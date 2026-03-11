@@ -216,7 +216,7 @@ class RawProcessing:
 
     def save_settings(self):
         # saves the processing parameters to a file
-        directory = os.path.join(self.config_path, f"{self.filename.split('.')[0]}.npy") # uses the same name as the input file
+        directory = os.path.join(self.config_path, f"{os.path.splitext(self.filename)[0]}.npy") # uses the same name as the input file
         params_dict = dict()
         for attr in self.processing_parameters:
             params_dict[attr] = getattr(self, attr)

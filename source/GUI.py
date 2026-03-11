@@ -992,7 +992,7 @@ class GUI:
         self.current_photo.load(True)
         self.current_photo.process(True)
         self.update_progress(99, 'Exporting photo...')
-        filename = os.path.join(self.destination_folder, str(self.current_photo).split('.')[0]) # removes the file extension
+        filename = os.path.join(self.destination_folder, os.path.splitext(str(self.current_photo))[0]) # removes the file extension
         self.current_photo.export(filename) # saves the photo
         self.current_photo_button.configure(state=tk.NORMAL)
         self.all_photo_button.configure(state=tk.NORMAL)
@@ -1022,7 +1022,7 @@ class GUI:
                     continue
                 if photo.use_global_settings:
                     self.apply_settings(photo, self.global_settings) # Ensures the proper settings have been applied
-                filename = os.path.join(self.destination_folder, str(photo).split('.')[0]) # removes the file extension
+                filename = os.path.join(self.destination_folder, os.path.splitext(str(photo))[0]) # removes the file extension
                 inputs.append((photo, filename, self.terminate, RawProcessing.class_parameters))
                 if hasattr(photo, 'memory_alloc'):
                     allocated += photo.memory_alloc # tally of estimated memory requirements of each photo
