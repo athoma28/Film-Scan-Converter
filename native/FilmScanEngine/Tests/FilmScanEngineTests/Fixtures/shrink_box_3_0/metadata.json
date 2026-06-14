@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "stage": "shrink_box",
+  "inputShape": [
+    4,
+    2
+  ],
+  "outputShape": [
+    4,
+    2
+  ],
+  "dtype": "int32",
+  "inputSHA256": "e4e3c66c19b8abf1f6aca194572730450f1e964d62bfc396d514320a1b483098",
+  "outputSHA256": "35d49ef7be0486d4a38ad2e1037a7199a3d970c0a3629d626fe7201e16933cdc",
+  "parameters": {
+    "x_percent": 5,
+    "y_percent": 3,
+    "rect_center": [
+      100,
+      200
+    ],
+    "rect_size": [
+      60,
+      100
+    ],
+    "rect_angle": 45.0
+  },
+  "renderingMilliseconds": 0.04458299372345209,
+  "generator": "tests/generate_native_snapshots.py"
+}

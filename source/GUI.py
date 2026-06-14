@@ -1,10 +1,8 @@
 import os
-import psutil
 import sys
 from tkinter import ttk,  filedialog, messagebox, colorchooser
 import tkinter as tk
 from PIL import ImageTk
-import rawpy
 import threading
 import numpy as np 
 import cv2
@@ -30,12 +28,13 @@ class GUI:
         self.config_path = self._check_and_create_conf_folder()
         self.photos = []
         self.in_progress = set() # keeps track photos that are in processing when first loading
+        self.in_progress_lock = threading.Lock()
         self.photo_process_values = ['RAW', 'Threshold', 'Contours', 'Histogram', 'Full Preview']
         self.filetypes = ['TIFF', 'PNG', 'JPG'] # Export File Types
         self.fit_aspect_ratios = ['Keep Original', '16:9 (Landscape)', '3:2 (Landscape)', '4:3 (Landscape)', '5:4 (Landscape)', '1:1 (Square)', '4:5 (Portrait)', '3:4 (Portrait)', '2:3 (Portrait)', '9:16 (Portrait)']
         self.destination_folder = ''
         self.allowable_image_filetypes = [
-            ('RAW files', '*.DNG *.CR2 *.CR3 *.NEF *.ARW *.RAF *.ORF *.ORI *.ERF *.GPR *.RAW *.CRW *.RW2 *.dng *.cr2 *.cr3 *.nef *.arw *.raf *.orf *.ori *.erf *.grp *.raw *.crw *.rw2'),
+            ('RAW files', '*.DNG *.CR2 *.CR3 *.NEF *.ARW *.RAF *.ORF *.ORI *.ERF *.GPR *.RAW *.CRW *.RW2 *.dng *.cr2 *.cr3 *.nef *.arw *.raf *.orf *.ori *.erf *.gpr *.raw *.crw *.rw2'),
             ('Image files', '*.PNG *.JPG *.JPEG *.BMP *.TIFF *.TIF *.png *.jpg *.jpeg *.bmp *.tiff *.tif')
             ]
         self.header_style = ('Segoe UI', 10, 'normal') # Defines font for section headers
@@ -151,7 +150,7 @@ class GUI:
         # Dust removal
         self.dustFrame = ttk.Frame(processingFrame)
         self.dustFrame.grid(row=4, column=0, sticky='EW')
-        CheckLabel(self.dustFrame, 'Remove Dust:', 0, 'remove_dust', self.widgets, command=lambda widget: self.widget_changed(widget, 'update'))
+        CheckLabel(self.dustFrame, 'Remove Dust:', 0, 'remove_dust', self.widgets, command=lambda widget: self.widget_changed(widget, 'skip crop' if widget.get() else 'update'))
 
         # Automatic Cropping Settings
         controls_title = ttk.Label(text='Automatic Crop & Rotate', font=self.header_style, padding=2)
@@ -295,6 +294,8 @@ class GUI:
         # Loading advanced parameters from the config file
         try:
             params_dict = np.load(os.path.join(self.config_path,'config.npy'), allow_pickle=True).item()
+        except FileNotFoundError:
+            logger.info('No config file found, using defaults.')
         except Exception as e:
             logger.exception(f'Exception: {e}')
         else:
@@ -573,8 +574,11 @@ class GUI:
             # Threading function to load photo in background
             # photo: RawProcessing object
             # i: the index of the photo in self.photos
-            photo.load()
-            self.in_progress.remove(i)
+            try:
+                photo.load()
+            finally:
+                with self.in_progress_lock:
+                    self.in_progress.discard(i)
 
         if len(self.photos) == 0:
             return
@@ -591,11 +595,23 @@ class GUI:
 
         # conservatively load extra images in background to speed up switching, while saving memory
         for i, photo in enumerate(self.photos):
-            if (abs(i - photo_index) <= self.advanced_settings['preload']) and not hasattr(photo, 'RAW_IMG') and i not in self.in_progress: # preload photos in buffer ahead or behind of the currently selected one
-                threading.Thread(target=load_async, args=(photo, i), daemon=True).start()
-                self.in_progress.add(i) # keeps track of photos in progress
-            elif (abs(i - photo_index) > self.advanced_settings['preload']) and hasattr(photo, 'RAW_IMG'): # delete photos outside of buffer
-                photo.clear_memory()
+            in_buffer = abs(i - photo_index) <= self.advanced_settings['preload']
+            if in_buffer and not hasattr(photo, 'RAW_IMG'): # preload photos in buffer ahead or behind of the currently selected one
+                with self.in_progress_lock:
+                    if i in self.in_progress:
+                        continue
+                    self.in_progress.add(i)
+                try:
+                    threading.Thread(target=load_async, args=(photo, i), daemon=True).start()
+                except Exception:
+                    with self.in_progress_lock:
+                        self.in_progress.discard(i)
+                    raise
+            elif not in_buffer and hasattr(photo, 'RAW_IMG'): # delete photos outside of buffer
+                with self.in_progress_lock:
+                    loading = i in self.in_progress
+                if not loading:
+                    photo.clear_memory()
 
         self.set_disable_buttons()
     
@@ -616,7 +632,8 @@ class GUI:
         if len(self.photos) == 0:
             return
         try:
-            if self.current_photo.get_IMG() is None:
+            result_img = self.current_photo.get_IMG()
+            if result_img is None:
                 raise Exception
         except Exception as e:
             logger.exception(f'Exception: {e}')
@@ -637,7 +654,7 @@ class GUI:
             self.process_photo.image = process_photo
             self.process_photo_frame.grid(row=1, column=0)
 
-        result_photo = ImageTk.PhotoImage(self.resize_IMG(self.current_photo.get_IMG()))
+        result_photo = ImageTk.PhotoImage(self.resize_IMG(result_img))
         self.result_photo.configure(image=[result_photo])
         self.result_photo.image = result_photo
         self.master.update()
@@ -1078,11 +1095,16 @@ class GUI:
                 max_processors = self.advanced_settings['max_processors_override']
             else:
                 # limting the maximum number of processes based on available system memory
+                import psutil
+
                 available = psutil.virtual_memory()[1]
                 #print('Available system RAM for export:', round(available / 1e9,1),'GB')
-                allocated = allocated / has_alloc # allocated memory as average of estimated memory requirements for each photo
-                #print(round(allocated / 1e9,1),'GB allocated')
-                max_processors = round(available / allocated)
+                if has_alloc:
+                    allocated = allocated / has_alloc # allocated memory as average of estimated memory requirements for each photo
+                    #print(round(allocated / 1e9,1),'GB allocated')
+                    max_processors = round(available / allocated)
+                else:
+                    max_processors = 1
             processes = max(min(max_processors, multiprocessing.cpu_count(), len(inputs)), 1) # allocates number of processors between 1 and the maximum number of processors available
             #print(processes, 'processes allocated for export')
 

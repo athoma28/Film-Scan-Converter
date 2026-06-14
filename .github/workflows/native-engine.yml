@@ -1,0 +1,27 @@
+name: Native Engine
+
+on:
+  push:
+    paths:
+      - ".github/workflows/native-engine.yml"
+      - "native/**"
+      - "tests/generate_native_snapshots.py"
+      - "tests/generate_raw_decode_reference.py"
+  pull_request:
+    paths:
+      - ".github/workflows/native-engine.yml"
+      - "native/**"
+      - "tests/generate_native_snapshots.py"
+      - "tests/generate_raw_decode_reference.py"
+
+jobs:
+  pixel-equivalence:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install native dependencies
+        run: brew install libraw
+      - name: Run native engine regression gate
+        run: swift test --package-path native/FilmScanEngine
+      - name: Build native macOS app
+        run: swift build --package-path native/FilmScanEngine --product FilmScanConverterMac

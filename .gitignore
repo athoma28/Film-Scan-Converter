@@ -1,7 +1,11 @@
 .venv
 venv
+.DS_Store
 *.log
 __pycache__
 *.npy
+!native/FilmScanEngine/Tests/FilmScanEngineTests/Fixtures/**/*.npy
 .data
 source/export/
+sample-raw/
+hdr_white

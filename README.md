@@ -9,14 +9,21 @@ For installing Film-Scan-Converter please check the [installation](docs/installa
 
 ## Documentation
 
-The documentation is located in the [/docs](docs/index.md) directory and also available on [Documentation Website](https://www.example.com).
+The documentation is located in the [/docs](docs/index.md) directory.
 
 Quick Links:
 
 - [Installation](docs/installation.md)
 - [How to Use](docs/how-to-use.md)
+- [Native macOS development status](docs/development/native-macos.md)
 
-Developer documentation and contribution guidelines are available in the [docs/developer-guide.md](docs/development/index.md) file.
+The Python application remains the production implementation. A native Swift
+and SwiftUI replacement is under active development; its current step, progress,
+limitations, and next work are tracked in the
+[native macOS development status](docs/development/native-macos.md).
+
+Developer documentation and contribution guidelines are available in the
+[developer guide](docs/development/index.md).
 
 ## ART Integration
 

@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "stage": "exposure",
+  "inputShape": [
+    3,
+    4
+  ],
+  "outputShape": [
+    3,
+    4
+  ],
+  "dtype": "float64",
+  "inputSHA256": "84a1c74b4017742e2bd7ad64cab4e5459f59c08b0d733539305a46b079cb6f95",
+  "outputSHA256": "9c9dd76a75aac0ea81a6120ae7402738f70113265634201acc878df452bc30d3",
+  "parameters": {
+    "gamma": 40,
+    "shadows": 0,
+    "highlights": 0
+  },
+  "renderingMilliseconds": 0.01950003206729889,
+  "generator": "tests/generate_native_snapshots.py"
+}

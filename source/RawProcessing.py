@@ -2,7 +2,6 @@ import rawpy
 import cv2
 import numpy as np
 from PIL import Image
-import matplotlib.colors
 import os 
 
 import logging
@@ -13,6 +12,7 @@ logging.basicConfig(filename='logfile.log', level=logging.DEBUG, format=FORMAT)
 
 class RawProcessing:
     # This class defines a photo object that contains the image processing pipeline from raw to final export, including all processing functions and parameters
+    memory_attributes = ('IMG', 'thresh', 'RAW_IMG', 'proxy_RAW_IMG', 'dust_mask', '_dust_signature', '_histogram_stats_signature', '_histogram_black_offsets', '_histogram_white_point')
     default_parameters = dict(
         max_proxy_size = 2000, # Max dimension of height + width to increase processing speed (only for previews)
         histogram_plt_size = (1600, 2400, 3), # Dimensions of the histogram
@@ -123,6 +123,7 @@ class RawProcessing:
             self.RAW_IMG = self.RAW_IMG[y:y+h,x:x+w,::-1]
         
         self.FileReadError = False
+        self._raw_revision = getattr(self, '_raw_revision', 0) + 1
         self.memory_alloc = self.RAW_IMG.nbytes * 4 * 12 # estimation of memory requirements based on the size of the image
 
     def get_IMG(self, output=None, as_array=False):
@@ -139,10 +140,11 @@ class RawProcessing:
                 thresh_img = np.uint8(cv2.cvtColor(self.thresh, cv2.COLOR_GRAY2BGR) / 2)
                 thresh_img[:,:,2] = 0 # sets colour of threshold image
 
-                indices = np.indices(thresh_img.shape[:2])
-                zebra_width = int(np.max(indices) / 100)
-                zebra = np.repeat((np.mod(indices[0] + indices[1], zebra_width * 2) > zebra_width)[:, :, np.newaxis], 3, axis=2)
-                thresh_img = np.where(zebra, 0, thresh_img) # applies zebra pattern to threshold image
+                rows = np.arange(thresh_img.shape[0])[:, np.newaxis]
+                columns = np.arange(thresh_img.shape[1])
+                zebra_width = max(int((max(thresh_img.shape[:2]) - 1) / 100), 1)
+                zebra = np.mod(rows + columns, zebra_width * 2) > zebra_width
+                thresh_img = np.where(zebra[:, :, np.newaxis], 0, thresh_img) # applies zebra pattern to threshold image
                 img = cv2.addWeighted(cv2.convertScaleAbs(self.RAW_IMG, alpha=(255.0/65535.0)), 1, thresh_img, 0.2, 0) # add threshold image to RAW
 
                 # drawing crop boxes
@@ -168,7 +170,8 @@ class RawProcessing:
                     EQ_ignore_poly = np.zeros_like(img)
                     cv2.fillPoly(EQ_ignore_poly, [extra_crop_box], (0,0,255))
                     cv2.fillPoly(EQ_ignore_poly, [EQ_ignore_box], (0,0,0))
-                    img = np.where(np.dstack([np.sum(EQ_ignore_poly, (2)) == 0]*3), img, cv2.addWeighted(EQ_ignore_poly, 2, img, 0.8, 0)) # shaded zone where EQ calcs are ignored
+                    EQ_ignore_mask = np.sum(EQ_ignore_poly, 2) == 0
+                    img = np.where(EQ_ignore_mask[:, :, np.newaxis], img, cv2.addWeighted(EQ_ignore_poly, 2, img, 0.8, 0)) # shaded zone where EQ calcs are ignored
                     
                     cv2.drawContours(img,[box],0,(0,255,255), int(border_width * 0.75)) # original crop
                     cv2.drawContours(img, self.largest_contour, -1, (0,255,255), int(border_width * .75)) # largest contour
@@ -251,7 +254,21 @@ class RawProcessing:
         else:
             img = self.RAW_IMG
 
-        dust_mask = self.find_dust(self.crop(img, self.rect))
+        if self.remove_dust:
+            dust_signature = (
+                getattr(self, '_raw_revision', 0),
+                img.shape,
+                self.rect,
+                self.border_crop,
+                tuple(self.class_parameters['ignore_border']),
+                self.class_parameters['dust_threshold'],
+                self.class_parameters['max_dust_area'],
+                self.class_parameters['dust_iter'],
+            )
+            if getattr(self, '_dust_signature', None) == dust_signature:
+                dust_mask = self.dust_mask
+            else:
+                dust_mask = self.find_dust(self.crop(img, self.rect))
 
         # Additional processing specific to each film type
         match self.film_type:
@@ -272,7 +289,9 @@ class RawProcessing:
 
         # Set all the global variables once processing is finished
         self.IMG = img
-        self.dust_mask = dust_mask
+        if self.remove_dust:
+            self.dust_mask = dust_mask
+            self._dust_signature = dust_signature
         self.processed = True
 
     def bw_negative_processing(self, img):
@@ -280,7 +299,8 @@ class RawProcessing:
         img = 65535 - img # invert to create positive image
         img = self.hist_EQ(img) # increases contrast to maximize dynamic range
         img = self.exposure(img) # exposure adjustment
-        img = img.clip(0, 65535).astype(np.uint16, copy=True)
+        np.clip(img, 0, 65535, out=img)
+        img = img.astype(np.uint16, copy=False)
         return img
 
     def colour_negative_processing(self, img):
@@ -290,11 +310,11 @@ class RawProcessing:
     
     def slide_processing(self, img):
         img = self.hist_EQ(img) # Maximizes dynamic range
-        wb_mode = [self.wb_adjust, self.wb_adjust_coeff, self.wb_adjust_gamma] # different ways to adjust wb, for debugging
-        img = wb_mode[1](img) # modifiers for white balancing
+        img = self.wb_adjust_coeff(img) # modifiers for white balancing
         img = self.exposure(img) # Exposure adjustment
         img = self.sat_adjust(img) # modifier for colour saturation
-        img = img.clip(0, 65535).astype(np.uint16, copy=True)
+        np.clip(img, 0, 65535, out=img)
+        img = img.astype(np.uint16, copy=False)
         return img
         
     def crop_only(self, img):
@@ -317,14 +337,12 @@ class RawProcessing:
 
         img8 = cv2.convertScaleAbs(img, alpha=(255.0/65535.0))
         imgray = cv2.cvtColor(img8, cv2.COLOR_BGR2GRAY) # converts to b&w
-        minimum = np.percentile(imgray[sample], 0.5)
-        maximum = np.percentile(imgray[sample], 99.5)
+        minimum, maximum = np.percentile(imgray[sample], (0.5, 99.5))
         threshold = (maximum - minimum) * self.class_parameters['dust_threshold'] / 100 + minimum
         _, thresh = cv2.threshold(imgray, threshold, 255, cv2.THRESH_BINARY_INV)
         thresh_img = cv2.dilate(thresh,kernel,iterations = self.class_parameters['dust_iter'])
         thresh_img = cv2.erode(thresh_img,kernel,iterations = self.class_parameters['dust_iter'])
         contours, _ = cv2.findContours(thresh_img, 1, 2)
-        contours = sorted(contours, key=lambda x: cv2.contourArea(x))
         smallest = [contour for contour in contours if cv2.contourArea(contour) < max_dust_size]
         dust_mask = np.zeros_like(imgray)
         dust_mask = cv2.drawContours(dust_mask, smallest, -1, 255, cv2.FILLED)
@@ -415,10 +433,8 @@ class RawProcessing:
         img = cv2.convertScaleAbs(img, alpha=(255.0/65535.0))
         imgray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) # converts to b&w
         dark_threshold = int(self.dark_threshold / 100 * 255)
-        _, dark_thresh_img = cv2.threshold(imgray, dark_threshold, 255, 0)
         light_threshold = int(self.light_threshold / 100 * 255)
-        _, light_thresh_img = cv2.threshold(imgray, light_threshold, 255, cv2.THRESH_BINARY_INV)
-        thresh_img = cv2.bitwise_and(dark_thresh_img, light_thresh_img)
+        thresh_img = cv2.inRange(imgray, dark_threshold + 1, light_threshold)
         kernel = np.ones((7,7),np.uint8)
         thresh_img = cv2.erode(thresh_img, kernel, iterations = 2)
         return thresh_img
@@ -427,26 +443,47 @@ class RawProcessing:
         # Equalizes histogram for each color channel
         sensitivity = 0.2 # multiplier to adjust degree at which the sliders affect the output image
 
-        sample_img = self.crop(img, self.rect, include_EQ_ignore=True)
-
-        if self.base_detect and (self.film_type == 1 or self.film_type == 2):
-            if self.film_type == 1:
-                black_point = 65535 - np.array(self.base_rgb, np.uint16)[::-1] * 256
-            else:
-                black_point = np.array(self.base_rgb, np.uint16)[::-1] * 256
+        stats_signature = (
+            getattr(self, '_raw_revision', 0),
+            img.shape,
+            self.rect,
+            self.border_crop,
+            self.film_type,
+            self.base_detect,
+            tuple(self.base_rgb),
+            tuple(self.class_parameters['ignore_border']),
+            self.class_parameters['ignore_neg_border'],
+            self.class_parameters['black_point_percentile'],
+            self.class_parameters['white_point_percentile'],
+            self.black_point,
+        )
+        if getattr(self, '_histogram_stats_signature', None) == stats_signature:
+            black_offsets = self._histogram_black_offsets
+            white_point = self._histogram_white_point
         else:
-            black_point = np.percentile(sample_img, self.class_parameters['black_point_percentile'], (0,1))
-        black_offsets = self.black_point / 100 * sensitivity * 65535 - black_point
-        img = img.astype(np.float64, copy=False)
-        sample_img = sample_img.astype(np.float32, copy=False)
-        
-        img[:,:] += black_offsets # Sets the black point
-        sample_img[:,:] += black_offsets
+            sample_img = self.crop(img, self.rect, include_EQ_ignore=True)
 
+            if self.base_detect and (self.film_type == 1 or self.film_type == 2):
+                if self.film_type == 1:
+                    black_point = 65535 - np.array(self.base_rgb, np.uint16)[::-1] * 256
+                else:
+                    black_point = np.array(self.base_rgb, np.uint16)[::-1] * 256
+            else:
+                black_point = np.percentile(sample_img, self.class_parameters['black_point_percentile'], (0,1))
+            black_offsets = self.black_point / 100 * sensitivity * 65535 - black_point
+            sample_img = sample_img.astype(np.float32, copy=False)
+            sample_img[:,:] += black_offsets
+            white_point = np.percentile(sample_img, self.class_parameters['white_point_percentile'], (0,1))
+
+            self._histogram_stats_signature = stats_signature
+            self._histogram_black_offsets = black_offsets
+            self._histogram_white_point = white_point
+
+        img = img.astype(np.float64, copy=False)
+        img[:,:] += black_offsets # Sets the black point
         max_array = np.ones_like(black_offsets)
-        white_point = np.percentile(sample_img, self.class_parameters['white_point_percentile'], (0,1))
         white_multipliers = np.divide(65535 + self.white_point / 100 * sensitivity * 65535, white_point, out=max_array, where=white_point>0) # division, but ignore divide by zero or negative
-        img = np.multiply(img, white_multipliers) # Scales the white percentile to 65535
+        np.multiply(img, white_multipliers, out=img) # Scales the white percentile to 65535
         return img
     
     # \/ Three different white balance functions experimented with \/
@@ -495,7 +532,9 @@ class RawProcessing:
             self.tint = max(min((G/B+G/R-2)/((B*(G+R)+R*G)/(B*R)) * multiplier, 100), -100)
             self.temp = max(min(((2*G-(2*G+R)*self.tint/multiplier)/2/R-1) * multiplier, 100), -100)
         
-        img = np.multiply(img, np.array([1-self.temp/multiplier+self.tint/multiplier/2, 1-self.tint/multiplier, 1+self.temp/multiplier+self.tint/multiplier/2]))
+        if self.temp == 0 and self.tint == 0:
+            return img
+        np.multiply(img, np.array([1-self.temp/multiplier+self.tint/multiplier/2, 1-self.tint/multiplier, 1+self.temp/multiplier+self.tint/multiplier/2]), out=img)
         return img
     
     def wb_adjust_gamma(self, img):
@@ -526,21 +565,25 @@ class RawProcessing:
     
     def exposure(self, img):
         # Exposure adjustment
-        norm = matplotlib.colors.Normalize(0, 65535, True)
-        img = norm(img).astype(np.float32, copy=False)
+        img = np.clip(img, 0, 65535)
+        if not np.issubdtype(img.dtype, np.floating):
+            img = img.astype(np.promote_types(img.dtype, np.float32), copy=False)
+        img /= 65535
+        img = img.astype(np.float32, copy=False)
         
-        img = (img ** (2 ** (-self.gamma/100))).astype(np.float32, copy=False) # gamma adjustment via gamma correction
+        if self.gamma != 0:
+            img = np.power(img.astype(np.float64), 2 ** (-self.gamma/100)).astype(np.float32) # gamma adjustment via gamma correction
         
         # Highlights and shadows formula
-        shadows_coefficient = 4.15e-5 * self.shadows ** 2 + 0.02185 * self.shadows
-        img += (shadows_coefficient * np.minimum(img - 0.75, 0) ** 2) * img
+        if self.shadows != 0:
+            shadows_coefficient = 4.15e-5 * self.shadows ** 2 + 0.02185 * self.shadows
+            img += (shadows_coefficient * np.minimum(img.astype(np.float64) - 0.75, 0) ** 2) * img
 
-        highlights_coefficient = -4.15e-5 * self.highlights ** 2 + 0.02185 * self.highlights
-        img += (highlights_coefficient * np.maximum(img - 0.25, 0) ** 2) * (1 - img)
-
-        img = np.ma.getdata(img, False) # converts masked array back to normal array
+        if self.highlights != 0:
+            highlights_coefficient = -4.15e-5 * self.highlights ** 2 + 0.02185 * self.highlights
+            img += (highlights_coefficient * np.maximum(img.astype(np.float64) - 0.25, 0) ** 2) * (1 - img.astype(np.float64))
         
-        img = img * 65535 # restores orginal range prior to normalization
+        img *= 65535 # restores orginal range prior to normalization
 
         return img
     
@@ -548,6 +591,8 @@ class RawProcessing:
         # Applies saturation adjustment factors
         if self.sat == 100:
             return img # don't run the calculation if no changes are to be made
+        import matplotlib.colors
+
         sat_adjust = self.sat / 100
         norm = matplotlib.colors.Normalize(0, 65535, True)
         img = norm(np.flip(img, 2)).astype(np.float32, copy=False) # Convert from bgr to rgb, and normalize input to (0,1)
@@ -615,8 +660,8 @@ class RawProcessing:
             pts.insert(0, [0, 0])
             pts.append([width, 0])
             new_plot = np.zeros(self.class_parameters['histogram_plt_size'], np.uint8)
-            new_plot = cv2.fillPoly(new_plot, np.array([pts]).astype(np.int32), color=colour) # Generates histogram as a polygon
-            hist_plot = hist_plot + new_plot # Add current histogram channel to the overall histogram plot
+            cv2.fillPoly(new_plot, np.array([pts]).astype(np.int32), color=colour) # Generates histogram as a polygon
+            np.add(hist_plot, new_plot, out=hist_plot) # Add current histogram channel to the overall histogram plot
         return hist_plot
     
     def add_frame(self, img):
@@ -647,8 +692,7 @@ class RawProcessing:
 
     def clear_memory(self):
         # Deletes instances of images to save memory
-        to_del = ['IMG', 'thresh', 'RAW_IMG', 'proxy_RAW_IMG', 'dust_mask']
-        for attr in to_del:
+        for attr in self.memory_attributes:
             if hasattr(self, attr):
                 delattr(self, attr)
         self.processed = False
@@ -660,6 +704,15 @@ class RawProcessing:
             if type(getattr(self, attr)) is np.ndarray:
                 total += getattr(self, attr).nbytes
         return total
+
+    def __getstate__(self):
+        # Multiprocessing export reloads the source file, so avoid serializing reproducible image arrays.
+        state = self.__dict__.copy()
+        for attr in self.memory_attributes:
+            state.pop(attr, None)
+        state['processed'] = False
+        state['proxy'] = False
+        return state
     
     def set_wb_from_picker(self, x, y):
         # x, y normalized between 0 and 1 as a proportion along the image height and width

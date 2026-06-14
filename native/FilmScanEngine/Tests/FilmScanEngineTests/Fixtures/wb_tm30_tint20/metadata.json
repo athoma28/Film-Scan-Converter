@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 2,
+  "stage": "wb_adjust_coeff",
+  "inputShape": [
+    4,
+    3,
+    3
+  ],
+  "outputShape": [
+    4,
+    3,
+    3
+  ],
+  "dtype": "float64",
+  "inputSHA256": "3b89de75d64ff376b234189b9aef622f4acf28a6c90c59f268fb5fe2d09ae046",
+  "outputSHA256": "f4f5d29c38ce8ba7a49c22cf4f0582d3f3c1b5809cd4484ebc20cd044f39b7e9",
+  "parameters": {
+    "temp": -30,
+    "tint": 20
+  },
+  "renderingMilliseconds": 0.014416989870369434,
+  "generator": "tests/generate_native_snapshots.py"
+}

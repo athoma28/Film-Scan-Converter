@@ -1,0 +1,89 @@
+{
+  "schemaVersion": 1,
+  "decoder": "rawpy 0.24.0 / LibRaw (0, 21, 3)",
+  "settings": {
+    "output_bps": 16,
+    "use_camera_wb": true,
+    "user_wb": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "demosaic_algorithm": 2,
+    "fbdd_noise_reduction": 0,
+    "output_color": 7,
+    "gamma": [
+      2.222,
+      4.5
+    ],
+    "auto_bright_thr": 0,
+    "median_filter_passes": 0,
+    "noise_thr": 0,
+    "exp_preserve_highlights": 1,
+    "exp_shift": 8,
+    "half_size": true
+  },
+  "entries": [
+    {
+      "file": "DSCF0669.RAF",
+      "shape": [
+        2592,
+        3876,
+        3
+      ],
+      "sha256": "e270fa995ecf8f39ce242cb470b1a84dee959418391c852185f3eb59a7be4880",
+      "colorDescription": "RGBG"
+    },
+    {
+      "file": "DSCF0718.RAF",
+      "shape": [
+        2592,
+        3876,
+        3
+      ],
+      "sha256": "68d38090b8896169e64292efef0d0b6ff36934dc66142390eded619f7fd728b3",
+      "colorDescription": "RGBG"
+    },
+    {
+      "file": "DSCF0729.RAF",
+      "shape": [
+        2592,
+        3876,
+        3
+      ],
+      "sha256": "3a8ccd567c20085c23f2f001482f009c43732431b012d706e04ede52ca4b092d",
+      "colorDescription": "RGBG"
+    },
+    {
+      "file": "DSCF2417.RAF",
+      "shape": [
+        2592,
+        3876,
+        3
+      ],
+      "sha256": "8866235b8222139cb496e2f328ddfccf6bad72d1837726b838f3919a062ccd82",
+      "colorDescription": "RGBG"
+    },
+    {
+      "file": "DSCF2422.RAF",
+      "shape": [
+        2592,
+        3876,
+        3
+      ],
+      "sha256": "9bf8a12cc6fc1c99c2232218f7e1c20c7a9168a53b962972fb24a3010fe7abfe",
+      "colorDescription": "RGBG"
+    }
+  ],
+  "fullResolution": {
+    "file": "DSCF0718.RAF",
+    "shape": [
+      5184,
+      7752,
+      3
+    ],
+    "sha256": "7869531d9d82fb75793b14111c4d1f1cd99b17d4750f3e811cab202939f799a0",
+    "colorDescription": "RGBG"
+  }
+}

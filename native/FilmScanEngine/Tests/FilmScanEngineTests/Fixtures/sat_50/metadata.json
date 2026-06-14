@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 2,
+  "stage": "sat_adjust",
+  "inputShape": [
+    4,
+    3,
+    3
+  ],
+  "outputShape": [
+    4,
+    3,
+    3
+  ],
+  "dtype": "float64",
+  "inputSHA256": "3b89de75d64ff376b234189b9aef622f4acf28a6c90c59f268fb5fe2d09ae046",
+  "outputSHA256": "43ff353afe46fb799736209dc5db21bdd22d4d99657a1245f90029bc3273bfb0",
+  "parameters": {
+    "sat": 50
+  },
+  "renderingMilliseconds": 0.19929197151213884,
+  "generator": "tests/generate_native_snapshots.py"
+}

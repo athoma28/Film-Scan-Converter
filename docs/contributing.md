@@ -10,13 +10,24 @@ You are welcome to develop more technical, niche features. However, if the featu
 
 ## How you can contribute
 
-If you're looking for somewhere to start, here are a few places where you can help:
+The primary development effort is the native Swift/macOS rewrite. Before
+starting native work, read
+[Native macOS Development](development/native-macos.md). It is the authoritative
+source for the active step, verified progress, limitations, and ordered next
+tasks.
 
-- Make the application easily distributable across all platforms
-- Modernize the GUI
-- Improve the dust detection
-- Improve the image conversion pipeline
-- Optimize code readability/performance
+The current native priority is histogram equalisation, followed by contour
+detection and perspective warp (which require OpenCV C++ interop). Work on later
+processing stages or additional SwiftUI controls should not bypass the
+pixel-equivalence gate.
+
+Useful contribution areas:
+
+- Complete a task from the current native status page.
+- Expand Python reference fixtures and equivalence coverage.
+- Fix or test the existing Python application without changing output pixels.
+- Improve processing performance only with before/after benchmarks and
+  equivalence tests.
 
 ## Suggesting New Features
 
@@ -34,6 +45,7 @@ If you're looking for somewhere to start, here are a few places where you can he
 - Include a brief description of what changes were made, and how you tested it, if applicable.
 - Include sample images especially if the change impacts the image processing pipeline.
 - If the PR is fixing a bug, include the relevant issue number.
+- Native processing changes must add or update an equivalence test before the implementation is accepted.
 
 ## Coding Conventions
 

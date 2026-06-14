@@ -1,0 +1,51 @@
+import Foundation
+import Testing
+
+@testable import FilmScanEngine
+
+@Suite("Python pixel-equivalence fixtures")
+struct UInt16ImageTests {
+  @Test("Rotation and horizontal flip match Python")
+  func rotateAndFlip() throws {
+    let fixture = try FixtureLoader.loadCase("rotate_flip")
+
+    let actual = fixture.input.rotated(quarterTurns: 1, flipHorizontally: true)
+
+    #expect(fixture.metadata.stage == "rotate")
+    #expect(actual == fixture.expected)
+    #expect([actual.height, actual.width, actual.channels] == fixture.metadata.outputShape)
+  }
+
+  @Test("Frame and aspect-ratio padding match Python")
+  func frameAndAspectRatio() throws {
+    let fixture = try FixtureLoader.loadCase("frame_aspect")
+
+    let actual = fixture.input.addingFrame(
+      percent: 10,
+      aspectRatio: AspectRatio(width: 3, height: 2)
+    )
+
+    #expect(fixture.metadata.stage == "add_frame")
+    #expect(actual == fixture.expected)
+    #expect([actual.height, actual.width, actual.channels] == fixture.metadata.outputShape)
+  }
+
+  @Test("Processing parameters round trip through JSON")
+  func processingParametersCodable() throws {
+    let parameters = ProcessingParameters(
+      borderCrop: 2.5,
+      flip: true,
+      rotation: 3,
+      filmType: .colourNegative,
+      gamma: 25,
+      temperature: -10,
+      saturation: 120,
+      removeDust: true
+    )
+
+    let encoded = try JSONEncoder().encode(parameters)
+    let decoded = try JSONDecoder().decode(ProcessingParameters.self, from: encoded)
+
+    #expect(decoded == parameters)
+  }
+}

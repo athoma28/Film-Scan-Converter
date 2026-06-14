@@ -1,6 +1,11 @@
 
 # How to Use It
 
+This guide describes the current production Python application. The native
+macOS application is still under development; see
+[Native macOS Development](development/native-macos.md) for implemented native
+features and limitations.
+
 ## Batch Processing
 
 This application enables you to import multiple RAW scans (most RAW image formats supported), and process them all simultaneously. Each photo's settings can either be synced with global settings, or have settings independent from all the other photos. This is useful when all the photos are scanned in a consistent manner, or you want to dial in the same "look" for multiple photos.

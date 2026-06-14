@@ -1,5 +1,9 @@
 # Installation
 
+This page installs the current production Python application. The native macOS
+application is under development and is not yet a production replacement. See
+[Native macOS Development](development/native-macos.md) for its current status.
+
 ## Installation from Binaries
 
 Download the latest release from the [Film-Scan-Converter Latest Release](https://github.com/kaimonmok/Film-Scan-Converter/releases/latest).

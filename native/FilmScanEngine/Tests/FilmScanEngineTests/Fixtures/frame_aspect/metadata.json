@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "stage": "add_frame",
+  "inputShape": [
+    8,
+    12,
+    3
+  ],
+  "outputShape": [
+    10,
+    15,
+    3
+  ],
+  "dtype": "uint16",
+  "inputSHA256": "75e4e4877afb53c73daf5f20c0f16cc79d21a8b54d72020cb2f1558f13b1a74c",
+  "outputSHA256": "da7239ca6765ffef3d3d69d79e7d689c2b88c8c451c8a64571fd6604ab1c4687",
+  "parameters": {
+    "frame": 10,
+    "fit_aspect_ratio": "3:2 (Landscape)"
+  },
+  "renderingMilliseconds": 0.11354201706126332,
+  "generator": "tests/generate_native_snapshots.py"
+}

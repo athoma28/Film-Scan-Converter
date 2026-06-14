@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "stage": "get_threshold",
+  "inputShape": [
+    80,
+    100,
+    3
+  ],
+  "outputShape": [
+    80,
+    100
+  ],
+  "dtype": "uint16",
+  "inputSHA256": "fb46cb863765a90dad76bedf25f7faca519c93740af1291410b0c9f10dc366ef",
+  "outputSHA256": "cdfa7f67764b0de8ad8960310d5a016b62e3188803bba79524c489ebbb22895e",
+  "parameters": {
+    "dark_threshold": 25,
+    "light_threshold": 75
+  },
+  "renderingMilliseconds": 0.05370797589421272,
+  "generator": "tests/generate_native_snapshots.py"
+}

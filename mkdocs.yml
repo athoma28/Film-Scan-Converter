@@ -16,6 +16,9 @@ nav:
   - Features: features.md
   - Developer Guide:
       - Overview: development/index.md
+      - Native macOS Status: development/native-macos.md
+      - Native RAW Benchmark: development/native-raw-benchmark.md
+      - Native macOS Technical Roadmap: improvements/MacOS-Native-Roadmap.md
       - Building: development/building.md
       - Contributing: contributing.md
 

@@ -1,5 +1,15 @@
 # Building
 
+This page covers packaging the existing Python application. For the active
+native Swift/macOS build and test commands, see
+[Native macOS Development](native-macos.md).
+
+The native package requires Homebrew LibRaw:
+
+```sh
+brew install libraw
+```
+
 ## Building Binaries using pyinstaller
 
 PyInstaller bundles your Python app and its dependencies into a single executable.

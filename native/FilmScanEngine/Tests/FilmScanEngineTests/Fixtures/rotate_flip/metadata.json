@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "stage": "rotate",
+  "inputShape": [
+    8,
+    12,
+    3
+  ],
+  "outputShape": [
+    12,
+    8,
+    3
+  ],
+  "dtype": "uint16",
+  "inputSHA256": "75e4e4877afb53c73daf5f20c0f16cc79d21a8b54d72020cb2f1558f13b1a74c",
+  "outputSHA256": "ca221153a51c255de5c4bfba7714d7dcb406a8f096ea6256e04a57b9e557fb6c",
+  "parameters": {
+    "rotation": 1,
+    "flip": true
+  },
+  "renderingMilliseconds": 0.5761249922215939,
+  "generator": "tests/generate_native_snapshots.py"
+}
