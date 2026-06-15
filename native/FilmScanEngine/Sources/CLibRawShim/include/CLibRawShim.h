@@ -23,5 +23,7 @@ int fsc_decode_raw(
 
 void fsc_free_raw_image(fsc_raw_image *image);
 const char *fsc_libraw_version(void);
+void fsc_set_log_path(const char *path);
+void fsc_close_log(void);
 
 #endif

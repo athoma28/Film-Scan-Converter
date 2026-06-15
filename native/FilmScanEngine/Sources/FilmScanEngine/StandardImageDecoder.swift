@@ -11,6 +11,10 @@ public enum StandardImageDecoder {
     guard url.isFileURL,
       supportedExtensions.contains(url.pathExtension.lowercased())
     else {
+      DecodeLog.standardImageFailed(
+        path: url.lastPathComponent,
+        error: "unsupportedFileType"
+      )
       throw StandardImageDecoderError.unsupportedFileType
     }
     guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
@@ -20,11 +24,42 @@ public enum StandardImageDecoder {
         [kCGImageSourceShouldCacheImmediately: true] as CFDictionary
       )
     else {
+      DecodeLog.standardImageFailed(
+        path: url.lastPathComponent,
+        error: "unreadableImage"
+      )
       throw StandardImageDecoderError.unreadableImage
     }
     guard image.width > 0, image.height > 0 else {
+      DecodeLog.standardImageFailed(
+        path: url.lastPathComponent,
+        error: "emptyImage"
+      )
       throw StandardImageDecoderError.emptyImage
     }
+
+    let colorModelName: String
+    if let model = image.colorSpace?.model {
+      switch model {
+      case .monochrome:
+        colorModelName = "monochrome"
+      case .rgb:
+        colorModelName = "rgb"
+      default:
+        colorModelName = "\(model.rawValue)"
+      }
+    } else {
+      colorModelName = "nil"
+    }
+
+    DecodeLog.standardImageStarted(
+      path: url.lastPathComponent,
+      ext: url.pathExtension,
+      width: image.width,
+      height: image.height,
+      colorModel: colorModelName,
+      bitsPerComponent: image.bitsPerComponent
+    )
 
     switch image.colorSpace?.model {
     case .monochrome:
@@ -32,6 +67,10 @@ public enum StandardImageDecoder {
     case .rgb:
       return try decodeRGB(image)
     default:
+      DecodeLog.standardImageFailed(
+        path: url.lastPathComponent,
+        error: "unsupportedColorModel"
+      )
       throw StandardImageDecoderError.unsupportedColorModel
     }
   }

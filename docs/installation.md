@@ -1,8 +1,12 @@
 # Installation
 
-This page installs the current production Python application. The native macOS
-application is under development and is not yet a production replacement. See
-[Native macOS Development](development/native-macos.md) for its current status.
+This page installs the maintenance-only legacy Python application. It remains
+the only complete end-to-end workflow while the primary native Swift/macOS
+application finishes automatic crop/perspective correction, dust handling, and
+packaging. Native TIFF, JPEG, PNG, and processed-RGB DNG export is implemented.
+See
+[Native macOS Development](development/native-macos.md) for the active product
+and [Legacy Python Application](legacy-python.md) for the retirement policy.
 
 ## Installation from Binaries
 
@@ -53,7 +57,7 @@ If no binary exists for your platform yet, please use the manual installation.
     # On macOS/Linux (bash):
     source venv/bin/activate
     # On Linux (fish):
-    source vent/bin/activate.fish
+    source venv/bin/activate.fish
     # On Windows:
     venv\Scripts\activate
     ```
@@ -72,7 +76,8 @@ python "Film Scan Converter.pyw"
 
 ## Note on tkinter
 
-The application requires `tkinter` for the GUI. On some platforms this may not installable in a venv or through pip.
+The application requires `tkinter` for the GUI. On some platforms this may not
+be installable in a venv or through pip.
 
 - On **macOS**, install it with Homebrew:
 

@@ -232,6 +232,18 @@ class RawProcessingTests(unittest.TestCase):
                 expected = self.reference_threshold(processor, self.image)
                 np.testing.assert_array_equal(actual, expected)
 
+    def test_large_narrow_images_crop_detection_keeps_resize_dimensions_positive(self):
+        for shape in ((3001, 1, 3), (1, 3001, 3)):
+            with self.subTest(shape=shape):
+                image = np.zeros(shape, dtype=np.uint16)
+                processor = make_processor(RawProcessing, image)
+
+                threshold, rect, contour = processor.find_optimal_crop()
+
+                self.assertEqual(threshold.shape, image.shape[:2])
+                self.assertIsNone(rect)
+                self.assertIsNone(contour)
+
     def test_process_dispatches_by_film_type(self):
         methods = (
             'bw_negative_processing',

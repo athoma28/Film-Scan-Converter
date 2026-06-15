@@ -1,14 +1,16 @@
 # Swift Port Evaluation
 
 **Date:** 2026-06-14 (updated 2026-06-15)
-**Scope:** Complete review of the native Swift/macOS rewrite against the
-production Python/Tkinter application, covering architecture, implemented
-features, code quality, test coverage, and remaining work.
+**Scope:** Historical review of the native Swift/macOS rewrite against the
+legacy Python/Tkinter application, covering architecture, implemented features,
+code quality, test coverage, and remaining work at the time of review.
 
 The authoritative current-step page is [Native macOS Development](native-macos.md).
 The longer-term technical design is in [macOS Native Roadmap](../improvements/MacOS-Native-Roadmap.md).
-This document is an independent top-to-bottom evaluation, not a replacement for
-either.
+The Python transition policy is in
+[Legacy Python Status And Retirement](../legacy-python.md). This document is a
+historical evaluation, not the current plan; where status differs, the
+authoritative pages take precedence.
 
 ---
 
@@ -22,7 +24,7 @@ CLibRaw (system library, pkg-config → Homebrew libraw)
   └─ CLibRawShim (C shim)
        └─ FilmScanEngine (pure Swift library)
             ├─ FilmScanPreviewRenderer (shared production Core Image renderer)
-            ├─ FilmScanConverterMac (SwiftUI correction prototype)
+            ├─ FilmScanConverterMac (SwiftUI application)
             ├─ FilmScanPreviewComparator (Core Image diagnostic CLI)
             ├─ FilmScanRawBenchmark (CLI benchmark)
             └─ FilmScanEngineTests (swift-testing regression gate)
@@ -55,10 +57,11 @@ CLibRaw (system library, pkg-config → Homebrew libraw)
   default until a single-copy path is proven correct.
 - Background decoding uses `Task.detached(priority: .userInitiated)` so
   full-resolution imports do not block the main actor.
-- The correction prototype now uses live slider bindings, a reusable 16-bit
+- The interactive correction workflow now uses live slider bindings, a reusable 16-bit
   Core Image/Metal renderer, and a bounded latest-value-wins queue. Direct
-  Metal-backed display, end-to-end latency instrumentation, visual-equivalence
-  tests, and idle authoritative rendering remain.
+  Metal-backed display, end-to-end display latency measurement, and idle
+  authoritative rendering remain. Production-renderer equivalence tests are
+  complete.
 
 ---
 
@@ -134,10 +137,10 @@ Simple, correct frame-rate limiter. Handles clock resets correctly (negative
 elapsed → accept frame), which is important for AVFoundation presentation
 timestamps that can wrap.
 
-### 2.7 SwiftUI App Shell — `FilmScanConverterMac/`
+### 2.7 SwiftUI Application — `FilmScanConverterMac/`
 
-**Status: Correction prototype. Quality: Adequate, with preview verification
-and display-path work remaining.**
+**Status: Interactive correction workflow. Quality: Adequate, with
+display-path work remaining.**
 
 The app now has a `NavigationSplitView`, drag-and-drop import, real RAW decode,
 per-file correction parameters, original/corrected comparison, and a bounded
@@ -147,13 +150,11 @@ context.
 The still-file correction path now keeps slider state live during drags, uploads
 one bounded 16-bit proxy per selection, applies the implemented corrections in
 one Core Image/Metal color kernel, and retains only one in-flight render plus
-the newest pending snapshot. GPU-vs-CPU algorithmic equivalence is verified
-across 696 parameter combinations (≤64 8-bit-level max difference, documented
-Float-precision tolerance). Render instrumentation (`os_signpost` + latency
-counters) is deployed. It still creates `NSImage`/`CGImage` display
-results. The production renderer is verified against the CPU path across 2,655
-comparisons with a maximum difference of 2/255, and its current-pipeline
-1080×720 benchmark measures approximately 10 ms p95. End-to-end display latency
+the newest pending snapshot. Render instrumentation (`os_signpost` + latency
+counters) is deployed. It still creates `NSImage`/`CGImage` display results.
+The production renderer is verified against the CPU path across 2,655
+comparisons with a maximum difference of 2/255, and its latest current-pipeline
+1080×720 benchmark measured 3.74 ms p95. End-to-end display latency
 with a real RAF corpus remains.
 
 ### 2.14 Fixture Loader — Extended
@@ -178,7 +179,7 @@ raw byte representation. Current support: `<u2` (uint16) and `<f8` (float64).
 | Image helpers | Rotation, flip, frame, aspect ratio, proxy resize, and 16-bit preview packing |
 | Threshold and coordinates | Exact threshold fixtures and Float32-precision `shrink_box` cases |
 | Processing | White balance, saturation, exposure, and corrected-preview behavior |
-| `InputAndLivePreviewTests.swift` | 58 | Drop admission, deduplication, extension consistency, frame throttle (including clock reset) | Input + preview contracts |
+| App model and preview | Real `AppModel` control-state behavior, production-renderer equivalence, scheduling, drop admission, deduplication, extension consistency, and frame throttle |
 
 The test suite has been migrated from XCTest to `swift-testing`. Tests consume
 Python-generated `.npy` fixtures frozen by `tests/generate_native_snapshots.py`
@@ -186,6 +187,8 @@ and `tests/generate_raw_decode_reference.py`. The fixture format includes
 SHA-256 hashes that are verified at load time, preventing fixture corruption.
 Tests are designed to pass in CI without the `sample-raw/` corpus (they skip
 RAF-specific tests when files are absent).
+
+As of 2026-06-15, the native suite contains **98 tests across 11 test files**.
 
 ### 2.9 CI — `.github/workflows/native-engine.yml`
 
@@ -327,20 +330,9 @@ a Metal compute kernel (vImage warp only supports 8-bit).
 
 ### 3.4 Phase 1.4: Histogram Equalisation
 
-Port `RawProcessing.hist_EQ()`:
-
-```
-np.percentile(linear)             → vDSP sort + linear interpolation between bins
-np.divide(where=white_point>0)    → vDSP.divide with zero guard
-np.multiply(white_multipliers)    → vDSP.multiply
-```
-
-The linear interpolation logic in `np.percentile` must be replicated exactly:
-sort the sample values, compute fractional index `(pct/100) * (N-1)`, linear
-interpolate between floor and ceil indices. The caching scheme
-(`_histogram_stats_signature`, `_histogram_black_offsets`,
-`_histogram_white_point`) must be ported with `Hashable` structs tracking
-`_raw_revision` and all input parameters.
+**COMPLETE.** Percentile-based histogram equalisation is implemented with exact
+float64 pixel equality for the current three-fixture corpus. Broader corpus
+coverage and persistence/cache integration remain.
 
 ### 3.5 Phase 1.5: White Balance — `wb_adjust_coeff` — COMPLETE
 
@@ -449,7 +441,7 @@ if needed (unlikely at 6K×4K 16-bit = 144 MB).
 
 ### 3.13 Phase 3: SwiftUI Application
 
-The current correction prototype covers import, selection, basic correction
+The current interactive correction workflow covers import, selection, basic correction
 controls, and interactive preview. The full application must also provide:
 
 **Sidebar inspector (scrollable, collapsible sections):**
@@ -497,9 +489,9 @@ controls, and interactive preview. The full application must also provide:
 
 | Metric | Target | Current |
 |--------|--------|---------|
-| Cold pipeline (6K RAW→export) | ≥ 3× faster than Python | Not yet measurable (no pipeline) |
-| Warm pipeline (cached) | ≥ 5× faster than Python | Not yet measurable |
-| Full batch (10× 6K RAW) | ≥ 4× faster than Python | Not yet measurable |
+| Cold pipeline (6K RAW→export) | ≥ 3× faster than Python | Export path implemented; full crop/perspective/dust pipeline not yet measurable |
+| Warm pipeline (cached) | ≥ 5× faster than Python | Export path implemented; complete workflow not yet measured |
+| Full batch (10× 6K RAW) | ≥ 4× faster than Python | Export path implemented; complete workflow not yet measured |
 | Memory per photo | ≤ Python baseline | Not yet measured |
 | RAW decode half-size | ≥ 2× faster than RawPy | **0.99x** (marginally slower) |
 | RAW decode full-size | ≥ 1× RawPy | **0.84x** (~19.7% slower) |
@@ -555,7 +547,7 @@ well-understood and low-risk.
    appending. At 6K×4K, this is ~72 MB. Using `UnsafeMutablePointer` +
    `CGDataProvider` with a release callback would eliminate the copy.
 
-5. The app shell's `loadSelection()` method cancels the previous task but does
+5. The app's `loadSelection()` method cancels the previous task but does
    not handle the case where `selection` changes during decoding (the decoded
    image would be discarded by the `guard self.selection == selection` check,
    which is correct).
@@ -566,7 +558,7 @@ well-understood and low-risk.
    work, but the `settingsLock.withLock` in the setter updates `settings` (a
    private struct) separately from the `@Published` property update. This
    creates a brief window where the published property has been updated but the
-   private `settings` struct has not. Not a correctness bug for the prototype,
+   private `settings` struct has not. Not a correctness bug for the application,
    but should be tightened.
 
 7. The `UInt16Image.pixels` array exposure is `[UInt16]` — a value type that
@@ -615,24 +607,23 @@ well-understood and low-risk.
 | 1.5 WB | ~~vDSP vector ops~~ Done | ~~1 day~~ Complete |
 | 1.7 Saturation | ~~HSV math~~ Done | ~~1 day~~ Complete |
 | 1.6 Exposure | ~~Float32-equivalent gamma and tone polynomials~~ Done | Complete |
-| Phase 2 still preview foundation | ~~Live bindings, GPU kernel, bounded queue~~ Done; ~~GPU equivalence gate~~ Done; latency benchmark + Metal surface remain | Verification remains |
+| Phase 2 still preview foundation | ~~Live bindings, GPU kernel, bounded queue, equivalence gate, and latency benchmark~~ Done; Metal surface and idle authoritative render deferred | Deferred follow-up remains |
 | 1.2 Contours | OpenCV interop setup + binding | 1-2 days |
 | 1.3 Perspective warp | DLT + Metal warp kernel | 2-3 days |
-| 1.4 Histogram EQ | vDSP sort + percentile + caching | 2-3 days |
+| 1.4 Histogram EQ | ~~Percentile + channel scaling~~ Done; broader cache integration remains | Partial follow-up |
 | 1.8 Dust detection | vImage morphology + OpenCV contours | 1-2 days |
 | 1.9 Dust inpainting | OpenCV inpaint binding | 1 day |
 | 1.10 Caching | Hashable signatures | 1 day |
 | 1.11 Batch export | OperationQueue + memory-aware parallelism | 2-3 days |
-| 1.12 Advanced grading | Curves, three-way color wheels, fixtures, GPU match | 1-2 weeks |
+| 1.12 Advanced grading | ~~Curves, three-way color wheels, fixtures, GPU match~~ Done | Complete |
 | 1.13 Export formats | TIFF/JPEG/PNG plus processed-RGB DNG contract | 1-2 weeks |
 | Phase 2 Metal | 4 compute kernels | 1-2 weeks |
 | Phase 3 SwiftUI app | Full inspector + preview + export UI | 2-4 weeks |
 | Phase 4 Polish | Packaging + perf gates + snapshot tests | 1-2 weeks |
 
-Total remaining: approximately **8-16 weeks** to a production-ready native
-application, assuming one full-time developer. Four pipeline stages are now
-complete and the real-time preview foundation is in place. The widest variance
-is in advanced grading, DNG interoperability, and Phase 3 UI work.
+The original estimate is retained as historical context and is no longer a
+current schedule. Export, DNG interoperability, the remaining processing
+stages, and Phase 3 workflow completion are the main sources of uncertainty.
 
 ---
 
@@ -658,11 +649,11 @@ creates a benign bug in `shrink_box` that must be replicated for pixel
 equivalence.
 
 The remaining work is clearly scoped: the actual still-preview renderer
-equivalence and latency gates are verified; the Metal-backed display surface and end-to-end
-real-file latency measurement remain. Next engine stages are contour detection
-+ perspective warp (requiring OpenCV C++ interop), dust detection/inpainting,
-caching, TIFF/JPEG/PNG/DNG export, and the full SwiftUI
-application.
+equivalence and latency gates are verified; the Metal-backed display surface
+and end-to-end real-file latency measurement remain deferred. Export is the
+next product priority, followed by contour detection + perspective warp
+(requiring OpenCV C++ interop), dust detection/inpainting, caching, and the
+remaining SwiftUI application workflows.
 The highest-risk items (contour detection and FMM inpainting) have a clear,
 pragmatic mitigation: use OpenCV C++ interop for both, then optionally replace
 with Metal in Phase 2 for performance.

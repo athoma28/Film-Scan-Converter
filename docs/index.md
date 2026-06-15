@@ -2,10 +2,14 @@
 
 Welcome to the documentation for the Film Scan Converter!
 
-The Python application is the current working application. Use the installation
-and usage guides for normal operation.
+The native Swift/macOS application is the primary product direction and the only
+target for new features. Start with
+[Native macOS Development](development/native-macos.md) for implemented scope,
+known limitations, the current step, and ordered next work.
 
-The native Swift/macOS replacement is under active development. Its single
-authoritative progress page is [Native macOS Development](development/native-macos.md).
-That page identifies the current step, implemented features, limitations, and
-next work.
+The Python/Tkinter application is retained as a maintenance-only legacy
+workflow until the native app completes automatic crop/perspective correction,
+dust handling, and release packaging. Native TIFF, JPEG, PNG, and processed-RGB
+DNG export is implemented. The legacy installation and usage guides remain
+available for users who need the complete crop/perspective/dust workflow. See
+[Legacy Python Application](legacy-python.md) for the retirement policy.

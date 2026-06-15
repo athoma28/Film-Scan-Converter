@@ -1,5 +1,10 @@
 # Performance Engineering Log
 
+> **Historical legacy-Python log:** This records maintenance work completed
+> before the native Swift/macOS application became the primary product. It is
+> not the current roadmap. See
+> [Native macOS Development](docs/development/native-macos.md).
+
 Started: 2026-06-13 20:36:56 PDT
 Branch: `dev`
 

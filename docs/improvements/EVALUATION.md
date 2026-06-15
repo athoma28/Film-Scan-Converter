@@ -4,7 +4,8 @@
 > implementation began. This file records the decisions from that audit and is
 > not the current development plan. See
 > [Native macOS Development](../development/native-macos.md) for authoritative
-> status and next work.
+> status and next work. The Python application is now maintenance-only legacy;
+> see [Legacy Python Status And Retirement](../legacy-python.md).
 
 Evaluated on 2026-06-14 with the requirement that processing output and
 user-facing functionality remain unchanged.
@@ -26,7 +27,7 @@ user-facing functionality remain unchanged.
 
 | Proposal | Reason |
 |---|---|
-| Native Swift/macOS rewrite | Deferred during this audit. It has since started with a partial pixel-equivalence gate; see the current native status page. |
+| Native Swift/macOS rewrite | Historical decision superseded. The native application is now the primary product; see the current native status page. |
 | Replace Matplotlib HSV conversion | Could change pixels; requires equivalence benchmarks before implementation. |
 | Broaden the NumPy pin | Needs a tested Python/OpenCV compatibility matrix. |
 | Split the GUI and redesign class-level settings | High churn with little immediate performance benefit. |

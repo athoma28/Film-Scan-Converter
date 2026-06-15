@@ -376,7 +376,13 @@ class RawProcessing:
         max_dim = max(thresh.shape)
         if max_dim > 2000:
             scale = 2000 / max_dim
-            small_thresh = cv2.resize(thresh, (int(thresh.shape[1] * scale), int(thresh.shape[0] * scale)), interpolation=cv2.INTER_NEAREST)
+            small_width = max(1, int(thresh.shape[1] * scale))
+            small_height = max(1, int(thresh.shape[0] * scale))
+            small_thresh = cv2.resize(
+                thresh,
+                (small_width, small_height),
+                interpolation=cv2.INTER_NEAREST,
+            )
             contours, _ = cv2.findContours(small_thresh, 1, 2)
             if len(contours) == 0:
                 return thresh, None, None

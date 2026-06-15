@@ -10,7 +10,8 @@ You are welcome to develop more technical, niche features. However, if the featu
 
 ## How you can contribute
 
-The primary development effort is the native Swift/macOS rewrite. Before
+The primary product is the native Swift/macOS application. All new features and
+new processing functionality must be implemented there. Before
 starting native work, read
 [Native macOS Development](development/native-macos.md). It is the authoritative
 source for the active step, verified progress, limitations, and ordered next
@@ -26,10 +27,15 @@ preview-only control without an authoritative processing definition.
 Useful contribution areas:
 
 - Complete a task from the current native status page.
-- Expand Python reference fixtures and equivalence coverage.
-- Fix or test the existing Python application without changing output pixels.
+- Expand frozen compatibility fixtures and native regression coverage.
+- Fix critical correctness, data-loss, or compatibility bugs in the legacy
+  Python application without expanding its product surface.
 - Improve processing performance only with before/after benchmarks and
   equivalence tests.
+
+Do not add new Python UI or processing features. The legacy implementation is
+retained only until the retirement gates in
+[Legacy Python Application](legacy-python.md) are complete.
 
 ## Suggesting New Features
 
@@ -47,7 +53,8 @@ Useful contribution areas:
 - Include a brief description of what changes were made, and how you tested it, if applicable.
 - Include sample images especially if the change impacts the image processing pipeline.
 - If the PR is fixing a bug, include the relevant issue number.
-- Native processing changes must add or update an equivalence test before the implementation is accepted.
+- Native processing changes to shared legacy behavior must add or update a
+  compatibility test before the implementation is accepted.
 - Native-only processing features without a Python equivalent must define a
   deterministic authoritative CPU contract and regression fixtures before UI or
   GPU-preview work is accepted.

@@ -1,8 +1,9 @@
 # Development and Contribution
 
-## Active Development
+## Active Product Development
 
-The primary development effort is the native Swift/macOS rewrite. Start with
+The native Swift/macOS application is now the primary product and the only
+target for new features. Start with
 [Native macOS Development](native-macos.md) for the current step, verified
 progress, limitations, and next tasks.
 
@@ -12,23 +13,29 @@ the status page above is authoritative. It now includes the planned
 highlight/midtone/shadow color wheels, overall and per-channel RGB curves, and
 DNG export contract.
 
+The [film-processing research](../film-processing-research.md) defines the
+capture-aware, density-domain inversion direction and its staged implementation
+track.
+
 The [native RAW decode and quality benchmark](native-raw-benchmark.md) records
 the current five-file sample-corpus quality and performance results.
 
-A [real-time still preview plan](realtime-preview-plan.md) documents the active
-slider-feedback blocker, the GPU preview architecture, and its measurable
-completion criteria.
+A [real-time still preview plan](realtime-preview-plan.md) records the completed
+interactive-preview work and deferred display-surface/idle-render follow-up.
 
 A [comprehensive Swift port evaluation](swift-port-evaluation.md) reviews the
 entire native codebase: architecture, code quality, implemented scope, remaining
 work, risks, and effort estimates.
 
-## Existing Python Application
+## Legacy Python Maintenance
 
-The Python application remains the production implementation and the reference
-for output equivalence. Its tests must continue to pass while the native engine
-is developed. Separate Python and native CI workflows protect both sides of
-that contract.
+The Python application is maintenance-only. It remains in place because it is
+still the only complete workflow for crop/perspective correction, dust handling,
+and the legacy all-in-one batch workflow, and because fixture/benchmark tools
+still import it. Native TIFF, JPEG, PNG, and processed-RGB DNG export is
+implemented. Shared legacy behavior is preserved by frozen fixtures; new
+native-only behavior is governed by deterministic Swift CPU contracts. See
+[Legacy Python Application](../legacy-python.md) for retirement gates.
 
 Useful development commands:
 
@@ -38,5 +45,6 @@ swift test --package-path native/FilmScanEngine
 swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
 ```
 
-See [Building](building.md) for the existing Python packaging notes and
+See [Building](building.md) for native build commands and legacy Python
+packaging notes, and
 [Contributing](../contributing.md) for contribution guidance.

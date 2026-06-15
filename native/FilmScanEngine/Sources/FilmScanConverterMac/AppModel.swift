@@ -16,6 +16,11 @@ final class AppModel: ObservableObject {
   }
   @Published private(set) var status = "Drop film scans into the window to begin."
   @Published private(set) var renderStats = RenderStats()
+  @Published private(set) var exportParameters = ExportParameters()
+  @Published private(set) var isExporting = false
+  @Published private(set) var exportProgressCurrent = 0
+  @Published private(set) var exportProgressTotal = 0
+  @Published private(set) var exportErrors: [String] = []
 
   public struct RenderStats: Sendable {
     public var submittedSnapshots: Int = 0
@@ -27,6 +32,7 @@ final class AppModel: ObservableObject {
   }
 
   private var settingsByPath: [String: ProcessingParameters] = [:]
+  private var decodedImagesByPath: [String: UInt16Image] = [:]
   private var previewCache: [String: CachedPreviewSession] = [:]
   private var previewCacheOrder: [String] = []
   private var previewSource: UInt16Image?
@@ -49,19 +55,26 @@ final class AppModel: ObservableObject {
   func importFiles(_ urls: [URL]) {
     let supported = FileDropPolicy.supportedFiles(from: urls)
     guard !supported.isEmpty else {
+      ImportLog.error("No supported files in import batch")
       status = "No supported image or RAW files were dropped."
       return
     }
 
     let existing = Set(files.map(\.standardizedFileURL.path))
-    files.append(contentsOf: supported.filter { !existing.contains($0.standardizedFileURL.path) })
+    let newFiles = supported.filter { !existing.contains($0.standardizedFileURL.path) }
+    ImportLog.importAdded(path: "appending \(newFiles.count) new files (total will be \(files.count + newFiles.count))")
+    files.append(contentsOf: newFiles)
     selection = supported.first
     loadSelection()
   }
 
+  private var loadGeneration = 0
+
   func loadSelection() {
     loadTask?.cancel()
     cancelRenderLoop()
+    loadGeneration += 1
+    let gen = loadGeneration
 
     guard let selection else {
       previewImage = nil
@@ -72,6 +85,8 @@ final class AppModel: ObservableObject {
       return
     }
 
+    ImportLog.loadSelectionStarted(path: selection.lastPathComponent)
+
     previewImage = nil
     decodedImage = nil
     previewSource = nil
@@ -81,12 +96,14 @@ final class AppModel: ObservableObject {
 
     let key = settingsKey(selection)
     if let cached = previewCache[key] {
+      ImportLog.loadSelectionCacheHit(path: selection.lastPathComponent)
       applyCachedSession(cached, selection: selection)
       touchPreviewCache(key)
       return
     }
 
     status = "Decoding \(selection.lastPathComponent)..."
+    ImportLog.loadSelectionDecodeStarted(path: selection.lastPathComponent)
 
     loadTask = Task { [weak self] in
       guard let self else {
@@ -101,21 +118,44 @@ final class AppModel: ObservableObject {
           return try RawImageDecoder.decode(selection).image
         }.value
         try Task.checkCancellation()
-        guard self.selection == selection else {
+        guard gen == self.loadGeneration else {
+          ImportLog.loadSelectionCancelled(path: selection.lastPathComponent)
           return
         }
+        guard self.selection == selection else {
+          ImportLog.loadSelectionCancelled(path: selection.lastPathComponent)
+          return
+        }
+        ImportLog.loadSelectionDecodeComplete(
+          path: selection.lastPathComponent,
+          width: decoded.width,
+          height: decoded.height,
+          channels: decoded.channels
+        )
         decodedImage = decoded
+        decodedImagesByPath[settingsKey(selection)] = decoded
         let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
         previewSource = proxy
         previewRenderer = StillPreviewRenderer(image: proxy)
+        populateFilmNegativeMedians()
         cacheCurrentSession(for: selection)
         scheduleRender(immediate: true)
       } catch is CancellationError {
+        ImportLog.loadSelectionCancelled(path: selection.lastPathComponent)
         return
       } catch {
-        guard self.selection == selection else {
+        guard gen == self.loadGeneration else {
+          ImportLog.loadSelectionCancelled(path: selection.lastPathComponent)
           return
         }
+        guard self.selection == selection else {
+          ImportLog.loadSelectionCancelled(path: selection.lastPathComponent)
+          return
+        }
+        ImportLog.loadSelectionDecodeFailed(
+          path: selection.lastPathComponent,
+          error: error.localizedDescription
+        )
         status = "Unable to decode \(selection.lastPathComponent): \(error.localizedDescription)"
       }
     }
@@ -228,6 +268,45 @@ final class AppModel: ObservableObject {
     updateParameters { $0.flip.toggle() }
   }
 
+  func setFilmNegativeEnabled(_ value: Bool) {
+    let medians = value ? computeFilmNegativeMedians() : nil
+    updateParameters {
+      $0.filmNegativeParams.enabled = value
+      if let medians {
+        $0.filmNegativeParams.measuredMedians = medians
+      }
+    }
+  }
+
+  func setFilmNegativeRedRatio(_ value: Double) {
+    updateParameters { $0.filmNegativeParams.redRatio = value }
+  }
+
+  func setFilmNegativeGreenExp(_ value: Double) {
+    updateParameters { $0.filmNegativeParams.greenExp = value }
+  }
+
+  func setFilmNegativeBlueRatio(_ value: Double) {
+    updateParameters { $0.filmNegativeParams.blueRatio = value }
+  }
+
+  func setFilmNegativePreset(_ preset: FilmNegativePreset) {
+    let medians = preset != .off ? computeFilmNegativeMedians() : nil
+    updateParameters {
+      switch preset {
+      case .off:
+        $0.filmNegativeParams.enabled = false
+      case .colourNegative:
+        $0.filmNegativeParams = FilmNegativeParams.colourNegative
+      case .blackAndWhite:
+        $0.filmNegativeParams = FilmNegativeParams.blackAndWhite
+      }
+      if let medians {
+        $0.filmNegativeParams.measuredMedians = medians
+      }
+    }
+  }
+
   func resetCorrections() {
     parameters = ProcessingParameters()
     saveParameters()
@@ -249,6 +328,169 @@ final class AppModel: ObservableObject {
     importFiles(panel.urls)
   }
 
+  func showExportFolderPicker() {
+    let panel = NSOpenPanel()
+    panel.allowsMultipleSelection = false
+    panel.canChooseDirectories = true
+    panel.canChooseFiles = false
+    panel.canCreateDirectories = true
+    panel.prompt = "Select Export Folder"
+    guard panel.runModal() == .OK, let url = panel.url else {
+      return
+    }
+    exportParameters.destinationDirectory = url
+  }
+
+  func setExportFormat(_ format: ExportFormat) {
+    exportParameters.format = format
+  }
+
+  func setExportFramePercent(_ percent: Int) {
+    exportParameters.framePercent = percent
+  }
+
+  func setExportAspectRatio(_ ratio: AspectRatio?) {
+    exportParameters.aspectRatio = ratio
+  }
+
+  func setExportAspectRatioCustom(width: Int, height: Int) {
+    if width > 0 && height > 0 {
+      exportParameters.aspectRatio = AspectRatio(width: width, height: height)
+    } else {
+      exportParameters.aspectRatio = nil
+    }
+  }
+
+  func setJpegQuality(_ quality: Double) {
+    exportParameters.jpegQuality = quality
+  }
+
+  func setTiffCompression(_ compression: TiffCompression) {
+    exportParameters.tiffCompression = compression
+  }
+
+  func exportSelected() {
+    guard let selection else {
+      status = "No image selected for export."
+      return
+    }
+    exportFiles([selection])
+  }
+
+  func exportAll() {
+    guard !files.isEmpty else {
+      status = "No images to export."
+      return
+    }
+    exportFiles(files)
+  }
+
+  private func exportFiles(_ urls: [URL]) {
+    guard !urls.isEmpty else { return }
+    guard let destDir = exportParameters.destinationDirectory else {
+      status = "Select an export destination folder first."
+      return
+    }
+
+    var params = exportParameters
+    params.destinationDirectory = destDir
+    let exportParams = params
+
+    isExporting = true
+    exportProgressCurrent = 0
+    exportProgressTotal = urls.count
+    exportErrors = []
+    status = "Exporting..."
+
+    Task { [weak self] in
+      guard let self else { return }
+
+      let requests: [ExportManager.ExportRequest] =
+        urls.compactMap { url in
+          let key = self.settingsKey(url)
+          let fileParams = self.settingsByPath[key] ?? ProcessingParameters()
+          guard let decoded = self.decodedImagesByPath[key] ?? self.decodedImage else {
+            return nil
+          }
+
+          var processed: UInt16Image
+          if fileParams.filmType == .cropOnly || fileParams == ProcessingParameters() {
+            processed = decoded.rotated(
+              quarterTurns: fileParams.rotation,
+              flipHorizontally: fileParams.flip
+            )
+          } else {
+            processed = FilmProcessing.correctedPreview(
+              image: decoded,
+              parameters: fileParams
+            )
+          }
+
+          if exportParams.framePercent > 0 || exportParams.aspectRatio != nil {
+            processed = processed.addingFrame(
+              percent: exportParams.framePercent,
+              aspectRatio: exportParams.aspectRatio
+            )
+          }
+
+          let baseName = url.deletingPathExtension().lastPathComponent
+          let ext = exportParams.format.fileExtension
+          let destURL = destDir.appendingPathComponent("\(baseName).\(ext)")
+
+          return ExportManager.ExportRequest(
+            sourceURL: url,
+            destinationURL: destURL,
+            image: processed,
+            parameters: exportParams
+          )
+        }
+
+      if requests.isEmpty {
+        await MainActor.run {
+          self.isExporting = false
+          self.status = "No images could be prepared for export."
+        }
+        return
+      }
+
+      let manager = ExportManager()
+      let results = await manager.exportBatch(
+        requests: requests,
+        progress: { current, total, success in
+          Task { @MainActor in
+            self.exportProgressCurrent = current
+            self.exportProgressTotal = total
+          }
+        }
+      )
+
+      await MainActor.run {
+        self.isExporting = false
+        let failures = results.filter { !$0.isSuccess }
+        if failures.isEmpty {
+          self.status = "Exported \(results.count) image\(results.count == 1 ? "" : "s") to \(destDir.lastPathComponent)."
+        } else {
+          self.exportErrors = failures.compactMap { result in
+            result.error.map { "\(result.sourceURL.lastPathComponent): \($0.localizedDescription)" }
+          }
+          self.status = "Export complete with \(failures.count) error\(failures.count == 1 ? "" : "s")."
+        }
+      }
+    }
+  }
+
+  private func computeFilmNegativeMedians() -> BGRChannelValues? {
+    guard let proxy = previewSource, proxy.channels == 3 else { return nil }
+    return FilmNegativeProcessing.computeMedians(image: proxy, borderPercent: 20.0)
+  }
+
+  private func populateFilmNegativeMedians() {
+    guard let medians = computeFilmNegativeMedians() else { return }
+    updateParameters {
+      $0.filmNegativeParams.measuredMedians = medians
+    }
+  }
+
   private func updateParameters(_ update: (inout ProcessingParameters) -> Void) {
     update(&parameters)
     saveParameters()
@@ -268,8 +510,10 @@ final class AppModel: ObservableObject {
 
   private func applyCachedSession(_ session: CachedPreviewSession, selection: URL) {
     decodedImage = session.decodedImage
+    decodedImagesByPath[settingsKey(selection)] = session.decodedImage
     previewSource = session.previewSource
     previewRenderer = session.previewRenderer
+    populateFilmNegativeMedians()
     status = "Loaded \(selection.lastPathComponent) from preview cache."
     scheduleRender(immediate: true)
   }

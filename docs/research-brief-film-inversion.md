@@ -2,9 +2,9 @@
 
 ## Context
 
-Film Scan Converter is a Swift desktop app that processes RAW scans of film negatives and slides. Currently, the "inversion" step for colour negative film is mathematically trivial: `65535 - pixel_value` (a simple per-pixel negation in 16-bit). After inversion, the same generic color adjustments (histogram equalization, gamma, shadows/highlights, saturation, white balance, RGB curves, color wheels) are applied identically regardless of film stock.
+Film Scan Converter is a Swift desktop app that processes RAW scans of film negatives and slides. The initial "inversion" step for colour negative film was mathematically trivial: `65535 - pixel_value` (a simple per-pixel negation in 16-bit). After inversion, the same generic color adjustments (histogram equalization, gamma, shadows/highlights, saturation, white balance, RGB curves, color wheels) were applied identically regardless of film stock.
 
-This is inadequate for photographic use. Real film negative inversion requires compensating for the orange mask (dye couplers in C-41 film), the characteristic density curves of each film stock, and the nonlinear relationship between negative density and scene-referred color. Without this, users must manually fight the orange cast and nonlinear color shifts with every scan.
+**Milestone: RawTherapee-compatible power-law inversion implemented (2026-06-15).** The inversion step has been replaced with a per-channel power-law model: `output = multiplier × pixel^-(greenExp × ratio)`. Auto-calibration via 20%-border-cut channel medians replaces the need for manual reference input and anchors the representative median to neutral middle gray. Color Negative (RedRatio=1.36, GreenExp=1.5, BlueRatio=0.86) and Black & White (all ratios=1.0) presets match RawTherapee's `Film Negative.pp3` and `Film Negative - Black and White.pp3`. The orange mask is compensated through the asymmetric channel ratios.
 
 **We are explicitly avoiding deep learning for this project.** The goal is a deterministic, math-based, performant Swift implementation. No CNNs, no models, no training.
 
@@ -88,7 +88,7 @@ The reference library is our calibration asset. Approach:
 These projects have already solved pieces of this problem. Read their source code:
 
 - **darktable negadoctor** (`src/iop/negadoctor.c`): Per-channel black point from rebate, automatic mask detection, D-log E curve approximation.
-- **RawTherapee Film Negative tool** (`rtengine/ipfrawneg.cc`): Similar approach, worth comparing to darktable.
+- **RawTherapee Film Negative tool** (`rtengine/filmnegativeproc.cc`): Per-channel power-law model adopted as Phase 1 implementation. Parameters (redRatio, greenExp, blueRatio) and auto-calibration via medians implemented in Swift with CPU/GPU/Metal parity. Upcoming phases target base density + color space conversion and flat-field calibration.
 - **filmulator** (`github.com/CarVac/filmulator-gui`): Approaches the problem from the other direction — simulates film development from a digital image. The forward model might be invertible.
 - **Grain2Pixel** (Photoshop plugin, closed source but worth studying the output/methodology): Reportedly uses a large database of per-stock calibration shots.
 - **Negative Lab Pro** (Lightroom plugin, closed source): The most popular commercial tool. Any technical blog posts, interviews with the developer, or reverse-engineering writeups?

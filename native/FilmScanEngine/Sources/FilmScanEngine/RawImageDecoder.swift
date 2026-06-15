@@ -18,8 +18,11 @@ public enum RawImageDecoder {
     guard url.isFileURL,
       FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased())
     else {
+      DecodeLog.rawDecodeFailed(path: url.lastPathComponent, error: "unsupportedFileType")
       throw RawImageDecoderError.unsupportedFileType
     }
+
+    DecodeLog.rawDecodeStarted(path: url.lastPathComponent, fullResolution: fullResolution)
 
     var output = fsc_raw_image()
     var errorBytes = [CChar](repeating: 0, count: 512)
@@ -34,6 +37,7 @@ public enum RawImageDecoder {
     }
     guard code == 0 else {
       let message = decodedCString(errorBytes)
+      DecodeLog.rawDecodeFailed(path: url.lastPathComponent, error: message.isEmpty ? "Unknown LibRaw error." : message)
       throw RawImageDecoderError.decodeFailed(message.isEmpty ? "Unknown LibRaw error." : message)
     }
     defer {
@@ -54,6 +58,14 @@ public enum RawImageDecoder {
         String(cString: $0)
       }
     }
+    let version = String(cString: fsc_libraw_version())
+    DecodeLog.rawDecodeComplete(
+      path: url.lastPathComponent,
+      width: Int(output.width),
+      height: Int(output.height),
+      colorDescription: colorDescription,
+      version: version
+    )
     return RawDecodeResult(
       image: UInt16Image(
         width: Int(output.width),
@@ -62,7 +74,7 @@ public enum RawImageDecoder {
         pixels: pixels
       ),
       colorDescription: colorDescription,
-      decoderVersion: String(cString: fsc_libraw_version())
+      decoderVersion: version
     )
   }
 

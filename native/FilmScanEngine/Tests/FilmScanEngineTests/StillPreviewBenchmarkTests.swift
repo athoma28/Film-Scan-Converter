@@ -1,3 +1,4 @@
+import CoreGraphics
 import FilmScanEngine
 import FilmScanPreviewRenderer
 import Foundation
@@ -140,5 +141,78 @@ struct StillPreviewBenchmarkTests {
         #expect(rendered.height > 0)
       }
     }
+  }
+
+  @Test("Production renderer stays visually equivalent to authoritative CPU pipeline")
+  func productionRendererMatchesAuthoritativePipeline() {
+    let image = Self.createRandomImage(width: 128, height: 96)
+    guard let renderer = StillPreviewRenderer(image: image) else {
+      #expect(Bool(false), "Could not create production still preview renderer")
+      return
+    }
+    let redCurve = [
+      CurvePoint(input: 0, output: 0.05),
+      CurvePoint(input: 0.45, output: 0.7),
+      CurvePoint(input: 1, output: 0.95),
+    ]
+    let greenCurve = [
+      CurvePoint(input: 0, output: 0),
+      CurvePoint(input: 0.5, output: 0.3),
+      CurvePoint(input: 1, output: 1),
+    ]
+    let blueCurve = [
+      CurvePoint(input: 0, output: 0.1),
+      CurvePoint(input: 0.65, output: 0.45),
+      CurvePoint(input: 1, output: 1),
+    ]
+    let parameters = ProcessingParameters(
+      flip: true,
+      rotation: 1,
+      filmType: .colourNegative,
+      gamma: 35,
+      shadows: 40,
+      highlights: -30,
+      temperature: 45,
+      tint: -25,
+      saturation: 145,
+      curveEnabled: true,
+      curveControlPoints: Self.curvePoints,
+      redCurveEnabled: true,
+      redCurveControlPoints: redCurve,
+      greenCurveEnabled: true,
+      greenCurveControlPoints: greenCurve,
+      blueCurveEnabled: true,
+      blueCurveControlPoints: blueCurve,
+      highlightWheel: ColorWheel(hue: 35, strength: 0.4),
+      midtoneWheel: ColorWheel(hue: 190, strength: 0.25),
+      shadowWheel: ColorWheel(hue: 285, strength: 0.5)
+    )
+
+    guard
+      let gpu = renderer.render(parameters: parameters, showOriginal: false),
+      let cpu = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+        .makePreviewCGImage(),
+      let gpuPixels = rgbaPixels(gpu),
+      let cpuPixels = rgbaPixels(cpu)
+    else {
+      #expect(Bool(false), "Could not render or extract comparison pixels")
+      return
+    }
+
+    #expect(gpu.width == cpu.width)
+    #expect(gpu.height == cpu.height)
+    #expect(gpuPixels.count == cpuPixels.count)
+    var maxDifference = 0
+    for index in gpuPixels.indices {
+      maxDifference = max(maxDifference, abs(Int(gpuPixels[index]) - Int(cpuPixels[index])))
+    }
+    #expect(maxDifference <= 2, "Production renderer differs from CPU by \(maxDifference)/255")
+  }
+
+  private func rgbaPixels(_ image: CGImage) -> [UInt8]? {
+    guard let data = image.dataProvider?.data, let pointer = CFDataGetBytePtr(data) else {
+      return nil
+    }
+    return Array(UnsafeBufferPointer(start: pointer, count: image.width * image.height * 4))
   }
 }

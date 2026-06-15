@@ -1,5 +1,10 @@
 # Representative RAF Benchmark
 
+> **Historical legacy-Python benchmark:** This records the selected-edit
+> baseline used during native compatibility work. See
+> [Native RAW Decode And Quality Benchmark](docs/development/native-raw-benchmark.md)
+> for the current native decode comparison.
+
 Date: 2026-06-13 21:06:32 PDT  
 Branch: `dev`
 

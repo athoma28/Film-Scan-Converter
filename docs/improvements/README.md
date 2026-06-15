@@ -5,7 +5,9 @@ not the authoritative development status.
 
 ## Current Direction
 
-The active development effort is the native Swift/macOS rewrite. Use
+The native Swift/macOS application is the primary product and the only target
+for new features. The Python application is maintenance-only legacy code; see
+[Legacy Python Status And Retirement](../legacy-python.md). Use
 [Native macOS Development](../development/native-macos.md) for:
 
 - the current development step;

@@ -16,7 +16,7 @@ This file contains only package-local build and implementation notes.
   and TIFF files into 16-bit BGR or grayscale `UInt16Image` buffers.
 - `RawImageDecoder` uses a narrow C shim over thread-safe LibRaw and reproduces
   the production RawPy settings in owned 16-bit BGR buffers.
-- `FilmScanConverterMac` is a buildable SwiftUI app shell. Dropping supported
+- `FilmScanConverterMac` is the primary SwiftUI application. Dropping supported
   standard or RAW images into its main window decodes and previews them through
   the engine without blocking the main actor.
 - Imported files expose per-file film mode,
@@ -27,9 +27,9 @@ This file contains only package-local build and implementation notes.
   the full decoded source for later export work. The two most recent
   decoded/proxy/renderer sessions are cached for immediate switching. The
   actual Core Image renderer is verified against the CPU path across 2,655
-  comparisons with a maximum difference of 2/255, and its current-pipeline
-  benchmark measures approximately 10 ms p95 at 1080×720. End-to-end real-file
-  drag latency still requires verification. See the
+  comparisons with a maximum difference of 2/255, and its latest current-pipeline
+  benchmark measured 3.74 ms p95 at 1080×720. End-to-end real-file drag
+  latency still requires verification. See the
   [real-time still preview plan](../docs/development/realtime-preview-plan.md).
 - Its optional live camera view uses AVFoundation and a GPU-backed Core Image
   context for negative inversion, exposure, and saturation preview corrections.
@@ -45,21 +45,45 @@ This file contains only package-local build and implementation notes.
 - `FilmScanRawBenchmark` compares release-mode native decode speed and decoded
   quality against the RawPy corpus runner. See the
   [benchmark report](../docs/development/native-raw-benchmark.md).
+- `FilmNegativeProcessing` provides standalone film-specific engine APIs for
+  BGR black-level correction, matched flat-field normalization, optical-density
+  conversion, manual base-density subtraction, manual rebate base measurement,
+  roll-profile storage, and base-density precedence resolution. The
+  density-domain primitives and roll profiles are not yet connected to preview
+  or export.
+- RawTherapee-compatible film negative power-law inversion is connected to the
+  correction preview and export path through the CPU engine, GPU-equivalent
+  model, and Core Image/Metal preview renderer. It uses 20%-border-cut channel
+  medians to calibrate the representative image median to neutral middle gray.
+- TIFF, JPEG, PNG, and processed-RGB DNG export are implemented with individual
+  and memory-bounded batch workflows, background processing, cancellation,
+  per-file errors, frame/aspect-ratio options, JPEG quality, and TIFF LZW
+  compression.
 
-The package is not yet a replacement for the production Python application.
-Crop detection, perspective warp, dust handling, and export are the current
-missing pieces. Threshold generation, white balance, saturation, exposure,
-histogram equalisation, highlight/midtone/shadow color wheels, and overall and
-per-channel RGB curves are implemented.
+The native application is the primary product and the only target for new
+features. It is not yet a complete replacement for the maintenance-only legacy
+Python application: automatic crop detection, perspective warp, dust handling,
+settings migration, packaging/release validation, and fixture independence are
+the current retirement gates. See
+[Legacy Python Status And Retirement](../docs/legacy-python.md).
+Threshold generation, white balance, saturation, exposure, histogram
+equalisation, highlight/midtone/shadow color wheels, and overall and per-channel
+RGB curves are implemented.
 Standard images with alpha channels are intentionally rejected until the
 processing pipeline defines four-channel behavior.
 
-Install the native dependency and generate or refresh the reference fixtures:
+Install the native dependency:
 
 ```sh
 brew install libraw
-python3 tests/generate_native_snapshots.py
-python3 tests/generate_raw_decode_reference.py
+```
+
+Refresh frozen legacy compatibility fixtures only when intentionally changing
+shared behavior:
+
+```sh
+.venv/bin/python tests/generate_native_snapshots.py
+.venv/bin/python tests/generate_raw_decode_reference.py
 ```
 
 Run the native regression gate:
@@ -68,7 +92,7 @@ Run the native regression gate:
 swift test --package-path native/FilmScanEngine
 ```
 
-Build or run the native app shell:
+Build or run the native app:
 
 ```sh
 swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
@@ -91,7 +115,8 @@ standard video feed; those cameras need a future vendor SDK or tethering
 adapter. Live view is intentionally a fast 8-bit preview path. Final captures
 still go through the pixel-equivalent 16-bit RAW pipeline as that port lands.
 
-Fixture changes must be reviewed alongside the Python behavior change that
-caused them. The next engine stages should follow the same pattern: generate a
-Python reference output, implement the Swift stage, then require exact equality
-or document a narrowly-scoped tolerance.
+Fixture changes must be reviewed alongside the legacy behavior change that
+caused them. Shared legacy behavior should use frozen compatibility output and
+require exact equality or a narrowly scoped documented tolerance. Native-only
+features must define and test their authoritative Swift CPU behavior directly;
+they must not be backported to Python solely to create a reference.

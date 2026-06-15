@@ -24,21 +24,86 @@ public enum GPUKernelModel {
     }
 
     if parameters.filmType == .blackAndWhiteNegative {
-      for i in 0..<pixelCount {
-        let base = i * 3
-        let gray = 0.299 * rgb[base + 2] + 0.587 * rgb[base + 1] + 0.114 * rgb[base]
-        let inv = 1.0 - gray
-        rgb[base + 2] = inv
-        rgb[base + 1] = inv
-        rgb[base] = inv
+      if parameters.filmNegativeParams.enabled {
+        let fnp = parameters.filmNegativeParams
+        let rexp = Float(-(fnp.greenExp * fnp.redRatio))
+        let gexp = Float(-fnp.greenExp)
+        let bexp = Float(-(fnp.greenExp * fnp.blueRatio))
+        let multTarget = Float(FilmNegativeProcessing.calibrationTargetFraction)
+        let bM: Float
+        let gM: Float
+        let rM: Float
+        if let med = fnp.measuredMedians {
+          bM = Float(med.blue) / 65535.0
+          gM = Float(med.green) / 65535.0
+          rM = Float(med.red) / 65535.0
+        } else {
+          bM = channelMedianFloat(pixels: rgb, channel: 0, pixelCount: pixelCount)
+          gM = channelMedianFloat(pixels: rgb, channel: 1, pixelCount: pixelCount)
+          rM = channelMedianFloat(pixels: rgb, channel: 2, pixelCount: pixelCount)
+        }
+        let bMult = multTarget / pow(max(bM, 1.0 / 65535.0), bexp)
+        let gMult = multTarget / pow(max(gM, 1.0 / 65535.0), gexp)
+        let rMult = multTarget / pow(max(rM, 1.0 / 65535.0), rexp)
+        for i in 0..<pixelCount {
+          let base = i * 3
+          rgb[base + 2] = clamp(rMult * pow(rgb[base + 2], rexp), 0, 1)
+          rgb[base + 1] = clamp(gMult * pow(rgb[base + 1], gexp), 0, 1)
+          rgb[base] = clamp(bMult * pow(rgb[base], bexp), 0, 1)
+        }
+        for i in 0..<pixelCount {
+          let base = i * 3
+          let gray = 0.299 * rgb[base + 2] + 0.587 * rgb[base + 1] + 0.114 * rgb[base]
+          rgb[base + 2] = gray
+          rgb[base + 1] = gray
+          rgb[base] = gray
+        }
+      } else {
+        for i in 0..<pixelCount {
+          let base = i * 3
+          let gray = 0.299 * rgb[base + 2] + 0.587 * rgb[base + 1] + 0.114 * rgb[base]
+          let inv = 1.0 - gray
+          rgb[base + 2] = inv
+          rgb[base + 1] = inv
+          rgb[base] = inv
+        }
       }
     } else {
       if parameters.filmType == .colourNegative {
-        for i in 0..<pixelCount {
-          let base = i * 3
-          rgb[base + 2] = 1.0 - rgb[base + 2]
-          rgb[base + 1] = 1.0 - rgb[base + 1]
-          rgb[base] = 1.0 - rgb[base]
+        if parameters.filmNegativeParams.enabled {
+          let fnp = parameters.filmNegativeParams
+          let rexp = Float(-(fnp.greenExp * fnp.redRatio))
+          let gexp = Float(-fnp.greenExp)
+          let bexp = Float(-(fnp.greenExp * fnp.blueRatio))
+          let multTarget = Float(FilmNegativeProcessing.calibrationTargetFraction)
+          let bM: Float
+          let gM: Float
+          let rM: Float
+          if let med = fnp.measuredMedians {
+            bM = Float(med.blue) / 65535.0
+            gM = Float(med.green) / 65535.0
+            rM = Float(med.red) / 65535.0
+          } else {
+            bM = channelMedianFloat(pixels: rgb, channel: 0, pixelCount: pixelCount)
+            gM = channelMedianFloat(pixels: rgb, channel: 1, pixelCount: pixelCount)
+            rM = channelMedianFloat(pixels: rgb, channel: 2, pixelCount: pixelCount)
+          }
+          let bMult = multTarget / pow(max(bM, 1.0 / 65535.0), bexp)
+          let gMult = multTarget / pow(max(gM, 1.0 / 65535.0), gexp)
+          let rMult = multTarget / pow(max(rM, 1.0 / 65535.0), rexp)
+          for i in 0..<pixelCount {
+            let base = i * 3
+            rgb[base + 2] = clamp(rMult * pow(rgb[base + 2], rexp), 0, 1)
+            rgb[base + 1] = clamp(gMult * pow(rgb[base + 1], gexp), 0, 1)
+            rgb[base] = clamp(bMult * pow(rgb[base], bexp), 0, 1)
+          }
+        } else {
+          for i in 0..<pixelCount {
+            let base = i * 3
+            rgb[base + 2] = 1.0 - rgb[base + 2]
+            rgb[base + 1] = 1.0 - rgb[base + 1]
+            rgb[base] = 1.0 - rgb[base]
+          }
         }
       }
 
@@ -55,21 +120,6 @@ public enum GPUKernelModel {
         }
       }
 
-      if parameters.saturation != 100 {
-        let satFactor = Float(parameters.saturation) / 100.0
-        for i in 0..<pixelCount {
-          let base = i * 3
-          let r = clamp(rgb[base + 2], 0, 1)
-          let g = clamp(rgb[base + 1], 0, 1)
-          let b = clamp(rgb[base], 0, 1)
-          var (h, s, v) = rgbToHsvFloat32(r: r, g: g, b: b)
-          s = clamp(s * satFactor, 0, 1)
-          let (r2, g2, b2) = hsvToRgbFloat32(h: h, s: s, v: v)
-          rgb[base + 2] = r2
-          rgb[base + 1] = g2
-          rgb[base] = b2
-        }
-      }
     }
 
     if parameters.gamma != 0 || parameters.shadows != 0 || parameters.highlights != 0 {
@@ -195,6 +245,22 @@ public enum GPUKernelModel {
       }
     }
 
+    if !isBW && parameters.saturation != 100 {
+      let satFactor = Float(parameters.saturation) / 100.0
+      for i in 0..<pixelCount {
+        let base = i * 3
+        let r = clamp(rgb[base + 2], 0, 1)
+        let g = clamp(rgb[base + 1], 0, 1)
+        let b = clamp(rgb[base], 0, 1)
+        var (h, s, v) = rgbToHsvFloat32(r: r, g: g, b: b)
+        s = clamp(s * satFactor, 0, 1)
+        let (r2, g2, b2) = hsvToRgbFloat32(h: h, s: s, v: v)
+        rgb[base + 2] = r2
+        rgb[base + 1] = g2
+        rgb[base] = b2
+      }
+    }
+
     var out = [UInt16](repeating: 0, count: pixelCount * 3)
     for i in 0..<pixelCount {
       let base = i * 3
@@ -214,6 +280,21 @@ private func clamp(_ value: Float, _ lo: Float, _ hi: Float) -> Float {
   min(max(value, lo), hi)
 }
 
+private func channelMedianFloat(pixels: [Float], channel: Int, pixelCount: Int) -> Float {
+  var vals = [Float]()
+  vals.reserveCapacity(pixelCount)
+  for i in 0..<pixelCount {
+    vals.append(pixels[i * 3 + channel])
+  }
+  vals.sort()
+  guard !vals.isEmpty else { return 0 }
+  let mid = vals.count / 2
+  if vals.count.isMultiple(of: 2) {
+    return (vals[mid - 1] + vals[mid]) / 2.0
+  }
+  return vals[mid]
+}
+
 public enum FilmProcessing {
   public static func correctedPreview(
     image: UInt16Image,
@@ -228,9 +309,22 @@ public enum FilmProcessing {
     }
 
     if parameters.filmType == .blackAndWhiteNegative {
-      working = grayscale(working, inverted: true)
+      if parameters.filmNegativeParams.enabled {
+        working = FilmNegativeProcessing.applyPowerLawInversion(
+          image: working, params: parameters.filmNegativeParams
+        )
+        working = grayscale(working, inverted: false)
+      } else {
+        working = grayscale(working, inverted: true)
+      }
     } else if parameters.filmType == .colourNegative {
-      working = inverted(working)
+      if parameters.filmNegativeParams.enabled {
+        working = FilmNegativeProcessing.applyPowerLawInversion(
+          image: working, params: parameters.filmNegativeParams
+        )
+      } else {
+        working = inverted(working)
+      }
     }
 
     let adjustWhiteBalance =

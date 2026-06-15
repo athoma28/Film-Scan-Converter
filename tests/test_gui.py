@@ -133,6 +133,19 @@ class GUITests(unittest.TestCase):
         self.assertIn(('Import...', {'state': tk.NORMAL}), gui.filemenu.calls)
         gui.hide_progress.assert_called_once_with()
 
+    def test_export_cancels_pending_preview_processing_before_starting_thread(self):
+        gui = GUI.__new__(GUI)
+        gui.photos = [FakePhoto()]
+        gui.destination_folder = '/tmp'
+        gui._cancel_debounce = mock.Mock()
+
+        with mock.patch('GUI.threading.Thread') as thread:
+            gui.export()
+
+        gui._cancel_debounce.assert_called_once_with()
+        thread.assert_called_once()
+        thread.return_value.start.assert_called_once_with()
+
     @staticmethod
     def make_batch_gui():
         gui = GUI.__new__(GUI)

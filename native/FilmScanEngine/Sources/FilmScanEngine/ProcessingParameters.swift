@@ -5,6 +5,14 @@ public enum FilmType: Int, Codable, CaseIterable, Hashable, Sendable {
   case colourNegative
   case slide
   case cropOnly
+
+  public var supportsToneCorrections: Bool {
+    self != .cropOnly
+  }
+
+  public var supportsColorCorrections: Bool {
+    self == .colourNegative || self == .slide
+  }
 }
 
 public struct CurvePoint: Codable, Equatable, Hashable, Sendable {
@@ -27,6 +35,57 @@ public struct ColorWheel: Codable, Equatable, Sendable {
   }
 
   public var isNeutral: Bool { strength == 0 }
+}
+
+public struct FilmNegativeParams: Codable, Equatable, Sendable {
+  public var enabled: Bool
+  public var redRatio: Double
+  public var greenExp: Double
+  public var blueRatio: Double
+
+  public var measuredMedians: BGRChannelValues?
+
+  private enum CodingKeys: String, CodingKey {
+    case enabled
+    case redRatio
+    case greenExp
+    case blueRatio
+  }
+
+  public init(
+    enabled: Bool = false,
+    redRatio: Double = 1.360,
+    greenExp: Double = 1.5,
+    blueRatio: Double = 0.86,
+    measuredMedians: BGRChannelValues? = nil
+  ) {
+    self.enabled = enabled
+    self.redRatio = redRatio
+    self.greenExp = greenExp
+    self.blueRatio = blueRatio
+    self.measuredMedians = measuredMedians
+  }
+
+  public static let colourNegative = FilmNegativeParams(
+    enabled: true, redRatio: 1.360, greenExp: 1.5, blueRatio: 0.86
+  )
+  public static let blackAndWhite = FilmNegativeParams(
+    enabled: true, redRatio: 1.0, greenExp: 1.5, blueRatio: 1.0
+  )
+}
+
+public enum FilmNegativePreset: Int, CaseIterable, Hashable, Sendable {
+  case off
+  case colourNegative
+  case blackAndWhite
+
+  public var displayName: String {
+    switch self {
+    case .off: "Off"
+    case .colourNegative: "Color Negative"
+    case .blackAndWhite: "Black & White"
+    }
+  }
 }
 
 public struct ProcessingParameters: Codable, Equatable, Sendable {
@@ -54,6 +113,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
   public var highlightWheel: ColorWheel
   public var midtoneWheel: ColorWheel
   public var shadowWheel: ColorWheel
+  public var filmNegativeParams: FilmNegativeParams
 
   public init(
     borderCrop: Double = 0,
@@ -79,7 +139,8 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     blueCurveControlPoints: [CurvePoint] = [],
     highlightWheel: ColorWheel = ColorWheel(),
     midtoneWheel: ColorWheel = ColorWheel(),
-    shadowWheel: ColorWheel = ColorWheel()
+    shadowWheel: ColorWheel = ColorWheel(),
+    filmNegativeParams: FilmNegativeParams = FilmNegativeParams()
   ) {
     self.borderCrop = borderCrop
     self.flip = flip
@@ -105,6 +166,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     self.highlightWheel = highlightWheel
     self.midtoneWheel = midtoneWheel
     self.shadowWheel = shadowWheel
+    self.filmNegativeParams = filmNegativeParams
   }
 }
 

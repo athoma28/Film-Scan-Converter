@@ -1049,6 +1049,7 @@ class GUI:
         # Start export in seperate thread to keep UI responsive
         if len([photo for photo in self.photos if not photo.reject]) == 0:
             return
+        self._cancel_debounce()
         if not self.destination_folder:
             self.destination_folder = "export"  # sets default export folder
         if not os.path.exists(self.destination_folder):

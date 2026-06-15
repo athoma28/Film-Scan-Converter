@@ -49,6 +49,18 @@ struct UInt16ImageTests {
     #expect(decoded == parameters)
   }
 
+  @Test("Film modes expose only corrections that processing applies")
+  func filmModeCorrectionCapabilities() {
+    #expect(FilmType.cropOnly.supportsToneCorrections == false)
+    #expect(FilmType.cropOnly.supportsColorCorrections == false)
+    #expect(FilmType.blackAndWhiteNegative.supportsToneCorrections == true)
+    #expect(FilmType.blackAndWhiteNegative.supportsColorCorrections == false)
+    #expect(FilmType.colourNegative.supportsToneCorrections == true)
+    #expect(FilmType.colourNegative.supportsColorCorrections == true)
+    #expect(FilmType.slide.supportsToneCorrections == true)
+    #expect(FilmType.slide.supportsColorCorrections == true)
+  }
+
   @Test("Preview proxy fits within the requested dimension")
   func previewProxyResize() {
     let image = UInt16Image(

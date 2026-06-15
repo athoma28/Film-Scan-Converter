@@ -1,14 +1,23 @@
 # Building
 
-This page covers packaging the existing Python application. For the active
-native Swift/macOS build and test commands, see
-[Native macOS Development](native-macos.md).
+The native Swift/macOS application is the primary product. The Python packaging
+notes below are retained only for maintenance of the legacy cross-platform
+workflow. See [Legacy Python Application](../legacy-python.md).
 
 The native package requires Homebrew LibRaw:
 
 ```sh
 brew install libraw
 ```
+
+Run the native regression gate and build the app:
+
+```sh
+swift test --package-path native/FilmScanEngine
+swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
+```
+
+## Legacy Python Packaging
 
 ## Building Binaries using pyinstaller
 

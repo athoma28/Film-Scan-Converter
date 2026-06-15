@@ -1,14 +1,18 @@
 # Test Suite
 
-This directory contains the Python reference and regression tests. The Python
-pipeline remains the source of truth while the native engine is ported. See
+This directory contains legacy Python regression tests, compatibility-fixture
+generators, and native benchmark helpers. The Python pipeline is no longer the
+design authority for new features. Shared historical behavior is frozen here
+for compatibility while new native behavior uses deterministic Swift CPU
+contracts. See
 [Native macOS Development](../docs/development/native-macos.md) for the current
-porting step and the combined Python/Swift test workflow.
+development step and [Legacy Python Application](../docs/legacy-python.md) for
+the retirement policy.
 
 The default suite is deterministic, dependency-light, and designed to run quickly:
 
 ```sh
-python3 -m unittest discover -v
+.venv/bin/python -m unittest discover -v
 ```
 
 It verifies pixel equivalence against reference implementations for thresholding, dust detection, histogram equalization, histogram rendering, exposure, white balance, and contour overlays. It also verifies cache invalidation, multiprocessing serialization, processing-counter cleanup after exceptions, failed-write reporting and retry behavior, batch-export UI restoration, and export error-dialog formatting.
@@ -28,7 +32,7 @@ present. The RAF files remain outside version control.
 Performance benchmarks are opt-in so normal test runs remain stable:
 
 ```sh
-RUN_PERFORMANCE_TESTS=1 python3 -m unittest tests.test_performance -v
+RUN_PERFORMANCE_TESTS=1 .venv/bin/python -m unittest tests.test_performance -v
 ```
 
 Benchmarks report best-of-several timings and do not enforce hardware-specific timing thresholds.
@@ -36,13 +40,13 @@ Benchmarks report best-of-several timings and do not enforce hardware-specific t
 The representative RAF corpus benchmark uses decoded 16-bit BGR arrays:
 
 ```sh
-python3 tests/generate_raw_decode_reference.py
+.venv/bin/python tests/generate_raw_decode_reference.py
 
-python3 tests/decode_sample_raw.py \
+.venv/bin/python tests/decode_sample_raw.py \
   --raw-dir sample-raw \
   --output-dir /tmp/film_scan_corpus
 
-python3 tests/benchmark_sample_raw.py \
+.venv/bin/python tests/benchmark_sample_raw.py \
   --decoded-dir /tmp/film_scan_corpus \
   --output-dir /tmp/film_scan_benchmark
 ```
@@ -59,7 +63,7 @@ swift build -c release \
 native/FilmScanEngine/.build/release/FilmScanRawBenchmark \
   sample-raw /tmp/film_scan_native_decode.json 3
 
-python3 tests/compare_raw_decode_benchmarks.py \
+.venv/bin/python tests/compare_raw_decode_benchmarks.py \
   --rawpy /tmp/film_scan_corpus/decode_results.json \
   --native /tmp/film_scan_native_decode.json \
   --output /tmp/film_scan_decode_comparison.json

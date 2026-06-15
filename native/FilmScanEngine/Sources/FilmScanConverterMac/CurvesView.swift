@@ -176,22 +176,8 @@ struct IntegratedCurvesView: View {
       let toView = makeViewTransform(drawRect: drawRect)
       let pts = sorted.map { toView(CGPoint(x: $0.input, y: $0.output)) }
       path.move(to: pts[0])
-
-      if sorted.count == 2 {
-        path.addLine(to: pts[1])
-      } else {
-        for i in 0..<(pts.count - 1) {
-          let p0 = pts[max(0, i - 1)]
-          let p1 = pts[i]
-          let p2 = pts[i + 1]
-          let p3 = pts[min(pts.count - 1, i + 2)]
-          for s in 0..<20 {
-            let t = CGFloat(s) / 20.0
-            let pt = catmullRom(p0: p0, p1: p1, p2: p2, p3: p3, t: t)
-            if i == 0 && s == 0 { path.move(to: pt) } else { path.addLine(to: pt) }
-          }
-        }
-        path.addLine(to: pts[pts.count - 1])
+      for point in pts.dropFirst() {
+        path.addLine(to: point)
       }
     }
     .stroke(selectedChannel.color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
@@ -428,12 +414,5 @@ struct IntegratedCurvesView: View {
     guard index < points.count else { return }
     points[index] = CurvePoint(input: points[index].input, output: value)
     setControlPoints(points)
-  }
-
-  private func catmullRom(p0: CGPoint, p1: CGPoint, p2: CGPoint, p3: CGPoint, t: CGFloat) -> CGPoint {
-    let t2 = t * t, t3 = t2 * t
-    let x = 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3)
-    let y = 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3)
-    return CGPoint(x: x, y: y)
   }
 }

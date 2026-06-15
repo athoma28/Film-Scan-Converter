@@ -48,6 +48,30 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       output = oriented
     } else {
       let lutImage = curveLUTImage(parameters: parameters)
+
+      let fnp = parameters.filmNegativeParams
+      let fnEnabled = parameters.filmNegativeParams.enabled
+        && (parameters.filmType == .colourNegative || parameters.filmType == .blackAndWhiteNegative)
+        && fnp.measuredMedians != nil
+      let (fnRExp, fnGExp, fnBExp): (Float, Float, Float)
+      let (fnRMult, fnGMult, fnBMult): (Float, Float, Float)
+
+      if fnEnabled, let medians = fnp.measuredMedians {
+        fnRExp = Float(-(fnp.greenExp * fnp.redRatio))
+        fnGExp = Float(-fnp.greenExp)
+        fnBExp = Float(-(fnp.greenExp * fnp.blueRatio))
+        let target = Float(FilmNegativeProcessing.calibrationTargetFraction)
+        let bM = max(Float(medians.blue) / 65535.0, 1.0 / 65535.0)
+        let gM = max(Float(medians.green) / 65535.0, 1.0 / 65535.0)
+        let rM = max(Float(medians.red) / 65535.0, 1.0 / 65535.0)
+        fnRMult = target / pow(rM, fnRExp)
+        fnGMult = target / pow(gM, fnGExp)
+        fnBMult = target / pow(bM, fnBExp)
+      } else {
+        fnRExp = 0; fnGExp = 0; fnBExp = 0
+        fnRMult = 1; fnGMult = 1; fnBMult = 1
+      }
+
       guard
         let corrected = correctionKernel.apply(
           extent: oriented.extent,
@@ -70,6 +94,13 @@ public final class StillPreviewRenderer: @unchecked Sendable {
             Float(parameters.midtoneWheel.strength),
             Float(parameters.shadowWheel.hue),
             Float(parameters.shadowWheel.strength),
+            Float(fnEnabled ? 1 : 0),
+            fnRExp,
+            fnGExp,
+            fnBExp,
+            fnRMult,
+            fnGMult,
+            fnBMult,
           ]
         )
       else {
@@ -278,17 +309,34 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       float midtoneHue,
       float midtoneStrength,
       float shadowHue,
-      float shadowStrength
+      float shadowStrength,
+      float filmNegativeEnabled,
+      float fnRExp,
+      float fnGExp,
+      float fnBExp,
+      float fnRMult,
+      float fnGMult,
+      float fnBMult
     ) {
       vec4 pixel = sample(image, samplerCoord(image));
       vec3 rgb = pixel.rgb;
       bool isBW = (filmType == 0.0);
 
-      if (isBW) {
-        float gray = dot(rgb, vec3(0.299, 0.587, 0.114));
-        rgb = vec3(1.0 - gray);
-      } else if (filmType == 1.0) {
-        rgb = 1.0 - rgb;
+      if (filmNegativeEnabled == 1.0) {
+        rgb.r = clamp(fnRMult * pow(rgb.r, fnRExp), 0.0, 1.0);
+        rgb.g = clamp(fnGMult * pow(rgb.g, fnGExp), 0.0, 1.0);
+        rgb.b = clamp(fnBMult * pow(rgb.b, fnBExp), 0.0, 1.0);
+        if (isBW) {
+          float gray = dot(rgb, vec3(0.299, 0.587, 0.114));
+          rgb = vec3(gray);
+        }
+      } else {
+        if (isBW) {
+          float gray = dot(rgb, vec3(0.299, 0.587, 0.114));
+          rgb = vec3(1.0 - gray);
+        } else if (filmType == 1.0) {
+          rgb = 1.0 - rgb;
+        }
       }
 
       if (!isBW) {

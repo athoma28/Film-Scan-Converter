@@ -1,4 +1,4 @@
-name: Python Regression
+name: Legacy Python Regression
 
 on:
   push:

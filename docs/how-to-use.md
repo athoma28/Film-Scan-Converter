@@ -1,10 +1,14 @@
 
 # How to Use It
 
-This guide describes the current production Python application. The native
-macOS application is still under development; see
-[Native macOS Development](development/native-macos.md) for implemented native
-features and limitations.
+This guide describes the maintenance-only legacy Python application. The native
+Swift/macOS application is the primary product direction, but does not yet
+provide this complete automatic-crop, perspective-correction, and dust-handling
+workflow. Native export is implemented for TIFF, JPEG, PNG, and processed-RGB
+DNG. See
+[Native macOS Development](development/native-macos.md) for current native
+features and [Legacy Python Application](legacy-python.md) for the retirement
+policy.
 
 ## Batch Processing
 

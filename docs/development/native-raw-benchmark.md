@@ -84,9 +84,10 @@ buffers. These metrics therefore apply equally to RawPy and native decode.
 | DSCF2422 tuned | 7.665 bits | 1.562% | 0.398% | 94 / 87 / 91 |
 
 Across all 23 edit variants, best cold processing totaled **17.22 seconds** and
-best warm cached processing totaled **10.52 seconds**. This processing remains
-in the Python reference pipeline; the native correction pipeline has not yet
-been ported.
+best warm cached processing totaled **10.52 seconds**. These are historical
+legacy-Python selected-edit baselines. The native engine now contains several
+correction stages, but does not yet have the complete end-to-end processing and
+export workflow required for a direct full-pipeline comparison.
 
 ## Reproduce
 

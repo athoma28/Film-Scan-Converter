@@ -415,10 +415,7 @@ struct ProcessingTests {
       print(
         "Pixels with any difference: \(diffPixels), total diff sum: \(totalDiff)")
     }
-    // Float precision accumulation through exposure+saturation cascade;
-    // BW grayscale coefficient rounding differences.
-    // GPU preview is approximate during interaction; CPU path provides authoritative output.
-    #expect(maxDiff8 <= 64, "GPU kernel model differs from CPU by \(maxDiff8) 8-bit levels at worst")
+    #expect(maxDiff8 <= 2, "GPU kernel model differs from CPU by \(maxDiff8) 8-bit levels at worst")
   }
 
   private static func loadHistogramEQCase(_ name: String) throws -> (
@@ -857,7 +854,7 @@ struct ProcessingTests {
       if diff > maxDiff { maxDiff = diff }
     }
     let maxDiff8 = Int(maxDiff) >> 8
-    #expect(maxDiff8 <= 64,
+    #expect(maxDiff8 <= 2,
       "GPU kernel model combined max diff \(maxDiff8) 8-bit levels")
   }
 
@@ -1132,5 +1129,123 @@ struct ProcessingTests {
 
     #expect(mMask > hMask, "Midtone mask should be strongest at luminance 0.5")
     #expect(mMask > sMask, "Midtone mask should be strongest at luminance 0.5")
+  }
+
+  @Test("Power-law film negative inverts dense areas to bright and clear areas to dark")
+  func filmNegativePowerLawInversion() {
+    let width = 32
+    let height = 32
+    var pixels = [UInt16](repeating: 0, count: width * height * 3)
+
+    for y in 0..<height {
+      for x in 0..<width {
+        let idx = (y * width + x) * 3
+        let v = UInt16(Float(x) / Float(width - 1) * 65535.0)
+        pixels[idx] = v
+        pixels[idx + 1] = v
+        pixels[idx + 2] = v
+      }
+    }
+
+    let image = UInt16Image(width: width, height: height, channels: 3, pixels: pixels)
+
+    let result = FilmNegativeProcessing.applyPowerLawInversion(
+      image: image, params: FilmNegativeParams.blackAndWhite
+    )
+
+    #expect(result.width == width)
+    #expect(result.height == height)
+    #expect(result.channels == 3)
+
+    let firstPixel = result.pixels[0]
+    let lastPixel = result.pixels[(width - 1) * 3]
+    #expect(lastPixel < firstPixel, "Dense (dark) areas should become bright, clear (bright) areas should become dark")
+  }
+
+  @Test("Power-law film negative multipliers map median pixel near target output")
+  func filmNegativeMultiplierCalibration() {
+    var pixels = [UInt16](repeating: 10000, count: 32 * 32 * 3)
+    var rng = SystemRandomNumberGenerator()
+    for i in pixels.indices {
+      pixels[i] = UInt16(max(0, min(65535, Double(pixels[i]) + Double.random(in: -2000...2000, using: &rng))))
+    }
+    let image = UInt16Image(width: 32, height: 32, channels: 3, pixels: pixels)
+
+    let result = FilmNegativeProcessing.applyPowerLawInversion(
+      image: image, params: FilmNegativeParams.blackAndWhite
+    )
+
+    var medianResult: UInt16 = 0
+    var vals = [UInt16]()
+    for i in 0..<(32 * 32) {
+      vals.append(result.pixels[i * 3 + 1])
+    }
+    vals.sort()
+    medianResult = vals[vals.count / 2]
+
+    let target = UInt16(65535.0 * FilmNegativeProcessing.calibrationTargetFraction)
+    #expect(abs(Int(medianResult) - Int(target)) < 1500,
+      "Median output should calibrate near middle gray, got \(medianResult)")
+  }
+
+  @Test("Film negative preset keeps representative median out of deep shadows")
+  func filmNegativePresetDoesNotDarkenMedian() {
+    let width = 16
+    let height = 16
+    let inputMedian: UInt16 = 30_000
+    let image = UInt16Image(
+      width: width,
+      height: height,
+      channels: 3,
+      pixels: [UInt16](repeating: inputMedian, count: width * height * 3)
+    )
+    var params = FilmNegativeParams.colourNegative
+    params.measuredMedians = BGRChannelValues(
+      blue: Double(inputMedian),
+      green: Double(inputMedian),
+      red: Double(inputMedian)
+    )
+
+    let result = FilmNegativeProcessing.applyPowerLawInversion(image: image, params: params)
+    let green = result.pixels[1]
+
+    #expect(green > 20_000, "Preset median should not be calibrated into deep shadows, got \(green)")
+    #expect(green < 45_000, "Preset median should stay near middle gray, got \(green)")
+  }
+
+  @Test("Film negative corrected preview produces valid output")
+  func filmNegativeCorrectedPreview() {
+    var pixels = [UInt16](repeating: 0, count: 8 * 8 * 3)
+    for i in 0..<(8 * 8) {
+      let base = i * 3
+      let v = max(1.0, (1.0 - Double(i) / 64.0) * 50000.0)
+      pixels[base] = UInt16(v)
+      pixels[base + 1] = UInt16(v)
+      pixels[base + 2] = UInt16(v)
+    }
+    let image = UInt16Image(width: 8, height: 8, channels: 3, pixels: pixels)
+
+    var params = ProcessingParameters(
+      filmType: .colourNegative,
+      filmNegativeParams: FilmNegativeParams.blackAndWhite
+    )
+    params.filmNegativeParams.measuredMedians =
+      FilmNegativeProcessing.computeMedians(image: image)
+
+    let cpuResult = FilmProcessing.correctedPreview(image: image, parameters: params)
+    #expect(cpuResult.width == 8)
+    let gpuResult = GPUKernelModel.gpuKernelEquivalent(image: image, parameters: params)
+    #expect(gpuResult.width == 8)
+    #expect(!cpuResult.pixels.isEmpty)
+    #expect(!gpuResult.pixels.isEmpty)
+
+    var maxDiff: UInt16 = 0
+    for i in gpuResult.pixels.indices {
+      let g = gpuResult.pixels[i]
+      let c = cpuResult.pixels[i]
+      let diff = g > c ? g - c : c - g
+      maxDiff = max(maxDiff, diff)
+    }
+    #expect(maxDiff <= 100, "GPU-CPU max diff=\(maxDiff)")
   }
 }

@@ -55,7 +55,7 @@ let package = Package(
     ),
     .testTarget(
       name: "FilmScanEngineTests",
-      dependencies: ["FilmScanEngine", "FilmScanPreviewRenderer"],
+      dependencies: ["FilmScanEngine", "FilmScanPreviewRenderer", "FilmScanConverterMac"],
       resources: [.copy("Fixtures")]
     ),
   ]

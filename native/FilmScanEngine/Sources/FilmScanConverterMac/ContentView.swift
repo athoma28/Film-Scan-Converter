@@ -104,6 +104,59 @@ struct ContentView: View {
         Toggle("Show Original", isOn: $model.showOriginal)
       }
 
+      Section("Film Negative") {
+        Picker(
+          "Preset",
+          selection: Binding(
+            get: { filmNegativePreset(for: model.parameters) },
+            set: { model.setFilmNegativePreset($0) }
+          )
+        ) {
+          ForEach(FilmNegativePreset.allCases, id: \.self) { preset in
+            Text(preset.displayName).tag(preset)
+          }
+        }
+
+        if model.parameters.filmNegativeParams.enabled
+          && supportsFilmNegative(filmType: model.parameters.filmType)
+        {
+          let fn = model.parameters.filmNegativeParams
+          let rexp = -(fn.greenExp * fn.redRatio)
+          let gexp = -fn.greenExp
+          let bexp = -(fn.greenExp * fn.blueRatio)
+
+          correctionDoubleSlider("Red Ratio", value: { fn.redRatio }, range: 0.5...2.5) {
+            model.setFilmNegativeRedRatio($0)
+          }
+          correctionDoubleSlider("Green Exponent", value: { fn.greenExp }, range: 0.5...3.0) {
+            model.setFilmNegativeGreenExp($0)
+          }
+          correctionDoubleSlider("Blue Ratio", value: { fn.blueRatio }, range: 0.5...2.5) {
+            model.setFilmNegativeBlueRatio($0)
+          }
+
+          VStack(alignment: .leading, spacing: 2) {
+            Text(
+              "Exponents: R \(String(format: "%.2f", rexp))  G \(String(format: "%.2f", gexp))  B \(String(format: "%.2f", bexp))"
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            if let medians = fn.measuredMedians {
+              Text(
+                "Medians: R \(Int(medians.red))  G \(Int(medians.green))  B \(Int(medians.blue))"
+              )
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+            }
+          }
+        } else if model.parameters.filmNegativeParams.enabled {
+          Text("Film negative is only supported for Color Negative and B&W Negative film types.")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+      }
+      .disabled(!supportsFilmNegative(filmType: model.parameters.filmType))
+
       Section("Orientation") {
         HStack {
           Button(action: model.rotateCounterclockwise) {
@@ -231,6 +284,52 @@ struct ContentView: View {
         in: Double(range.lowerBound)...Double(range.upperBound)
       )
     }
+  }
+
+  private func correctionDoubleSlider(
+    _ title: String,
+    value: @escaping () -> Double,
+    range: ClosedRange<Double>,
+    set: @escaping (Double) -> Void
+  ) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+      HStack {
+        Text(title)
+        Spacer()
+        Text(String(format: "%.3f", value()))
+          .monospacedDigit()
+          .foregroundStyle(.secondary)
+      }
+      Slider(
+        value: Binding(
+          get: { value() },
+          set: { set($0) }
+        ),
+        in: range
+      )
+    }
+  }
+
+  private func filmNegativePreset(for params: ProcessingParameters) -> FilmNegativePreset {
+    guard params.filmNegativeParams.enabled else { return .off }
+    let fn = params.filmNegativeParams
+    if fn.redRatio == FilmNegativeParams.colourNegative.redRatio
+      && fn.greenExp == FilmNegativeParams.colourNegative.greenExp
+      && fn.blueRatio == FilmNegativeParams.colourNegative.blueRatio
+    {
+      return .colourNegative
+    }
+    if fn.redRatio == FilmNegativeParams.blackAndWhite.redRatio
+      && fn.greenExp == FilmNegativeParams.blackAndWhite.greenExp
+      && fn.blueRatio == FilmNegativeParams.blackAndWhite.blueRatio
+    {
+      return .blackAndWhite
+    }
+    return .off
+  }
+
+  private func supportsFilmNegative(filmType: FilmType) -> Bool {
+    filmType == .colourNegative || filmType == .blackAndWhiteNegative
   }
 }
 

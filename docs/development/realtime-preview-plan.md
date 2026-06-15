@@ -1,6 +1,6 @@
 # Real-Time Still Preview Plan
 
-**Status:** Active — Stage 3 complete, Stage 4 deferred
+**Status:** Completed through Stage 3; Stage 4 deferred
 
 **Last updated:** 2026-06-15
 
@@ -8,45 +8,45 @@
 
 - Stage 0 live slider bindings are implemented; slider getters now read the
   current model parameters throughout a drag.
-- The initial Stage 1 Core Image/Metal renderer is implemented. It uploads one
-  bounded 16-bit preview proxy per selection and applies orientation, inversion,
-  grayscale, white balance, gamma, shadows, highlights, and HSV saturation in
-  one custom GPU color kernel.
+- The Core Image/Metal renderer is implemented. It uploads one bounded 16-bit
+  preview proxy per selection and applies orientation, RawTherapee-compatible
+  film negative power-law inversion, grayscale, white balance, gamma, shadows,
+  highlights, HSV saturation, curves, and color wheels in one custom GPU color
+  kernel.
 - Render scheduling is bounded to one in-flight request and the newest pending
   parameter snapshot. Superseded snapshots are discarded without creating an
   unbounded detached-task backlog.
 - The kernel is display-only. The existing 16-bit CPU correction path remains
   the authoritative reference and fallback.
-- A focused 1080×720 runtime smoke benchmark over 120 parameter changes measured
-  approximately 1.33 ms median and 1.97 ms p95 for the correction kernel plus
-  `CGImage` render on the development machine.
-- **Stage 2 GPU-vs-CPU equivalence is verified.** The `GPUKernelModel` compares
-  the GPU kernel math against `FilmProcessing.correctedPreview` across a 696
-  combination parameter grid. Two kernel bugs were fixed (saturation clamping,
-  B&W negative WB/saturation). After fixes, maximum difference is ≤64 8-bit
-  levels, attributable to Float-vs-Float-through-Double precision.
+- The latest 500-change 1080×720 runtime benchmark measured 2.73 ms median and
+  3.74 ms p95 for the correction kernel plus `CGImage` render on the
+  development machine.
+- **Stage 2 GPU-vs-CPU equivalence is verified.** The model and production
+  renderer are compared against `FilmProcessing.correctedPreview` across the
+  current correction parameter grid. The direct Core Image renderer is
+  verified across 2,655 comparisons with a maximum difference of 2/255.
 - **Render instrumentation is deployed.** `AppModel.renderStats` publishes
   submitted/dropped/displayed counters plus latency metrics. `os_signpost`
   events are emitted for profiling.
 - **The production-renderer Stage 3 performance gate is met.** Display-rate coalescing is implemented
   with a 17 ms inter-frame delay, capping renders at ~60 Hz. A 500-update GPU
   render burst benchmark across current-pipeline parameter combinations,
-  including curves and color wheels, measures approximately 10 ms p95 at
-  1080×720. Scheduling contract tests verify coalescing, latest-value-wins,
+  including curves and color wheels, measured 3.74 ms p95 at 1080×720 in the
+  latest local run. Scheduling contract tests verify coalescing, latest-value-wins,
   cancellation, and bounded backlog.
-- GPU-versus-CPU image-difference tests via CIImage, a Metal-backed preview
-  surface, and the idle authoritative preview remain to be implemented (Stage 4).
+- A Metal-backed preview surface and the idle authoritative preview remain
+  deferred (Stage 4).
 
 ## Next Step
 
 The direct Core Image renderer is verified against the CPU path across 2,655
 comparisons with zero failures and a maximum difference of 2/255. Stage 4
-(Metal-backed preview surface, display-rate coalescing for the full
-display-to-screen path, and idle authoritative rendering) remains deferred.
+(Metal-backed preview surface, direct display-path instrumentation, and idle
+authoritative rendering) remains deferred.
 
 ## Original Blocker
 
-The initial still-image correction prototype loaded real RAW files and exposed
+The initial still-image correction workflow loaded real RAW files and exposed
 the intended controls, but did not provide useful feedback while a slider was
 moving.
 
@@ -61,8 +61,7 @@ There are three causes:
 
 Live bindings, a reusable GPU correction renderer, and a bounded render queue
 now address those causes. The remaining work is direct Metal-backed display,
-display-rate coalescing, end-to-end latency measurement, visual-equivalence
-testing, and idle authoritative rendering.
+end-to-end latency measurement, and idle authoritative rendering.
 
 ## Definition Of Done
 
@@ -103,8 +102,10 @@ For every display frame with new parameters, apply this render graph:
 2. film-mode inversion or grayscale conversion;
 3. white-balance matrix;
 4. gamma, shadows, and highlights tone kernel;
-5. saturation;
-6. display color conversion.
+5. overall and per-channel curves;
+6. shadow, midtone, and highlight color wheels;
+7. saturation;
+8. display color conversion.
 
 Display the renderer output through a Metal-backed preview view. Do not create
 a new `NSImage` for every slider event.
@@ -151,8 +152,8 @@ does not by itself make the CPU renderer real-time.
 
 - ~~Add `StillPreviewRenderer`.~~ Done.
 - Reuse the live-camera Core Image and Metal context approach for still images.
-- ~~Implement orientation, inversion, grayscale, white balance, saturation, and
-  exposure on the GPU.~~ Done.
+- ~~Implement orientation, film negative inversion, grayscale, white balance,
+  saturation, exposure, curves, and color wheels on the GPU.~~ Done.
 - Replace per-update `NSImage` creation with a Metal-backed preview surface.
 
 ### Stage 2: Tone Kernel And Visual Equivalence
@@ -160,8 +161,9 @@ does not by itself make the CPU renderer real-time.
 - ~~Implement gamma, shadows, and highlights in a custom `CIColorKernel`.~~
   Done for the initial renderer; migrate to a compiled Metal kernel before
   release because the source-kernel API is deprecated.
-- Compare a parameter grid against the CPU reference.
-- Document accepted preview tolerances and fix visibly divergent controls.
+- ~~Compare a parameter grid against the CPU reference.~~ Done.
+- ~~Document accepted preview tolerances and fix visibly divergent controls.~~
+  Done; production-renderer maximum difference is 2/255.
 
 ### Stage 3: Performance Gate
 
@@ -169,9 +171,10 @@ does not by itself make the CPU renderer real-time.
   17 ms inter-frame delay, latest-value-wins bounded to 1 in-flight + 1 pending.
 - ~~Benchmark the representative RAF corpus.~~ Done. The 500-update 1080×720
   production-renderer burst benchmark, including curves and color wheels,
-  measures approximately 10 ms p95.
+  measured 3.74 ms p95 in the latest local run.
 - ~~Require 95th-percentile update latency below 33 ms with no render backlog
-  after 500 rapid parameter changes.~~ Verified at approximately 10 ms p95.
+  after 500 rapid parameter changes.~~ Verified at 3.74 ms p95 in the latest
+  local run.
   Scheduling contract tests confirm no unbounded backlog and latest-value-wins.
 
 ### Stage 4: Idle Authoritative Preview
@@ -190,10 +193,11 @@ does not by itself make the CPU renderer real-time.
 - ~~Test that switching files cannot display a late result from the previous
   file.~~ Done (cancellation test, generation-based guard).
 - ~~Compare GPU and CPU output across representative film modes and parameter
-  combinations.~~ Done (696 combinations, ≤64 8-bit-level max difference).
+  combinations.~~ Done (2,655 direct production-renderer comparisons,
+  maximum difference 2/255).
 - ~~Benchmark drag latency on representative standard images and RAF files.~~ Done.
-  The 500-update production-renderer burst benchmark measures approximately
-  10 ms p95 at 1080×720.
+  The latest 500-update production-renderer burst benchmark measured 3.74 ms
+  p95 at 1080×720.
 - Add a UI smoke test that drags each slider and confirms visible preview
   changes once reliable app automation is available.
 
@@ -207,5 +211,6 @@ does not by itself make the CPU renderer real-time.
   authoritative processing result.
 - Full-resolution GPU ownership must be bounded when switching files. The first
   implementation should retain only the selected file's preview texture.
-- Histogram equalisation remains the next engine-equivalence stage after the
-  remaining real-time preview verification work.
+- Export is the active product priority. Stage 4 remains deferred until its
+  display-path and idle-render work has higher value than the remaining
+  replacement gates.
