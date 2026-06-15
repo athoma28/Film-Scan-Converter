@@ -1,6 +1,9 @@
 # macOS Native App Roadmap
 
-**Goal:** Rewrite Film Scan Converter as a native macOS application (Swift + SwiftUI) with pixel-identical output, better performance, and a modern Cocoa UI.
+**Goal:** Rewrite Film Scan Converter as a native macOS application (Swift +
+SwiftUI) with pixel-identical output for shared Python behavior, deterministic
+tested output for new native grading features, better performance, and a modern
+Cocoa UI.
 
 > **Status:** This is the detailed technical design reference. The authoritative
 > current step, verified progress, limitations, and next work are maintained in
@@ -8,8 +11,9 @@
 
 ## Current Position
 
-Development is currently at **Phase 1.8, exposure complete. Next: histogram
-equalisation.**
+Development is currently finishing the real-time still-preview exception in
+Phase 2 before returning to Phase 1 engine equivalence. Histogram equalisation
+is the next engine-equivalence stage.
 
 Completed foundations:
 
@@ -30,13 +34,35 @@ Completed foundations:
   ≤1 LSB tolerance for 5 saturation levels.
 - Exposure adjustment with exact Python float32-rounding equivalence for 5
   parameter combinations.
-- Main-window file drag and drop.
+- Main-window file drag and drop plus per-file correction controls.
+- A reusable 16-bit Core Image/Metal still-preview renderer with live bindings
+  and bounded latest-value-wins scheduling.
 - Optional AVFoundation/Core Image live camera preview prototype.
 - macOS CI that tests the engine and builds the app.
 
-The next blocking goal is contour detection and perspective warp, which require
-OpenCV C++ interop for `findContours` + `minAreaRect`. Nothing later in this
-roadmap should be interpreted as implemented unless the status page says it is.
+The immediate goal is to finish the still-preview latency and visual-equivalence
+gates. Histogram equalisation follows, then contour detection and perspective
+warp. Nothing later in this roadmap should be interpreted as implemented unless
+the status page says it is.
+
+### Next Implementation Step: Still-Preview Equivalence And Latency Gate
+
+Before adding more correction controls or returning to engine stages, make the
+current GPU preview measurable:
+
+1. Compare `StillPreviewRenderer` against `FilmProcessing.correctedPreview`
+   across a representative parameter grid and RAF proxy corpus.
+2. Record maximum and mean per-channel differences and enforce a documented
+   preview tolerance.
+3. Add `os_signpost` intervals and counters for parameter submission, frame
+   display, dropped snapshots, and end-to-end latency.
+4. Verify a 500-update burst keeps only the newest pending snapshot and creates
+   no render backlog.
+5. Require p95 parameter-to-display latency below 33 ms before proceeding.
+
+The following increment is direct Metal-backed display plus the idle
+authoritative CPU render. Histogram equalisation resumes after the real-time
+preview gate is complete.
 
 ---
 
@@ -87,6 +113,9 @@ Swift Test Target (XCTest)
 - **Where floating-point accumulates differently (e.g. `pow`, `divide`):** Tolerance of ≤1 LSB in 16-bit (`±1` in `UInt16` range) with per-stage documented waivers
 - **OpenCV operations (`warpPerspective`, `inpaint`, `threshold`):** Must match exactly — these are deterministic algorithms with well-defined behaviour. Note that `inpaint` (Telea FMM) is numerically sensitive; start with OpenCV interop for correctness.
 - **Histogram equalisation:** Exact match for percentile-based calculations; OK to differ at floating-point accumulation edges only (document each waiver). The Python code uses `np.percentile` with linear interpolation; replicate exactly.
+- **Native-only grading features:** Define the authoritative CPU math first,
+  freeze identity and parameter-grid fixtures, then require the GPU preview to
+  stay within a documented tolerance.
 
 ### 0.5 Performance Baseline
 
@@ -242,11 +271,63 @@ Swift replacement:
 - Cancellation via `Operation.cancel` + checking `isCancelled` between stages
 - Clean up partial output files on cancellation
 
+### 1.12 Advanced Grading: Curves And Three-Way Color Wheels
+
+Add authoritative, deterministic grading stages after base inversion, white
+balance, histogram equalisation, and exposure, but before final output framing.
+
+**Curves:**
+
+- One overall RGB curve plus independent red, green, and blue curves.
+- Store normalized control points in `ProcessingParameters`.
+- Define endpoint behavior, control-point ordering, interpolation, and clipping
+  explicitly. Start with a monotonic piecewise-cubic or piecewise-linear
+  reference implementation; do not allow curve overshoot to change pixels
+  unpredictably.
+- Build 16-bit lookup tables for the authoritative CPU pipeline and matching
+  GPU lookup textures for interactive preview.
+- Add identity, channel-isolation, extreme-point, and parameter-grid fixtures.
+
+**Three-way color wheels:**
+
+- Separate highlight, midtone, and shadow color-balance controls.
+- Define each wheel as a neutral-centered chroma vector plus strength, with
+  documented luminance masks and overlap behavior.
+- Preserve neutral luminance unless the user explicitly changes luminance.
+- Require identity at zero and bounded GPU-versus-CPU differences across the
+  representative corpus.
+
+These controls must exist in both the authoritative pipeline and the
+interactive preview. UI-only approximations are not acceptable for export.
+
+### 1.13 Export Formats, Including DNG
+
+Implement TIFF, JPEG, PNG, and DNG output behind one tested export contract.
+
+- Preserve orientation, dimensions, bit depth, color profile, source metadata,
+  and processing metadata where the selected format supports them.
+- Define DNG scope before implementation. The initial target is a processed,
+  demosaiced 16-bit RGB DNG with explicit color/profile metadata, not a
+  reconstruction of the camera's original sensor mosaic.
+- Never label processed RGB DNG output as untouched camera RAW.
+- Validate DNG output with multiple readers and require round-trip pixel,
+  metadata, and orientation tests.
+- Add individual and memory-bounded batch export, cancellation, partial-file
+  cleanup, collision handling, and reproducible output tests.
+
 ---
 
 ## Phase 2: Rendering Pipeline — Metal / Accelerate
 
 After the Swift port is pixel-identical, optimise the hot paths.
+
+Real-file UX testing established one exception to that ordering: still-image
+slider feedback must become real-time before the rest of the correction engine
+is complete, otherwise the SwiftUI workflow cannot be evaluated meaningfully.
+Use a fast, explicitly non-authoritative GPU preview while dragging and retain
+the pixel-equivalent CPU path for idle verification and export. The staged
+implementation and acceptance criteria are in the
+[real-time still preview plan](../development/realtime-preview-plan.md).
 
 ### 2.1 Profiling Targets
 
@@ -270,7 +351,10 @@ Write Metal kernels for the most expensive stages:
 
 3. **`histogram_equalization`** — One pass to build per-channel histograms via `atomic_uint`, one pass to apply the LUT. Use threadgroup memory for partial histograms to reduce global atomics.
 
-4. **`exposure` + `wb_adjust` + `saturation`** — Fuse into a single kernel: gamma → shadows → highlights → WB coefficient multiply → HSV convert → sat multiply → HSV invert. Reduces memory bandwidth by avoiding intermediate buffers.
+4. **`exposure` + `wb_adjust` + `saturation` + advanced grading** — Fuse the
+   per-pixel stages where practical. Curves should use lookup textures; color
+   wheels should use the same documented tonal masks as the authoritative CPU
+   pipeline. Reduce memory bandwidth without changing control meaning.
 
 ### 2.3 Memory Strategy
 
@@ -306,12 +390,14 @@ FilmScanConverter.app
 │   ├── CropViewModel
 │   ├── ColourViewModel
 │   ├── BrightnessViewModel
+│   ├── GradingViewModel
 │   └── ExportViewModel
 └── View Layer (SwiftUI)
     ├── ContentView (split pane: inspector | preview)
     ├── ImportPanel / PhotoList (with drag-to-reorder)
     ├── InspectorPanel (scrollable controls, collapsible sections)
     ├── PreviewView (NSViewRepresentable wrapping Metal-backed view)
+    ├── CurveEditor / ThreeWayColorWheels
     ├── ExportSheet (progress + abort + error log)
     └── AdvancedSettingsSheet
 ```
@@ -343,9 +429,13 @@ FilmScanConverter.app
    - Photo selector + import/prev/next/remove buttons
    - Processing: film type picker, reject toggle, dust removal toggle, global sync toggle
    - Crop & rotate: dark/light threshold sliders, border crop slider, flip toggle, rotation (±90°)
-   - Colour: base mode picker, base RGB display + picker, WB picker button, temp/tint sliders, saturation slider
-   - Brightness: white/black point percentiles, gamma, shadows, highlights sliders
-   - Export: file type picker (TIFF/JPEG/PNG), frame slider, aspect ratio picker, folder selector, export buttons (individual/batch)
+   - Colour: base mode picker, base RGB display + picker, WB picker button,
+     temp/tint sliders, saturation slider, and highlight/midtone/shadow color
+     wheels
+   - Tone: white/black point percentiles, gamma, shadows, highlights, one
+     overall curve, and independent red/green/blue curves
+   - Export: file type picker (TIFF/JPEG/PNG/DNG), frame slider, aspect ratio
+     picker, folder selector, export buttons (individual/batch)
 3. **Preview area:**
    - Process view selector (RAW / Threshold / Contours / Histogram / Full Preview)
    - Intermediate stage preview (upper, smaller)
@@ -364,6 +454,9 @@ FilmScanConverter.app
 - **Dark mode:** Free with SwiftUI (adapts to system appearance automatically).
 - **Undo/redo:** `UndoManager` integration on `DocumentModel` for all parameter changes.
 - **Batch reorder:** Drag to reorder photos in the sidebar list with haptic feedback.
+- **Professional grading without default clutter:** Keep curves and three-way
+  color wheels in collapsible advanced sections while preserving immediate
+  preview feedback and numeric reset controls.
 
 ---
 
@@ -377,6 +470,8 @@ FilmScanConverter.app
 | Warm pipeline (cached crop + stats) | ≥ 5× faster than Python | Wall clock, same hardware |
 | Full batch export (10× 6K RAW) | ≥ 4× faster than Python | Wall clock, same hardware |
 | Memory per photo during export | ≤ Python baseline | `footprint` / Xcode Memory Graph |
+| Curve/color-wheel preview vs. authoritative render | Within documented tolerance | Parameter-grid pixel comparison |
+| Processed-RGB DNG interoperability | Opens with correct pixels, orientation, profile, and metadata | Multi-reader round-trip suite |
 | RAW decode + half-size proxy | ≥ 2× faster than RawPy | `os_signpost` intervals |
 | Perspective warp (4K × 4K) | < 5ms (GPU) | Metal System Trace |
 | Dust inpainting (4K, 3 channels) | < 20ms (GPU) | Metal System Trace |
@@ -439,19 +534,24 @@ Git push
    dark/light combinations, matching Python `get_threshold` output.
 4. **Phase 1.5 and 1.7, complete** — White balance coefficient adjustment and
    saturation adjustment are verified against Python float64 reference fixtures.
-5. **Phase 1.6 and 1.4, active now** — Exposure (gamma + shadows/highlights
-   polynomials) and histogram equalisation (percentile computation + channel
-   scaling), each with a failing equivalence test before implementation.
-6. **Phase 1.3 and 1.2 cont., next** — Contour detection + minAreaRect (OpenCV
+5. **Phase 2 still preview, active now** — Next, implement the GPU-versus-CPU
+   equivalence and latency gate. Then finish direct Metal-backed display,
+   display-rate coalescing, and idle authoritative rendering.
+6. **Phase 1.4, next** — Histogram equalisation (percentile computation +
+   channel scaling) with a failing equivalence test before implementation.
+7. **Phase 1.3 and 1.2 cont.** — Contour detection + minAreaRect (OpenCV
    C++ interop), perspective warp (DLT homography + bilinear warp).
-7. **Phase 1.8–1.9** — Dust detection and Telea FMM inpainting.
-8. **Phase 1.10–1.11** — Caching and batch export, verified with batch export
-   equivalence.
-9. **Phase 2** — Replace measured hot paths with Metal or Accelerate
+8. **Phase 1.8–1.9** — Dust detection and Telea FMM inpainting.
+9. **Phase 1.10–1.11** — Caching and memory-bounded export orchestration.
+10. **Phase 1.12** — Authoritative overall/per-channel curves and
+    highlight/midtone/shadow color wheels, then matching GPU preview controls.
+11. **Phase 1.13** — TIFF/JPEG/PNG export plus the defined processed-RGB DNG
+    contract, verified by round-trip and multi-reader tests.
+12. **Phase 2** — Replace remaining measured hot paths with Metal or Accelerate
    implementations. Profile before and after each change.
-10. **Phase 3** — Connect completed engine stages to the existing SwiftUI shell
+13. **Phase 3** — Connect completed engine stages to the existing SwiftUI shell
     and finish the application workflows.
-11. **Phase 4** — Performance gates, packaging, CI hardening, and polish.
+14. **Phase 4** — Performance gates, packaging, CI hardening, and polish.
 
 Each phase should produce a verifiable increment. The SwiftUI shell may develop
 in parallel, but it is not a production replacement until the required engine

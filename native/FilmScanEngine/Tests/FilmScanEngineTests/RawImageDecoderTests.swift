@@ -57,6 +57,34 @@ struct RawImageDecoderTests {
     #expect(result.colorDescription == entry.colorDescription)
   }
 
+  @Test("Representative RAF completes the interactive correction preview pipeline")
+  func interactiveCorrectionPreview() throws {
+    let rawURL = repositoryRoot.appending(path: "sample-raw/DSCF2422.RAF")
+    guard FileManager.default.fileExists(atPath: rawURL.path) else {
+      return
+    }
+
+    let decoded = try RawImageDecoder.decode(rawURL).image
+    let proxy = decoded.resizedToFit(maxDimension: 720)
+    let corrected = FilmProcessing.correctedPreview(
+      image: proxy,
+      parameters: ProcessingParameters(
+        rotation: 3,
+        filmType: .colourNegative,
+        gamma: 20,
+        shadows: 30,
+        highlights: 10,
+        temperature: 10,
+        tint: -10,
+        saturation: 110
+      )
+    )
+
+    #expect(max(corrected.width, corrected.height) == 720)
+    #expect(corrected.channels == 3)
+    #expect(corrected.makePreviewCGImage() != nil)
+  }
+
   @Test("Standard images do not enter the RAW decoder")
   func rejectsStandardImageExtension() {
     #expect(throws: RawImageDecoderError.self) {

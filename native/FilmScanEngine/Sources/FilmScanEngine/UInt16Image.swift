@@ -79,6 +79,24 @@ public struct UInt16Image: Equatable, Sendable {
     return framed
   }
 
+  public func resizedToFit(maxDimension: Int) -> UInt16Image {
+    precondition(maxDimension > 0, "Maximum dimension must be positive")
+    let largestDimension = max(width, height)
+    guard largestDimension > maxDimension else {
+      return self
+    }
+
+    let scale = Double(maxDimension) / Double(largestDimension)
+    let outputWidth = max(1, Int((Double(width) * scale).rounded()))
+    let outputHeight = max(1, Int((Double(height) * scale).rounded()))
+    return remapped(width: outputWidth, height: outputHeight) { x, y in
+      (
+        min(width - 1, x * width / outputWidth),
+        min(height - 1, y * height / outputHeight)
+      )
+    }
+  }
+
   private func remapped(
     width outputWidth: Int,
     height outputHeight: Int,

@@ -21,6 +21,14 @@ def import_raw_processing():
     return RawProcessing
 
 
+def import_gui():
+    import_raw_processing()
+
+    from GUI import GUI
+
+    return GUI
+
+
 def make_processor(raw_processing, image, **settings):
     processor = raw_processing.__new__(raw_processing)
     processor.class_parameters = raw_processing.default_parameters.copy()

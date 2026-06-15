@@ -164,6 +164,29 @@ struct ProcessingTests {
     assertFloat64Equal(actual, expected)
   }
 
+  @Test("Saturation clips white-balanced highlights before HSV conversion")
+  func saturationClipsHighlights() {
+    let overRange = [10_000.0, 40_000.0, 90_000.0]
+    let clipped = [10_000.0, 40_000.0, 65_535.0]
+
+    let actual = FilmProcessing.satAdjust(
+      image: overRange,
+      width: 1,
+      height: 1,
+      channels: 3,
+      saturation: 150
+    )
+    let expected = FilmProcessing.satAdjust(
+      image: clipped,
+      width: 1,
+      height: 1,
+      channels: 3,
+      saturation: 150
+    )
+
+    #expect(actual == expected)
+  }
+
   @Test(
     "Exposure matches Python float32 rounding",
     arguments: [
@@ -187,6 +210,40 @@ struct ProcessingTests {
     )
 
     #expect(actual == expected)
+  }
+
+  @Test("Corrected preview applies negative inversion and neutral corrections")
+  func correctedPreviewNegative() {
+    let image = UInt16Image(
+      width: 1,
+      height: 1,
+      channels: 3,
+      pixels: [0, 32768, 65535]
+    )
+
+    let actual = FilmProcessing.correctedPreview(
+      image: image,
+      parameters: ProcessingParameters(filmType: .colourNegative)
+    )
+
+    #expect(actual.pixels == [65535, 32767, 0])
+  }
+
+  @Test("Crop-only corrected preview applies orientation without tonal corrections")
+  func correctedPreviewCropOnly() {
+    let image = UInt16Image(
+      width: 2,
+      height: 1,
+      channels: 1,
+      pixels: [10, 20]
+    )
+
+    let actual = FilmProcessing.correctedPreview(
+      image: image,
+      parameters: ProcessingParameters(flip: true)
+    )
+
+    #expect(actual.pixels == [20, 10])
   }
 
   private func assertFloat64Equal(_ actual: [Double], _ expected: [Double], tolerance: Double = 0.5)

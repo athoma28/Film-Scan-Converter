@@ -48,4 +48,35 @@ struct UInt16ImageTests {
 
     #expect(decoded == parameters)
   }
+
+  @Test("Preview proxy fits within the requested dimension")
+  func previewProxyResize() {
+    let image = UInt16Image(
+      width: 4,
+      height: 2,
+      channels: 1,
+      pixels: [0, 1, 2, 3, 4, 5, 6, 7]
+    )
+
+    let resized = image.resizedToFit(maxDimension: 2)
+
+    #expect(resized.width == 2)
+    #expect(resized.height == 1)
+    #expect(resized.pixels == [0, 2])
+  }
+
+  @Test("16-bit preview image preserves dimensions and component depth")
+  func previewImage16() {
+    let image = UInt16Image(width: 1, height: 1, channels: 3, pixels: [1, 2, 3])
+
+    let preview = image.makePreviewCGImage16()
+
+    #expect(preview?.width == 1)
+    #expect(preview?.height == 1)
+    #expect(preview?.bitsPerComponent == 16)
+    #expect(preview?.bitsPerPixel == 64)
+    let data = preview?.dataProvider?.data as Data?
+    let components = data?.withUnsafeBytes { Array($0.bindMemory(to: UInt16.self)) }
+    #expect(components == [3, 2, 1, .max])
+  }
 }

@@ -9,3 +9,4 @@ __pycache__
 source/export/
 sample-raw/
 hdr_white
+.build/

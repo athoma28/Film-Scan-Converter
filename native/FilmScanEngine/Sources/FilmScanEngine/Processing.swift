@@ -1,6 +1,70 @@
 import Foundation
 
 public enum FilmProcessing {
+  public static func correctedPreview(
+    image: UInt16Image,
+    parameters: ProcessingParameters
+  ) -> UInt16Image {
+    var working = image.rotated(
+      quarterTurns: parameters.rotation,
+      flipHorizontally: parameters.flip
+    )
+    guard parameters.filmType != .cropOnly else {
+      return working
+    }
+
+    if parameters.filmType == .blackAndWhiteNegative {
+      working = grayscale(working, inverted: true)
+    } else if parameters.filmType == .colourNegative {
+      working = inverted(working)
+    }
+
+    let adjustWhiteBalance =
+      working.channels == 3 && (parameters.temperature != 0 || parameters.tint != 0)
+    let adjustExposure =
+      parameters.gamma != 0 || parameters.shadows != 0 || parameters.highlights != 0
+    let adjustSaturation = working.channels == 3 && parameters.saturation != 100
+    guard adjustWhiteBalance || adjustExposure || adjustSaturation else {
+      return working
+    }
+
+    var values = working.pixels.map(Double.init)
+    if adjustWhiteBalance {
+      values = wbAdjustCoeff(
+        image: values,
+        width: working.width,
+        height: working.height,
+        channels: working.channels,
+        temp: parameters.temperature,
+        tint: parameters.tint
+      )
+    }
+    if adjustExposure {
+      values = exposure(
+        image: values,
+        gamma: parameters.gamma,
+        shadows: parameters.shadows,
+        highlights: parameters.highlights
+      )
+    }
+    if adjustSaturation {
+      values = satAdjust(
+        image: values,
+        width: working.width,
+        height: working.height,
+        channels: working.channels,
+        saturation: parameters.saturation
+      )
+    }
+
+    return UInt16Image(
+      width: working.width,
+      height: working.height,
+      channels: working.channels,
+      pixels: values.map { UInt16(min(max($0, 0), 65535)) }
+    )
+  }
+
   public static func wbAdjustCoeff(
     image: [Double],
     width: Int,
@@ -50,9 +114,9 @@ public enum FilmProcessing {
 
     for i in 0..<pixelCount {
       let base = i * 3
-      let r = Float(max(0, image[base + 2])) / 65535.0
-      let g = Float(max(0, image[base + 1])) / 65535.0
-      let b = Float(max(0, image[base])) / 65535.0
+      let r = Float(min(max(0, image[base + 2]), 65535)) / 65535.0
+      let g = Float(min(max(0, image[base + 1]), 65535)) / 65535.0
+      let b = Float(min(max(0, image[base]), 65535)) / 65535.0
 
       var (h, s, v) = rgbToHsvFloat32(r: r, g: g, b: b)
       s = min(max(s * satFactor, 0), 1)
@@ -97,6 +161,32 @@ public enum FilmProcessing {
       value *= 65535
       return Double(value)
     }
+  }
+
+  private static func inverted(_ image: UInt16Image) -> UInt16Image {
+    UInt16Image(
+      width: image.width,
+      height: image.height,
+      channels: image.channels,
+      pixels: image.pixels.map { UInt16.max - $0 }
+    )
+  }
+
+  private static func grayscale(_ image: UInt16Image, inverted: Bool) -> UInt16Image {
+    guard image.channels == 3 else {
+      return inverted ? self.inverted(image) : image
+    }
+
+    var pixels = [UInt16]()
+    pixels.reserveCapacity(image.width * image.height)
+    for index in stride(from: 0, to: image.pixels.count, by: 3) {
+      let b = UInt64(image.pixels[index])
+      let g = UInt64(image.pixels[index + 1])
+      let r = UInt64(image.pixels[index + 2])
+      let gray = UInt16((1868 * b + 9617 * g + 4899 * r + 8192) >> 14)
+      pixels.append(inverted ? UInt16.max - gray : gray)
+    }
+    return UInt16Image(width: image.width, height: image.height, channels: 1, pixels: pixels)
   }
 }
 

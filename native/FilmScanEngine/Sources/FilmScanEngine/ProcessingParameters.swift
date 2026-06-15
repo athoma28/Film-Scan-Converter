@@ -1,6 +1,6 @@
 import Foundation
 
-public enum FilmType: Int, Codable, CaseIterable, Sendable {
+public enum FilmType: Int, Codable, CaseIterable, Hashable, Sendable {
   case blackAndWhiteNegative
   case colourNegative
   case slide

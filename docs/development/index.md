@@ -8,10 +8,16 @@ progress, limitations, and next tasks.
 
 The detailed [macOS native roadmap](../improvements/MacOS-Native-Roadmap.md)
 contains the longer-term technical design. It is supporting reference material;
-the status page above is authoritative.
+the status page above is authoritative. It now includes the planned
+highlight/midtone/shadow color wheels, overall and per-channel RGB curves, and
+DNG export contract.
 
 The [native RAW decode and quality benchmark](native-raw-benchmark.md) records
 the current five-file sample-corpus quality and performance results.
+
+A [real-time still preview plan](realtime-preview-plan.md) documents the active
+slider-feedback blocker, the GPU preview architecture, and its measurable
+completion criteria.
 
 A [comprehensive Swift port evaluation](swift-port-evaluation.md) reviews the
 entire native codebase: architecture, code quality, implemented scope, remaining

@@ -22,7 +22,14 @@ struct ContentView: View {
       VStack(spacing: 0) {
         toolbar
         Divider()
-        preview
+        HStack(spacing: 0) {
+          preview
+          if !showLivePreview, model.decodedImage != nil {
+            Divider()
+            inspector
+              .frame(width: 290)
+          }
+        }
         Divider()
         Text(showLivePreview ? camera.status : model.status)
           .frame(maxWidth: .infinity, alignment: .leading)
@@ -80,6 +87,69 @@ struct ContentView: View {
     .padding(10)
   }
 
+  private var inspector: some View {
+    Form {
+      Section("Film") {
+        Picker(
+          "Type",
+          selection: Binding(
+            get: { model.parameters.filmType },
+            set: { model.setFilmType($0) }
+          )
+        ) {
+          ForEach(FilmType.allCases, id: \.self) { type in
+            Text(type.displayName).tag(type)
+          }
+        }
+        Toggle("Show Original", isOn: $model.showOriginal)
+      }
+
+      Section("Orientation") {
+        HStack {
+          Button(action: model.rotateCounterclockwise) {
+            Label("Left", systemImage: "rotate.left")
+          }
+          Button(action: model.rotateClockwise) {
+            Label("Right", systemImage: "rotate.right")
+          }
+          Button(action: model.toggleFlip) {
+            Label(
+              "Flip", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right")
+          }
+        }
+        .labelStyle(.iconOnly)
+      }
+
+      Section("Color") {
+        correctionSlider("Temperature", value: { model.parameters.temperature }, range: -100...100) {
+          model.setTemperature($0)
+        }
+        correctionSlider("Tint", value: { model.parameters.tint }, range: -100...100) {
+          model.setTint($0)
+        }
+        correctionSlider("Saturation", value: { model.parameters.saturation }, range: 0...200) {
+          model.setSaturation($0)
+        }
+      }
+
+      Section("Tone") {
+        correctionSlider("Gamma", value: { model.parameters.gamma }, range: -100...100) {
+          model.setGamma($0)
+        }
+        correctionSlider("Shadows", value: { model.parameters.shadows }, range: -100...100) {
+          model.setShadows($0)
+        }
+        correctionSlider("Highlights", value: { model.parameters.highlights }, range: -100...100) {
+          model.setHighlights($0)
+        }
+      }
+
+      Button("Reset Corrections", role: .destructive, action: model.resetCorrections)
+        .frame(maxWidth: .infinity)
+    }
+    .formStyle(.grouped)
+  }
+
   @ViewBuilder
   private var preview: some View {
     if showLivePreview, let image = camera.image {
@@ -103,6 +173,41 @@ struct ContentView: View {
         Button("Choose Files", action: model.showImportPanel)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+  }
+
+  private func correctionSlider(
+    _ title: String,
+    value: @escaping () -> Int,
+    range: ClosedRange<Int>,
+    set: @escaping (Int) -> Void
+  ) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+      HStack {
+        Text(title)
+        Spacer()
+        Text(value().formatted())
+          .monospacedDigit()
+          .foregroundStyle(.secondary)
+      }
+      Slider(
+        value: Binding(
+          get: { Double(value()) },
+          set: { set(Int($0.rounded())) }
+        ),
+        in: Double(range.lowerBound)...Double(range.upperBound)
+      )
+    }
+  }
+}
+
+extension FilmType {
+  fileprivate var displayName: String {
+    switch self {
+    case .blackAndWhiteNegative: "B&W Negative"
+    case .colourNegative: "Color Negative"
+    case .slide: "Slide"
+    case .cropOnly: "Original"
     }
   }
 }

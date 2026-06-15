@@ -16,10 +16,11 @@ starting native work, read
 source for the active step, verified progress, limitations, and ordered next
 tasks.
 
-The current native priority is histogram equalisation, followed by contour
-detection and perspective warp (which require OpenCV C++ interop). Work on later
-processing stages or additional SwiftUI controls should not bypass the
-pixel-equivalence gate.
+The current native priority is completing and verifying the real-time still
+preview, followed by histogram equalisation, contour detection, and perspective
+warp. Work on later processing stages or additional SwiftUI controls should not
+bypass the pixel-equivalence gate or introduce a preview-only control without
+an authoritative processing definition.
 
 Useful contribution areas:
 
@@ -46,6 +47,9 @@ Useful contribution areas:
 - Include sample images especially if the change impacts the image processing pipeline.
 - If the PR is fixing a bug, include the relevant issue number.
 - Native processing changes must add or update an equivalence test before the implementation is accepted.
+- Native-only processing features without a Python equivalent must define a
+  deterministic authoritative CPU contract and regression fixtures before UI or
+  GPU-preview work is accepted.
 
 ## Coding Conventions
 

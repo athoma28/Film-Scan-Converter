@@ -210,12 +210,14 @@ class RawProcessing:
         match self.class_parameters['filetype']:
             case 'JPG':
                 quality = [cv2.IMWRITE_JPEG_QUALITY, self.class_parameters['jpg_quality']]
-                cv2.imwrite(filename, cv2.convertScaleAbs(img, alpha=(255.0/65535.0)), quality) # Must convert to 8-bit image before exporting as JPG
+                written = cv2.imwrite(filename, cv2.convertScaleAbs(img, alpha=(255.0/65535.0)), quality) # Must convert to 8-bit image before exporting as JPG
             case 'TIFF':
                 quality = [cv2.IMWRITE_TIFF_COMPRESSION, self.class_parameters['tiff_compression']]
-                cv2.imwrite(filename, img, quality)
+                written = cv2.imwrite(filename, img, quality)
             case _:
-                cv2.imwrite(filename, img)
+                written = cv2.imwrite(filename, img)
+        if not written:
+            raise OSError(f'Failed to write exported image: {filename}')
 
     def save_settings(self):
         # saves the processing parameters to a file
@@ -236,54 +238,56 @@ class RawProcessing:
             return # Do not process if the file could not be read
         self.active_processes += 1 # Used to keep track of the number of processes currently running
 
-        if not skip_crop or not hasattr(self, 'thresh'):
-            self.thresh, self.rect, self.largest_contour = self.find_optimal_crop()
-            
-            img_size = self.RAW_IMG.shape[0] + self.RAW_IMG.shape[1]
-            if (img_size > self.class_parameters['max_proxy_size']): # Checks if image is larger than the allowable size, if yes, then generate proxy images to speed up preview generation
-                # Downscales the image to a smaller size
-                scale_factor = self.class_parameters['max_proxy_size'] / img_size
-                x = int(self.RAW_IMG.shape[1] * scale_factor)
-                y = int(self.RAW_IMG.shape[0] * scale_factor)
-                self.proxy_RAW_IMG = cv2.resize(self.RAW_IMG, (x, y))
-                self.proxy = True # Flag to tell the rest of the program that proxies are being used
+        try:
+            if not skip_crop or not hasattr(self, 'thresh'):
+                self.thresh, self.rect, self.largest_contour = self.find_optimal_crop()
 
-        # Uses a proxy to generate preview, when needed. During final export, will use full resolution
-        if self.proxy and not full_res:
-            img = self.proxy_RAW_IMG
-        else:
-            img = self.RAW_IMG
+                img_size = self.RAW_IMG.shape[0] + self.RAW_IMG.shape[1]
+                if (img_size > self.class_parameters['max_proxy_size']): # Checks if image is larger than the allowable size, if yes, then generate proxy images to speed up preview generation
+                    # Downscales the image to a smaller size
+                    scale_factor = self.class_parameters['max_proxy_size'] / img_size
+                    x = int(self.RAW_IMG.shape[1] * scale_factor)
+                    y = int(self.RAW_IMG.shape[0] * scale_factor)
+                    self.proxy_RAW_IMG = cv2.resize(self.RAW_IMG, (x, y))
+                    self.proxy = True # Flag to tell the rest of the program that proxies are being used
 
-        if self.remove_dust:
-            dust_signature = (
-                getattr(self, '_raw_revision', 0),
-                img.shape,
-                self.rect,
-                self.border_crop,
-                tuple(self.class_parameters['ignore_border']),
-                self.class_parameters['dust_threshold'],
-                self.class_parameters['max_dust_area'],
-                self.class_parameters['dust_iter'],
-            )
-            if getattr(self, '_dust_signature', None) == dust_signature:
-                dust_mask = self.dust_mask
+            # Uses a proxy to generate preview, when needed. During final export, will use full resolution
+            if self.proxy and not full_res:
+                img = self.proxy_RAW_IMG
             else:
-                dust_mask = self.find_dust(self.crop(img, self.rect))
+                img = self.RAW_IMG
 
-        # Additional processing specific to each film type
-        match self.film_type:
-            case 0:
-                img = self.bw_negative_processing(img)
-            case 1:
-                img = self.colour_negative_processing(img)
-            case 2:
-                img = self.slide_processing(img)
-            case 3:
-                img = self.crop_only(img)
-        
-        img = self.crop(img, self.rect)
+            if self.remove_dust:
+                dust_signature = (
+                    getattr(self, '_raw_revision', 0),
+                    img.shape,
+                    self.rect,
+                    self.border_crop,
+                    tuple(self.class_parameters['ignore_border']),
+                    self.class_parameters['dust_threshold'],
+                    self.class_parameters['max_dust_area'],
+                    self.class_parameters['dust_iter'],
+                )
+                if getattr(self, '_dust_signature', None) == dust_signature:
+                    dust_mask = self.dust_mask
+                else:
+                    dust_mask = self.find_dust(self.crop(img, self.rect))
 
-        self.active_processes -= 1
+            # Additional processing specific to each film type
+            match self.film_type:
+                case 0:
+                    img = self.bw_negative_processing(img)
+                case 1:
+                    img = self.colour_negative_processing(img)
+                case 2:
+                    img = self.slide_processing(img)
+                case 3:
+                    img = self.crop_only(img)
+
+            img = self.crop(img, self.rect)
+        finally:
+            self.active_processes -= 1
+
         if recent_only and (self.active_processes > 0):
             return # skip displaying final image if it is not the last active process
 

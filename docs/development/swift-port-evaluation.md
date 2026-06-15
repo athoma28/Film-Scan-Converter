@@ -1,6 +1,6 @@
 # Swift Port Evaluation
 
-**Date:** 2026-06-14 (updated 2026-06-14)
+**Date:** 2026-06-14 (updated 2026-06-15)
 **Scope:** Complete review of the native Swift/macOS rewrite against the
 production Python/Tkinter application, covering architecture, implemented
 features, code quality, test coverage, and remaining work.
@@ -19,11 +19,11 @@ with five targets layered cleanly:
 
 ```
 CLibRaw (system library, pkg-config → Homebrew libraw)
-  └─ CLibRawShim (C shim, 152 lines)
-       └─ FilmScanEngine (pure Swift library, 10 files / ~940 lines)
-            ├─ FilmScanConverterMac (SwiftUI app shell, 5 files / ~420 lines)
-            ├─ FilmScanRawBenchmark (CLI benchmark, 1 file / ~143 lines)
-            └─ FilmScanEngineTests (swift-testing, 10 files / ~930 lines)
+  └─ CLibRawShim (C shim)
+       └─ FilmScanEngine (pure Swift library)
+            ├─ FilmScanConverterMac (SwiftUI correction prototype)
+            ├─ FilmScanRawBenchmark (CLI benchmark)
+            └─ FilmScanEngineTests (swift-testing regression gate)
 ```
 
 **Dependency strategy:**
@@ -53,12 +53,16 @@ CLibRaw (system library, pkg-config → Homebrew libraw)
   default until a single-copy path is proven correct.
 - Background decoding uses `Task.detached(priority: .userInitiated)` so
   full-resolution imports do not block the main actor.
+- The correction prototype now uses live slider bindings, a reusable 16-bit
+  Core Image/Metal renderer, and a bounded latest-value-wins queue. Direct
+  Metal-backed display, end-to-end latency instrumentation, visual-equivalence
+  tests, and idle authoritative rendering remain.
 
 ---
 
 ## 2. What Is Implemented (With Quality Assessment)
 
-### 2.1 LibRaw C Bridge — `CLibRawShim.c` (152 lines)
+### 2.1 LibRaw C Bridge — `CLibRawShim.c`
 
 **Status: Complete. Quality: High.**
 
@@ -68,7 +72,7 @@ make_mem_image → free). The BGR reorder loop and `color_description` extractio
 match RawPy output byte-for-byte. Error paths all free LibRaw state and report
 through a 512-byte error buffer that Swift converts to `LocalizedError`.
 
-### 2.2 Standard Image Decoder — `StandardImageDecoder.swift` (140 lines)
+### 2.2 Standard Image Decoder — `StandardImageDecoder.swift`
 
 **Status: Complete. Quality: High.**
 
@@ -81,7 +85,7 @@ the pixel packing stage (RGBA → BGR). Alpha channels are rejected explicitly.
 Coverage gaps (acknowledged in `native-macos.md`): embedded color profiles and
 orientation metadata are not yet in the frozen corpus.
 
-### 2.3 `UInt16Image` — `UInt16Image.swift` (116 lines)
+### 2.3 `UInt16Image` — `UInt16Image.swift`
 
 **Status: Complete. Quality: High.**
 
@@ -90,11 +94,11 @@ initialisers. Rotation (0/90/180/270) and horizontal flip through coordinate
 remapping. Frame and aspect-ratio padding via `padded(top:bottom:left:right:)`.
 All operations are pure Swift with no external dependencies.
 
-The `makePreviewCGImage()` extension (42 lines) produces an 8-bit RGBA `CGImage`
-from either 1-channel or 3-channel BGR `UInt16Image` buffers. Used by
-`AppModel` for SwiftUI `Image(nsImage:)` display.
+The CGImage extension produces 8-bit display images and 16-bit RGBA images for
+the still-preview renderer from either 1-channel or 3-channel BGR
+`UInt16Image` buffers.
 
-### 2.4 Processing Parameters — `ProcessingParameters.swift` (75 lines)
+### 2.4 Processing Parameters — `ProcessingParameters.swift`
 
 **Status: Complete. Quality: Adequate.**
 
@@ -112,7 +116,7 @@ Also missing: `base_detect`, `base_rgb`, `dark_threshold`, `light_threshold`,
 `reject` — these are user-facing processing params present in the Python
 `processing_parameters` tuple but absent from the Swift struct.
 
-### 2.5 File Drop Policy — `FileDropPolicy.swift` (20 lines)
+### 2.5 File Drop Policy — `FileDropPolicy.swift`
 
 **Status: Complete. Quality: High.**
 
@@ -120,7 +124,7 @@ Case-insensitive extension matching, deduplication by canonical path while
 preserving insertion order. Correctly separates RAW and standard-image
 extensions.
 
-### 2.6 Live Preview Throttle — `LivePreviewThrottle.swift` (23 lines)
+### 2.6 Live Preview Throttle — `LivePreviewThrottle.swift`
 
 **Status: Complete. Quality: High.**
 
@@ -128,17 +132,22 @@ Simple, correct frame-rate limiter. Handles clock resets correctly (negative
 elapsed → accept frame), which is important for AVFoundation presentation
 timestamps that can wrap.
 
-### 2.7 SwiftUI App Shell — `FilmScanConverterMac/` (5 files, ~420 lines)
+### 2.7 SwiftUI App Shell — `FilmScanConverterMac/`
 
-**Status: Early shell. Quality: Adequate.**
+**Status: Correction prototype. Quality: Adequate, with preview verification
+and display-path work remaining.**
 
-| File | Lines | Assessment |
-|------|-------|------------|
-| `FilmScanConverterMacApp.swift` | 22 | Minimal `@main` entry. Replaces `CommandGroup(.newItem)` with Import Files (`Cmd+O`). |
-| `ContentView.swift` | 108 | `NavigationSplitView` with sidebar list + detail preview. Drag-and-drop with visual feedback. Live camera toggle with exposure/saturation sliders in toolbar. |
-| `AppModel.swift` | 88 | `@MainActor ObservableObject`. File import → dedup → background decode → preview. Status bar text. `NSOpenPanel` import fallback. |
-| `CameraController.swift` | 197 | AVFoundation capture session. External device preferred, fallback to built-in. Core Image inversion/exposure/saturation on GPU. 20 FPS throttle. Thread-safe settings via `NSLock`. |
-| `Info.plist` | — | Embedded via linker flag. Camera usage description. |
+The app now has a `NavigationSplitView`, drag-and-drop import, real RAW decode,
+per-file correction parameters, original/corrected comparison, and a bounded
+preview proxy. The live-camera path already uses a Metal-backed Core Image
+context.
+
+The still-file correction path now keeps slider state live during drags, uploads
+one bounded 16-bit proxy per selection, applies the implemented corrections in
+one Core Image/Metal color kernel, and retains only one in-flight render plus
+the newest pending snapshot. It still creates `NSImage`/`CGImage` display
+results, lacks display-refresh-rate coalescing and end-to-end latency signposts,
+and has not yet passed GPU-versus-CPU visual-equivalence tests.
 
 ### 2.14 Fixture Loader — Extended
 
@@ -154,15 +163,14 @@ raw byte representation. Current support: `<u2` (uint16) and `<f8` (float64).
 
 **Status: Solid. Quality: High.**
 
-| Test file | Lines | Tests | Coverage |
-|-----------|-------|-------|----------|
-| `FixtureLoader.swift` | 135 | NPY parser (uint16 + float64) with SHA-256 verification | Fixture I/O |
-| `StandardImageDecoderTests.swift` | 95 | PNG8, BMP8, JPEG8 (tolerance), TIFF16, grayscale PNG8, RAW rejection, preview CGImage | All standard decode paths |
-| `RawImageDecoderTests.swift` | 94 | 5-RAF half-res corpus (exact SHA-256), 1 RAF full-res, standard-image rejection, missing file | All RAW decode paths |
-| `UInt16ImageTests.swift` | 50 | Rotation+flip equivalence, frame+aspect equivalence, parameters JSON round-trip | All helper operations |
-| `ThresholdTests.swift` | 55 | 5 dark/light fixtures, exact pixel equality, 1-channel output | All threshold paths |
-| `CoordinateMathTests.swift` | 60 | 7 box/shrink cases, Float32-precision | All shrink_box paths |
-| `ProcessingTests.swift` | 120 | 4 WB fixtures (exact float64), 5 saturation fixtures (≤1 LSB tolerance) | WB + SAT paths |
+| Test area | Coverage |
+|---|---|
+| Fixture loading | uint16 and float64 NPY parsing with SHA-256 verification |
+| Standard decoding | PNG, BMP, JPEG tolerance, TIFF, grayscale, rejection, and preview images |
+| RAW decoding | Five-RAF half-resolution corpus, one full-resolution gate, rejection, and failures |
+| Image helpers | Rotation, flip, frame, aspect ratio, proxy resize, and 16-bit preview packing |
+| Threshold and coordinates | Exact threshold fixtures and Float32-precision `shrink_box` cases |
+| Processing | White balance, saturation, exposure, and corrected-preview behavior |
 | `InputAndLivePreviewTests.swift` | 58 | Drop admission, deduplication, extension consistency, frame throttle (including clock reset) | Input + preview contracts |
 
 The test suite has been migrated from XCTest to `swift-testing`. Tests consume
@@ -187,7 +195,7 @@ Repeated decode with timing (median + best), pixel SHA-256, quality metrics
 (min/max/mean/clip %). Outputs structured JSON for comparison tooling. Used by
 `tests/compare_raw_decode_benchmarks.py`.
 
-### 2.11 Threshold Generation — `UInt16Image+Threshold.swift` (~110 lines)
+### 2.11 Threshold Generation — `UInt16Image+Threshold.swift`
 
 **Status: Complete. Quality: High.**
 
@@ -201,7 +209,7 @@ Uses pure Swift integer/float arithmetic. No Accelerate/vImage dependency yet
 (correctness-first; vImage can replace in Phase 2). Verified against 5
 dark/light parameter combinations on an 80×100 structured synthetic image.
 
-### 2.12 Coordinate Math — `CoordinateMath.swift` (~120 lines)
+### 2.12 Coordinate Math — `CoordinateMath.swift`
 
 **Status: Complete. Quality: High.**
 
@@ -218,7 +226,7 @@ implementation handles this via `Double(Float(value))` for comparison
 operations. Verified against 7 test cases spanning 0° through 45° rotations
 with expand, contract, and identity shrink operations.
 
-### 2.13 Film Processing — `Processing.swift` (~150 lines)
+### 2.13 Film Processing — `Processing.swift`
 
 **Status: Partial (WB, saturation, and exposure complete). Quality: High.**
 
@@ -418,6 +426,10 @@ Port Python's `multiprocessing.Pool` export strategy:
 ### 3.12 Phase 2: Metal Acceleration (Performance)
 
 All of this is forward-looking. The engine must be correct before it is fast.
+The exception is the interactive still preview: it should use a fast,
+non-authoritative GPU render path now so the app workflow can be tested while
+the authoritative engine continues to land. See the
+[real-time still preview plan](realtime-preview-plan.md).
 
 | Kernel | Purpose | Performance target |
 |--------|---------|--------------------|
@@ -431,7 +443,8 @@ if needed (unlikely at 6K×4K 16-bit = 144 MB).
 
 ### 3.13 Phase 3: SwiftUI Application
 
-The current shell is minimal. The full application must provide:
+The current correction prototype covers import, selection, basic correction
+controls, and interactive preview. The full application must also provide:
 
 **Sidebar inspector (scrollable, collapsible sections):**
 - Photo selector: Combobox→`Picker` with selection binding. Import/prev/next/remove.
@@ -439,7 +452,10 @@ The current shell is minimal. The full application must provide:
 - Crop & rotate: Threshold sliders, border crop slider, flip toggle, rotation buttons (90° CW/CCW).
 - Colour: Base detection mode `Picker`, base RGB display + color swatch + picker, WB picker button, temp/tint/saturation sliders.
 - Brightness: White point, black point, gamma, shadows, highlights sliders.
-- Export: File type `Picker` (TIFF/JPEG/PNG), frame slider, aspect ratio `Picker`, folder selector, export buttons (individual/batch).
+- Advanced grading: highlight/midtone/shadow color wheels, overall curve, and
+  independent red/green/blue curves.
+- Export: File type `Picker` (TIFF/JPEG/PNG/DNG), frame slider, aspect ratio
+  `Picker`, folder selector, export buttons (individual/batch).
 
 **Preview area:**
 - Process view switcher: `Picker(.segmented)` for RAW / Threshold / Contours /
@@ -578,6 +594,8 @@ well-understood and low-risk.
 | `warpPerspective` divergence at boundary pixels | Medium | Test at 0-359° in 1° increments; document any ±1 LSB tolerance |
 | Full-res decode 19.7% slower than RawPy | Medium | Eliminate double-copy via single-allocation bridge path |
 | Live camera not exposed by DSLR as AVFoundation device | Medium | Already documented; vendor SDKs / tethering adapters are the expected path |
+| DNG interoperability or misleading RAW semantics | Medium | Define processed-RGB DNG scope explicitly and validate with multiple readers |
+| Curves/color-wheel preview diverges from export | Medium | One authoritative math contract, CPU fixtures, and GPU-versus-CPU grid tests |
 | CI cannot run RAF corpus tests (files outside repo) | Low | Tests gracefully skip; local verification via committed SHA-256 hashes |
 | OpenCV adding non-trivial build complexity | Low | Homebrew `opencv` formula is stable; only 2 functions need interop |
 
@@ -590,22 +608,25 @@ well-understood and low-risk.
 | 1.2 Threshold | ~~vImage port, failing test~~ Done | ~~1-2 days~~ Complete |
 | 1.5 WB | ~~vDSP vector ops~~ Done | ~~1 day~~ Complete |
 | 1.7 Saturation | ~~HSV math~~ Done | ~~1 day~~ Complete |
+| 1.6 Exposure | ~~Float32-equivalent gamma and tone polynomials~~ Done | Complete |
+| Phase 2 still preview foundation | ~~Live bindings, GPU kernel, bounded queue~~ Done | Verification remains |
 | 1.2 Contours | OpenCV interop setup + binding | 1-2 days |
 | 1.3 Perspective warp | DLT + Metal warp kernel | 2-3 days |
 | 1.4 Histogram EQ | vDSP sort + percentile + caching | 2-3 days |
-| 1.6 Exposure | vDSP vector ops + polynomials | 1-2 days |
 | 1.8 Dust detection | vImage morphology + OpenCV contours | 1-2 days |
 | 1.9 Dust inpainting | OpenCV inpaint binding | 1 day |
 | 1.10 Caching | Hashable signatures | 1 day |
 | 1.11 Batch export | OperationQueue + memory-aware parallelism | 2-3 days |
+| 1.12 Advanced grading | Curves, three-way color wheels, fixtures, GPU match | 1-2 weeks |
+| 1.13 Export formats | TIFF/JPEG/PNG plus processed-RGB DNG contract | 1-2 weeks |
 | Phase 2 Metal | 4 compute kernels | 1-2 weeks |
 | Phase 3 SwiftUI app | Full inspector + preview + export UI | 2-4 weeks |
 | Phase 4 Polish | Packaging + perf gates + snapshot tests | 1-2 weeks |
 
-Total remaining: approximately **6-12 weeks** to a production-ready native
+Total remaining: approximately **8-16 weeks** to a production-ready native
 application, assuming one full-time developer. Four pipeline stages are now
-complete. The widest variance remains in Phase 3 (UI), which can be
-parallelised with engine work since the engine is testable independently.
+complete and the real-time preview foundation is in place. The widest variance
+is in advanced grading, DNG interoperability, and Phase 3 UI work.
 
 ---
 
@@ -630,10 +651,11 @@ learnings have emerged: float32 precision is pervasive in the Python pipeline
 creates a benign bug in `shrink_box` that must be replicated for pixel
 equivalence.
 
-The remaining work is clearly scoped: histogram equalisation (percentile
-computation), contour detection + perspective warp (requiring OpenCV C++
-interop), dust
-detection/inpainting, caching, batch export, and the full SwiftUI application.
+The remaining work is clearly scoped: finish still-preview verification,
+histogram equalisation, contour detection + perspective warp (requiring OpenCV
+C++ interop), dust detection/inpainting, caching, authoritative curves and
+three-way color wheels, TIFF/JPEG/PNG/DNG export, and the full SwiftUI
+application.
 The highest-risk items (contour detection and FMM inpainting) have a clear,
 pragmatic mitigation: use OpenCV C++ interop for both, then optionally replace
 with Metal in Phase 2 for performance.

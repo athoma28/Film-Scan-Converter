@@ -1074,67 +1074,71 @@ class GUI:
         self.import_button.configure(state=tk.DISABLED)
         self.filemenu.entryconfigure('Import...', state=tk.DISABLED)
 
-        inputs = []
-        allocated = 0 # sum of total allocated memory
-        has_alloc = 0 # number of photos in which the memory allocation has been calculated
-        with multiprocessing.Manager() as manager:
-            self.terminate = manager.Event() # flag to abort export and safely close processes
+        try:
+            inputs = []
+            allocated = 0 # sum of total allocated memory
+            has_alloc = 0 # number of photos in which the memory allocation has been calculated
+            with multiprocessing.Manager() as manager:
+                self.terminate = manager.Event() # flag to abort export and safely close processes
 
-            for photo in self.photos:
-                if photo.reject:
-                    continue
-                if photo.use_global_settings:
-                    self.apply_settings(photo, self.global_settings) # Ensures the proper settings have been applied
-                filename = os.path.join(self.destination_folder, os.path.splitext(str(photo))[0]) # removes the file extension
-                inputs.append((photo, filename, self.terminate, RawProcessing.class_parameters))
-                if hasattr(photo, 'memory_alloc'):
-                    allocated += photo.memory_alloc # tally of estimated memory requirements of each photo
-                    has_alloc += 1
-            
-            if self.advanced_settings['max_processors_override'] != 0:
-                max_processors = self.advanced_settings['max_processors_override']
-            else:
-                # limting the maximum number of processes based on available system memory
-                import psutil
+                for photo in self.photos:
+                    if photo.reject:
+                        continue
+                    if photo.use_global_settings:
+                        self.apply_settings(photo, self.global_settings) # Ensures the proper settings have been applied
+                    filename = os.path.join(self.destination_folder, os.path.splitext(str(photo))[0]) # removes the file extension
+                    inputs.append((photo, filename, self.terminate, RawProcessing.class_parameters))
+                    if hasattr(photo, 'memory_alloc'):
+                        allocated += photo.memory_alloc # tally of estimated memory requirements of each photo
+                        has_alloc += 1
 
-                available = psutil.virtual_memory()[1]
-                #print('Available system RAM for export:', round(available / 1e9,1),'GB')
-                if has_alloc:
-                    allocated = allocated / has_alloc # allocated memory as average of estimated memory requirements for each photo
-                    #print(round(allocated / 1e9,1),'GB allocated')
-                    max_processors = round(available / allocated)
+                if self.advanced_settings['max_processors_override'] != 0:
+                    max_processors = self.advanced_settings['max_processors_override']
                 else:
-                    max_processors = 1
-            processes = max(min(max_processors, multiprocessing.cpu_count(), len(inputs)), 1) # allocates number of processors between 1 and the maximum number of processors available
-            #print(processes, 'processes allocated for export')
+                    # limting the maximum number of processes based on available system memory
+                    import psutil
 
-            self.update_progress(20, 'Allocating ' + str(processes) + ' processor(s) for export...')
-            with multiprocessing.Pool(processes) as self.pool:
-                i = 1
-                errors = []
-                for result in self.pool.imap(self.export_async, inputs):
-                    if self.terminate.is_set():
-                        self.pool.terminate()
-                        break
-                    if result:
-                        errors.append(result) # keeps track of any errors raised
-                        logger.exception(f'Exception: {result}') 
-                    update_message = f'Exported {i} of {str(len(inputs))} photos.'
-                    self.update_progress(i / len(inputs) * 80 + 19.99, update_message) # update progress display
-                    i += 1
-        if errors and not self.terminate.is_set():
-            # if errors are raised, display dialog with errors
-            errors_display = 'Details:'
-            for i, error in enumerate(errors, 1):
-                errors_display += f'\n {str(i)}. {str(error)}'
-            messagebox.showerror(f'Export Error: {len(errors)}) export(s) failed.\n' + errors_display)
+                    available = psutil.virtual_memory()[1]
+                    #print('Available system RAM for export:', round(available / 1e9,1),'GB')
+                    if has_alloc:
+                        allocated = allocated / has_alloc # allocated memory as average of estimated memory requirements for each photo
+                        #print(round(allocated / 1e9,1),'GB allocated')
+                        max_processors = round(available / allocated)
+                    else:
+                        max_processors = 1
+                processes = max(min(max_processors, multiprocessing.cpu_count(), len(inputs)), 1) # allocates number of processors between 1 and the maximum number of processors available
+                #print(processes, 'processes allocated for export')
 
-        self.current_photo_button.configure(state=tk.NORMAL)
-        self.abort_button.pack_forget()
-        self.all_photo_button.pack(side=tk.LEFT, padx=2, pady=5)
-        self.import_button.configure(state=tk.NORMAL)
-        self.filemenu.entryconfigure('Import...', state=tk.NORMAL)
-        self.hide_progress() # hide the progress bar
+                self.update_progress(20, 'Allocating ' + str(processes) + ' processor(s) for export...')
+                with multiprocessing.Pool(processes) as self.pool:
+                    i = 1
+                    errors = []
+                    for result in self.pool.imap(self.export_async, inputs):
+                        if self.terminate.is_set():
+                            self.pool.terminate()
+                            break
+                        if result:
+                            errors.append(result) # keeps track of any errors raised
+                            logger.exception(f'Exception: {result}')
+                        update_message = f'Exported {i} of {str(len(inputs))} photos.'
+                        self.update_progress(i / len(inputs) * 80 + 19.99, update_message) # update progress display
+                        i += 1
+            if errors and not self.terminate.is_set():
+                # if errors are raised, display dialog with errors
+                errors_display = 'Details:'
+                for i, error in enumerate(errors, 1):
+                    errors_display += f'\n {str(i)}. {str(error)}'
+                messagebox.showerror(
+                    f'Export Error: {len(errors)} export(s) failed.',
+                    errors_display,
+                )
+        finally:
+            self.current_photo_button.configure(state=tk.NORMAL)
+            self.abort_button.pack_forget()
+            self.all_photo_button.pack(side=tk.LEFT, padx=2, pady=5)
+            self.import_button.configure(state=tk.NORMAL)
+            self.filemenu.entryconfigure('Import...', state=tk.NORMAL)
+            self.hide_progress() # hide the progress bar
 
     def abort(self):
         # Stop the export
@@ -1302,14 +1306,13 @@ class GUI:
                 if terminate.is_set():
                     return
                 photo.process(True) # process photo in full quality
-            except Exception as e:
-                error = e
-            else:
                 if terminate.is_set():
                     return
                 photo.export(filename)
                 photo.clear_memory()
                 return False
+            except Exception as e:
+                error = e
         return error
 
 def remove_duplicate_strings(strings):

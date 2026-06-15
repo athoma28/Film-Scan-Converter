@@ -11,7 +11,7 @@ The default suite is deterministic, dependency-light, and designed to run quickl
 python3 -m unittest discover -v
 ```
 
-It verifies pixel equivalence against reference implementations for thresholding, dust detection, histogram equalization, histogram rendering, exposure, white balance, and contour overlays. It also verifies cache invalidation and multiprocessing serialization behavior.
+It verifies pixel equivalence against reference implementations for thresholding, dust detection, histogram equalization, histogram rendering, exposure, white balance, and contour overlays. It also verifies cache invalidation, multiprocessing serialization, processing-counter cleanup after exceptions, failed-write reporting and retry behavior, batch-export UI restoration, and export error-dialog formatting.
 
 `generate_native_snapshots.py` also writes the standard-image decode fixtures
 used by the Swift regression gate. They lock exact Python/OpenCV-equivalent

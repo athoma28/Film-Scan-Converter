@@ -1,5 +1,7 @@
 import pickle
+import tempfile
 import unittest
+from unittest import mock
 
 import cv2
 import numpy as np
@@ -254,6 +256,26 @@ class RawProcessingTests(unittest.TestCase):
                 processor.process(skip_crop=True)
 
                 self.assertEqual(calls, [expected_method])
+
+    def test_process_restores_active_process_count_after_exception(self):
+        processor = make_processor(RawProcessing, self.image)
+        processor.find_optimal_crop = mock.Mock(side_effect=RuntimeError('processing failed'))
+
+        with self.assertRaisesRegex(RuntimeError, 'processing failed'):
+            processor.process()
+
+        self.assertEqual(processor.active_processes, 0)
+
+    def test_export_raises_when_opencv_cannot_write_file(self):
+        processor = make_processor(RawProcessing, self.image)
+        processor.IMG = self.image
+        processor.class_parameters['filetype'] = 'PNG'
+
+        with tempfile.TemporaryDirectory() as directory:
+            filename = f'{directory}/output'
+            with mock.patch.object(cv2, 'imwrite', return_value=False):
+                with self.assertRaisesRegex(OSError, 'Failed to write exported image'):
+                    processor.export(filename)
 
     def test_add_frame_preserves_pixels_and_adds_white_border(self):
         image = self.image[:20, :30]
