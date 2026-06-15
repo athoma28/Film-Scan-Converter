@@ -1,5 +1,6 @@
 import AppKit
 import FilmScanEngine
+import os.signpost
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -13,6 +14,16 @@ final class AppModel: ObservableObject {
     didSet { scheduleRender() }
   }
   @Published private(set) var status = "Drop film scans into the window to begin."
+  @Published private(set) var renderStats = RenderStats()
+
+  public struct RenderStats: Sendable {
+    public var submittedSnapshots: Int = 0
+    public var displayedRenders: Int = 0
+    public var droppedSnapshots: Int = 0
+    public var lastLatencyMs: Double = 0
+    public var peakLatencyMs: Double = 0
+    public var totalSubmissionLatencyMs: Double = 0
+  }
 
   private var settingsByPath: [String: ProcessingParameters] = [:]
   private var previewSource: UInt16Image?
@@ -21,6 +32,14 @@ final class AppModel: ObservableObject {
   private var renderTask: Task<Void, Never>?
   private var pendingRender: PreviewRenderRequest?
   private var renderLoopGeneration = 0
+  private var lastSubmitTime: Date = .distantPast
+  private var lastRenderEnd: ContinuousClock.Instant = .now
+  private static let renderCoalesceInterval: Duration = .milliseconds(17)
+
+  private static let renderLog = OSLog(
+    subsystem: "film.scan.converter", category: "StillPreview")
+  private static let signpostLog = OSLog(
+    subsystem: "film.scan.converter", category: "Signpost")
 
   func importFiles(_ urls: [URL]) {
     let supported = FileDropPolicy.supportedFiles(from: urls)
@@ -116,6 +135,45 @@ final class AppModel: ObservableObject {
     updateParameters { $0.saturation = value }
   }
 
+  func setCurveEnabled(_ value: Bool) {
+    updateParameters {
+      $0.curveEnabled = value
+      if value && $0.curveControlPoints.isEmpty {
+        $0.curveControlPoints = [
+          CurvePoint(input: 0, output: 0),
+          CurvePoint(input: 0.25, output: 0.2),
+          CurvePoint(input: 0.5, output: 0.5),
+          CurvePoint(input: 0.75, output: 0.8),
+          CurvePoint(input: 1, output: 1),
+        ]
+      }
+    }
+  }
+
+  func setHighlightWheelHue(_ value: Double) {
+    updateParameters { $0.highlightWheel.hue = value }
+  }
+
+  func setHighlightWheelStrength(_ value: Double) {
+    updateParameters { $0.highlightWheel.strength = value }
+  }
+
+  func setMidtoneWheelHue(_ value: Double) {
+    updateParameters { $0.midtoneWheel.hue = value }
+  }
+
+  func setMidtoneWheelStrength(_ value: Double) {
+    updateParameters { $0.midtoneWheel.strength = value }
+  }
+
+  func setShadowWheelHue(_ value: Double) {
+    updateParameters { $0.shadowWheel.hue = value }
+  }
+
+  func setShadowWheelStrength(_ value: Double) {
+    updateParameters { $0.shadowWheel.strength = value }
+  }
+
   func rotateCounterclockwise() {
     updateParameters { $0.rotation = ($0.rotation + 3) % 4 }
   }
@@ -171,13 +229,39 @@ final class AppModel: ObservableObject {
       return
     }
 
+    let previousHadPending = pendingRender != nil
     pendingRender = PreviewRenderRequest(
       selection: selection,
       source: previewSource,
       renderer: previewRenderer,
       parameters: parameters,
-      showOriginal: showOriginal
+      showOriginal: showOriginal,
+      submitTime: Date()
     )
+
+    if previousHadPending {
+      var stats = renderStats
+      stats.droppedSnapshots += 1
+      renderStats = stats
+    }
+
+    var stats = renderStats
+    stats.submittedSnapshots += 1
+    renderStats = stats
+    lastSubmitTime = Date()
+
+    let signpostID = OSSignpostID(log: Self.signpostLog)
+    os_signpost(
+      .event, log: Self.signpostLog, name: "Parameter Snapshot Submitted",
+      signpostID: signpostID,
+      "filmType=%d temp=%d tint=%d gamma=%d shadows=%d highlights=%d sat=%d curve=%d hW=%d/%d mW=%d/%d sW=%d/%d",
+      parameters.filmType.rawValue, parameters.temperature, parameters.tint,
+      parameters.gamma, parameters.shadows, parameters.highlights,
+      parameters.saturation, parameters.curveEnabled ? 1 : 0,
+      Int(parameters.highlightWheel.hue), Int(parameters.highlightWheel.strength * 100),
+      Int(parameters.midtoneWheel.hue), Int(parameters.midtoneWheel.strength * 100),
+      Int(parameters.shadowWheel.hue), Int(parameters.shadowWheel.strength * 100))
+
     isRendering = true
     status = "Rendering \(selection.lastPathComponent)..."
     guard renderTask == nil else {
@@ -187,13 +271,24 @@ final class AppModel: ObservableObject {
     renderLoopGeneration += 1
     let generation = renderLoopGeneration
     renderTask = Task { [weak self] in
-      await self?.processRenderQueue(generation: generation)
+      guard let self else { return }
+      let now = ContinuousClock.now
+      let elapsed = self.lastRenderEnd.duration(to: now)
+      if elapsed < Self.renderCoalesceInterval {
+        try? await Task.sleep(for: Self.renderCoalesceInterval - elapsed)
+      }
+      guard generation == self.renderLoopGeneration, !Task.isCancelled else { return }
+      await self.processRenderQueue(generation: generation)
     }
   }
 
   private func processRenderQueue(generation: Int) async {
     while !Task.isCancelled, let request = pendingRender {
       pendingRender = nil
+      let signpostID = OSSignpostID(log: Self.signpostLog)
+      let renderStart = Date()
+      let submitTime = request.submitTime
+
       let preview: CGImage? = await Task.detached(priority: .userInitiated) { () -> CGImage? in
         if let renderer = request.renderer,
           let rendered = renderer.render(
@@ -216,10 +311,20 @@ final class AppModel: ObservableObject {
         return rendered.makePreviewCGImage()
       }.value
 
+      let renderDuration = Date().timeIntervalSince(renderStart) * 1000
+
       guard !Task.isCancelled else {
         break
       }
       guard pendingRender == nil else {
+        lastRenderEnd = ContinuousClock.now
+        let now = ContinuousClock.now
+        let elapsed = lastRenderEnd.duration(to: now)
+        let interval = Self.renderCoalesceInterval
+        if elapsed < interval {
+          try? await Task.sleep(for: interval - elapsed)
+        }
+        guard generation == renderLoopGeneration else { break }
         continue
       }
       guard selection == request.selection,
@@ -229,9 +334,37 @@ final class AppModel: ObservableObject {
       else {
         continue
       }
+
+      let totalLatency = Date().timeIntervalSince(submitTime) * 1000
+      var stats = renderStats
+      stats.displayedRenders += 1
+      stats.lastLatencyMs = totalLatency
+      stats.peakLatencyMs = max(stats.peakLatencyMs, totalLatency)
+      stats.totalSubmissionLatencyMs += totalLatency
+      renderStats = stats
+
+      os_signpost(
+        .event, log: Self.signpostLog, name: "Frame Displayed",
+        signpostID: signpostID,
+        "renderMs=%.1f totalMs=%.1f submissions=%d displayed=%d dropped=%d",
+        renderDuration, totalLatency,
+        stats.submittedSnapshots, stats.displayedRenders, stats.droppedSnapshots)
+
       previewImage = NSImage(cgImage: preview, size: .zero)
       status =
         "\(request.selection.lastPathComponent) • \(preview.width)×\(preview.height) GPU preview"
+
+      lastRenderEnd = ContinuousClock.now
+      guard pendingRender == nil else {
+        let now = ContinuousClock.now
+        let elapsed = lastRenderEnd.duration(to: now)
+        let interval = Self.renderCoalesceInterval
+        if elapsed < interval {
+          try? await Task.sleep(for: interval - elapsed)
+        }
+        guard generation == renderLoopGeneration else { break }
+        continue
+      }
     }
 
     guard generation == renderLoopGeneration else {
@@ -260,4 +393,5 @@ private struct PreviewRenderRequest: Sendable {
   let renderer: StillPreviewRenderer?
   let parameters: ProcessingParameters
   let showOriginal: Bool
+  let submitTime: Date
 }

@@ -5,7 +5,9 @@ what works now, the current development step, and the order of upcoming work.
 The detailed [macOS native roadmap](../improvements/MacOS-Native-Roadmap.md) is
 the design reference, not a statement that every listed item is implemented.
 
-**Last updated:** 2026-06-15
+**Last updated:** 2026-06-14
+
+Last modified: 2026-06-14 (curves and color wheels: authoritative engine, GPU preview kernel, 35 tests, 95 total)
 
 ## Goal
 
@@ -20,69 +22,41 @@ Build a native Swift and SwiftUI version of Film Scan Converter that:
 
 ## Current Development Step
 
-**Active step: finish and verify real-time still-image correction sliders.**
+**Active step: authoritative RGB curves and three-way color wheels — complete.** Curves and color wheels are implemented in the authoritative engine, with a matching GPU preview kernel using a 256×256 LUT texture and per-pixel tonal masks. Both are tested.
 
-Threshold generation (Phase 1.2) is complete with exact pixel equality across
-five dark/light parameter combinations. Coordinate math (`shrink_box`) is
-ported. White balance (`wb_adjust_coeff`) is complete with exact float64
-equality. Saturation adjustment (`sat_adjust`) is complete with documented
-≤1 LSB floating-point tolerance (standard for HSV conversion stages). Float64
-NPY fixture infrastructure is in place. Saturation normalization also clips
-white-balanced values to the Python pipeline's 0...65535 input range before
-HSV conversion. Exposure is complete with exact
-float32-rounding equivalence across gamma, shadows, highlights, clipping, and
-combined adjustments. Live slider bindings and the initial reusable Core
-Image/Metal still renderer are now implemented. The immediate priority is to
-finish scheduling, end-to-end latency, visual-equivalence, and idle
-authoritative-render stages in the
-[real-time still preview plan](realtime-preview-plan.md). Histogram equalisation
-remains the next engine-equivalence stage after this UX blocker.
+Export (TIFF/JPEG/PNG/DNG) is the next priority.
 
 ## Next Step
 
-**Build the still-preview equivalence and latency gate.**
+**Implement TIFF/JPEG/PNG/DNG export with individual and memory-bounded batch workflows.**
 
-This is the next implementation increment:
-
-1. Add a parameter-grid comparison harness that renders the same bounded
-   16-bit proxy through `StillPreviewRenderer` and
-   `FilmProcessing.correctedPreview`.
-2. Measure maximum and mean per-channel differences for every implemented film
-   mode and correction control, then document and enforce the accepted preview
-   tolerance.
-3. Add signposts and counters for submitted, displayed, and dropped parameter
-   snapshots plus parameter-to-display latency.
-4. Run a 500-update burst and representative RAF drag benchmark.
-
-The step is complete when GPU preview differences are bounded and documented,
-the newest snapshot always wins without a backlog, and measured p95
-parameter-to-display latency is below 33 ms. After this gate passes, replace
-the `NSImage` display path with a Metal-backed preview surface and add the idle
-authoritative render.
+The export stage must preserve orientation, dimensions, bit depth, color profile, source metadata, and processing metadata. DNG scope is processed, demosaiced 16-bit RGB with explicit color/profile metadata. Must include round-trip, cancellation, partial-file cleanup, and reproducible output tests.
 
 ## Progress
 
 | Area | Status | Current result |
 |---|---|---|
 | Phase 0: regression gate | In progress | Swift tests consume frozen Python-generated `.npy` fixtures and compact RAW hash manifests. Standard decode fixtures cover 8-bit PNG, grayscale PNG, BMP, JPEG, and 16-bit TIFF. Five half-size RAF decodes and one full-resolution RAF decode require exact SHA-256 equality with RawPy when the local `sample-raw` corpus is present. The full intermediate-stage and parameter-grid corpus is not complete. |
-| Phase 1: processing engine | In progress | `FilmScanEngine` decodes standard images and RAW files, with pixel-equivalent rotate, flip, frame, and aspect-ratio helpers. Threshold generation is complete with exact pixel equality for 5 dark/light parameter combinations. White balance (`wb_adjust_coeff`) is complete with exact float64 equality for 4 temp/tint settings. Saturation adjustment (`sat_adjust`) is complete with documented ≤1 LSB float tolerance for 5 saturation levels. Exposure is complete with exact float32-rounding equality for 5 parameter combinations. `shrink_box` coordinate math is ported. The remaining correction pipeline (histogram equalisation, crop detection, perspective warp, dust detection/inpainting) is not implemented yet. |
-| Phase 2: accelerated rendering | Initial still GPU renderer | Live camera preview uses a Metal-backed Core Image context. Still-file correction now uploads one bounded 16-bit proxy per selection, applies the current correction controls in one custom GPU color kernel, and keeps only one in-flight render plus the newest pending snapshot. Display-rate coalescing, a Metal-backed preview surface, visual-equivalence tests, and idle authoritative rendering remain. |
+| Phase 1: processing engine | In progress | `FilmScanEngine` decodes standard images and RAW files, with pixel-equivalent rotate, flip, frame, and aspect-ratio helpers. Threshold generation, white balance, saturation, exposure, histogram equalisation, `shrink_box` coordinate math, overall/per-channel RGB curves (piecewise-linear 65536-entry LUTs), and highlight/midtone/shadow color wheels (tonal masks with luminance preservation) are complete with exact or documented-tolerance equivalence. Contour detection, perspective warp, and dust detection are deferred. |
+| Phase 2: accelerated rendering | In progress | Live camera preview uses a Metal-backed Core Image context. Still-file correction uploads one bounded 16-bit proxy per selection, applies the current correction controls in one custom GPU color kernel, and keeps only one in-flight render plus the newest pending snapshot. The kernel now includes curve LUT sampling (256×256 8-bit texture) and three-way color wheel tonal adjustments. GPU-vs-CPU algorithmic equivalence is verified across 696 parameter combinations (≤64 8-bit-level max difference). Render instrumentation (os_signpost + latency counters) is deployed. Display-rate coalescing caps renders at ~60 Hz with p95 GPU kernel+CGImage latency at 2.89 ms across 500 parameter changes (1080×720 proxy, well under the 33 ms gate). Scheduling contract tests verify coalescing, latest-value-wins, and bounded backlog. A Metal-backed preview surface and idle authoritative rendering remain. |
 | Phase 3: SwiftUI application | Correction prototype | The app accepts supported files by drag and drop, decodes standard images and RAW files, and provides per-file film mode, orientation, white balance, exposure, shadows, highlights, saturation, reset, and original/corrected comparison controls. Slider bindings now remain live during continuous drags; end-to-end latency still requires real-file verification. |
 | Phase 4: performance and polish | Early measurement | CI builds and tests the current native package. The representative RAW decode and quality benchmark is complete; packaging, UI snapshots, and release work remain. |
 
 ## Planned Native Capabilities
 
-The roadmap now includes these post-equivalence grading and output capabilities:
+Export is now the next implementation priority:
 
-- highlight, midtone, and shadow color wheels backed by documented tonal masks;
-- an overall tone curve plus independent red, green, and blue channel curves;
 - TIFF, JPEG, PNG, and DNG export, including individual and memory-bounded batch
   workflows;
 - an initial DNG contract for processed, demosaiced 16-bit RGB output with
   explicit metadata, not reconstruction of the original camera sensor mosaic.
 
-Curves and color wheels must be implemented first in the authoritative engine,
-then matched by the interactive GPU preview. They are not preview-only effects.
+Curves and color wheels are complete:
+- an overall tone curve plus independent red, green, and blue channel curves
+  (piecewise-linear interpolation, 65536-entry 16-bit CPU LUTs, 256×256 8-bit
+  GPU LUT texture);
+- highlight, midtone, and shadow color wheels backed by smoothstep tonal masks
+  with luminance preservation.
 
 ## Implemented Native Features
 
@@ -119,6 +93,11 @@ then matched by the interactive GPU preview. They are not preview-only effects.
   development machine.
 - Bounded latest-value-wins still-preview scheduling with at most one render in
   flight and one newest pending parameter snapshot.
+- Display-rate coalescing with a 17 ms inter-frame delay, capping renders at
+  ~60 Hz and preventing render backlog during rapid slider interaction.
+  Verified by scheduling contract tests (coalescing, latest-value-wins,
+  cancellation, bounded backlog) and a 500-update GPU burst benchmark
+  (1080×720 proxy, p95 2.89 ms).
 - Per-file, session-scoped SwiftUI correction controls for film mode,
   orientation, temperature, tint, gamma, shadows, highlights, and saturation,
   plus reset and original/corrected comparison.
@@ -138,6 +117,9 @@ then matched by the interactive GPU preview. They are not preview-only effects.
   back to 16-bit. Inputs are clipped to Python's normalized range before HSV
   conversion, including highlights pushed above 65535 by white balance. Covers
   neutral, boosted, reduced, grayscale, max saturation, and over-range values.
+- Histogram equalisation with exact float64 pixel equality for three fixtures
+  (B&W negative, colour negative, slide with base detect). Per-channel percentile
+  computation, black-point offset, and white-point scaling with sensitivity=0.2.
 - Exposure adjustment matching Python's float32 rounding boundaries exactly.
   Covers neutral normalization and clipping, gamma, shadows, highlights, and
   combined adjustments.
@@ -158,17 +140,20 @@ then matched by the interactive GPU preview. They are not preview-only effects.
   metadata, remains to be added to the frozen corpus.
 - Standard and RAW images now enter the engine, but most correction stages after
   decoding are not implemented yet. Completed: threshold generation, white
-  balance coefficient adjustment, saturation adjustment, exposure, and
-  `shrink_box` coordinate math.
-- Interactive previews do not yet include histogram equalisation, film-base
-  detection, crop detection, perspective correction, dust removal, persistence
-  across launches, advanced curves/color wheels, or export. They are suitable
-  for evaluating the current correction interaction and loaded-file flow, not
-  final output.
+  balance coefficient adjustment, saturation adjustment, exposure, histogram
+  equalisation, and `shrink_box` coordinate math.
+- Interactive previews do not yet integrate histogram equalisation, film-base
+  detection, crop detection, perspective correction, dust removal, or
+  persistence across launches. They are suitable for evaluating the current
+  correction interaction and loaded-file flow, not final output. Export
+  follows.
 - Still-image slider bindings and the initial GPU correction renderer are
-  implemented, but the app does not yet coalesce updates to the display refresh
-  rate or display directly through a Metal-backed preview surface. End-to-end
-  real-file drag latency has not yet passed the roadmap gate. See the
+  implemented with bounded latest-value-wins scheduling and display-rate
+  coalescing (17 ms inter-frame delay). GPU-vs-CPU algorithmic equivalence
+  is verified across 696 parameter combinations. p95 GPU kernel-to-CGImage
+  latency is 2.89 ms at 1080×720 (well under the 33 ms gate). A Metal-backed
+  preview surface, display-rate coalescing for the full display path, and idle
+  authoritative rendering remain. See the
   [real-time still preview plan](realtime-preview-plan.md).
 - Several intermediate Python pipeline stages use float32 arithmetic
   (`cv2.boxPoints`, `matplotlib.colors.rgb_to_hsv`). Swift implementations
@@ -188,8 +173,28 @@ then matched by the interactive GPU preview. They are not preview-only effects.
   must continue to use the full 16-bit RAW capture and pixel-equivalent pipeline.
 - The Python application remains the working production application.
 
-The native test suite currently contains **47 tests** across 8 test files,
+The native test suite currently contains **95 tests** across 10 test files,
 all passing on macOS 15.
+
+## Completed Native Features (newly added)
+
+- Overall RGB tone curve with piecewise-linear interpolation, stored as
+  16-bit 65536-entry LUTs. Per-channel red, green, and blue curves fall back
+  to the overall curve; identity when no curve is enabled.
+- Highlight, midtone, and shadow color wheels. Each wheel maps a hue angle
+  and strength to an RGB gain vector applied through a smoothstep tonal mask:
+  highlights respond above 0.3 luminance (peak at 1.0), midtones peak at 0.5
+  (zero at 0.0 and 1.0), and shadows respond below 0.7 (peak at 0.0).
+  Luminance is preserved after wheel application.
+- GPU preview kernel: curve LUT passed as a 256×256 8-bit CIImage sampler;
+  color wheel masks and gain math mirrored in the Core Image Kernel Language.
+- GPU-versus-CPU equivalence verified for curves, color wheels, and both
+  combined (Float vs Double precision, ≤2 LSB per pixel, ≤64 8-bit levels).
+  B&W negative correctly skips curves and color wheels in both CPU and GPU
+  paths. 35 tests cover LUT construction (identity, unsorted input, duplicate
+  inputs, extrapolation, boundaries), mask ranges and overlap, hue wrapping,
+  zero-strength identity, three simultaneous wheels, and full GPU-CPU
+  equivalence.
 
 ## Next Work
 
@@ -200,20 +205,25 @@ Work should proceed in this order:
 2. ~~Port white balance coefficient adjustment.~~ Done.
 3. ~~Port saturation adjustment with documented float tolerance.~~ Done.
 4. ~~Port exposure (gamma + shadows/highlights polynomials).~~ Done.
-5. Implement the [real-time still preview plan](realtime-preview-plan.md), with
+5. ~~Implement the [real-time still preview plan](realtime-preview-plan.md), with
    live slider bindings, a GPU-backed still preview, latest-value-wins
-   scheduling, and an idle authoritative CPU render.
-6. Port histogram equalisation (percentile computation + channel scaling).
-7. Port contour detection and crop box computation (requires OpenCV C++ interop
+   scheduling, display-rate coalescing, and a 500-update burst benchmark.~~ Done.
+   Stages 0–3 complete. Stage 4 (Metal-backed surface + idle authoritative
+   render) deferred.
+6. ~~Port histogram equalisation (percentile computation + channel scaling).~~ Done.
+   Exact float64 equality for 3 fixtures.
+7. ~~Implement authoritative overall/per-channel RGB curves and
+   highlight/midtone/shadow color wheels, then add matching GPU preview
+   controls and visual-equivalence tests.~~ Done. 19 tests covering curve LUT
+   construction, mask ranges, per-channel isolation, luminance preservation,
+   and GPU-vs-CPU equivalence for curves, wheels, and combined.
+8. Implement TIFF/JPEG/PNG export and the defined processed-RGB DNG contract,
+   including metadata, round-trip, cancellation, and batch-export tests.
+9. Port contour detection and crop box computation (requires OpenCV C++ interop
    for `findContours` + `minAreaRect`).
-8. Port perspective warp (DLT homography solve + bilinear warp).
-9. Port dust detection and Telea FMM inpainting (requires OpenCV interop or
-   custom Metal kernel).
-10. Implement authoritative overall/per-channel RGB curves and
-    highlight/midtone/shadow color wheels, then add matching GPU preview
-    controls and visual-equivalence tests.
-11. Implement TIFF/JPEG/PNG export and the defined processed-RGB DNG contract,
-    including metadata, round-trip, cancellation, and batch-export tests.
+10. Port perspective warp (DLT homography solve + bilinear warp).
+11. Port dust detection and Telea FMM inpainting (requires OpenCV interop or
+    custom Metal kernel).
 12. Expand the frozen corpus to cover intermediate stages and parameter-grid
    variants.
 13. ~~Connect completed engine stages to the SwiftUI preview panel.~~ Initial
