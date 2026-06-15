@@ -1,5 +1,6 @@
 import AppKit
 import FilmScanEngine
+import FilmScanPreviewRenderer
 import os.signpost
 
 @MainActor
@@ -26,6 +27,8 @@ final class AppModel: ObservableObject {
   }
 
   private var settingsByPath: [String: ProcessingParameters] = [:]
+  private var previewCache: [String: CachedPreviewSession] = [:]
+  private var previewCacheOrder: [String] = []
   private var previewSource: UInt16Image?
   private var previewRenderer: StillPreviewRenderer?
   private var loadTask: Task<Void, Never>?
@@ -35,6 +38,8 @@ final class AppModel: ObservableObject {
   private var lastSubmitTime: Date = .distantPast
   private var lastRenderEnd: ContinuousClock.Instant = .now
   private static let renderCoalesceInterval: Duration = .milliseconds(17)
+  private static let previewMaxDimension = 640
+  private static let previewCacheLimit = 2
 
   private static let renderLog = OSLog(
     subsystem: "film.scan.converter", category: "StillPreview")
@@ -73,6 +78,14 @@ final class AppModel: ObservableObject {
     previewRenderer = nil
     parameters = settingsByPath[settingsKey(selection)] ?? ProcessingParameters()
     showOriginal = false
+
+    let key = settingsKey(selection)
+    if let cached = previewCache[key] {
+      applyCachedSession(cached, selection: selection)
+      touchPreviewCache(key)
+      return
+    }
+
     status = "Decoding \(selection.lastPathComponent)..."
 
     loadTask = Task { [weak self] in
@@ -92,9 +105,10 @@ final class AppModel: ObservableObject {
           return
         }
         decodedImage = decoded
-        let proxy = decoded.resizedToFit(maxDimension: 1080)
+        let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
         previewSource = proxy
         previewRenderer = StillPreviewRenderer(image: proxy)
+        cacheCurrentSession(for: selection)
         scheduleRender(immediate: true)
       } catch is CancellationError {
         return
@@ -147,6 +161,34 @@ final class AppModel: ObservableObject {
           CurvePoint(input: 1, output: 1),
         ]
       }
+    }
+  }
+
+  func setCurveControlPoints(_ points: [CurvePoint]) {
+    updateParameters {
+      $0.curveEnabled = true
+      $0.curveControlPoints = points
+    }
+  }
+
+  func setRedCurveControlPoints(_ points: [CurvePoint]) {
+    updateParameters {
+      $0.redCurveEnabled = true
+      $0.redCurveControlPoints = points
+    }
+  }
+
+  func setGreenCurveControlPoints(_ points: [CurvePoint]) {
+    updateParameters {
+      $0.greenCurveEnabled = true
+      $0.greenCurveControlPoints = points
+    }
+  }
+
+  func setBlueCurveControlPoints(_ points: [CurvePoint]) {
+    updateParameters {
+      $0.blueCurveEnabled = true
+      $0.blueCurveControlPoints = points
     }
   }
 
@@ -222,6 +264,36 @@ final class AppModel: ObservableObject {
       return
     }
     settingsByPath[settingsKey(selection)] = parameters
+  }
+
+  private func applyCachedSession(_ session: CachedPreviewSession, selection: URL) {
+    decodedImage = session.decodedImage
+    previewSource = session.previewSource
+    previewRenderer = session.previewRenderer
+    status = "Loaded \(selection.lastPathComponent) from preview cache."
+    scheduleRender(immediate: true)
+  }
+
+  private func cacheCurrentSession(for selection: URL) {
+    guard let decodedImage, let previewSource, let previewRenderer else {
+      return
+    }
+    let key = settingsKey(selection)
+    previewCache[key] = CachedPreviewSession(
+      decodedImage: decodedImage,
+      previewSource: previewSource,
+      previewRenderer: previewRenderer
+    )
+    touchPreviewCache(key)
+    while previewCacheOrder.count > Self.previewCacheLimit {
+      let evicted = previewCacheOrder.removeFirst()
+      previewCache.removeValue(forKey: evicted)
+    }
+  }
+
+  private func touchPreviewCache(_ key: String) {
+    previewCacheOrder.removeAll { $0 == key }
+    previewCacheOrder.append(key)
   }
 
   private func scheduleRender(immediate _: Bool = false) {
@@ -394,4 +466,10 @@ private struct PreviewRenderRequest: Sendable {
   let parameters: ProcessingParameters
   let showOriginal: Bool
   let submitTime: Date
+}
+
+private struct CachedPreviewSession {
+  let decodedImage: UInt16Image
+  let previewSource: UInt16Image
+  let previewRenderer: StillPreviewRenderer
 }

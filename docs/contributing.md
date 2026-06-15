@@ -16,11 +16,12 @@ starting native work, read
 source for the active step, verified progress, limitations, and ordered next
 tasks.
 
-The current native priority is completing and verifying the real-time still
-preview, followed by histogram equalisation, contour detection, and perspective
-warp. Work on later processing stages or additional SwiftUI controls should not
-bypass the pixel-equivalence gate or introduce a preview-only control without
-an authoritative processing definition.
+The current native priority is TIFF/JPEG/PNG/DNG export with individual and
+memory-bounded batch workflows. Histogram equalisation, curves, color wheels,
+the still-preview latency gate, and the GPU-vs-CPU algorithmic equivalence gate
+are already verified. Work on later processing stages or additional SwiftUI
+controls should not bypass the pixel-equivalence gate or introduce a
+preview-only control without an authoritative processing definition.
 
 Useful contribution areas:
 

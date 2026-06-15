@@ -17,6 +17,6 @@
     "shadows": 0,
     "highlights": 0
   },
-  "renderingMilliseconds": 0.036416982766240835,
+  "renderingMilliseconds": 0.04320900188758969,
   "generator": "tests/generate_native_snapshots.py"
 }

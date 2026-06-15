@@ -22,7 +22,10 @@ Build a native Swift and SwiftUI version of Film Scan Converter that:
 
 ## Current Development Step
 
-**Active step: authoritative RGB curves and three-way color wheels — complete.** Curves and color wheels are implemented in the authoritative engine, with a matching GPU preview kernel using a 256×256 LUT texture and per-pixel tonal masks. Both are tested.
+**Active step: authoritative RGB curves and three-way color wheels — complete.**
+Curves and color wheels are implemented in the authoritative engine and the GPU
+preview kernel. The actual Core Image renderer is verified against the CPU path
+across 2,655 comparisons with a maximum difference of 2/255.
 
 Export (TIFF/JPEG/PNG/DNG) is the next priority.
 
@@ -38,8 +41,8 @@ The export stage must preserve orientation, dimensions, bit depth, color profile
 |---|---|---|
 | Phase 0: regression gate | In progress | Swift tests consume frozen Python-generated `.npy` fixtures and compact RAW hash manifests. Standard decode fixtures cover 8-bit PNG, grayscale PNG, BMP, JPEG, and 16-bit TIFF. Five half-size RAF decodes and one full-resolution RAF decode require exact SHA-256 equality with RawPy when the local `sample-raw` corpus is present. The full intermediate-stage and parameter-grid corpus is not complete. |
 | Phase 1: processing engine | In progress | `FilmScanEngine` decodes standard images and RAW files, with pixel-equivalent rotate, flip, frame, and aspect-ratio helpers. Threshold generation, white balance, saturation, exposure, histogram equalisation, `shrink_box` coordinate math, overall/per-channel RGB curves (piecewise-linear 65536-entry LUTs), and highlight/midtone/shadow color wheels (tonal masks with luminance preservation) are complete with exact or documented-tolerance equivalence. Contour detection, perspective warp, and dust detection are deferred. |
-| Phase 2: accelerated rendering | In progress | Live camera preview uses a Metal-backed Core Image context. Still-file correction uploads one bounded 16-bit proxy per selection, applies the current correction controls in one custom GPU color kernel, and keeps only one in-flight render plus the newest pending snapshot. The kernel now includes curve LUT sampling (256×256 8-bit texture) and three-way color wheel tonal adjustments. GPU-vs-CPU algorithmic equivalence is verified across 696 parameter combinations (≤64 8-bit-level max difference). Render instrumentation (os_signpost + latency counters) is deployed. Display-rate coalescing caps renders at ~60 Hz with p95 GPU kernel+CGImage latency at 2.89 ms across 500 parameter changes (1080×720 proxy, well under the 33 ms gate). Scheduling contract tests verify coalescing, latest-value-wins, and bounded backlog. A Metal-backed preview surface and idle authoritative rendering remain. |
-| Phase 3: SwiftUI application | Correction prototype | The app accepts supported files by drag and drop, decodes standard images and RAW files, and provides per-file film mode, orientation, white balance, exposure, shadows, highlights, saturation, reset, and original/corrected comparison controls. Slider bindings now remain live during continuous drags; end-to-end latency still requires real-file verification. |
+| Phase 2: accelerated rendering | In progress | Live camera preview uses a Metal-backed Core Image context. Still-file correction uploads one bounded 16-bit proxy per selection, applies the current correction controls in one custom GPU kernel, and keeps only one in-flight render plus the newest pending snapshot. The kernel includes curve LUT sampling (256×256 8-bit texture) and three-way color wheel tonal adjustments. The production renderer is verified against the authoritative CPU path across 2,655 comparisons with zero failures and a maximum difference of 2/255. A 500-change current-pipeline benchmark measures approximately 10 ms p95 at 1080×720 after bounded LUT caching; the app now uses a 640-pixel maximum interactive proxy, which contains about 2.85× fewer pixels than the former 1080-pixel proxy. Render instrumentation and scheduling contract tests are deployed. A Metal-backed preview surface and idle authoritative rendering remain. |
+| Phase 3: SwiftUI application | Correction prototype | The app accepts supported files by drag and drop, decodes standard images and RAW files, and provides per-file film mode, orientation, white balance, exposure, shadows, highlights, saturation, reset, and original/corrected comparison controls. Three-way correction is exposed through actual draggable color-wheel controls. The two most recent decoded/proxy/renderer sessions are cached for immediate back-and-forth switching. Slider and wheel bindings remain live during continuous drags; end-to-end latency still requires real-file verification. |
 | Phase 4: performance and polish | Early measurement | CI builds and tests the current native package. The representative RAW decode and quality benchmark is complete; packaging, UI snapshots, and release work remain. |
 
 ## Planned Native Capabilities
@@ -81,10 +84,13 @@ Curves and color wheels are complete:
   proving exact decoded pixels for all five RAFs at half and full resolution.
 - Background RAW decoding and preview through the same engine-buffer path used
   by standard images.
-- A bounded 1080-pixel correction preview proxy that rerenders verified engine
+- A bounded 640-pixel correction preview proxy that rerenders verified engine
   corrections in the background without changing the full decoded source. This
   CPU path is currently suitable only as an idle correctness preview, not
   continuous real-time interaction.
+- A bounded two-session decoded/proxy/renderer cache that makes switching back
+  and forth between recently viewed files immediate without allowing memory use
+  to grow with the imported-file list.
 - A reusable Core Image/Metal still-preview renderer that uploads one bounded
   16-bit proxy per selection, disables implicit working-space conversion, and
   fuses inversion, grayscale, white balance, tone, and HSV saturation into one
@@ -96,11 +102,14 @@ Curves and color wheels are complete:
 - Display-rate coalescing with a 17 ms inter-frame delay, capping renders at
   ~60 Hz and preventing render backlog during rapid slider interaction.
   Verified by scheduling contract tests (coalescing, latest-value-wins,
-  cancellation, bounded backlog) and a 500-update GPU burst benchmark
-  (1080×720 proxy, p95 2.89 ms).
+  cancellation, bounded backlog) and a 500-update production-renderer benchmark
+  including curves and color wheels (1080×720 proxy, approximately 10 ms p95).
 - Per-file, session-scoped SwiftUI correction controls for film mode,
   orientation, temperature, tint, gamma, shadows, highlights, and saturation,
   plus reset and original/corrected comparison.
+- Draggable shadow, midtone, and highlight color wheels with hue mapped around
+  the wheel, strength mapped from center to edge, position markers, and
+  double-click reset.
 - Exact threshold generation from 16-bit BGR images matching Python `get_threshold`
   for five dark/light parameter combinations. Covers `convertScaleAbs` (16-to-8
   bit), BGR-to-grayscale via OpenCV fixed-point coefficients, `inRange` binary
@@ -150,10 +159,11 @@ Curves and color wheels are complete:
 - Still-image slider bindings and the initial GPU correction renderer are
   implemented with bounded latest-value-wins scheduling and display-rate
   coalescing (17 ms inter-frame delay). GPU-vs-CPU algorithmic equivalence
-  is verified across 696 parameter combinations. p95 GPU kernel-to-CGImage
-  latency is 2.89 ms at 1080×720 (well under the 33 ms gate). A Metal-backed
-  preview surface, display-rate coalescing for the full display path, and idle
-  authoritative rendering remain. See the
+  is verified across 696 parameter combinations, and the actual Core Image
+  renderer is verified across 2,655 comparisons with a maximum difference of
+  2/255. Its current-pipeline benchmark measures approximately 10 ms p95 at
+  1080×720. A Metal-backed preview surface, display-rate coalescing for the full
+  display path, and idle authoritative rendering remain. See the
   [real-time still preview plan](realtime-preview-plan.md).
 - Several intermediate Python pipeline stages use float32 arithmetic
   (`cv2.boxPoints`, `matplotlib.colors.rgb_to_hsv`). Swift implementations
@@ -188,8 +198,9 @@ all passing on macOS 15.
   Luminance is preserved after wheel application.
 - GPU preview kernel: curve LUT passed as a 256×256 8-bit CIImage sampler;
   color wheel masks and gain math mirrored in the Core Image Kernel Language.
-- GPU-versus-CPU equivalence verified for curves, color wheels, and both
-  combined (Float vs Double precision, ≤2 LSB per pixel, ≤64 8-bit levels).
+- GPU-model-versus-CPU equivalence verified for curves, color wheels, and both
+  combined. Direct Core Image renderer comparison covers 2,655 cases with zero
+  failures and a maximum difference of 2/255.
   B&W negative correctly skips curves and color wheels in both CPU and GPU
   paths. 35 tests cover LUT construction (identity, unsorted input, duplicate
   inputs, extrapolation, boundaries), mask ranges and overlap, hue wrapping,

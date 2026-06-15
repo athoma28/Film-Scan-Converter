@@ -17,6 +17,6 @@
     "dark_threshold": 100,
     "light_threshold": 100
   },
-  "renderingMilliseconds": 0.03529101377353072,
+  "renderingMilliseconds": 0.03362499410286546,
   "generator": "tests/generate_native_snapshots.py"
 }

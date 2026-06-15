@@ -15,13 +15,15 @@ either.
 ## 1. Architecture
 
 The native package is a Swift Package Manager project at `native/FilmScanEngine`
-with five targets layered cleanly:
+with seven targets layered cleanly:
 
 ```
 CLibRaw (system library, pkg-config → Homebrew libraw)
   └─ CLibRawShim (C shim)
        └─ FilmScanEngine (pure Swift library)
+            ├─ FilmScanPreviewRenderer (shared production Core Image renderer)
             ├─ FilmScanConverterMac (SwiftUI correction prototype)
+            ├─ FilmScanPreviewComparator (Core Image diagnostic CLI)
             ├─ FilmScanRawBenchmark (CLI benchmark)
             └─ FilmScanEngineTests (swift-testing regression gate)
 ```
@@ -145,9 +147,14 @@ context.
 The still-file correction path now keeps slider state live during drags, uploads
 one bounded 16-bit proxy per selection, applies the implemented corrections in
 one Core Image/Metal color kernel, and retains only one in-flight render plus
-the newest pending snapshot. It still creates `NSImage`/`CGImage` display
-results, lacks display-refresh-rate coalescing and end-to-end latency signposts,
-and has not yet passed GPU-versus-CPU visual-equivalence tests.
+the newest pending snapshot. GPU-vs-CPU algorithmic equivalence is verified
+across 696 parameter combinations (≤64 8-bit-level max difference, documented
+Float-precision tolerance). Render instrumentation (`os_signpost` + latency
+counters) is deployed. It still creates `NSImage`/`CGImage` display
+results. The production renderer is verified against the CPU path across 2,655
+comparisons with a maximum difference of 2/255, and its current-pipeline
+1080×720 benchmark measures approximately 10 ms p95. End-to-end display latency
+with a real RAF corpus remains.
 
 ### 2.14 Fixture Loader — Extended
 
@@ -253,9 +260,8 @@ covering neutral normalization and clipping, gamma, shadows, highlights, and
 combined adjustments. The implementation preserves Python's Float32 rounding
 after normalization, gamma, each polynomial adjustment, and final scaling.
 
-Histogram equalisation is not yet implemented.
-
-### 2.14 Fixture Loader — Extended
+Histogram equalisation is implemented with exact float64 equality for the
+current three-fixture corpus.
 
 ---
 
@@ -609,7 +615,7 @@ well-understood and low-risk.
 | 1.5 WB | ~~vDSP vector ops~~ Done | ~~1 day~~ Complete |
 | 1.7 Saturation | ~~HSV math~~ Done | ~~1 day~~ Complete |
 | 1.6 Exposure | ~~Float32-equivalent gamma and tone polynomials~~ Done | Complete |
-| Phase 2 still preview foundation | ~~Live bindings, GPU kernel, bounded queue~~ Done | Verification remains |
+| Phase 2 still preview foundation | ~~Live bindings, GPU kernel, bounded queue~~ Done; ~~GPU equivalence gate~~ Done; latency benchmark + Metal surface remain | Verification remains |
 | 1.2 Contours | OpenCV interop setup + binding | 1-2 days |
 | 1.3 Perspective warp | DLT + Metal warp kernel | 2-3 days |
 | 1.4 Histogram EQ | vDSP sort + percentile + caching | 2-3 days |
@@ -651,10 +657,11 @@ learnings have emerged: float32 precision is pervasive in the Python pipeline
 creates a benign bug in `shrink_box` that must be replicated for pixel
 equivalence.
 
-The remaining work is clearly scoped: finish still-preview verification,
-histogram equalisation, contour detection + perspective warp (requiring OpenCV
-C++ interop), dust detection/inpainting, caching, authoritative curves and
-three-way color wheels, TIFF/JPEG/PNG/DNG export, and the full SwiftUI
+The remaining work is clearly scoped: the actual still-preview renderer
+equivalence and latency gates are verified; the Metal-backed display surface and end-to-end
+real-file latency measurement remain. Next engine stages are contour detection
++ perspective warp (requiring OpenCV C++ interop), dust detection/inpainting,
+caching, TIFF/JPEG/PNG/DNG export, and the full SwiftUI
 application.
 The highest-risk items (contour detection and FMM inpainting) have a clear,
 pragmatic mitigation: use OpenCV C++ interop for both, then optionally replace

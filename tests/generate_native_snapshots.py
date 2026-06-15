@@ -205,6 +205,47 @@ def main():
             elapsed,
         )
 
+    hist_source = rng.integers(0, 65536, size=(60, 80, 3), dtype=np.uint16)
+
+    for name, film_type, black_point, white_point, base_detect, base_rgb in (
+        ('histeq_bw_neutral', 0, 0, 0, 0, (255, 255, 255)),
+        ('histeq_colour_neg', 1, -35, 45, 0, (255, 255, 255)),
+        ('histeq_slide_base', 2, 20, -15, 1, (220, 180, 140)),
+    ):
+        proc = make_processor(
+            RawProcessing, hist_source,
+            film_type=film_type,
+            black_point=black_point,
+            white_point=white_point,
+            base_detect=base_detect,
+            base_rgb=base_rgb,
+        )
+        proc.rect = None
+        proc.class_parameters['ignore_border'] = (0, 0)
+        proc.class_parameters['ignore_neg_border'] = False
+
+        input_uint16 = (
+            cv2.cvtColor(hist_source, cv2.COLOR_BGR2GRAY)
+            if film_type == 0
+            else hist_source
+        )
+        result, elapsed = measured(lambda: proc.hist_EQ(input_uint16.copy()))
+        write_case(
+            args.output_dir,
+            name,
+            'histogram_equalisation',
+            input_uint16,
+            result,
+            {
+                'film_type': film_type,
+                'black_point': black_point,
+                'white_point': white_point,
+                'base_detect': base_detect,
+                'base_rgb': list(base_rgb),
+            },
+            elapsed,
+        )
+
 
 def _build_threshold_image():
     h, w = 80, 100

@@ -9,6 +9,7 @@ let package = Package(
   ],
   products: [
     .library(name: "FilmScanEngine", targets: ["FilmScanEngine"]),
+    .library(name: "FilmScanPreviewRenderer", targets: ["FilmScanPreviewRenderer"]),
     .executable(name: "FilmScanConverterMac", targets: ["FilmScanConverterMac"]),
     .executable(name: "FilmScanRawBenchmark", targets: ["FilmScanRawBenchmark"]),
   ],
@@ -27,13 +28,21 @@ let package = Package(
       name: "FilmScanEngine",
       dependencies: ["CLibRawShim"]
     ),
+    .target(
+      name: "FilmScanPreviewRenderer",
+      dependencies: ["FilmScanEngine"]
+    ),
     .executableTarget(
       name: "FilmScanRawBenchmark",
       dependencies: ["FilmScanEngine"]
     ),
     .executableTarget(
+      name: "FilmScanPreviewComparator",
+      dependencies: ["FilmScanEngine", "FilmScanPreviewRenderer"]
+    ),
+    .executableTarget(
       name: "FilmScanConverterMac",
-      dependencies: ["FilmScanEngine"],
+      dependencies: ["FilmScanEngine", "FilmScanPreviewRenderer"],
       exclude: ["Info.plist"],
       linkerSettings: [
         .unsafeFlags([
@@ -46,7 +55,7 @@ let package = Package(
     ),
     .testTarget(
       name: "FilmScanEngineTests",
-      dependencies: ["FilmScanEngine"],
+      dependencies: ["FilmScanEngine", "FilmScanPreviewRenderer"],
       resources: [.copy("Fixtures")]
     ),
   ]

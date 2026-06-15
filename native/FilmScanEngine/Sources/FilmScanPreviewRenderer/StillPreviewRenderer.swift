@@ -2,15 +2,17 @@ import CoreImage
 import FilmScanEngine
 import Metal
 
-final class StillPreviewRenderer: @unchecked Sendable {
+public final class StillPreviewRenderer: @unchecked Sendable {
   private let context: CIContext
   private let source: CIImage
-  private let correctionKernel: CIColorKernel
+  private let correctionKernel: CIKernel
+  private let curveLUTLock = NSLock()
+  private var curveLUTCache: [CurveLUTKey: CIImage] = [:]
 
-  init?(image: UInt16Image) {
+  public init?(image: UInt16Image) {
     guard
       let cgImage = image.makePreviewCGImage16(),
-      let kernel = CIColorKernel(source: Self.correctionKernelSource)
+      let kernel = CIKernel(source: Self.correctionKernelSource)
     else {
       return nil
     }
@@ -38,17 +40,20 @@ final class StillPreviewRenderer: @unchecked Sendable {
     correctionKernel = kernel
   }
 
-  func render(parameters: ProcessingParameters, showOriginal: Bool) -> CGImage? {
+  public func render(parameters: ProcessingParameters, showOriginal: Bool) -> CGImage? {
     let oriented = orientedSource(parameters: parameters)
     let output: CIImage
 
     if showOriginal || parameters.filmType == .cropOnly {
       output = oriented
     } else {
-      let lutImage = Self.makeCurveLUTImage(parameters: parameters)
+      let lutImage = curveLUTImage(parameters: parameters)
       guard
         let corrected = correctionKernel.apply(
           extent: oriented.extent,
+          roiCallback: { inputIndex, destinationRect in
+            inputIndex == 1 ? lutImage.extent : destinationRect
+          },
           arguments: [
             oriented,
             lutImage,
@@ -79,6 +84,21 @@ final class StillPreviewRenderer: @unchecked Sendable {
       format: .RGBA8,
       colorSpace: CGColorSpace(name: CGColorSpace.sRGB)
     )
+  }
+
+  private func curveLUTImage(parameters: ProcessingParameters) -> CIImage {
+    let key = CurveLUTKey(parameters: parameters)
+    curveLUTLock.lock()
+    defer { curveLUTLock.unlock() }
+    if let cached = curveLUTCache[key] {
+      return cached
+    }
+    let image = Self.makeCurveLUTImage(parameters: parameters)
+    if curveLUTCache.count >= 8 {
+      curveLUTCache.removeAll(keepingCapacity: true)
+    }
+    curveLUTCache[key] = image
+    return image
   }
 
   private func orientedSource(parameters: ProcessingParameters) -> CIImage {
@@ -244,8 +264,8 @@ final class StillPreviewRenderer: @unchecked Sendable {
     }
 
     kernel vec4 correction(
-      __sample pixel,
-      __sample lutImage,
+      sampler image,
+      sampler lutImage,
       float filmType,
       float temperature,
       float tint,
@@ -260,6 +280,7 @@ final class StillPreviewRenderer: @unchecked Sendable {
       float shadowHue,
       float shadowStrength
     ) {
+      vec4 pixel = sample(image, samplerCoord(image));
       vec3 rgb = pixel.rgb;
       bool isBW = (filmType == 0.0);
 
@@ -296,13 +317,15 @@ final class StillPreviewRenderer: @unchecked Sendable {
         }
       }
 
-      float idxR = clamp(rgb.r * 65535.0, 0.0, 65535.0);
-      float idxG = clamp(rgb.g * 65535.0, 0.0, 65535.0);
-      float idxB = clamp(rgb.b * 65535.0, 0.0, 65535.0);
-      float outR = sample(lutImage, vec2((mod(idxR, 256.0) + 0.5) / 256.0, (floor(idxR / 256.0) + 0.5) / 256.0)).r;
-      float outG = sample(lutImage, vec2((mod(idxG, 256.0) + 0.5) / 256.0, (floor(idxG / 256.0) + 0.5) / 256.0)).g;
-      float outB = sample(lutImage, vec2((mod(idxB, 256.0) + 0.5) / 256.0, (floor(idxB / 256.0) + 0.5) / 256.0)).b;
-      rgb = vec3(outR, outG, outB);
+      if (!isBW) {
+        float idxR = clamp(rgb.r * 65535.0, 0.0, 65535.0);
+        float idxG = clamp(rgb.g * 65535.0, 0.0, 65535.0);
+        float idxB = clamp(rgb.b * 65535.0, 0.0, 65535.0);
+        float outR = sample(lutImage, vec2(mod(idxR, 256.0) + 0.5, floor(idxR / 256.0) + 0.5)).r;
+        float outG = sample(lutImage, vec2(mod(idxG, 256.0) + 0.5, floor(idxG / 256.0) + 0.5)).g;
+        float outB = sample(lutImage, vec2(mod(idxB, 256.0) + 0.5, floor(idxB / 256.0) + 0.5)).b;
+        rgb = vec3(outR, outG, outB);
+      }
 
       if (!isBW && (highlightStrength > 0.0 || midtoneStrength > 0.0 || shadowStrength > 0.0)) {
         float lum = dot(rgb, vec3(0.299, 0.587, 0.114));
@@ -326,4 +349,26 @@ final class StillPreviewRenderer: @unchecked Sendable {
       return vec4(clamp(rgb, 0.0, 1.0), pixel.a);
     }
     """
+}
+
+private struct CurveLUTKey: Hashable {
+  let curveEnabled: Bool
+  let curveControlPoints: [CurvePoint]
+  let redCurveEnabled: Bool
+  let redCurveControlPoints: [CurvePoint]
+  let greenCurveEnabled: Bool
+  let greenCurveControlPoints: [CurvePoint]
+  let blueCurveEnabled: Bool
+  let blueCurveControlPoints: [CurvePoint]
+
+  init(parameters: ProcessingParameters) {
+    curveEnabled = parameters.curveEnabled
+    curveControlPoints = parameters.curveControlPoints
+    redCurveEnabled = parameters.redCurveEnabled
+    redCurveControlPoints = parameters.redCurveControlPoints
+    greenCurveEnabled = parameters.greenCurveEnabled
+    greenCurveControlPoints = parameters.greenCurveControlPoints
+    blueCurveEnabled = parameters.blueCurveEnabled
+    blueCurveControlPoints = parameters.blueCurveControlPoints
+  }
 }

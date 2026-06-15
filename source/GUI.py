@@ -473,6 +473,30 @@ class GUI:
         y = self.master.winfo_y() + int((self.master.winfo_height()/2) - (top.winfo_height()/2))
         top.geometry('+%d+%d' % (x, y))
 
+    def _debounce_process(self, delay_ms=40):
+        skiplayer = {'normal': 0, 'skip crop': 1, 'update': 2, 'skip': 3}
+        best = getattr(self, '_debounce_best_mode', 'skip')
+        if skiplayer.get(self._debounce_next_mode, 'skip') < skiplayer.get(best, 'skip'):
+            self._debounce_best_mode = self._debounce_next_mode
+        if hasattr(self, '_debounce_timer'):
+            self.master.after_cancel(self._debounce_timer)
+        self._debounce_timer = self.master.after(delay_ms, self._run_debounced_process)
+        self._debounce_next_mode = 'skip'
+
+    def _run_debounced_process(self):
+        if len(self.photos) == 0:
+            return
+        mode = getattr(self, '_debounce_best_mode', 'skip')
+        self._debounce_best_mode = 'skip'
+        match mode:
+            case 'normal':
+                self.current_photo.process()
+            case 'skip crop':
+                self.current_photo.process(skip_crop=True)
+        if mode != 'skip':
+            self.update_IMG()
+            self.unsaved = True
+
     def widget_changed(self, widget, mode: Literal['normal','skip crop','update','skip']='normal', instance=True):
         # called whenever widget is changed
         # applies value stored in widget to photo
@@ -491,20 +515,8 @@ class GUI:
             RawProcessing.class_parameters[key] = value
         if len(self.photos) == 0:
             return
-        match mode:
-            case 'normal':
-                self.current_photo.process()
-                self.update_IMG()
-                self.unsaved = True
-            case 'skip crop':
-                self.current_photo.process(skip_crop=True)
-                self.update_IMG()
-                self.unsaved = True
-            case 'update':
-                self.update_IMG()
-                self.unsaved = True
-            case 'skip':
-                pass
+        self._debounce_next_mode = mode
+        self._debounce_process()
     
     def import_photos(self):
         # Import photos: opens dialog to load files, and intializes GUI
@@ -583,6 +595,8 @@ class GUI:
         if len(self.photos) == 0:
             return
 
+        self._cancel_debounce()
+
         photo_index = self.photoCombo.current()
         self.current_photo = self.photos[photo_index]
         self.glob_check.set(self.current_photo.use_global_settings)
@@ -657,7 +671,7 @@ class GUI:
         result_photo = ImageTk.PhotoImage(self.resize_IMG(result_img))
         self.result_photo.configure(image=[result_photo])
         self.result_photo.image = result_photo
-        self.master.update()
+        self.master.update_idletasks()
 
         if full_res:
             # Generates full resolution image in the background
@@ -852,6 +866,7 @@ class GUI:
         if len(self.photos) == 0:
             return
         self.current_photo.flip = self.widgets['flip'].get()
+        self._cancel_debounce()
         self.update_IMG()
         self.unsaved = True
     
@@ -862,6 +877,7 @@ class GUI:
             self.current_photo.rotation -= 1
         else:
             self.current_photo.rotation += 1
+        self._cancel_debounce()
         self.update_IMG()
         self.unsaved = True
     
@@ -872,8 +888,16 @@ class GUI:
             self.current_photo.rotation += 1
         else:
             self.current_photo.rotation -= 1
+        self._cancel_debounce()
         self.update_IMG()
         self.unsaved = True
+
+    def _cancel_debounce(self):
+        if hasattr(self, '_debounce_timer'):
+            self.master.after_cancel(self._debounce_timer)
+            del self._debounce_timer
+        self._debounce_best_mode = 'skip'
+        self._debounce_next_mode = 'skip'
 
     def pick_wb(self):
         # Enables the white balance picker and cursor

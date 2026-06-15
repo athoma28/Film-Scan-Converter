@@ -18,6 +18,6 @@
     "rotation": 1,
     "flip": true
   },
-  "renderingMilliseconds": 0.5761249922215939,
+  "renderingMilliseconds": 0.05612499080598354,
   "generator": "tests/generate_native_snapshots.py"
 }

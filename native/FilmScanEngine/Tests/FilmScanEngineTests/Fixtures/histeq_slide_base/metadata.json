@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "stage": "histogram_equalisation",
+  "inputShape": [
+    60,
+    80,
+    3
+  ],
+  "outputShape": [
+    60,
+    80,
+    3
+  ],
+  "dtype": "float64",
+  "inputSHA256": "dda8316506c6c310f78c2a3f880182a0e92bb097bb32c1efc89ad8566591574e",
+  "outputSHA256": "bdaf0172445a980ef132b77c6327f63b397a61d9fdddc37532fc205e59dda50d",
+  "parameters": {
+    "film_type": 2,
+    "black_point": 20,
+    "white_point": -15,
+    "base_detect": 1,
+    "base_rgb": [
+      220,
+      180,
+      140
+    ]
+  },
+  "renderingMilliseconds": 0.32049999572336674,
+  "generator": "tests/generate_native_snapshots.py"
+}

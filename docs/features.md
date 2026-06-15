@@ -38,17 +38,22 @@ production replacement. Its current implemented scope includes:
 - Float64 NPY fixture infrastructure for intermediate pipeline stages.
 - Optional GPU-accelerated live camera preview with inversion, exposure, and
   saturation controls.
-- A still-image correction prototype with live slider bindings, a reusable
-  16-bit Core Image/Metal preview renderer, and bounded latest-value-wins
-  scheduling. End-to-end drag latency, direct Metal-backed display, and
-  GPU-versus-CPU visual-equivalence gates remain.
+- A still-image correction prototype with live slider bindings, draggable
+  shadow/midtone/highlight color wheels, a reusable 16-bit Core Image/Metal
+  preview renderer, bounded latest-value-wins scheduling, and a two-session
+  decoded-preview cache. GPU-vs-CPU algorithmic equivalence is verified across
+  696 parameter combinations. Direct Metal-backed display and end-to-end
+  latency benchmarking remain.
+- Render instrumentation with `os_signpost` profiling markers and published
+  snapshot/display/drop counters.
 - macOS CI that runs all engine tests and builds the app.
 - Python CI that protects the production reference implementation.
 
-The remaining correction pipeline (histogram equalisation, crop detection,
-perspective warp, dust detection/inpainting), advanced grading controls
-(highlight/midtone/shadow color wheels and overall/per-channel RGB curves), and
-the full TIFF/JPEG/PNG/DNG export workflow are still under development.
+The remaining correction pipeline (crop detection, perspective warp, and dust
+detection/inpainting) and the full TIFF/JPEG/PNG/DNG export workflow are still
+under development. Histogram equalisation, highlight/midtone/shadow color
+wheels, and overall/per-channel RGB curves are implemented in the native
+engine.
 
 See [Native macOS Development](development/native-macos.md) for the
 authoritative current step, progress, limitations, and next work.

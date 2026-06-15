@@ -4,11 +4,16 @@ import numpy as np
 from PIL import Image
 import os 
 
+import matplotlib.colors
+from matplotlib.colors import Normalize, rgb_to_hsv, hsv_to_rgb
+
 import logging
 
 logger = logging.getLogger(__name__)
 FORMAT = '%(asctime)s:::%(levelname)s:::%(message)s'
 logging.basicConfig(filename='logfile.log', level=logging.DEBUG, format=FORMAT)
+
+_SAT_NORM = Normalize(0, 65535, True)
 
 class RawProcessing:
     # This class defines a photo object that contains the image processing pipeline from raw to final export, including all processing functions and parameters
@@ -368,12 +373,23 @@ class RawProcessing:
     def find_optimal_crop(self):
         # Determines the optimal crop around an image and corrects for misalignment/rotation
         thresh = self.get_threshold(self.RAW_IMG)
-        #thresh = self.get_edges(img) # experimental threholding using edge detection
-        contours, _ = cv2.findContours(thresh, 1, 2)
-        if len(contours) == 0:
-            return thresh, None, None # if no contours are found, skip cropping
-        largest_contour = max(contours, key=cv2.contourArea)
-        rect = cv2.minAreaRect(largest_contour) # bounding box of largest contour
+        max_dim = max(thresh.shape)
+        if max_dim > 2000:
+            scale = 2000 / max_dim
+            small_thresh = cv2.resize(thresh, (int(thresh.shape[1] * scale), int(thresh.shape[0] * scale)), interpolation=cv2.INTER_NEAREST)
+            contours, _ = cv2.findContours(small_thresh, 1, 2)
+            if len(contours) == 0:
+                return thresh, None, None
+            largest_contour_small = max(contours, key=cv2.contourArea)
+            rect = cv2.minAreaRect(largest_contour_small)
+            rect = ((rect[0][0] / scale, rect[0][1] / scale), (rect[1][0] / scale, rect[1][1] / scale), rect[2])
+            largest_contour = (largest_contour_small.astype(np.float64) / scale).astype(np.int32)
+        else:
+            contours, _ = cv2.findContours(thresh, 1, 2)
+            if len(contours) == 0:
+                return thresh, None, None # if no contours are found, skip cropping
+            largest_contour = max(contours, key=cv2.contourArea)
+            rect = cv2.minAreaRect(largest_contour) # bounding box of largest contour
         y, x = self.RAW_IMG.shape[0], self.RAW_IMG.shape[1]
         if rect[2] <= 0:
             rect = ((rect[0][0], rect[0][1]), (rect[1][1], rect[1][0]), rect[2] + 90) # correction for if the rectangle rotation is exactly zero
@@ -595,15 +611,13 @@ class RawProcessing:
         # Applies saturation adjustment factors
         if self.sat == 100:
             return img # don't run the calculation if no changes are to be made
-        import matplotlib.colors
 
         sat_adjust = self.sat / 100
-        norm = matplotlib.colors.Normalize(0, 65535, True)
-        img = norm(np.flip(img, 2)).astype(np.float32, copy=False) # Convert from bgr to rgb, and normalize input to (0,1)
-        img = matplotlib.colors.rgb_to_hsv(img) # Convert from rgb to hsv
+        img = _SAT_NORM(img[:,:,::-1]).astype(np.float32, copy=False) # Convert from bgr to rgb, and normalize input to (0,1)
+        img = rgb_to_hsv(img) # Convert from rgb to hsv
         img[:,:,1] = np.clip(img[:,:,1] * sat_adjust, 0, 1) # Apply saturation adjustment
-        img = matplotlib.colors.hsv_to_rgb(img) # Convert from hsv back to rgb
-        img = np.flip(img, 2) * 65535 # Convert from rgb to bgr
+        img = hsv_to_rgb(img) # Convert from hsv back to rgb
+        img = img[:,:,::-1] * 65535 # Convert from rgb to bgr
         return img
     
     def rotate(self, img, undo=False):

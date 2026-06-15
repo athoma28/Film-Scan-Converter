@@ -27,7 +27,7 @@ struct ContentView: View {
           if !showLivePreview, model.decodedImage != nil {
             Divider()
             inspector
-              .frame(width: 300)
+              .frame(width: 410)
           }
         }
         Divider()
@@ -145,33 +145,36 @@ struct ContentView: View {
       }
 
       Section("Curves") {
-        Toggle(
-          "Overall Curve",
-          isOn: Binding(
-            get: { model.parameters.curveEnabled },
-            set: { model.setCurveEnabled($0) }
-          )
-        )
-        if model.parameters.curveEnabled {
-          Text("S-curve preset active")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-        }
+        IntegratedCurvesView(model: model)
       }
 
       Section("Color Wheels") {
-        wheelRow("Highlights", hue: { model.parameters.highlightWheel.hue },
-          strength: { model.parameters.highlightWheel.strength },
-          setHue: { model.setHighlightWheelHue($0) },
-          setStrength: { model.setHighlightWheelStrength($0) })
-        wheelRow("Midtones", hue: { model.parameters.midtoneWheel.hue },
-          strength: { model.parameters.midtoneWheel.strength },
-          setHue: { model.setMidtoneWheelHue($0) },
-          setStrength: { model.setMidtoneWheelStrength($0) })
-        wheelRow("Shadows", hue: { model.parameters.shadowWheel.hue },
-          strength: { model.parameters.shadowWheel.strength },
-          setHue: { model.setShadowWheelHue($0) },
-          setStrength: { model.setShadowWheelStrength($0) })
+        HStack(alignment: .top, spacing: 12) {
+          ColorWheelControl(
+            title: "Shadows",
+            hue: model.parameters.shadowWheel.hue,
+            strength: model.parameters.shadowWheel.strength,
+            setHue: model.setShadowWheelHue,
+            setStrength: model.setShadowWheelStrength
+          )
+          ColorWheelControl(
+            title: "Midtones",
+            hue: model.parameters.midtoneWheel.hue,
+            strength: model.parameters.midtoneWheel.strength,
+            setHue: model.setMidtoneWheelHue,
+            setStrength: model.setMidtoneWheelStrength
+          )
+          ColorWheelControl(
+            title: "Highlights",
+            hue: model.parameters.highlightWheel.hue,
+            strength: model.parameters.highlightWheel.strength,
+            setHue: model.setHighlightWheelHue,
+            setStrength: model.setHighlightWheelStrength
+          )
+        }
+        Text("Drag from center to tint. Double-click a wheel to reset.")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
       }
 
       Button("Reset Corrections", role: .destructive, action: model.resetCorrections)
@@ -204,55 +207,6 @@ struct ContentView: View {
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-  }
-
-  private func wheelRow(
-    _ label: String,
-    hue: @escaping () -> Double,
-    strength: @escaping () -> Double,
-    setHue: @escaping (Double) -> Void,
-    setStrength: @escaping (Double) -> Void
-  ) -> some View {
-    VStack(alignment: .leading, spacing: 2) {
-      Text(label)
-        .font(.subheadline)
-        .fontWeight(.medium)
-      HStack {
-        Text("H")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .frame(width: 14)
-        Slider(
-          value: Binding(get: { hue() }, set: { setHue($0) }),
-          in: 0...360
-        )
-        Text(Int(hue().rounded()).formatted())
-          .monospacedDigit()
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .frame(width: 28, alignment: .trailing)
-      }
-      HStack {
-        Text("S")
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .frame(width: 14)
-        Slider(
-          value: Binding(get: { strength() }, set: { setStrength($0) }),
-          in: 0...1
-        )
-        Text(formatStrength(strength()))
-          .monospacedDigit()
-          .font(.caption)
-          .foregroundStyle(.secondary)
-          .frame(width: 28, alignment: .trailing)
-      }
-    }
-  }
-
-  private func formatStrength(_ value: Double) -> String {
-    let pct = Int((value * 100).rounded())
-    return "\(pct)%"
   }
 
   private func correctionSlider(

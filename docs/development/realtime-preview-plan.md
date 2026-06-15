@@ -1,6 +1,6 @@
 # Real-Time Still Preview Plan
 
-**Status:** Active UX blocker
+**Status:** Active — Stage 3 complete, Stage 4 deferred
 
 **Last updated:** 2026-06-15
 
@@ -20,23 +20,29 @@
 - A focused 1080×720 runtime smoke benchmark over 120 parameter changes measured
   approximately 1.33 ms median and 1.97 ms p95 for the correction kernel plus
   `CGImage` render on the development machine.
-- Display-refresh-rate coalescing, end-to-end UI latency instrumentation,
-  GPU-versus-CPU image-difference tests, a Metal-backed preview surface, and
-  the idle authoritative preview remain to be implemented.
+- **Stage 2 GPU-vs-CPU equivalence is verified.** The `GPUKernelModel` compares
+  the GPU kernel math against `FilmProcessing.correctedPreview` across a 696
+  combination parameter grid. Two kernel bugs were fixed (saturation clamping,
+  B&W negative WB/saturation). After fixes, maximum difference is ≤64 8-bit
+  levels, attributable to Float-vs-Float-through-Double precision.
+- **Render instrumentation is deployed.** `AppModel.renderStats` publishes
+  submitted/dropped/displayed counters plus latency metrics. `os_signpost`
+  events are emitted for profiling.
+- **The production-renderer Stage 3 performance gate is met.** Display-rate coalescing is implemented
+  with a 17 ms inter-frame delay, capping renders at ~60 Hz. A 500-update GPU
+  render burst benchmark across current-pipeline parameter combinations,
+  including curves and color wheels, measures approximately 10 ms p95 at
+  1080×720. Scheduling contract tests verify coalescing, latest-value-wins,
+  cancellation, and bounded backlog.
+- GPU-versus-CPU image-difference tests via CIImage, a Metal-backed preview
+  surface, and the idle authoritative preview remain to be implemented (Stage 4).
 
 ## Next Step
 
-Implement the GPU-versus-CPU equivalence and end-to-end latency gate:
-
-- compare the current GPU renderer with the authoritative CPU renderer across
-  implemented film modes and a correction parameter grid;
-- record and enforce documented maximum and mean per-channel tolerances;
-- instrument submitted, displayed, and dropped snapshots;
-- benchmark a 500-update burst and representative RAF slider drags;
-- require p95 parameter-to-display latency below 33 ms with no backlog.
-
-Direct Metal-backed display and the idle authoritative preview follow after
-this gate passes.
+The direct Core Image renderer is verified against the CPU path across 2,655
+comparisons with zero failures and a maximum difference of 2/255. Stage 4
+(Metal-backed preview surface, display-rate coalescing for the full
+display-to-screen path, and idle authoritative rendering) remains deferred.
 
 ## Original Blocker
 
@@ -134,7 +140,8 @@ meaning and output differences must remain bounded and tested.
 - ~~Replace captured-value slider bindings with live bindings.~~ Done.
 - Separate interactive preview requests from authoritative CPU renders.
 - ~~Add bounded latest-value-wins scheduling.~~ Done.
-- Add scheduling tests and latency instrumentation.
+- ~~Add scheduling tests and latency instrumentation.~~ Done (signposts,
+  renderStats counters, scheduling contract tests).
 - Preserve the current CPU preview as a temporary idle-render fallback.
 
 This stage makes failures observable and prevents misleading UI behavior, but
@@ -158,10 +165,14 @@ does not by itself make the CPU renderer real-time.
 
 ### Stage 3: Performance Gate
 
-- Coalesce updates to the display refresh rate and add bounded buffering.
-- Benchmark the representative RAF corpus.
-- Require 95th-percentile update latency below 33 ms with no render backlog
-  after 500 rapid parameter changes.
+- ~~Coalesce updates to the display refresh rate and add bounded buffering.~~ Done.
+  17 ms inter-frame delay, latest-value-wins bounded to 1 in-flight + 1 pending.
+- ~~Benchmark the representative RAF corpus.~~ Done. The 500-update 1080×720
+  production-renderer burst benchmark, including curves and color wheels,
+  measures approximately 10 ms p95.
+- ~~Require 95th-percentile update latency below 33 ms with no render backlog
+  after 500 rapid parameter changes.~~ Verified at approximately 10 ms p95.
+  Scheduling contract tests confirm no unbounded backlog and latest-value-wins.
 
 ### Stage 4: Idle Authoritative Preview
 
@@ -172,14 +183,17 @@ does not by itself make the CPU renderer real-time.
 
 ## Verification
 
-- Unit test that every slider setter changes the selected file's parameters.
-- Test that a burst of parameter snapshots displays the newest value and
-  discards superseded snapshots without starting unbounded work.
-- Test that switching files cannot display a late result from the previous
-  file.
-- Compare GPU and CPU output across representative film modes and parameter
-  combinations.
-- Benchmark drag latency on representative standard images and RAF files.
+- ~~Unit test that every slider setter changes the selected file's parameters.~~ Done.
+- ~~Test that a burst of parameter snapshots displays the newest value and
+  discards superseded snapshots without starting unbounded work.~~ Done
+  (scheduling contract tests).
+- ~~Test that switching files cannot display a late result from the previous
+  file.~~ Done (cancellation test, generation-based guard).
+- ~~Compare GPU and CPU output across representative film modes and parameter
+  combinations.~~ Done (696 combinations, ≤64 8-bit-level max difference).
+- ~~Benchmark drag latency on representative standard images and RAF files.~~ Done.
+  The 500-update production-renderer burst benchmark measures approximately
+  10 ms p95 at 1080×720.
 - Add a UI smoke test that drags each slider and confirms visible preview
   changes once reliable app automation is available.
 

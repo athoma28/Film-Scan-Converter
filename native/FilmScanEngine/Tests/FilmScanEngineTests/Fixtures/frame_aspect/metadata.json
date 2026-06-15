@@ -18,6 +18,6 @@
     "frame": 10,
     "fit_aspect_ratio": "3:2 (Landscape)"
   },
-  "renderingMilliseconds": 0.11354201706126332,
+  "renderingMilliseconds": 0.09037501877173781,
   "generator": "tests/generate_native_snapshots.py"
 }

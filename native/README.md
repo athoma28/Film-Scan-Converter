@@ -21,11 +21,15 @@ This file contains only package-local build and implementation notes.
   the engine without blocking the main actor.
 - Imported files expose per-file film mode,
   orientation, white balance, exposure, shadows, highlights, and saturation
-  controls. Interactive rendering uses a bounded 1080-pixel, 16-bit proxy with
-  a Core Image/Metal correction kernel and bounded latest-value-wins scheduling,
-  while preserving the full decoded source for later export work. End-to-end
-  real-file drag latency and GPU-versus-CPU visual equivalence still require
-  verification; see the
+  controls, plus draggable shadow/midtone/highlight color wheels. Interactive
+  rendering uses a bounded 640-pixel, 16-bit proxy with a Core Image/Metal
+  correction kernel and bounded latest-value-wins scheduling, while preserving
+  the full decoded source for later export work. The two most recent
+  decoded/proxy/renderer sessions are cached for immediate switching. The
+  actual Core Image renderer is verified against the CPU path across 2,655
+  comparisons with a maximum difference of 2/255, and its current-pipeline
+  benchmark measures approximately 10 ms p95 at 1080×720. End-to-end real-file
+  drag latency still requires verification. See the
   [real-time still preview plan](../docs/development/realtime-preview-plan.md).
 - Its optional live camera view uses AVFoundation and a GPU-backed Core Image
   context for negative inversion, exposure, and saturation preview corrections.
@@ -43,11 +47,10 @@ This file contains only package-local build and implementation notes.
   [benchmark report](../docs/development/native-raw-benchmark.md).
 
 The package is not yet a replacement for the production Python application.
-Histogram equalisation, crop detection, perspective warp, dust handling, and
-the remaining correction and export pipeline are the current missing pieces.
-Planned grading and output work includes highlight/midtone/shadow color wheels,
-overall and per-channel RGB curves, and DNG export. Threshold generation, white
-balance, saturation, and exposure are implemented.
+Crop detection, perspective warp, dust handling, and export are the current
+missing pieces. Threshold generation, white balance, saturation, exposure,
+histogram equalisation, highlight/midtone/shadow color wheels, and overall and
+per-channel RGB curves are implemented.
 Standard images with alpha channels are intentionally rejected until the
 processing pipeline defines four-channel behavior.
 
