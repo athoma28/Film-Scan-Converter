@@ -15,13 +15,20 @@ Cocoa UI.
 ## Current Position
 
 The interactive still-preview foundation, histogram equalisation, curves,
-three-way color wheels, and export are complete. Contour/crop detection is the
-next product priority, followed by perspective warp and dust handling.
+three-way color wheels, RawTherapee-compatible startup inversion, automatic
+film-kind classification, and export are complete. The current product priority
+is the film-specific camera-scan track: manual region wiring or automatic
+rebate estimation, then base density + color-space conversion and flat-field
+calibration. Contour/crop detection, perspective warp, and dust handling remain
+later replacement gates.
 
 The TIFF/JPEG/PNG/DNG export contract is implemented with individual and
-memory-bounded batch workflows, cancellation, partial-file cleanup, and 19
-focused tests. The native app can export processed full-resolution images with
-applied corrections, frame, and aspect ratio.
+batch-all workflows, cancellation, partial-file cleanup, and 19 focused
+format/manager tests. The app-level Export All path now lazily decodes,
+classifies, processes, and writes unloaded batch files one at a time so large
+import lists do not require all full-resolution decodes to remain resident.
+The native app can export processed full-resolution images with applied
+corrections, frame, and aspect ratio.
 
 Completed foundations:
 
@@ -46,6 +53,9 @@ Completed foundations:
   three-fixture corpus.
 - Authoritative overall/per-channel curves and highlight/midtone/shadow color
   wheels with matching GPU preview behavior.
+- Deterministic startup classification for color negative, B&W negative, and
+  slide scans, applying the matching RawTherapee film-negative preset when
+  appropriate.
 - Main-window file drag and drop plus per-file correction controls.
 - A reusable 16-bit Core Image/Metal still-preview renderer with live bindings
   and bounded latest-value-wins scheduling. The production renderer is verified
@@ -55,23 +65,26 @@ Completed foundations:
 - macOS CI that tests the engine and builds the app.
 - TIFF/JPEG/PNG/DNG export with CGImageDestination for TIFF/JPEG/PNG and a
   custom minimal DNG writer producing valid TIFF containers with DNG IFD tags.
-  Actor-based ExportManager with sequential and parallel batch modes,
-  memory-bounded concurrency, cancellation, per-file error reporting, and
-  partial-file cleanup. Export inspector section with format options, frame,
-  aspect ratio, destination folder picker, progress, and error display.
-  19 focused tests.
+  Actor-based ExportManager with sequential and parallel modes, cancellation,
+  per-file error reporting, and partial-file cleanup. The SwiftUI app's Export
+  All path performs lazy per-file decode/classify/process/write for unloaded
+  files to keep batch memory bounded. Export inspector section with format
+  options, frame, aspect ratio, destination folder picker, progress, and error
+  display. 19 focused export tests plus app-level integration coverage.
 
 The immediate goal is to continue the film-specific camera-scan track from
-engine-only manual rebate base measurement and roll reuse (Slice C) toward
-manual UI region picking or automatic rebate estimation (Slice D). Nothing later in this roadmap
-should be interpreted as implemented unless the status page says it is.
+startup classification and engine-only manual rebate base measurement/roll reuse
+(Slice C) toward manual UI region picking or automatic rebate estimation
+(Slice D). Nothing later in this roadmap should be interpreted as implemented
+unless the status page says it is.
 
 A parallel film-specific processing track has started from the
 [camera-scan film-processing research brief](../film-processing-research.md).
 Slices A (capture normalization), B (linear-capture diagnostics), and the first
 engine-only C API (manual rebate base measurement, roll profile storage, and
 base-density precedence resolution) are complete as standalone engine APIs.
-They are not yet connected to preview or export.
+Startup film-kind classification is connected to preview and export; the
+density-domain Slice A/C APIs are not yet connected to preview or export.
 
 ### Native Export Contract — Complete
 
@@ -486,6 +499,7 @@ user input, replace the relevant traps with typed errors and test them.
 | A. Capture normalization foundation | Complete as standalone engine API | Per-channel black-level correction, matched flat-field normalization, safe transmittance clamping, optical-density conversion, and manual base-density subtraction. | Known ratios, BGR ordering, defaults, spatial flat-field correction, clipping/bounds, matched-exposure invariance, density-ratio identity, Codable parameters, and composed pipeline. Focused suite: 11 tests, 92.1% line coverage; only precondition traps uncovered. |
 | B. Linear-capture diagnostics | Complete as standalone engine API | Per-channel minimum/maximum values, low/high clipping fractions (threshold-based with 0.1% warning floor), source-kind and bit-depth metadata, and deterministic warnings for 8-bit input, lossy source, clipped channels, missing flat field, and explicitly marked nonlinear input. Not yet wired to the SwiftUI import workflow. Focused suite: 18 tests, 98.9% line coverage; only the bit-depth precondition trap uncovered. | Synthetic 8/16-bit cases, channel-specific clipping, deterministic warning rules, Codable report, and no false nonlinear warning for known linear fixtures. |
 | C. Manual base selection and roll reuse | Complete as standalone engine API | Compute robust median/trimmed-mean transmittance and density from a user-selected rebate rectangle; persist and reuse it in a roll profile. | Dust/outlier resistance, invalid/empty region errors, BGR correctness, five-frame roll stability, serialization, and explicit precedence rules. Focused suite: 17 film-negative processing tests. UI region picking remains deferred. |
+| C1. Startup film-kind classification | Complete in engine and app | Classify new imports as color negative, B&W negative, or slide and initialize the matching RawTherapee preset without overwriting existing per-file settings. | Synthetic orange-mask, low-chroma, and positive-slide cases; app export coverage proving unloaded files receive automatic settings during lazy batch export. |
 | D. Automatic rebate estimation | Planned after manual base works | Detect candidate rebate regions and return base density plus confidence; never silently override a stronger roll/manual base. | Border/no-border fixtures, rotated frames, dust contamination, low-confidence rejection, and deterministic overlay geometry. |
 | E. Generic C-41 scene estimate | Planned | Channel density slopes/offsets producing scene-linear positive values, with exposure normalization separated from display rendering. | Identity/default profile, monotonicity, channel isolation, extreme density bounds, and independent inversion/rendering tests. |
 | F. Shared display renderer and noise protection | Planned | Stable exposure, white balance, tone map, and bounded noise-safe highlight/shadow behavior. | Neutral identity, monotonic tone curve, finite output, highlight rolloff, noise-gain limiting, and CPU/GPU tolerance before UI integration. |
@@ -759,13 +773,16 @@ Git push
    latency gates are implemented. Direct Metal-backed display and idle
    authoritative rendering remain deferred.
 7. **Phase 1.13, complete** — TIFF/JPEG/PNG export plus the defined processed-RGB
-   DNG contract, verified by round-trip and batch tests. Individual and
-   memory-bounded batch workflows implemented with ExportManager actor.
+   DNG contract, verified by round-trip and batch tests. Individual export,
+   ExportManager batch primitives, and app-level lazy Export All are
+   implemented.
 8. **Phase 1.14, in progress** — Capture normalization/density primitives and
    linear-input diagnostics are complete as standalone engine APIs. The
    RawTherapee-compatible power-law inversion front-end is connected to preview
-   and export with neutral middle-gray median calibration. Continue with
-   manual/rebate base selection, roll-level reuse, and generic C-41 rendering.
+   and export with neutral middle-gray median calibration, and startup
+   classification now initializes color negative, B&W negative, or slide mode
+   automatically for new files. Continue with manual/rebate base selection,
+   roll-level reuse, and generic C-41 rendering.
 9. **Phase 1.3 and 1.2 cont.** — Contour detection + minAreaRect (OpenCV
    C++ interop), perspective warp (DLT homography + bilinear warp).
 10. **Phase 1.8–1.9** — Dust detection and Telea FMM inpainting.

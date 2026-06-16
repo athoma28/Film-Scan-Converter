@@ -27,6 +27,12 @@ public actor ExportManager {
     public let error: Error?
 
     public var isSuccess: Bool { error == nil }
+
+    public init(sourceURL: URL, destinationURL: URL, error: Error?) {
+      self.sourceURL = sourceURL
+      self.destinationURL = destinationURL
+      self.error = error
+    }
   }
 
   public enum ExportManagerError: Error, LocalizedError, Equatable {

@@ -88,6 +88,22 @@ public enum FilmNegativePreset: Int, CaseIterable, Hashable, Sendable {
   }
 }
 
+public struct FilmClassification: Equatable, Sendable {
+  public var filmType: FilmType
+  public var filmNegativePreset: FilmNegativePreset
+  public var confidence: Double
+
+  public init(
+    filmType: FilmType,
+    filmNegativePreset: FilmNegativePreset,
+    confidence: Double
+  ) {
+    self.filmType = filmType
+    self.filmNegativePreset = filmNegativePreset
+    self.confidence = confidence
+  }
+}
+
 public struct ProcessingParameters: Codable, Equatable, Sendable {
   public var borderCrop: Double
   public var flip: Bool

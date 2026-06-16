@@ -31,6 +31,49 @@ struct AppModelTests {
     #expect(model.renderStats.droppedSnapshots > 0)
   }
 
+  @Test("Export all decodes and writes imported files that were not selected yet")
+  func exportAllDecodesUnloadedImports() async throws {
+    let model = AppModel()
+    let first = try #require(
+      Bundle.module.url(
+        forResource: "input",
+        withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"
+      )
+    )
+    let second = try #require(
+      Bundle.module.url(
+        forResource: "input",
+        withExtension: "bmp",
+        subdirectory: "Fixtures/decode_bmp8"
+      )
+    )
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-export-all-\(UUID().uuidString)", isDirectory: true)
+    let sourceDir = workDir.appendingPathComponent("source", isDirectory: true)
+    let destination = workDir.appendingPathComponent("export", isDirectory: true)
+    try FileManager.default.createDirectory(at: sourceDir, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let firstCopy = sourceDir.appendingPathComponent("first.png")
+    let secondCopy = sourceDir.appendingPathComponent("second.bmp")
+    try FileManager.default.copyItem(at: first, to: firstCopy)
+    try FileManager.default.copyItem(at: second, to: secondCopy)
+
+    model.importFiles([firstCopy, secondCopy])
+    try await waitUntil { model.decodedImage != nil && model.previewImage != nil }
+    model.setExportDestinationDirectory(destination)
+    model.setExportFormat(.png)
+
+    model.exportAll()
+    try await waitUntil(timeout: .seconds(10)) { !model.isExporting && model.exportProgressCurrent == 2 }
+
+    #expect(model.exportErrors.isEmpty)
+    #expect(FileManager.default.fileExists(atPath: destination.appendingPathComponent("first.png").path))
+    #expect(FileManager.default.fileExists(atPath: destination.appendingPathComponent("second.png").path))
+    #expect(model.exportProgressTotal == 2)
+  }
+
   private func waitUntil(
     timeout: Duration = .seconds(5),
     condition: @escaping @MainActor () -> Bool

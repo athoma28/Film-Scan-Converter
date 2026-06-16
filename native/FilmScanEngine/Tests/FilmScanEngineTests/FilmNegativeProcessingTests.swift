@@ -367,10 +367,83 @@ struct FilmNegativeProcessingTests {
     )
   }
 
+  @Test("Classifier identifies orange-mask colour negative and selects RawTherapee preset")
+  func classifierIdentifiesColourNegative() {
+    let image = repeatedImage(
+      width: 8,
+      height: 8,
+      bgr: [
+        (blue: 11_000, green: 26_000, red: 42_000),
+        (blue: 12_000, green: 27_000, red: 44_000),
+        (blue: 10_000, green: 25_000, red: 41_000),
+      ]
+    )
+
+    let classification = FilmNegativeProcessing.classifyFilmScan(image: image)
+
+    #expect(classification.filmType == .colourNegative)
+    #expect(classification.filmNegativePreset == .colourNegative)
+    #expect(classification.confidence >= 0.45)
+  }
+
+  @Test("Classifier identifies low-chroma black and white negative")
+  func classifierIdentifiesBlackAndWhiteNegative() {
+    let image = repeatedImage(
+      width: 8,
+      height: 8,
+      bgr: [
+        (blue: 19_500, green: 20_000, red: 20_400),
+        (blue: 30_000, green: 30_200, red: 30_100),
+        (blue: 9_800, green: 10_000, red: 10_200),
+      ]
+    )
+
+    let classification = FilmNegativeProcessing.classifyFilmScan(image: image)
+
+    #expect(classification.filmType == .blackAndWhiteNegative)
+    #expect(classification.filmNegativePreset == .blackAndWhite)
+    #expect(classification.confidence >= 0.75)
+  }
+
+  @Test("Classifier leaves positive slide without film negative inversion")
+  func classifierIdentifiesSlide() {
+    let image = repeatedImage(
+      width: 8,
+      height: 8,
+      bgr: [
+        (blue: 28_000, green: 23_000, red: 18_000),
+        (blue: 8_000, green: 27_000, red: 12_000),
+        (blue: 34_000, green: 18_000, red: 31_000),
+      ]
+    )
+
+    let classification = FilmNegativeProcessing.classifyFilmScan(image: image)
+
+    #expect(classification.filmType == .slide)
+    #expect(classification.filmNegativePreset == .off)
+    #expect(classification.confidence >= 0.55)
+  }
+
   private func assertEqual(_ actual: [Double], _ expected: [Double], tolerance: Double = 1e-12) {
     #expect(actual.count == expected.count)
     for index in actual.indices {
       #expect(abs(actual[index] - expected[index]) <= tolerance)
     }
+  }
+
+  private func repeatedImage(
+    width: Int,
+    height: Int,
+    bgr samples: [(blue: UInt16, green: UInt16, red: UInt16)]
+  ) -> UInt16Image {
+    var pixels: [UInt16] = []
+    pixels.reserveCapacity(width * height * 3)
+    for index in 0..<(width * height) {
+      let sample = samples[index % samples.count]
+      pixels.append(sample.blue)
+      pixels.append(sample.green)
+      pixels.append(sample.red)
+    }
+    return UInt16Image(width: width, height: height, channels: 3, pixels: pixels)
   }
 }

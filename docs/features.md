@@ -31,6 +31,10 @@ features. Its implemented scope includes:
   Black and White.pp3`. Full CPU (Double), GPU-equivalent (Float), and Metal
   CIKernel processing parity. SwiftUI controls with preset picker and per-channel
   ratio/exponent sliders.
+- Automatic startup classification for new files: low-chroma scans start as
+  B&W negative, orange-mask scans start as color negative, and other
+  positive-looking scans start as slide. Existing per-file settings are not
+  overwritten.
 - Overall RGB tone curve with piecewise-linear interpolation (65536-entry 16-bit
   CPU LUTs, 256×256 8-bit GPU LUT texture). Per-channel red, green, and blue
   curves fall back to the overall curve.
@@ -47,9 +51,10 @@ features. Its implemented scope includes:
 - TIFF (16-bit, optional LZW compression), JPEG (8-bit, configurable quality),
   PNG (16-bit lossless), and DNG (processed 16-bit RGB in a valid TIFF container)
   export with individual and batch-all workflows, background processing,
-  cancellation, per-file error reporting, and partial-file cleanup.
+  cancellation, per-file error reporting, partial-file cleanup, and lazy
+  per-file decode/classify/process/write for unloaded batch members.
 - macOS CI that runs the native engine tests and builds the app. The latest
-  local native suite contains 156 tests.
+  local native suite contains 160 tests.
 - Real production-renderer comparison against the authoritative CPU path and an
   actual `AppModel` rapid-update scheduling integration test.
 

@@ -396,6 +396,82 @@ public enum FilmNegativeProcessing {
     let b = target / pow(max(medians.blue, 1.0), bexp)
     return (r, g, b)
   }
+
+  public static func classifyFilmScan(
+    image: UInt16Image,
+    borderPercent: Double = 20.0,
+    maxSamples: Int = 4_096
+  ) -> FilmClassification {
+    guard image.channels == 3 else {
+      return FilmClassification(
+        filmType: .cropOnly,
+        filmNegativePreset: .off,
+        confidence: 0
+      )
+    }
+
+    let medians = computeMedians(image: image, borderPercent: borderPercent)
+    let r = max(medians.red, 1)
+    let g = max(medians.green, 1)
+    let b = max(medians.blue, 1)
+    let orangeOrderScore =
+      channelDominanceScore(ratio: r / g, threshold: 1.05, span: 0.30) * 0.55
+      + channelDominanceScore(ratio: g / b, threshold: 1.05, span: 0.30) * 0.45
+    let redBlueSeparation = channelDominanceScore(ratio: r / b, threshold: 1.20, span: 0.80)
+    let orangeMaskScore = min(max(orangeOrderScore * 0.65 + redBlueSeparation * 0.35, 0), 1)
+
+    let chroma = sampledChroma(image: image, maxSamples: maxSamples)
+    if chroma.mean < 0.045 && chroma.median < 0.055 {
+      let confidence = min(max(1.0 - chroma.mean / 0.045, 0), 1)
+      return FilmClassification(
+        filmType: .blackAndWhiteNegative,
+        filmNegativePreset: .blackAndWhite,
+        confidence: max(confidence, 0.75)
+      )
+    }
+
+    if orangeMaskScore >= 0.45 {
+      return FilmClassification(
+        filmType: .colourNegative,
+        filmNegativePreset: .colourNegative,
+        confidence: orangeMaskScore
+      )
+    }
+
+    return FilmClassification(
+      filmType: .slide,
+      filmNegativePreset: .off,
+      confidence: max(0.55, 1.0 - orangeMaskScore)
+    )
+  }
+}
+
+private func channelDominanceScore(ratio: Double, threshold: Double, span: Double) -> Double {
+  min(max((ratio - threshold) / span, 0), 1)
+}
+
+private func sampledChroma(image: UInt16Image, maxSamples: Int) -> (mean: Double, median: Double) {
+  let pixelCount = image.width * image.height
+  let step = max(1, pixelCount / max(1, maxSamples))
+  var values: [Double] = []
+  values.reserveCapacity(min(pixelCount, maxSamples))
+
+  var index = 0
+  while index < pixelCount {
+    let base = index * 3
+    let blue = Double(image.pixels[base])
+    let green = Double(image.pixels[base + 1])
+    let red = Double(image.pixels[base + 2])
+    let maximum = max(blue, green, red, 1)
+    let minimum = min(blue, green, red)
+    values.append((maximum - minimum) / maximum)
+    index += step
+  }
+
+  guard !values.isEmpty else { return (0, 0) }
+  let mean = values.reduce(0, +) / Double(values.count)
+  values.sort()
+  return (mean, median(values))
 }
 
 private func median(_ sortedValues: [Double]) -> Double {

@@ -32,7 +32,6 @@ final class AppModel: ObservableObject {
   }
 
   private var settingsByPath: [String: ProcessingParameters] = [:]
-  private var decodedImagesByPath: [String: UInt16Image] = [:]
   private var previewCache: [String: CachedPreviewSession] = [:]
   private var previewCacheOrder: [String] = []
   private var previewSource: UInt16Image?
@@ -91,10 +90,11 @@ final class AppModel: ObservableObject {
     decodedImage = nil
     previewSource = nil
     previewRenderer = nil
-    parameters = settingsByPath[settingsKey(selection)] ?? ProcessingParameters()
+    let key = settingsKey(selection)
+    let hasStoredSettings = settingsByPath[key] != nil
+    parameters = settingsByPath[key] ?? ProcessingParameters()
     showOriginal = false
 
-    let key = settingsKey(selection)
     if let cached = previewCache[key] {
       ImportLog.loadSelectionCacheHit(path: selection.lastPathComponent)
       applyCachedSession(cached, selection: selection)
@@ -133,11 +133,14 @@ final class AppModel: ObservableObject {
           channels: decoded.channels
         )
         decodedImage = decoded
-        decodedImagesByPath[settingsKey(selection)] = decoded
         let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
         previewSource = proxy
         previewRenderer = StillPreviewRenderer(image: proxy)
-        populateFilmNegativeMedians()
+        if hasStoredSettings {
+          populateFilmNegativeMedians()
+        } else {
+          applyAutomaticFilmClassification(from: proxy)
+        }
         cacheCurrentSession(for: selection)
         scheduleRender(immediate: true)
       } catch is CancellationError {
@@ -341,6 +344,10 @@ final class AppModel: ObservableObject {
     exportParameters.destinationDirectory = url
   }
 
+  func setExportDestinationDirectory(_ url: URL?) {
+    exportParameters.destinationDirectory = url
+  }
+
   func setExportFormat(_ format: ExportFormat) {
     exportParameters.format = format
   }
@@ -405,64 +412,43 @@ final class AppModel: ObservableObject {
     Task { [weak self] in
       guard let self else { return }
 
-      let requests: [ExportManager.ExportRequest] =
-        urls.compactMap { url in
-          let key = self.settingsKey(url)
-          let fileParams = self.settingsByPath[key] ?? ProcessingParameters()
-          guard let decoded = self.decodedImagesByPath[key] ?? self.decodedImage else {
-            return nil
-          }
-
-          var processed: UInt16Image
-          if fileParams.filmType == .cropOnly || fileParams == ProcessingParameters() {
-            processed = decoded.rotated(
-              quarterTurns: fileParams.rotation,
-              flipHorizontally: fileParams.flip
-            )
-          } else {
-            processed = FilmProcessing.correctedPreview(
-              image: decoded,
-              parameters: fileParams
-            )
-          }
-
-          if exportParams.framePercent > 0 || exportParams.aspectRatio != nil {
-            processed = processed.addingFrame(
-              percent: exportParams.framePercent,
-              aspectRatio: exportParams.aspectRatio
-            )
-          }
-
-          let baseName = url.deletingPathExtension().lastPathComponent
-          let ext = exportParams.format.fileExtension
-          let destURL = destDir.appendingPathComponent("\(baseName).\(ext)")
-
-          return ExportManager.ExportRequest(
-            sourceURL: url,
-            destinationURL: destURL,
-            image: processed,
-            parameters: exportParams
-          )
-        }
-
-      if requests.isEmpty {
-        await MainActor.run {
-          self.isExporting = false
-          self.status = "No images could be prepared for export."
-        }
-        return
-      }
-
       let manager = ExportManager()
-      let results = await manager.exportBatch(
-        requests: requests,
-        progress: { current, total, success in
-          Task { @MainActor in
-            self.exportProgressCurrent = current
-            self.exportProgressTotal = total
-          }
+      var results: [ExportManager.ExportResult] = []
+      results.reserveCapacity(urls.count)
+
+      for (index, url) in urls.enumerated() {
+        if Task.isCancelled {
+          results.append(
+            ExportManager.ExportResult(
+              sourceURL: url,
+              destinationURL: self.destinationURL(for: url, exportParams: exportParams),
+              error: ExportManager.ExportManagerError.cancelled
+            ))
+          continue
         }
-      )
+
+        do {
+          let request = try await self.makeExportRequest(
+            for: url,
+            exportParams: exportParams,
+            destinationDirectory: destDir
+          )
+          let fileResults = await manager.export(requests: [request])
+          results.append(contentsOf: fileResults)
+        } catch {
+          results.append(
+            ExportManager.ExportResult(
+              sourceURL: url,
+              destinationURL: self.destinationURL(for: url, exportParams: exportParams),
+              error: error
+            ))
+        }
+
+        await MainActor.run {
+          self.exportProgressCurrent = index + 1
+          self.exportProgressTotal = urls.count
+        }
+      }
 
       await MainActor.run {
         self.isExporting = false
@@ -491,6 +477,107 @@ final class AppModel: ObservableObject {
     }
   }
 
+  private func applyAutomaticFilmClassification(from image: UInt16Image) {
+    parameters = Self.automaticallyClassifiedParameters(base: parameters, image: image)
+    saveParameters()
+  }
+
+  private func makeExportRequest(
+    for url: URL,
+    exportParams: ExportParameters,
+    destinationDirectory: URL
+  ) async throws -> ExportManager.ExportRequest {
+    let key = settingsKey(url)
+    let decoded = try await decodedImageForExport(url)
+    let fileParams: ProcessingParameters
+    if let stored = settingsByPath[key] {
+      fileParams = stored
+    } else {
+      let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
+      let automatic = Self.automaticallyClassifiedParameters(
+        base: ProcessingParameters(),
+        image: proxy
+      )
+      settingsByPath[key] = automatic
+      fileParams = automatic
+    }
+
+    let processed = await Task.detached(priority: .userInitiated) {
+      var output: UInt16Image
+      if fileParams.filmType == .cropOnly || fileParams == ProcessingParameters() {
+        output = decoded.rotated(
+          quarterTurns: fileParams.rotation,
+          flipHorizontally: fileParams.flip
+        )
+      } else {
+        output = FilmProcessing.correctedPreview(
+          image: decoded,
+          parameters: fileParams
+        )
+      }
+
+      if exportParams.framePercent > 0 || exportParams.aspectRatio != nil {
+        output = output.addingFrame(
+          percent: exportParams.framePercent,
+          aspectRatio: exportParams.aspectRatio
+        )
+      }
+      return output
+    }.value
+
+    return ExportManager.ExportRequest(
+      sourceURL: url,
+      destinationURL: destinationDirectory.appendingPathComponent(
+        "\(url.deletingPathExtension().lastPathComponent).\(exportParams.format.fileExtension)"
+      ),
+      image: processed,
+      parameters: exportParams
+    )
+  }
+
+  private func decodedImageForExport(_ url: URL) async throws -> UInt16Image {
+    let key = settingsKey(url)
+    if selection == url, let decodedImage {
+      return decodedImage
+    }
+    if let cached = previewCache[key] {
+      return cached.decodedImage
+    }
+    return try await Task.detached(priority: .userInitiated) {
+      if StandardImageDecoder.supportedExtensions.contains(url.pathExtension.lowercased()) {
+        return try StandardImageDecoder.decode(url)
+      }
+      return try RawImageDecoder.decode(url).image
+    }.value
+  }
+
+  private func destinationURL(for url: URL, exportParams: ExportParameters) -> URL {
+    let directory = exportParams.destinationDirectory ?? url.deletingLastPathComponent()
+    return directory.appendingPathComponent(
+      "\(url.deletingPathExtension().lastPathComponent).\(exportParams.format.fileExtension)"
+    )
+  }
+
+  private static func automaticallyClassifiedParameters(
+    base: ProcessingParameters,
+    image: UInt16Image
+  ) -> ProcessingParameters {
+    let classification = FilmNegativeProcessing.classifyFilmScan(image: image)
+    var next = base
+    next.filmType = classification.filmType
+    switch classification.filmNegativePreset {
+    case .off:
+      next.filmNegativeParams = FilmNegativeParams(enabled: false)
+    case .colourNegative:
+      next.filmNegativeParams = FilmNegativeParams.colourNegative
+      next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
+    case .blackAndWhite:
+      next.filmNegativeParams = FilmNegativeParams.blackAndWhite
+      next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
+    }
+    return next
+  }
+
   private func updateParameters(_ update: (inout ProcessingParameters) -> Void) {
     update(&parameters)
     saveParameters()
@@ -510,7 +597,6 @@ final class AppModel: ObservableObject {
 
   private func applyCachedSession(_ session: CachedPreviewSession, selection: URL) {
     decodedImage = session.decodedImage
-    decodedImagesByPath[settingsKey(selection)] = session.decodedImage
     previewSource = session.previewSource
     previewRenderer = session.previewRenderer
     populateFilmNegativeMedians()
