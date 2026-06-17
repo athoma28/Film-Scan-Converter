@@ -25,7 +25,9 @@ This file contains only package-local build and implementation notes.
   rendering uses a bounded 640-pixel, 16-bit proxy with a Core Image/Metal
   correction kernel and bounded latest-value-wins scheduling, while preserving
   the full decoded source for later export work. The two most recent
-  decoded/proxy/renderer sessions are cached for immediate switching. The
+  decoded/proxy/renderer sessions are cached for immediate switching, and the
+  app uses a cancellable utility-priority worker to predecode only the immediate
+  next uncached file into that same bounded cache. The
   actual Core Image renderer is verified against the CPU path across 2,655
   comparisons with a maximum difference of 2/255, and its latest current-pipeline
   benchmark measured 3.74 ms p95 at 1080×720. End-to-end real-file drag
@@ -41,7 +43,9 @@ This file contains only package-local build and implementation notes.
   exact pixels; JPEG uses the documented tolerance in the authoritative status
   page because ImageIO and OpenCV use different lossy decoders.
 - When `sample-raw/` is present, Swift tests require exact RawPy SHA-256 hashes
-  for all five half-size RAF decodes and one full-resolution RAF decode.
+  for all five half-size RAF decodes and one full-resolution RAF decode. When
+  it is absent, the corpus-specific tests are explicitly reported as disabled
+  rather than silently passing.
 - `FilmScanRawBenchmark` compares release-mode native decode speed and decoded
   quality against the RawPy corpus runner. See the
   [benchmark report](../docs/development/native-raw-benchmark.md).

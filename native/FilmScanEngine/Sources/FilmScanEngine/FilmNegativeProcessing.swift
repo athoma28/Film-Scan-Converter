@@ -139,6 +139,7 @@ public struct RollProfile: Codable, Equatable, Sendable {
 public enum BaseDensitySource: String, Codable, Equatable, Sendable {
   case measuredRoll
   case measuredFrame
+  case automaticEstimate
   case stockCaptureDefault
   case manualPicker
 }
@@ -151,6 +152,37 @@ public struct ResolvedBaseDensity: Codable, Equatable, Sendable {
     self.baseDensity = baseDensity
     self.source = source
   }
+}
+
+public struct AutomaticRebateCandidate: Codable, Equatable, Sendable {
+  public var region: ImageRegion
+  public var measurement: FilmBaseMeasurement
+  public var confidence: Double
+
+  public init(region: ImageRegion, measurement: FilmBaseMeasurement, confidence: Double) {
+    self.region = region
+    self.measurement = measurement
+    self.confidence = confidence
+  }
+}
+
+public struct GenericC41Profile: Codable, Equatable, Sendable {
+  public var densitySlope: BGRChannelValues
+  public var densityOffset: BGRChannelValues
+
+  public init(
+    densitySlope: BGRChannelValues = BGRChannelValues(blue: 1.0, green: 1.0, red: 1.0),
+    densityOffset: BGRChannelValues = BGRChannelValues(blue: 0.0, green: 0.0, red: 0.0)
+  ) {
+    precondition(
+      densitySlope.blue >= 0 && densitySlope.green >= 0 && densitySlope.red >= 0,
+      "Density slopes must be nonnegative"
+    )
+    self.densitySlope = densitySlope
+    self.densityOffset = densityOffset
+  }
+
+  public static let identity = GenericC41Profile()
 }
 
 public enum FilmNegativeProcessing {
@@ -354,6 +386,7 @@ public enum FilmNegativeProcessing {
   public static func resolveBaseDensity(
     rollProfile: RollProfile? = nil,
     frameMeasurement: BGRChannelValues? = nil,
+    automaticBaseDensity: BGRChannelValues? = nil,
     defaultBaseDensity: BGRChannelValues? = nil,
     manualBaseDensity: BGRChannelValues? = nil
   ) -> ResolvedBaseDensity? {
@@ -363,6 +396,9 @@ public enum FilmNegativeProcessing {
     if let frameMeasurement {
       return ResolvedBaseDensity(baseDensity: frameMeasurement, source: .measuredFrame)
     }
+    if let automaticBaseDensity {
+      return ResolvedBaseDensity(baseDensity: automaticBaseDensity, source: .automaticEstimate)
+    }
     if let defaultBaseDensity {
       return ResolvedBaseDensity(baseDensity: defaultBaseDensity, source: .stockCaptureDefault)
     }
@@ -370,6 +406,150 @@ public enum FilmNegativeProcessing {
       return ResolvedBaseDensity(baseDensity: manualBaseDensity, source: .manualPicker)
     }
     return nil
+  }
+
+  public static func automaticRebateCandidates(
+    image: UInt16Image,
+    flatField: UInt16Image,
+    parameters: CaptureNormalizationParameters = CaptureNormalizationParameters(),
+    edgeFraction: Double = 0.08,
+    minimumConfidence: Double = 0.45
+  ) -> [AutomaticRebateCandidate] {
+    precondition(image.channels == 3, "Automatic rebate estimation requires a 3-channel BGR image")
+    precondition(
+      image.width == flatField.width
+        && image.height == flatField.height
+        && image.channels == flatField.channels,
+      "Flat field must match the image dimensions and channels"
+    )
+    precondition(edgeFraction > 0 && edgeFraction <= 0.25, "Edge fraction must be in the range (0, 0.25]")
+    precondition(
+      minimumConfidence >= 0 && minimumConfidence <= 1,
+      "Minimum confidence must be in the range [0, 1]"
+    )
+
+    let stripWidth = max(1, Int((Double(image.width) * edgeFraction).rounded()))
+    let stripHeight = max(1, Int((Double(image.height) * edgeFraction).rounded()))
+    let regions = [
+      ImageRegion(x: 0, y: 0, width: image.width, height: stripHeight),
+      ImageRegion(x: 0, y: image.height - stripHeight, width: image.width, height: stripHeight),
+      ImageRegion(x: 0, y: 0, width: stripWidth, height: image.height),
+      ImageRegion(x: image.width - stripWidth, y: 0, width: stripWidth, height: image.height),
+    ]
+
+    let interior = ImageRegion(
+      x: stripWidth,
+      y: stripHeight,
+      width: image.width - stripWidth * 2,
+      height: image.height - stripHeight * 2
+    )
+    guard interior.width > 0 && interior.height > 0 else {
+      return []
+    }
+    let interiorLuminance = regionMedianLuminance(
+      image: image,
+      flatField: flatField,
+      region: interior,
+      parameters: parameters
+    )
+
+    return regions.compactMap { region in
+      guard let measurement = try? measureBaseDensity(
+        image: image,
+        flatField: flatField,
+        region: region,
+        parameters: parameters
+      ) else {
+        return nil
+      }
+      let edgeLuminance = luminance(measurement.medianTransmittance)
+      let separation = max(0, edgeLuminance - interiorLuminance)
+      let separationScore = min(separation / 0.12, 1)
+      let confidence = measurement.confidence * separationScore
+      guard confidence >= minimumConfidence else {
+        return nil
+      }
+      return AutomaticRebateCandidate(
+        region: region,
+        measurement: measurement,
+        confidence: confidence
+      )
+    }
+    .sorted {
+      if $0.confidence == $1.confidence {
+        return $0.region.y == $1.region.y
+          ? $0.region.x < $1.region.x
+          : $0.region.y < $1.region.y
+      }
+      return $0.confidence > $1.confidence
+    }
+  }
+
+  public static func genericC41SceneEstimate(
+    baseSubtractedDensity: [Double],
+    profile: GenericC41Profile = .identity
+  ) -> [Double] {
+    precondition(
+      baseSubtractedDensity.count.isMultiple(of: 3),
+      "Density data must contain BGR pixels"
+    )
+
+    return baseSubtractedDensity.enumerated().map { index, density in
+      let channel = index % 3
+      let logE = profile.densitySlope[channel] * density + profile.densityOffset[channel]
+      return pow(10, logE)
+    }
+  }
+
+  public static func normalizeSceneExposure(
+    sceneLinear: [Double]
+  ) -> [Double] {
+    precondition(
+      sceneLinear.count.isMultiple(of: 3),
+      "Scene-linear data must contain BGR pixels"
+    )
+    guard !sceneLinear.isEmpty else { return sceneLinear }
+
+    let pixelCount = sceneLinear.count / 3
+    var greenValues: [Double] = []
+    greenValues.reserveCapacity(pixelCount)
+    for i in 0..<pixelCount {
+      greenValues.append(sceneLinear[i * 3 + 1])
+    }
+    greenValues.sort()
+    let medianGreen = FilmNegativeProcessing.medianOfSorted(greenValues)
+    let scale = medianGreen > 0 ? 1.0 / medianGreen : 1.0
+
+    return sceneLinear.map { $0 * scale }
+  }
+
+  public static func densityToSceneLinear(
+    image: UInt16Image,
+    flatField: UInt16Image,
+    baseDensity: BGRChannelValues,
+    c41Profile: GenericC41Profile = .identity,
+    parameters: CaptureNormalizationParameters = CaptureNormalizationParameters()
+  ) -> [Double] {
+    let density = normalizedImageDensity(
+      image: image,
+      flatField: flatField,
+      baseDensity: baseDensity,
+      parameters: parameters
+    )
+    let scene = genericC41SceneEstimate(
+      baseSubtractedDensity: density,
+      profile: c41Profile
+    )
+    return normalizeSceneExposure(sceneLinear: scene)
+  }
+
+  fileprivate static func medianOfSorted(_ sorted: [Double]) -> Double {
+    guard !sorted.isEmpty else { return 0 }
+    let mid = sorted.count / 2
+    if sorted.count.isMultiple(of: 2) {
+      return (sorted[mid - 1] + sorted[mid]) / 2.0
+    }
+    return sorted[mid]
   }
 
   public static func computeMedians(
@@ -504,6 +684,27 @@ private func confidenceScore(
   ]
   let penalty = min(1, channelPenalties.max() ?? 0)
   return min(max(1 - penalty - rejectedFraction * 0.25, 0), 1)
+}
+
+private func regionMedianLuminance(
+  image: UInt16Image,
+  flatField: UInt16Image,
+  region: ImageRegion,
+  parameters: CaptureNormalizationParameters
+) -> Double {
+  guard let measurement = try? FilmNegativeProcessing.measureBaseDensity(
+    image: image,
+    flatField: flatField,
+    region: region,
+    parameters: parameters
+  ) else {
+    return 0
+  }
+  return luminance(measurement.medianTransmittance)
+}
+
+private func luminance(_ values: BGRChannelValues) -> Double {
+  values.red * 0.2126 + values.green * 0.7152 + values.blue * 0.0722
 }
 
 private func relativeDifference(_ a: Double, _ b: Double) -> Double {

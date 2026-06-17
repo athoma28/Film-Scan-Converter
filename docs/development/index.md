@@ -9,9 +9,8 @@ progress, limitations, and next tasks.
 
 The detailed [macOS native roadmap](../improvements/MacOS-Native-Roadmap.md)
 contains the longer-term technical design. It is supporting reference material;
-the status page above is authoritative. It now includes the planned
-highlight/midtone/shadow color wheels, overall and per-channel RGB curves, and
-DNG export contract.
+the status page above is authoritative. Curves, color wheels, and
+TIFF/JPEG/PNG/DNG export are complete with verified GPU-CPU equivalence.
 
 The [film-processing research](../film-processing-research.md) defines the
 capture-aware, density-domain inversion direction and its staged implementation

@@ -27,7 +27,9 @@ ImageIO and OpenCV use different lossy JPEG decoders.
 color descriptions, and SHA-256 pixel hashes for the five representative
 half-size RAF decodes plus one full-resolution decode. The Swift LibRaw tests
 consume that manifest and require exact RawPy equality when `sample-raw/` is
-present. The RAF files remain outside version control.
+present. When the untracked RAF corpus is absent, corpus-specific Swift tests
+are reported as disabled with an explicit reason rather than silently passing.
+The RAF files remain outside version control.
 
 Performance benchmarks are opt-in so normal test runs remain stable:
 

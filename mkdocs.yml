@@ -11,6 +11,8 @@ exclude:
 nav:
   - Home: index.md
   - Features: features.md
+  - Installation: installation.md
+  - How to Use: how-to-use.md
   - Best Practices: best-practices.md
   - Developer Guide:
       - Overview: development/index.md
@@ -23,8 +25,6 @@ nav:
       - Contributing: contributing.md
   - Legacy Python:
       - Status and Retirement Gates: legacy-python.md
-      - Installation: installation.md
-      - How to Use: how-to-use.md
       - ART Integration: how-to-add-to-ART.md
 
 

@@ -1,14 +1,53 @@
 # Installation
 
-This page installs the maintenance-only legacy Python application. It remains
-the only complete end-to-end workflow while the primary native Swift/macOS
-application finishes automatic crop/perspective correction, dust handling, and
-packaging. Native TIFF, JPEG, PNG, and processed-RGB DNG export is implemented.
-See
+The native Swift/macOS application is the primary product. The legacy Python
+application is maintenance-only and remains available for workflows the native
+app has not yet replaced (crop/perspective, dust handling). See
 [Native macOS Development](development/native-macos.md) for the active product
 and [Legacy Python Application](legacy-python.md) for the retirement policy.
 
-## Installation from Binaries
+## Native Swift/macOS Application
+
+### Prerequisites
+
+- macOS 14 or later
+- Xcode Command Line Tools or Xcode
+- [Homebrew](https://brew.sh)
+
+### Build and Run
+
+1. Install the required system library:
+
+    ```sh
+    brew install libraw
+    ```
+
+2. Clone or download the repository.
+
+3. Build and run the native application:
+
+    ```sh
+    # Run the full regression test suite (164 tests)
+    swift test --package-path native/FilmScanEngine
+
+    # Build the app
+    swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
+
+    # Run the app
+    swift run --package-path native/FilmScanEngine FilmScanConverterMac
+    ```
+
+4. Or use the provided launcher script from the project root:
+
+    ```sh
+    ./run-swift.sh
+    ```
+
+## Legacy Python Application (Maintenance Only)
+
+This section installs the maintenance-only legacy Python application.
+
+### Installation from Binaries
 
 Download the latest release from the [Film-Scan-Converter Latest Release](https://github.com/kaimonmok/Film-Scan-Converter/releases/latest).
 

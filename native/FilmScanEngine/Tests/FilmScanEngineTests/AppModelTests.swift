@@ -3,6 +3,19 @@ import Testing
 
 @testable import FilmScanConverterMac
 
+private let appModelRepositoryRoot = URL(fileURLWithPath: #filePath)
+  .deletingLastPathComponent()
+  .deletingLastPathComponent()
+  .deletingLastPathComponent()
+  .deletingLastPathComponent()
+  .deletingLastPathComponent()
+
+private var appModelRawCorpusAvailable: Bool {
+  FileManager.default.fileExists(
+    atPath: appModelRepositoryRoot.appending(path: "sample-raw").path
+  )
+}
+
 @Suite("Native app model integration")
 @MainActor
 struct AppModelTests {
@@ -74,6 +87,63 @@ struct AppModelTests {
     #expect(model.exportProgressTotal == 2)
   }
 
+  @Test("Import predecodes the next file into the bounded preview cache")
+  func importPredecodesNextFileIntoPreviewCache() async throws {
+    let model = AppModel()
+    let first = try #require(
+      Bundle.module.url(
+        forResource: "input",
+        withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"
+      )
+    )
+    let second = try #require(
+      Bundle.module.url(
+        forResource: "input",
+        withExtension: "bmp",
+        subdirectory: "Fixtures/decode_bmp8"
+      )
+    )
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-predecode-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let firstCopy = workDir.appendingPathComponent("first.png")
+    let secondCopy = workDir.appendingPathComponent("second.bmp")
+    try FileManager.default.copyItem(at: first, to: firstCopy)
+    try FileManager.default.copyItem(at: second, to: secondCopy)
+
+    model.importFiles([firstCopy, secondCopy])
+    try await waitUntil { model.decodedImage != nil && model.previewImage != nil }
+    try await waitUntil { model.previewCacheSessionCount == 2 }
+
+    model.selection = secondCopy
+    model.loadSelection()
+
+    #expect(model.decodedImage != nil)
+    #expect(model.previewCacheSessionCount <= 2)
+  }
+
+  @Test(
+    "RAW import shows embedded thumbnail before full decode swaps in",
+    .enabled(if: appModelRawCorpusAvailable, "sample-raw corpus unavailable; AppModel RAW thumbnail-swap test skipped")
+  )
+  func rawImportShowsThumbnailBeforeFullDecodeSwap() async throws {
+    let raw = repositoryRoot.appending(path: "sample-raw/DSCF2422.RAF")
+
+    let model = AppModel()
+    model.importFiles([raw])
+
+    try await waitUntil(timeout: .seconds(3)) {
+      model.isShowingEmbeddedRawPreview && model.previewImage != nil && model.decodedImage == nil
+    }
+
+    try await waitUntil(timeout: .seconds(10)) {
+      !model.isShowingEmbeddedRawPreview && model.decodedImage != nil && model.previewImage != nil
+    }
+    #expect(model.decodedImage?.channels == 3)
+  }
+
   private func waitUntil(
     timeout: Duration = .seconds(5),
     condition: @escaping @MainActor () -> Bool
@@ -87,5 +157,9 @@ struct AppModelTests {
       }
       try await Task.sleep(for: .milliseconds(10))
     }
+  }
+
+  private var repositoryRoot: URL {
+    appModelRepositoryRoot
   }
 }

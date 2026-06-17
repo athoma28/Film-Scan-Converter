@@ -30,7 +30,10 @@ let package = Package(
     ),
     .target(
       name: "FilmScanPreviewRenderer",
-      dependencies: ["FilmScanEngine"]
+      dependencies: ["FilmScanEngine"],
+      swiftSettings: [
+        .unsafeFlags(["-Xcc", "-DCI_SILENCE_GL_DEPRECATION"])
+      ]
     ),
     .executableTarget(
       name: "FilmScanRawBenchmark",

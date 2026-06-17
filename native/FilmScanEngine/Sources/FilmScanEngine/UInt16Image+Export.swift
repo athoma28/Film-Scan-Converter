@@ -99,23 +99,8 @@ extension UInt16Image {
   }
 
   public func makeExportCGImage16() -> CGImage? {
-    guard channels == 1 || channels == 3 else {
+    guard let components = rgba16Components() else {
       return nil
-    }
-
-    var components = [UInt16]()
-    components.reserveCapacity(width * height * 4)
-    for pixelIndex in 0..<(width * height) {
-      if channels == 1 {
-        let value = pixels[pixelIndex]
-        components.append(contentsOf: [value, value, value, .max])
-      } else {
-        let componentIndex = pixelIndex * 3
-        components.append(pixels[componentIndex + 2])
-        components.append(pixels[componentIndex + 1])
-        components.append(pixels[componentIndex])
-        components.append(.max)
-      }
     }
 
     let data = components.withUnsafeBytes { Data($0) }
@@ -140,23 +125,8 @@ extension UInt16Image {
   }
 
   public func makeExportCGImage8() -> CGImage? {
-    guard channels == 1 || channels == 3 else {
+    guard let bytes = rgba8Components() else {
       return nil
-    }
-
-    var bytes = [UInt8]()
-    bytes.reserveCapacity(width * height * 4)
-    for pixelIndex in 0..<(width * height) {
-      if channels == 1 {
-        let value = UInt8(truncatingIfNeeded: pixels[pixelIndex] >> 8)
-        bytes.append(contentsOf: [value, value, value, 255])
-      } else {
-        let componentIndex = pixelIndex * 3
-        bytes.append(UInt8(truncatingIfNeeded: pixels[componentIndex + 2] >> 8))
-        bytes.append(UInt8(truncatingIfNeeded: pixels[componentIndex + 1] >> 8))
-        bytes.append(UInt8(truncatingIfNeeded: pixels[componentIndex] >> 8))
-        bytes.append(255)
-      }
     }
 
     guard let provider = CGDataProvider(data: Data(bytes) as CFData) else {

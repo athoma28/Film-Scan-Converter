@@ -15,11 +15,26 @@ Run the native regression gate and build the app:
 ```sh
 swift test --package-path native/FilmScanEngine
 swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
+swift run --package-path native/FilmScanEngine FilmScanConverterMac
+```
+
+Or use the convenience launcher from the project root:
+
+```sh
+./run-swift.sh
+```
+
+Refresh frozen legacy compatibility fixtures only when intentionally changing
+shared behavior:
+
+```sh
+.venv/bin/python tests/generate_native_snapshots.py
+.venv/bin/python tests/generate_raw_decode_reference.py
 ```
 
 ## Legacy Python Packaging
 
-## Building Binaries using pyinstaller
+### PyInstaller
 
 PyInstaller bundles your Python app and its dependencies into a single executable.
 
@@ -29,7 +44,7 @@ pyinstaller --onefile --windowed "Film Scan Converter.pyw"
 
 > **MacOS compatibility Warning:** This does not seem to work reliably on macos due to Tkinter. For MacOS use nuitka instead.
 
-## Building binaries using nuitka
+### Nuitka
 
 Nuitka compiles Python code to optimized C executables, often resulting in faster and smaller binaries.
 

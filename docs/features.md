@@ -45,7 +45,8 @@ features. Its implemented scope includes:
   saturation controls.
 - A still-image correction workflow with live slider bindings, a reusable 16-bit
   Core Image/Metal preview renderer, bounded latest-value-wins scheduling, and a
-  two-session decoded-preview cache.
+  two-session decoded-preview cache with one-file lookahead predecode for the
+  next uncached import.
 - Render instrumentation with `os_signpost` profiling markers and published
   snapshot/display/drop counters.
 - TIFF (16-bit, optional LZW compression), JPEG (8-bit, configurable quality),
@@ -54,7 +55,7 @@ features. Its implemented scope includes:
   cancellation, per-file error reporting, partial-file cleanup, and lazy
   per-file decode/classify/process/write for unloaded batch members.
 - macOS CI that runs the native engine tests and builds the app. The latest
-  local native suite contains 160 tests.
+  local native suite contains 164 tests.
 - Real production-renderer comparison against the authoritative CPU path and an
   actual `AppModel` rapid-update scheduling integration test.
 

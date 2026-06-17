@@ -1,16 +1,43 @@
 
 # How to Use It
 
-This guide describes the maintenance-only legacy Python application. The native
-Swift/macOS application is the primary product direction, but does not yet
-provide this complete automatic-crop, perspective-correction, and dust-handling
-workflow. Native export is implemented for TIFF, JPEG, PNG, and processed-RGB
-DNG. See
-[Native macOS Development](development/native-macos.md) for current native
-features and [Legacy Python Application](legacy-python.md) for the retirement
-policy.
+## Native Swift/macOS Application
 
-## Batch Processing
+The native application is the primary product. It provides:
+
+- Drag-and-drop import of RAW and standard image files.
+- Per-file correction controls: film mode (color negative, B&W negative, slide),
+  RawTherapee-compatible film negative power-law inversion with presets,
+  orientation, white balance, exposure, shadows, highlights, saturation,
+  RGB tone curves, highlight/midtone/shadow color wheels.
+- Interactive GPU-accelerated preview that updates during slider drags.
+- Export to TIFF (16-bit, optional LZW), JPEG (8-bit, configurable quality),
+  PNG (16-bit lossless), and DNG (processed 16-bit RGB).
+- Individual and batch-all export with background processing.
+
+### Workflow
+
+1. Launch the app with `swift run --package-path native/FilmScanEngine FilmScanConverterMac`
+   or `./run-swift.sh`.
+2. Drag and drop supported RAW or image files onto the app window.
+3. New files are automatically classified as color negative, B&W negative, or
+   slide. Review and adjust the film mode and film negative preset as needed.
+4. Adjust corrections in the inspector panel: orientation, white balance,
+   exposure, shadows/highlights, saturation, curves, and color wheels.
+   The preview updates in real time as you drag sliders.
+5. Use the original/corrected comparison toggle to evaluate your adjustments.
+6. Set export options (format, frame, aspect ratio) and choose a destination
+   folder.
+7. Click Export Selected or Export All to write processed full-resolution images.
+
+The native app does not yet provide automatic crop detection, perspective
+correction, or dust handling. Those workflows still require the legacy Python
+application. See
+[Native macOS Development](development/native-macos.md) for the current status.
+
+## Legacy Python Application (Maintenance Only)
+
+### Batch Processing
 
 This application enables you to import multiple RAW scans (most RAW image formats supported), and process them all simultaneously. Each photo's settings can either be synced with global settings, or have settings independent from all the other photos. This is useful when all the photos are scanned in a consistent manner, or you want to dial in the same "look" for multiple photos.
 
@@ -25,7 +52,7 @@ A potential workflow is as follows:
 7. If an individual photo needs adjustment, uncheck "Sync with Global Settings", then apply the adjustment.
 8. Set the export settings, then click "Export All Photos".
 
-## Automatic Cropping
+### Automatic Cropping
 
 By setting the appropriate dark and light threshold values, the application can automatically find the optimal crop around a photo, even if it is off-center or misaligned. The dark and light threshold values define the minimum and maximum brightness levels of the region of the RAW scan to highlight for retention. An appropriately thresholded image highlights most if not the entirety of the desired image, and excludes the mask and/or the film base. In the "Threshold" view, it should look like a white box surrounded by a black border, as shown below:  
 ![image](./images/4a768370-e47c-48a8-b76f-8cd934c5d924.png)
@@ -35,7 +62,7 @@ You can verify that the application has detected the photo properly using the "C
 
 If the mask has fuzzy edges, this may show up near the borders of the final image. You can either increase the Border Crop, or fine tune the light and dark threshold values to try to crop it out.
 
-## Colour Correction
+### Colour Correction
 
 By default, each colour channel will be equalized such that the darkest point is pure black and the lightest point is pure white. This produces pleasing colours under most circumstances; however, there may be instances where this algorithm is thrown off by the scanning method or by the particular photo itself. If the colours look wrong in the preview, check the following:
 
@@ -48,7 +75,7 @@ By default, each colour channel will be equalized such that the darkest point is
 - If sprocket holes are desired in the final image, they will need to be masked out for the equalization calculation. This can be done by going to Edit -> Advanced Settings -> EQ Ignore Borders %, and increasing the height parameter until the sprocket holes are masked. For 35mm film, a value of 15% usually works. To visualize this masking, it is displayed in the "Contours" view as a red border within the cropped region, as shown below:  
 ![image](./images/41ef16e7-def5-4a36-9d6d-d7c685c5b1ab.png)
 
-## Command Line Variables
+### Command Line Variables
 There are 3 command line variables that can be passed in when opening Film Scan Converter, these are:
 - Directory: `-d path/to/folder` this will open all compatible files in the given folder on open.  
   Example use: `python "Film Scan Converter.pyw" -d /home/user/Pictures/scans`

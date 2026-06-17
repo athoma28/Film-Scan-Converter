@@ -332,6 +332,7 @@ struct FilmNegativeProcessingTests {
   func baseDensityPrecedence() {
     let manual = BGRChannelValues(blue: 0.1, green: 0.1, red: 0.1)
     let defaults = BGRChannelValues(blue: 0.2, green: 0.2, red: 0.2)
+    let automatic = BGRChannelValues(blue: 0.25, green: 0.25, red: 0.25)
     let frame = BGRChannelValues(blue: 0.3, green: 0.3, red: 0.3)
     let roll = RollProfile(
       filmStockID: "stock",
@@ -343,6 +344,7 @@ struct FilmNegativeProcessingTests {
       FilmNegativeProcessing.resolveBaseDensity(
         rollProfile: roll,
         frameMeasurement: frame,
+        automaticBaseDensity: automatic,
         defaultBaseDensity: defaults,
         manualBaseDensity: manual
       ) == ResolvedBaseDensity(baseDensity: roll.measuredBaseDensity!, source: .measuredRoll)
@@ -350,9 +352,17 @@ struct FilmNegativeProcessingTests {
     #expect(
       FilmNegativeProcessing.resolveBaseDensity(
         frameMeasurement: frame,
+        automaticBaseDensity: automatic,
         defaultBaseDensity: defaults,
         manualBaseDensity: manual
       ) == ResolvedBaseDensity(baseDensity: frame, source: .measuredFrame)
+    )
+    #expect(
+      FilmNegativeProcessing.resolveBaseDensity(
+        automaticBaseDensity: automatic,
+        defaultBaseDensity: defaults,
+        manualBaseDensity: manual
+      ) == ResolvedBaseDensity(baseDensity: automatic, source: .automaticEstimate)
     )
     #expect(
       FilmNegativeProcessing.resolveBaseDensity(
@@ -365,6 +375,61 @@ struct FilmNegativeProcessingTests {
         manualBaseDensity: manual
       ) == ResolvedBaseDensity(baseDensity: manual, source: .manualPicker)
     )
+  }
+
+  @Test("Automatic rebate estimator returns the brightest top border")
+  func automaticRebateEstimatorFindsTopBorder() throws {
+    let image = borderedImage(width: 10, height: 10, top: 50_000, center: 25_000)
+    let flatField = UInt16Image(
+      width: 10, height: 10, channels: 3,
+      pixels: [UInt16](repeating: 60_000, count: 10 * 10 * 3))
+
+    let candidates = FilmNegativeProcessing.automaticRebateCandidates(
+      image: image,
+      flatField: flatField,
+      edgeFraction: 0.1
+    )
+
+    let first = try #require(candidates.first)
+    #expect(first.region == ImageRegion(x: 0, y: 0, width: 10, height: 1))
+    #expect(first.confidence > 0.9)
+    #expect(abs(first.measurement.baseDensity.blue - -log10(50_000.0 / 60_000.0)) < 1e-12)
+  }
+
+  @Test("Automatic rebate estimator handles vertical edge rebates")
+  func automaticRebateEstimatorFindsLeftBorder() throws {
+    let image = borderedImage(width: 10, height: 10, left: 52_000, center: 25_000)
+    let flatField = UInt16Image(
+      width: 10, height: 10, channels: 3,
+      pixels: [UInt16](repeating: 60_000, count: 10 * 10 * 3))
+
+    let candidates = FilmNegativeProcessing.automaticRebateCandidates(
+      image: image,
+      flatField: flatField,
+      edgeFraction: 0.1
+    )
+
+    let first = try #require(candidates.first)
+    #expect(first.region == ImageRegion(x: 0, y: 0, width: 1, height: 10))
+    #expect(first.confidence > 0.9)
+  }
+
+  @Test("Automatic rebate estimator rejects borderless frames")
+  func automaticRebateEstimatorRejectsBorderlessFrame() {
+    let image = UInt16Image(
+      width: 10, height: 10, channels: 3,
+      pixels: [UInt16](repeating: 35_000, count: 10 * 10 * 3))
+    let flatField = UInt16Image(
+      width: 10, height: 10, channels: 3,
+      pixels: [UInt16](repeating: 60_000, count: 10 * 10 * 3))
+
+    let candidates = FilmNegativeProcessing.automaticRebateCandidates(
+      image: image,
+      flatField: flatField,
+      edgeFraction: 0.1
+    )
+
+    #expect(candidates.isEmpty)
   }
 
   @Test("Classifier identifies orange-mask colour negative and selects RawTherapee preset")
@@ -424,6 +489,152 @@ struct FilmNegativeProcessingTests {
     #expect(classification.confidence >= 0.55)
   }
 
+  @Test("Generic C-41 identity profile maps zero density to unity and unit density to 10")
+  func genericC41IdentityProfile() {
+    let density: [Double] = [0, 0, 0, 0.5, 0.5, 0.5, 1.0, 1.0, 1.0]
+
+    let scene = FilmNegativeProcessing.genericC41SceneEstimate(
+      baseSubtractedDensity: density,
+      profile: .identity
+    )
+
+    assertEqual(scene, [1, 1, 1, pow(10, 0.5), pow(10, 0.5), pow(10, 0.5), 10, 10, 10])
+  }
+
+  @Test("Generic C-41 applies per-channel slopes and offsets")
+  func genericC41ChannelSlopesAndOffsets() {
+    let density: [Double] = [0.2, 0.4, 0.6]
+    let profile = GenericC41Profile(
+      densitySlope: BGRChannelValues(blue: 2.0, green: 1.5, red: 1.0),
+      densityOffset: BGRChannelValues(blue: -0.1, green: 0, red: 0.1)
+    )
+
+    let scene = FilmNegativeProcessing.genericC41SceneEstimate(
+      baseSubtractedDensity: density,
+      profile: profile
+    )
+
+    #expect(scene.count == 3)
+    #expect(abs(scene[0] - pow(10, 2.0 * 0.2 - 0.1)) < 1e-12)
+    #expect(abs(scene[1] - pow(10, 1.5 * 0.4)) < 1e-12)
+    #expect(abs(scene[2] - pow(10, 1.0 * 0.6 + 0.1)) < 1e-12)
+  }
+
+  @Test("Generic C-41 scene estimate is monotonic in each channel")
+  func genericC41Monotonicity() {
+    let density: [Double] = [0.1, 0.2, 0.3, 0.9, 1.0, 1.1]
+    let profile = GenericC41Profile(
+      densitySlope: BGRChannelValues(blue: 2.0, green: 1.0, red: 0.5)
+    )
+
+    let scene = FilmNegativeProcessing.genericC41SceneEstimate(
+      baseSubtractedDensity: density,
+      profile: profile
+    )
+
+    #expect(scene[0] < scene[3])
+    #expect(scene[1] < scene[4])
+    #expect(scene[2] < scene[5])
+  }
+
+  @Test("Generic C-41 slope respects BGR channel isolation")
+  func genericC41ChannelIsolation() {
+    let density: [Double] = [0.3, 0.3, 0.3]
+    let blueProfile = GenericC41Profile(
+      densitySlope: BGRChannelValues(blue: 3.0, green: 1.0, red: 1.0)
+    )
+    let greenProfile = GenericC41Profile(
+      densitySlope: BGRChannelValues(blue: 1.0, green: 3.0, red: 1.0)
+    )
+
+    let blueScene = FilmNegativeProcessing.genericC41SceneEstimate(
+      baseSubtractedDensity: density,
+      profile: blueProfile
+    )
+    let greenScene = FilmNegativeProcessing.genericC41SceneEstimate(
+      baseSubtractedDensity: density,
+      profile: greenProfile
+    )
+
+    #expect(blueScene[0] > blueScene[1])
+    #expect(blueScene[2] == greenScene[2])
+    #expect(greenScene[1] > greenScene[0])
+  }
+
+  @Test("Generic C-41 clamps scene estimate for extreme density values")
+  func genericC41ExtremeDensityBounds() {
+    let zeroDensity: [Double] = [0, 0, 0]
+    let highDensity: [Double] = [3, 3, 3]
+
+    let zeroScene = FilmNegativeProcessing.genericC41SceneEstimate(
+      baseSubtractedDensity: zeroDensity
+    )
+    let highScene = FilmNegativeProcessing.genericC41SceneEstimate(
+      baseSubtractedDensity: highDensity
+    )
+
+    assertEqual(zeroScene, [1, 1, 1])
+    #expect(highScene[0] > zeroScene[0])
+    #expect(highScene[1] > zeroScene[1])
+    #expect(highScene[2] > zeroScene[2])
+  }
+
+  @Test("Scene exposure normalization scales by reciprocal of median green")
+  func sceneExposureNormalizationMedian() {
+    let scene: [Double] = [1, 2, 3, 4, 5, 6]
+    let normalized = FilmNegativeProcessing.normalizeSceneExposure(sceneLinear: scene)
+
+    let greenValues = [2.0, 5.0]
+    let medianGreen = (greenValues[0] + greenValues[1]) / 2.0
+    let scale = 1.0 / medianGreen
+    let expected = scene.map { $0 * scale }
+    assertEqual(normalized, expected)
+  }
+
+  @Test("Scene exposure normalization with zero median green is identity")
+  func sceneExposureNormalizationZeroMedian() {
+    let scene: [Double] = [1, 0, 3, 4, 0, 6]
+    let normalized = FilmNegativeProcessing.normalizeSceneExposure(sceneLinear: scene)
+
+    #expect(normalized == scene)
+  }
+
+  @Test("Generic C-41 profile round trips through JSON")
+  func genericC41ProfileCodableRoundTrip() throws {
+    let profile = GenericC41Profile(
+      densitySlope: BGRChannelValues(blue: 1.8, green: 1.2, red: 0.9),
+      densityOffset: BGRChannelValues(blue: -0.05, green: 0.1, red: 0.05)
+    )
+
+    let encoded = try JSONEncoder().encode(profile)
+    let decoded = try JSONDecoder().decode(GenericC41Profile.self, from: encoded)
+
+    #expect(decoded == profile)
+  }
+
+  @Test("Composed density-to-scene pipeline converts capture to scene-linear values")
+  func densityToSceneLinearPipeline() {
+    let image = UInt16Image(width: 1, height: 1, channels: 3, pixels: [3_000, 5_000, 9_000])
+    let flatField = UInt16Image(
+      width: 1, height: 1, channels: 3, pixels: [11_000, 21_000, 41_000])
+    let parameters = CaptureNormalizationParameters(
+      blackLevel: BGRChannelValues(blue: 1_000, green: 1_000, red: 1_000)
+    )
+    let baseDensity = BGRChannelValues(blue: 0.1, green: 0.2, red: 0.3)
+
+    let scene = FilmNegativeProcessing.densityToSceneLinear(
+      image: image,
+      flatField: flatField,
+      baseDensity: baseDensity,
+      parameters: parameters
+    )
+
+    assertEqual(
+      scene,
+      [pow(10, 0.1), 1.0, pow(10, -0.1)]
+    )
+  }
+
   private func assertEqual(_ actual: [Double], _ expected: [Double], tolerance: Double = 1e-12) {
     #expect(actual.count == expected.count)
     for index in actual.indices {
@@ -443,6 +654,26 @@ struct FilmNegativeProcessingTests {
       pixels.append(sample.blue)
       pixels.append(sample.green)
       pixels.append(sample.red)
+    }
+    return UInt16Image(width: width, height: height, channels: 3, pixels: pixels)
+  }
+
+  private func borderedImage(
+    width: Int,
+    height: Int,
+    top: UInt16? = nil,
+    left: UInt16? = nil,
+    center: UInt16
+  ) -> UInt16Image {
+    var pixels: [UInt16] = []
+    pixels.reserveCapacity(width * height * 3)
+    for y in 0..<height {
+      for x in 0..<width {
+        let value = top.map { y == 0 ? $0 : center }
+          ?? left.map { x == 0 ? $0 : center }
+          ?? center
+        pixels.append(contentsOf: [value, value, value])
+      }
     }
     return UInt16Image(width: width, height: height, channels: 3, pixels: pixels)
   }

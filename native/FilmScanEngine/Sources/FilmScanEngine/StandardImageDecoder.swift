@@ -106,12 +106,14 @@ public enum StandardImageDecoder {
     )
 
     let scaled = pythonScaled(components, sourceBitsPerComponent: image.bitsPerComponent)
-    var pixels = [UInt16]()
-    pixels.reserveCapacity(image.width * image.height * 3)
-    for index in stride(from: 0, to: scaled.count, by: 4) {
-      pixels.append(scaled[index + 2])
-      pixels.append(scaled[index + 1])
-      pixels.append(scaled[index])
+    let pixelCount = image.width * image.height
+    var pixels = [UInt16](repeating: 0, count: pixelCount * 3)
+    for i in 0..<pixelCount {
+      let src = i * 4
+      let dst = i * 3
+      pixels[dst] = scaled[src + 2]
+      pixels[dst + 1] = scaled[src + 1]
+      pixels[dst + 2] = scaled[src]
     }
     return UInt16Image(width: image.width, height: image.height, channels: 3, pixels: pixels)
   }

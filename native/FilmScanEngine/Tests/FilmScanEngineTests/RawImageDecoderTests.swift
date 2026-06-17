@@ -4,6 +4,19 @@ import Testing
 
 @testable import FilmScanEngine
 
+private let rawDecoderRepositoryRoot = URL(fileURLWithPath: #filePath)
+  .deletingLastPathComponent()
+  .deletingLastPathComponent()
+  .deletingLastPathComponent()
+  .deletingLastPathComponent()
+  .deletingLastPathComponent()
+
+private var rawCorpusAvailable: Bool {
+  FileManager.default.fileExists(
+    atPath: rawDecoderRepositoryRoot.appending(path: "sample-raw").path
+  )
+}
+
 private struct RawDecodeReference: Decodable {
   struct Entry: Decodable {
     let file: String
@@ -18,16 +31,22 @@ private struct RawDecodeReference: Decodable {
 
 @Suite("LibRaw decoding")
 struct RawImageDecoderTests {
-  @Test("Representative RAF corpus matches RawPy reference pixels")
+  @Test("RAW decode profiles expose stable C bridge values")
+  func rawDecodeProfileBridgeValues() {
+    #expect(RawDecodeProfile.rawPyCompatibility.rawValue == 0)
+    #expect(RawDecodeProfile.rawTherapeeCameraScan.rawValue == 1)
+  }
+
+  @Test(
+    "Representative RAF corpus matches RawPy reference pixels",
+    .enabled(if: rawCorpusAvailable, "sample-raw corpus unavailable; RAW parity test skipped")
+  )
   func representativeRAFCorpus() throws {
     let reference = try JSONDecoder().decode(
       RawDecodeReference.self,
       from: Data(contentsOf: FixtureLoader.fixtureURL("", file: "raw_decode_reference.json"))
     )
     let rawDirectory = repositoryRoot.appending(path: "sample-raw")
-    guard FileManager.default.fileExists(atPath: rawDirectory.path) else {
-      return
-    }
 
     for entry in reference.entries {
       let result = try RawImageDecoder.decode(rawDirectory.appending(path: entry.file))
@@ -38,13 +57,13 @@ struct RawImageDecoderTests {
     }
   }
 
-  @Test("Full-resolution RAF decode matches RawPy reference pixels")
+  @Test(
+    "Full-resolution RAF decode matches RawPy reference pixels",
+    .enabled(if: rawCorpusAvailable, "sample-raw corpus unavailable; full-resolution RAW parity test skipped")
+  )
   func fullResolutionRAF() throws {
     let reference = try loadReference()
     let rawDirectory = repositoryRoot.appending(path: "sample-raw")
-    guard FileManager.default.fileExists(atPath: rawDirectory.path) else {
-      return
-    }
 
     let entry = reference.fullResolution
     let result = try RawImageDecoder.decode(
@@ -57,12 +76,12 @@ struct RawImageDecoderTests {
     #expect(result.colorDescription == entry.colorDescription)
   }
 
-  @Test("Representative RAF completes the interactive correction preview pipeline")
+  @Test(
+    "Representative RAF completes the interactive correction preview pipeline",
+    .enabled(if: rawCorpusAvailable, "sample-raw corpus unavailable; RAW preview-pipeline test skipped")
+  )
   func interactiveCorrectionPreview() throws {
     let rawURL = repositoryRoot.appending(path: "sample-raw/DSCF2422.RAF")
-    guard FileManager.default.fileExists(atPath: rawURL.path) else {
-      return
-    }
 
     let decoded = try RawImageDecoder.decode(rawURL).image
     let proxy = decoded.resizedToFit(maxDimension: 720)
@@ -85,10 +104,35 @@ struct RawImageDecoderTests {
     #expect(corrected.makePreviewCGImage() != nil)
   }
 
+  @Test(
+    "Representative RAF embedded thumbnail decodes into a 3-channel preview image",
+    .enabled(if: rawCorpusAvailable, "sample-raw corpus unavailable; embedded thumbnail test skipped")
+  )
+  func embeddedThumbnailDecode() throws {
+    let rawURL = repositoryRoot.appending(path: "sample-raw/DSCF2422.RAF")
+
+    let thumbnail = try RawImageDecoder.extractThumbnail(rawURL)
+
+    #expect(thumbnail.width > 0)
+    #expect(thumbnail.height > 0)
+    #expect(thumbnail.image.width == thumbnail.width)
+    #expect(thumbnail.image.height == thumbnail.height)
+    #expect(thumbnail.image.channels == 3)
+    #expect(thumbnail.image.pixels.count == thumbnail.width * thumbnail.height * 3)
+    #expect(thumbnail.image.makePreviewCGImage() != nil)
+  }
+
   @Test("Standard images do not enter the RAW decoder")
   func rejectsStandardImageExtension() {
     #expect(throws: RawImageDecoderError.self) {
       try RawImageDecoder.decode(URL(fileURLWithPath: "/tmp/scan.png"))
+    }
+  }
+
+  @Test("Standard images do not enter embedded RAW thumbnail extraction")
+  func thumbnailRejectsStandardImageExtension() {
+    #expect(throws: RawImageDecoderError.self) {
+      try RawImageDecoder.extractThumbnail(URL(fileURLWithPath: "/tmp/scan.png"))
     }
   }
 
@@ -100,12 +144,7 @@ struct RawImageDecoderTests {
   }
 
   private var repositoryRoot: URL {
-    URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
+    rawDecoderRepositoryRoot
   }
 
   private func loadReference() throws -> RawDecodeReference {

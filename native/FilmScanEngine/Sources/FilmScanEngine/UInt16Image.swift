@@ -131,4 +131,56 @@ public struct UInt16Image: Equatable, Sendable {
     }
     return UInt16Image(width: outputWidth, height: outputHeight, channels: channels, pixels: output)
   }
+
+  func rgba16Components() -> [UInt16]? {
+    guard channels == 1 || channels == 3 else {
+      return nil
+    }
+
+    let pixelCount = width * height
+    var components = [UInt16](repeating: 0, count: pixelCount * 4)
+    for i in 0..<pixelCount {
+      let dst = i * 4
+      if channels == 1 {
+        let value = pixels[i]
+        components[dst] = value
+        components[dst + 1] = value
+        components[dst + 2] = value
+        components[dst + 3] = .max
+      } else {
+        let src = i * 3
+        components[dst] = pixels[src + 2]
+        components[dst + 1] = pixels[src + 1]
+        components[dst + 2] = pixels[src]
+        components[dst + 3] = .max
+      }
+    }
+    return components
+  }
+
+  func rgba8Components() -> [UInt8]? {
+    guard channels == 1 || channels == 3 else {
+      return nil
+    }
+
+    let pixelCount = width * height
+    var bytes = [UInt8](repeating: 0, count: pixelCount * 4)
+    for i in 0..<pixelCount {
+      let dst = i * 4
+      if channels == 1 {
+        let value = UInt8(truncatingIfNeeded: pixels[i] >> 8)
+        bytes[dst] = value
+        bytes[dst + 1] = value
+        bytes[dst + 2] = value
+        bytes[dst + 3] = 255
+      } else {
+        let src = i * 3
+        bytes[dst] = UInt8(truncatingIfNeeded: pixels[src + 2] >> 8)
+        bytes[dst + 1] = UInt8(truncatingIfNeeded: pixels[src + 1] >> 8)
+        bytes[dst + 2] = UInt8(truncatingIfNeeded: pixels[src] >> 8)
+        bytes[dst + 3] = 255
+      }
+    }
+    return bytes
+  }
 }

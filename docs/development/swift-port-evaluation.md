@@ -185,10 +185,10 @@ The test suite has been migrated from XCTest to `swift-testing`. Tests consume
 Python-generated `.npy` fixtures frozen by `tests/generate_native_snapshots.py`
 and `tests/generate_raw_decode_reference.py`. The fixture format includes
 SHA-256 hashes that are verified at load time, preventing fixture corruption.
-Tests are designed to pass in CI without the `sample-raw/` corpus (they skip
-RAF-specific tests when files are absent).
+Tests are designed to pass in CI without the `sample-raw/` corpus; RAF-specific
+tests are explicitly reported as disabled when the untracked corpus is absent.
 
-As of 2026-06-15, the native suite contains **98 tests across 11 test files**.
+As of 2026-06-16, the native suite contains **176 tests across 14 test files**.
 
 ### 2.9 CI — `.github/workflows/native-engine.yml`
 

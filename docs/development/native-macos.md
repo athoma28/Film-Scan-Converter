@@ -5,7 +5,7 @@ what works now, the current development step, and the order of upcoming work.
 The detailed [macOS native roadmap](../improvements/MacOS-Native-Roadmap.md) is
 the design reference, not a statement that every listed item is implemented.
 
-**Last updated:** 2026-06-16 (160 tests; startup film-kind classification applies RawTherapee color-negative/B&W presets or slide mode automatically for new imports; Export All now lazily decodes, classifies, processes, and writes unloaded batch files without retaining every full-resolution image)
+**Last updated:** 2026-06-16 (177 tests; RawTherapee camera-scan RAW decode profile added for app imports/exports with linear output, disabled auto-bright/exposure boost, and LibRaw highlight reconstruction while preserving the frozen RawPy compatibility profile for benchmark/hash fixtures; embedded JPEG thumbnail fast-path delivers 65–110 ms first-frame preview from RAW files with background LibRaw decode and seamless swap; C bridge uses mmap I/O and `fsc_decode_raw_direct` single-copy pipeline; CIKernel and CIContext cached as shared statics in `StillPreviewRenderer`; FSC_LOG compile-time gated on `#ifdef DEBUG` for release builds; CGImage preview/export conversion shares one BGR-to-RGBA implementation)
 
 ## Goal
 
@@ -34,22 +34,22 @@ Native export is complete.
 
 ## Current Development Step
 
-**Active step: film-specific camera-scan track. RawTherapee-compatible film negative power-law inversion is complete with 20%-border-cut median sampling, neutral middle-gray calibration, adopted presets (Color Negative and Black & White), CPU/GPU/Metal processing parity, SwiftUI controls, and automatic startup classification for new imports. Slice A (capture normalization), Slice B (linear-capture diagnostics), and the first engine-only Slice C manual rebate/roll-reuse API are complete as standalone engine APIs.**
+**Active step: film-specific camera-scan track. RawTherapee-compatible film negative power-law inversion is complete with 20%-border-cut median sampling, neutral middle-gray calibration, adopted presets (Color Negative and Black & White), CPU/GPU/Metal processing parity, SwiftUI controls, and automatic startup classification for new imports. App RAW imports and export-on-demand now use a dedicated RawTherapee camera-scan decode profile instead of the frozen RawPy compatibility profile. Slice A (capture normalization), Slice B (linear-capture diagnostics), the first engine-only Slice C manual rebate/roll-reuse API, the first engine-only Slice D automatic rebate candidate API, and Slice E (generic C-41 density-to-scene-linear renderer with per-channel slopes/offsets, monotonicity, and median-green exposure normalization) are complete as standalone engine APIs.**
 TIFF, JPEG, PNG, and DNG export is complete with individual and memory-bounded batch workflows, cancellation, partial-file cleanup, and 19 focused tests. The native app can now produce processed output files across all four formats from the full-resolution decoded image with applied corrections, frame, and aspect ratio.
 
 ## Next Step
 
-**Continue from the completed startup classification into Slice C UI/manual-region wiring or Slice D automatic rebate estimation, building on the now-operational power-law inversion as a preview-compatible front-end. Then add base density and color space conversion, followed by flat-field calibration.**
-The app now starts new files in color negative, B&W negative, or slide mode from deterministic proxy statistics without overwriting existing per-file settings. The engine also computes robust median/trimmed-mean transmittance and density from a user-selected rebate rectangle, persists measured roll base in a Codable roll profile, and resolves base-density precedence. Next, expose the manual region picker in the app or implement automatic rebate candidates without silently overriding stronger roll/manual measurements.
+**Continue from the completed density-domain engine APIs into Slice F (shared display renderer and noise protection) or Slice C/D UI wiring. The app now has a complete density-to-scene-linear pipeline, so the next logical step is to add a shared display rendering transform that turns scene-linear values into display-referred output, enabling the density pipeline to replace the current power-law preview front-end.**
+The app now starts new files in color negative, B&W negative, or slide mode from deterministic proxy statistics without overwriting existing per-file settings. The engine also computes robust median/trimmed-mean transmittance and density from a user-selected rebate rectangle, persists measured roll base in a Codable roll profile, resolves base-density precedence, and returns deterministic edge rebate candidates with confidence without overriding stronger roll/frame measurements. Next, expose manual or automatic rebate selection in the app or connect the density-domain stages to a generic C-41 render path, including RawTherapee-style highlight/noise protection for thin negative regions.
 
 ## Progress
 
 | Area | Status | Current result |
 |---|---|---|
-| Phase 0: regression gate | In progress | Swift tests consume frozen Python-generated `.npy` fixtures and compact RAW hash manifests. Standard decode fixtures cover 8-bit PNG, grayscale PNG, BMP, JPEG, and 16-bit TIFF. Five half-size RAF decodes and one full-resolution RAF decode require exact SHA-256 equality with RawPy when the local `sample-raw` corpus is present. The full intermediate-stage and parameter-grid corpus is not complete. |
-| Phase 1: processing engine | In progress | `FilmScanEngine` decodes standard images and RAW files, with pixel-equivalent rotate, flip, frame, and aspect-ratio helpers. Threshold generation, white balance, saturation, exposure, histogram equalisation, `shrink_box` coordinate math, overall/per-channel RGB curves (piecewise-linear 65536-entry LUTs), and highlight/midtone/shadow color wheels (tonal masks with luminance preservation) are complete with exact or documented-tolerance equivalence. RawTherapee-compatible film negative power-law inversion is complete: per-channel exponent model (`output = multiplier × pixel^-(greenExp×ratio)`), auto-calibration via 20%-border-cut channel medians to neutral middle gray, Color Negative and Black & White presets matching RawTherapee's defaults, full CPU (Double), GPU-equivalent (Float), and Metal CIKernel processing parity, plus deterministic startup classification for color negative, B&W negative, and slide scans. The film-specific track has three complete standalone engine APIs: per-channel black-level correction, flat-field normalization, optical-density conversion, and manual base-density subtraction (Slice A); linear-capture diagnostics with per-channel min/max, clipping fractions, source-kind/bit-depth metadata, and deterministic warnings for nonlinear/unsuitable input (Slice B); and manual rebate base-density measurement plus roll-profile reuse and precedence resolution (Slice C). Contour detection, perspective warp, dust detection, automatic rebate estimation, UI region picking, and density-pipeline integration are deferred. |
+| Phase 0: regression gate | In progress | Swift tests consume frozen Python-generated `.npy` fixtures and compact RAW hash manifests. Standard decode fixtures cover 8-bit PNG, grayscale PNG, BMP, JPEG, and 16-bit TIFF. Five half-size RAF decodes and one full-resolution RAF decode require exact SHA-256 equality with RawPy when the local `sample-raw` corpus is present; when it is absent, those corpus-specific tests are explicitly reported as disabled rather than silently passing. The full intermediate-stage and parameter-grid corpus is not complete. |
+| Phase 1: processing engine | In progress | `FilmScanEngine` decodes standard images and RAW files, with pixel-equivalent rotate, flip, frame, and aspect-ratio helpers. RAW decoding now has two named profiles: the frozen RawPy compatibility profile for exact hash fixtures and the app-facing RawTherapee camera-scan profile with linear output, no auto brightening/exposure boost, and LibRaw highlight reconstruction. Threshold generation, white balance, saturation, exposure, histogram equalisation, `shrink_box` coordinate math, overall/per-channel RGB curves (piecewise-linear 65536-entry LUTs), and highlight/midtone/shadow color wheels (tonal masks with luminance preservation) are complete with exact or documented-tolerance equivalence. RawTherapee-compatible film negative power-law inversion is complete: per-channel exponent model (`output = multiplier × pixel^-(greenExp×ratio)`), auto-calibration via 20%-border-cut channel medians to neutral middle gray, Color Negative and Black & White presets matching RawTherapee's defaults, full CPU (Double), GPU-equivalent (Float), and Metal CIKernel processing parity, plus deterministic startup classification for color negative, B&W negative, and slide scans. The film-specific track has five complete standalone engine APIs: per-channel black-level correction, flat-field normalization, optical-density conversion, and manual base-density subtraction (Slice A); linear-capture diagnostics with per-channel min/max, clipping fractions, source-kind/bit-depth metadata, and deterministic warnings for nonlinear/unsuitable input (Slice B); manual rebate base-density measurement plus roll-profile reuse and precedence resolution (Slice C); deterministic automatic edge rebate candidates with confidence (initial Slice D); and generic C-41 density-to-scene-linear renderer with per-channel slopes/offsets, monotonicity, and median-green exposure normalization (Slice E). Contour detection, perspective warp, dust detection, UI region picking, native RawTherapee highlight recovery methods, and display rendering are deferred. |
 | Phase 2: accelerated rendering | In progress | Live camera preview uses a Metal-backed Core Image context. Still-file correction uploads one bounded 16-bit proxy per selection, applies the current correction controls in one custom GPU kernel, and keeps only one in-flight render plus the newest pending snapshot. The kernel includes RawTherapee-compatible film negative power-law inversion, curve LUT sampling (256×256 8-bit texture), and three-way color wheel tonal adjustments. The production renderer is verified against the authoritative CPU path across 2,655 comparisons with zero failures and a maximum difference of 2/255. The latest 500-change current-pipeline benchmark measured 3.74 ms p95 at 1080×720 after bounded LUT caching; the app now uses a 640-pixel maximum interactive proxy, which contains about 2.85× fewer pixels than the former 1080-pixel proxy. Render instrumentation and scheduling contract tests are deployed. A direct Metal-backed preview surface and idle authoritative rendering remain. |
-| Phase 3: SwiftUI application | Interactive correction + export workflow | The app accepts supported files by drag and drop, decodes standard images and RAW files, auto-initializes new files to color negative, B&W negative, or slide mode, and provides per-file film mode, film negative preset (Off/Color Negative/B&W) and per-channel ratio/exp sliders, orientation, white balance, exposure, shadows, highlights, saturation, curves, color wheels, reset, and original/corrected comparison controls. An export section supports TIFF, JPEG (configurable quality), PNG, and DNG output with frame percentage, aspect-ratio presets, TIFF LZW compression, destination folder selection, per-file error reporting, and individual plus batch-all export. Export All decodes and processes unloaded files on demand instead of requiring every batch member to be selected first or retained in a full-resolution cache. The two most recent decoded/proxy/renderer sessions are cached for immediate back-and-forth switching. Slider and wheel bindings remain live during continuous drags; end-to-end latency still requires real-file verification. |
+| Phase 3: SwiftUI application | Interactive correction + export workflow | The app accepts supported files by drag and drop, decodes standard images and RAW files, auto-initializes new files to color negative, B&W negative, or slide mode, and provides per-file film mode, film negative preset (Off/Color Negative/B&W) and per-channel ratio/exp sliders, orientation, white balance, exposure, shadows, highlights, saturation, curves, color wheels, reset, and original/corrected comparison controls. An export section supports TIFF, JPEG (configurable quality), PNG, and DNG output with frame percentage, aspect-ratio presets, TIFF LZW compression, destination folder selection, per-file error reporting, and individual plus batch-all export. Export All decodes and processes unloaded files on demand instead of requiring every batch member to be selected first or retained in a full-resolution cache. The two most recent decoded/proxy/renderer sessions are cached for immediate back-and-forth switching; after a selection loads, a utility-priority worker predecodes only the immediate next uncached file into that same bounded cache. Slider and wheel bindings remain live during continuous drags; end-to-end latency still requires real-file verification. |
 | Phase 4: performance and polish | Early measurement | CI builds and tests the current native package. The representative RAW decode and quality benchmark is complete; packaging, UI snapshots, and release work remain. |
 
 ## Planned Native Capabilities
@@ -67,9 +67,10 @@ Export is complete for all four target formats:
 - PNG (16-bit deep, lossless);
 - DNG (processed 16-bit RGB, valid TIFF container with DNG IFD tags, not
   claiming untouched camera RAW);
-- individual and batch-all export with actor-based batch parallelism,
-  memory-bounded concurrency, cancellation propagation, error-per-file
-  reporting, and partial-file cleanup.
+- individual and batch-all export with actor-based export primitives,
+  memory-bounded sequential app-level Export All, parallel `ExportManager`
+  batch support for prebuilt request sets, cancellation propagation,
+  error-per-file reporting, and partial-file cleanup.
 
 Film-specific camera-scan processing now has a separate staged track based on
 the [film-processing research brief](../film-processing-research.md). The
@@ -78,9 +79,10 @@ a preview-compatible front-end. Upcoming phases add film base density and color
 space conversion, then flat-field calibration (geometry + density-domain
 normalization). The first engine-only slice (capture normalization + density
 primitives) and second engine-only slice (linear-capture diagnostics) remain
-complete, and the first Slice C engine API now measures manual rebate base
-density and persists roll-level reuse metadata. Upcoming slices add UI region
-picking, automatic rebate estimation, generic C-41 rendering, capture profiles,
+complete, the first Slice C engine API now measures manual rebate base
+density and persists roll-level reuse metadata, and the first Slice D engine API
+returns automatic edge rebate candidates with confidence. Upcoming slices add UI region
+picking, generic C-41 rendering, capture profiles,
 per-stock inverse density curves, fitted matrices, and optional residual LUTs.
 The detailed order and acceptance criteria are maintained in the
 [native roadmap](../improvements/MacOS-Native-Roadmap.md#film-specific-camera-scan-processing-track).
@@ -100,21 +102,52 @@ The detailed order and acceptance criteria are maintained in the
 - Preview generation from decoded `UInt16Image` buffers.
 - Background standard-image decoding so full-resolution imports do not block
   the SwiftUI main actor.
-- A narrow C module boundary around thread-safe LibRaw, returning owned 16-bit
-  BGR buffers with no LibRaw lifetime exposed to Swift.
+- A narrow C module boundary around thread-safe LibRaw (`CLibRawShim.c`), providing
+  two decode paths: `fsc_decode_raw_direct` (mmap I/O, no C-side BGR→RGB malloc
+  — Swift does single-pass swizzle during `[UInt16]` creation) and the legacy
+  `fsc_decode_raw` (kept for caller compatibility). Both return owned 16-bit
+  buffers with no LibRaw lifetime exposed to Swift.
 - Exact RawPy-equivalent half-size decoding for all five representative X-T5
   RAF files and exact full-resolution decoding for one representative RAF.
 - A reproducible [native RAW decode and quality benchmark](native-raw-benchmark.md)
   proving exact decoded pixels for all five RAFs at half and full resolution.
+- A separate RawTherapee camera-scan RAW decode profile for application RAW
+  imports, background full-decode swaps, lookahead predecode, and export-on-demand.
+  This profile keeps 16-bit output but requests linear gamma, disables LibRaw
+  auto-brightening and exposure boost, and enables LibRaw highlight reconstruction
+  so film-negative conversion starts from a closer camera-scan source while the
+  RawPy fixture profile remains stable.
+- C bridge debug logging (`FSC_LOG` macro) is compile-time gated on `#ifdef DEBUG`,
+  eliminating `fprintf` + `fflush` overhead from release builds. Debug builds retain
+  full per-step LibRaw instrumentation.
 - Background RAW decoding and preview through the same engine-buffer path used
   by standard images.
+- Embedded JPEG thumbnail fast-path: `RawImageDecoder.extractThumbnail()` extracts
+  the camera-processed JPEG preview from RAW files via `libraw_unpack_thumb` at
+  65–110 ms (10–15× faster than half-res LibRaw decode). `AppModel.loadSelection()`
+  shows the JPEG instantly as the interactive preview while a background
+  `rawSwapTask` decodes the full RAW buffer and seamlessly swaps it in at the same
+  correction settings and proxy dimensions.
+- `StillPreviewRenderer` caches the compiled `CIKernel` and `CIContext` as shared
+  static properties, eliminating per-selection kernel recompilation and Metal
+  context creation. The kernel is compiled once on first use; subsequent previews
+  reuse the cached objects.
+- `UInt16Image.makePreviewCGImage()` and `makePreviewCGImage16()` use pre-allocated
+  directly-indexed arrays instead of per-component `append()`, reducing allocation
+  traffic on every preview generation.
 - A bounded 640-pixel correction preview proxy that rerenders verified engine
   corrections in the background without changing the full decoded source. This
   CPU path is currently suitable only as an idle correctness preview, not
   continuous real-time interaction.
 - A bounded two-session decoded/proxy/renderer cache that makes switching back
   and forth between recently viewed files immediate without allowing memory use
-  to grow with the imported-file list.
+  to grow with the imported-file list. Selection also starts a cancellable,
+  utility-priority predecode for the immediate next uncached file only, so
+  forward navigation can be immediate without retaining the entire import batch.
+- Embedded RAW thumbnail and full-decode swap behavior is covered by both
+  decoder-level and app-model tests when the local `sample-raw/` corpus is
+  available. Corpus-specific tests are conditionally disabled with an explicit
+  reason on machines that do not have the untracked RAF files.
 - A reusable Core Image/Metal still-preview renderer that uploads one bounded
   16-bit proxy per selection, disables implicit working-space conversion, and
   fuses film negative power-law inversion, grayscale, white balance, tone, HSV
@@ -190,6 +223,16 @@ The detailed order and acceptance criteria are maintained in the
   marked nonlinear input. Codable report with 18 synthetic tests covering 1- and
   3-channel images, channel isolation, warning thresholds, and JSON round-trips.
   98.9% line coverage; only the bit-depth precondition trap uncovered.
+- Generic C-41 density-to-scene-linear renderer (Slice E, engine-only):
+  `genericC41SceneEstimate()` applies per-channel BGR density slopes/offsets to
+  produce scene-linear positive values. `normalizeSceneExposure()` scales by
+  reciprocal of median green channel. `densityToSceneLinear()` composes capture
+  normalization, optical density, base subtraction, scene estimate, and exposure
+  normalization into one call. Codable `GenericC41Profile` with identity default
+  (slopes=1.0, offsets=0.0) and nonnegative-slope precondition. 9 focused tests
+  cover identity, channel-specific slopes/offsets, monotonicity, channel
+  isolation, extreme density bounds, zero-median fallback, JSON round-trip, and
+  composed pipeline correctness.
 - Optional AVFoundation live camera preview.
 - GPU-backed live preview inversion, exposure, and saturation controls.
 - Late-frame dropping and a 20 FPS processing throttle.
@@ -220,6 +263,13 @@ The detailed order and acceptance criteria are maintained in the
   detection, crop detection, perspective correction, dust removal, or
   persistence across launches. They are suitable for evaluating the current
   correction interaction and loaded-file flow, not final output.
+- The native RawTherapee parity path is still partial. RawTherapee's source
+  order is `preprocess` (black/white scaling, bad pixels, flat field/gain maps,
+  green equilibration), `demosaic`, `getImage` (white balance, optional highlight
+  recovery, baseline exposure, color conversion), then `filmNegativeProcess`
+  unless the tool is in input color space. The app now uses a closer LibRaw
+  decode profile, but native equivalents for RawTherapee's own highlight
+  recovery methods and color-management placement are still pending.
 - The new density-domain film-negative API is not yet connected to the
   interactive preview or export pipeline. The power-law film negative inversion
   (RawTherapee-compatible) now serves as the primary inversion front-end for
@@ -228,8 +278,9 @@ The detailed order and acceptance criteria are maintained in the
   subtraction) are complete as standalone APIs but require a matched flat field
   and supplied base density. Import diagnostics (Slice B, complete as engine
   API), and manual rebate/roll-reuse base measurement (Slice C, complete as an
-  engine API) remain separate from the interactive workflow. Rebate auto-detection,
-  generic C-41 rendering, and stored capture profiles remain roadmap work.
+  engine API), and automatic rebate candidates (initial Slice D, complete as an
+  engine API) remain separate from the interactive workflow. Generic C-41
+  rendering and stored capture profiles remain roadmap work.
 - Still-image slider bindings and the initial GPU correction renderer are
   implemented with bounded latest-value-wins scheduling and display-rate
   coalescing (17 ms inter-frame delay). The actual Core Image renderer is
@@ -246,10 +297,13 @@ The detailed order and acceptance criteria are maintained in the
 - The representative RAF files remain outside version control. Their compact
   RawPy hashes are committed, so local runs with `sample-raw/` prove exact
   equivalence; CI compiles and exercises non-corpus decoder contracts.
-- Half-resolution native RAW decode performance is effectively equal to RawPy.
-  Full-resolution native decode is currently about 19.7% slower because the
-  bridge and Swift ownership boundary copy the approximately 241 MB output
-  twice. See the benchmark report before changing this path.
+- Half-resolution and full-resolution native RAW decode performance is effectively
+  equal to RawPy on current hardware (M4 Pro, 14 cores). The C bridge uses mmap I/O
+  instead of buffered `fopen` and the `fsc_decode_raw_direct` path eliminates the
+  C-side malloc + BGR→RGB swizzle copy; the BGR→RGB conversion now runs in a single
+  pass during `[UInt16]` creation in Swift. Full-resolution decode was previously
+  19.7% slower due to a double-copy bridge design that has since been removed.
+  See the benchmark report for current numbers.
 - Live camera preview works only when macOS exposes the DSLR or capture adapter
   as an AVFoundation video device. Many DSLRs require a vendor SDK or tethering
   adapter for live view.
@@ -259,7 +313,7 @@ The detailed order and acceptance criteria are maintained in the
   complete historical crop/perspective/dust workflow until the retirement gates
   are complete.
 
-The native test suite currently contains **160 tests** across 14 test files,
+The native test suite currently contains **176 tests** across 14 test files,
 all passing in the latest local run.
 
 ## Completed Native Features (newly added)
@@ -271,7 +325,10 @@ all passing in the latest local run.
   16-bit RGB output, explicitly labelled as processed rather than camera RAW.
 - ExportManager actor with sequential and parallel (`exportBatch`) modes,
   cancellation propagation, per-file error reporting, and partial-file cleanup
-  on failure. Memory-bounded concurrency heuristic based on system physical
+  on failure. The app-level Export All path intentionally uses the sequential
+  lazy-decode mode so it never retains the whole processed batch in memory;
+  `exportBatch` remains available and tested for callers that already hold a
+  bounded request set. Memory-bounded concurrency heuristic based on system physical
   memory and active processor count.
 - Export inspector section in the SwiftUI UI: format picker, JPEG quality
   slider, TIFF compression picker, frame-percent slider, aspect-ratio preset
@@ -330,8 +387,8 @@ Work should proceed in this order:
    19 export tests covering all four formats, round-trip decode, batch
    parallelism, cancellation, frame/aspect ratio, and JSON coding.
 9. Continue the film-specific camera-scan track from the completed engine-only
-   manual/rebate base selection and roll-level reuse API toward UI region
-   picking, automatic rebate estimation, and a generic C-41 density-to-display
+   manual/rebate base selection and roll-level reuse API plus initial automatic
+   rebate candidates toward UI region picking and a generic C-41 density-to-display
    render; keep each stage separate and testable. Slice A (capture
    normalization), Slice B (linear-capture diagnostics), and the first Slice C
    engine API are complete as standalone engine APIs. RawTherapee-compatible
@@ -404,7 +461,7 @@ on-disk output:
 | Source | File | Format prefix | Disciplines |
 |---|---|---|---|
 | Swift `LogFile` | `Logging.swift` | Custom (`[Import]`, `[Decode]`) | Import lifecycle, decode events, errors |
-| C bridge `FSC_LOG` | `CLibRawShim.c` | `[FSC-RAW]` | LibRaw init, file open, unpack, dcraw process, memory image, allocation, free |
+| C bridge `FSC_LOG` | `CLibRawShim.c` | `[FSC-RAW]` | LibRaw init, file open, unpack, dcraw process, memory image, allocation, free, thumbnail extraction. Gated on `#ifdef DEBUG` in release builds. |
 | Apple `OSLog` | Various | N/A (system log) | Import, Decode, Export, StillPreview, Signpost categories |
 
 ### Timestamp format
@@ -426,15 +483,18 @@ chronologically.
 | `Decoding started` | Either standard or RAW decoding began. |
 | `Decode complete` | Decoding finished with pixel dimensions and channel count. |
 | `Decode failed` | Decoding failed with an error message. |
-| `[FSC-RAW] decode_raw start` | The C bridge began a LibRaw decode. |
-| `[FSC-RAW] libraw_open_file OK` | LibRaw successfully opened and identified the file. |
+| `[FSC-RAW] decode_raw_direct start` | The C bridge began a LibRaw decode via the direct (mmap, single-copy) path. |
+| `[FSC-RAW] mmap OK` | The RAW file was memory-mapped. |
+| `[FSC-RAW] libraw_open_buffer OK` | LibRaw successfully opened the mmap'd data and identified the camera. |
 | `[FSC-RAW] params set; unpacking...` | Decode parameters were configured. |
 | `[FSC-RAW] libraw_unpack OK; dcraw processing...` | LibRaw unpacked the RAW data. |
 | `[FSC-RAW] libraw_dcraw_process OK; building memory image...` | LibRaw finished dcraw processing. |
 | `[FSC-RAW] make_mem_image OK` | A memory image was built with its dimensions and type. |
-| `[FSC-RAW] allocating N bytes` | The Swift-side pixel buffer was allocated. |
-| `[FSC-RAW] decode_raw SUCCESS` | The full decode completed with dimensions, channels, and pixel count. |
-| `[FSC-RAW] free_raw_image` | The pixel buffer was freed. |
+| `[FSC-RAW] decode_raw_direct SUCCESS` | The full decode completed with dimensions, channels, and pixel count. |
+| `[FSC-RAW] free_raw_direct` | The LibRaw processed image buffer was freed. |
+| `[FSC-RAW] extract_thumbnail start` | Thumbnail extraction began via `libraw_unpack_thumb`. |
+| `[FSC-RAW] extract_thumbnail SUCCESS` | The embedded JPEG was extracted with dimensions and byte size. |
+| `[FSC-RAW] free_thumbnail` | The thumbnail JPEG copy was freed. |
 
 ### Interpreting the log
 
@@ -448,30 +508,42 @@ in order:
 [Import] Import added: appending N new files (total will be N)
 [Import] loadSelection started: <filename>
 [Import] Decoding started: <filename>
-[FSC-RAW] decode_raw start: path=<filename> fullRes=0
-[FSC-RAW] libraw_init OK
-[FSC-RAW] libraw_open_file OK: <camera make>
+[FSC-RAW] extract_thumbnail start: path=<filename>
+[FSC-RAW] mmap OK: N bytes
+[FSC-RAW] libraw_open_buffer OK: <camera make>
+[FSC-RAW] extract_thumbnail SUCCESS: WxH JPEG N bytes
+[FSC-RAW] free_thumbnail: 0x... (N bytes)
+  (preview appears immediately from embedded JPEG)
+[FSC-RAW] decode_raw_direct start: path=<filename> fullRes=0
+[FSC-RAW] mmap OK: N bytes
+[FSC-RAW] libraw_open_buffer OK: <camera make>
 [FSC-RAW] params set; unpacking...
 [FSC-RAW] libraw_unpack OK; dcraw processing...
 [FSC-RAW] libraw_dcraw_process OK; building memory image...
 [FSC-RAW] make_mem_image OK: WxH type=2 bits=16 colors=3
-[FSC-RAW] allocating N bytes for N pixels
-[FSC-RAW] decode_raw SUCCESS: WxH 3ch N pixels cdesc=RGBG
+[FSC-RAW] decode_raw_direct SUCCESS: WxH 3ch N pixels cdesc=RGBG
 [Decode] RAW decode started: <filename> fullRes=false
 [Decode] RAW decode complete: <filename> WxH color=RGBG libraw=0.21.4-Release
 [Import] Decode complete: <filename> WxH 3ch
-[FSC-RAW] free_raw_image: 0x... (N pixels)
+[FSC-RAW] free_raw_direct: 0x... (N pixels)
+  (RAW buffer swaps in, preview re-renders)
 ```
 
 **Warning signs:**
 - Duplicate `Import started` / `loadSelection started` for the same files within
   one second indicates a double-import bug.
-- A crash immediately after `free_raw_image` with no further log lines suggests
+- A crash immediately after `free_raw_direct` with no further log lines suggests
   a post-decode processing failure (e.g. median computation, preview render).
-- Missing `decode_raw SUCCESS` but present `decode_raw FAIL` indicates a LibRaw
-  error; the failure message includes the specific LibRaw error code.
-- Missing `free_raw_image` for a previously allocated image indicates a memory
+- Missing `decode_raw_direct SUCCESS` but present `decode_raw_direct FAIL`
+  indicates a LibRaw error; the failure message includes the specific LibRaw
+  error code.
+- Missing `free_raw_direct` for a previously allocated image indicates a memory
   leak in the C bridge.
+- `extract_thumbnail FAIL` followed by a successful `decode_raw_direct` is normal
+  for RAW files without embedded JPEG previews; the app falls back to the standard
+  decode path.
+- In release builds, FSC_LOG messages are absent; diagnostics rely on Swift-level
+  `[Import]`/`[Decode]` log events and OSLog.
 
 ## Development Rules
 

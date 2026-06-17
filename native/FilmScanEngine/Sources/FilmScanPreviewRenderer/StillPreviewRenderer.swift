@@ -3,42 +3,38 @@ import FilmScanEngine
 import Metal
 
 public final class StillPreviewRenderer: @unchecked Sendable {
-  private let context: CIContext
   private let source: CIImage
-  private let correctionKernel: CIKernel
   private let curveLUTLock = NSLock()
   private var curveLUTCache: [CurveLUTKey: CIImage] = [:]
+
+  nonisolated(unsafe) private static let sharedKernel: CIKernel? = {
+    CIKernel(source: correctionKernelSource)
+  }()
+  nonisolated(unsafe) private static let sharedContext: CIContext = {
+    let options: [CIContextOption: Any] = [
+      .cacheIntermediates: false,
+      .workingColorSpace: NSNull(),
+      .outputColorSpace: NSNull(),
+    ]
+    if let device = MTLCreateSystemDefaultDevice() {
+      return CIContext(mtlDevice: device, options: options)
+    }
+    return CIContext(options: [.useSoftwareRenderer: false] as [CIContextOption: Any])
+  }()
 
   public init?(image: UInt16Image) {
     guard
       let cgImage = image.makePreviewCGImage16(),
-      let kernel = CIKernel(source: Self.correctionKernelSource)
+      let kernel = Self.sharedKernel
     else {
       return nil
     }
 
-    if let device = MTLCreateSystemDefaultDevice() {
-      context = CIContext(
-        mtlDevice: device,
-        options: [
-          .cacheIntermediates: false,
-          .workingColorSpace: NSNull(),
-          .outputColorSpace: NSNull(),
-        ]
-      )
-    } else {
-      context = CIContext(
-        options: [
-          .useSoftwareRenderer: false,
-          .cacheIntermediates: false,
-          .workingColorSpace: NSNull(),
-          .outputColorSpace: NSNull(),
-        ]
-      )
-    }
     source = CIImage(cgImage: cgImage)
     correctionKernel = kernel
   }
+
+  private let correctionKernel: CIKernel
 
   public func render(parameters: ProcessingParameters, showOriginal: Bool) -> CGImage? {
     let oriented = orientedSource(parameters: parameters)
@@ -109,7 +105,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       output = corrected
     }
 
-    return context.createCGImage(
+    return Self.sharedContext.createCGImage(
       output,
       from: output.extent,
       format: .RGBA8,

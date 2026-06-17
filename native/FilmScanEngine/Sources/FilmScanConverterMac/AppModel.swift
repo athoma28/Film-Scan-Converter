@@ -16,6 +16,7 @@ final class AppModel: ObservableObject {
   }
   @Published private(set) var status = "Drop film scans into the window to begin."
   @Published private(set) var renderStats = RenderStats()
+  @Published private(set) var isShowingEmbeddedRawPreview = false
   @Published private(set) var exportParameters = ExportParameters()
   @Published private(set) var isExporting = false
   @Published private(set) var exportProgressCurrent = 0
@@ -37,14 +38,21 @@ final class AppModel: ObservableObject {
   private var previewSource: UInt16Image?
   private var previewRenderer: StillPreviewRenderer?
   private var loadTask: Task<Void, Never>?
+  private var rawSwapTask: Task<Void, Never>?
+  private var predecodeTask: Task<Void, Never>?
   private var renderTask: Task<Void, Never>?
   private var pendingRender: PreviewRenderRequest?
   private var renderLoopGeneration = 0
   private var lastSubmitTime: Date = .distantPast
   private var lastRenderEnd: ContinuousClock.Instant = .now
   private static let renderCoalesceInterval: Duration = .milliseconds(17)
-  private static let previewMaxDimension = 640
+  nonisolated private static let previewMaxDimension = 640
   private static let previewCacheLimit = 2
+  private static let predecodeLookaheadLimit = 1
+
+  var previewCacheSessionCount: Int {
+    previewCache.count
+  }
 
   private static let renderLog = OSLog(
     subsystem: "film.scan.converter", category: "StillPreview")
@@ -71,6 +79,7 @@ final class AppModel: ObservableObject {
 
   func loadSelection() {
     loadTask?.cancel()
+    rawSwapTask?.cancel()
     cancelRenderLoop()
     loadGeneration += 1
     let gen = loadGeneration
@@ -80,16 +89,20 @@ final class AppModel: ObservableObject {
       decodedImage = nil
       previewSource = nil
       previewRenderer = nil
+      isShowingEmbeddedRawPreview = false
+      cancelPredecode()
       status = "Drop film scans into the window to begin."
       return
     }
 
+    cancelPredecode()
     ImportLog.loadSelectionStarted(path: selection.lastPathComponent)
 
     previewImage = nil
     decodedImage = nil
     previewSource = nil
     previewRenderer = nil
+    isShowingEmbeddedRawPreview = false
     let key = settingsKey(selection)
     let hasStoredSettings = settingsByPath[key] != nil
     parameters = settingsByPath[key] ?? ProcessingParameters()
@@ -99,11 +112,70 @@ final class AppModel: ObservableObject {
       ImportLog.loadSelectionCacheHit(path: selection.lastPathComponent)
       applyCachedSession(cached, selection: selection)
       touchPreviewCache(key)
+      scheduleLookaheadPredecode(after: selection)
+      return
+    }
+
+    ImportLog.loadSelectionDecodeStarted(path: selection.lastPathComponent)
+
+    let isRaw = FileDropPolicy.rawExtensions.contains(selection.pathExtension.lowercased())
+
+    if isRaw, let thumbnail = try? RawImageDecoder.extractThumbnail(selection) {
+      let proxy = thumbnail.image.resizedToFit(maxDimension: Self.previewMaxDimension)
+      previewSource = proxy
+      previewRenderer = StillPreviewRenderer(image: proxy)
+      isShowingEmbeddedRawPreview = true
+      status = "Loading \(selection.lastPathComponent)..."
+      if hasStoredSettings {
+        populateFilmNegativeMedians()
+      }
+      cacheCurrentSession(for: selection)
+      scheduleRender(immediate: true)
+      scheduleLookaheadPredecode(after: selection)
+
+      rawSwapTask = Task { [weak self] in
+        guard let self else { return }
+        do {
+          let decoded = try await Task.detached(priority: .userInitiated) {
+            return try RawImageDecoder.decode(selection, profile: .rawTherapeeCameraScan).image
+          }.value
+          try Task.checkCancellation()
+          guard gen == self.loadGeneration else { return }
+          guard self.selection == selection else { return }
+          ImportLog.loadSelectionDecodeComplete(
+            path: selection.lastPathComponent,
+            width: decoded.width,
+            height: decoded.height,
+            channels: decoded.channels
+          )
+          decodedImage = decoded
+          isShowingEmbeddedRawPreview = false
+          let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
+          previewSource = proxy
+          previewRenderer = StillPreviewRenderer(image: proxy)
+          if hasStoredSettings {
+            populateFilmNegativeMedians()
+          } else {
+            applyAutomaticFilmClassification(from: proxy)
+          }
+          cacheCurrentSession(for: selection)
+          scheduleRender(immediate: true)
+        } catch is CancellationError {
+          return
+        } catch {
+          guard gen == self.loadGeneration else { return }
+          guard self.selection == selection else { return }
+          ImportLog.loadSelectionDecodeFailed(
+            path: selection.lastPathComponent,
+            error: error.localizedDescription
+          )
+          status = "Unable to decode \(selection.lastPathComponent): \(error.localizedDescription)"
+        }
+      }
       return
     }
 
     status = "Decoding \(selection.lastPathComponent)..."
-    ImportLog.loadSelectionDecodeStarted(path: selection.lastPathComponent)
 
     loadTask = Task { [weak self] in
       guard let self else {
@@ -115,7 +187,7 @@ final class AppModel: ObservableObject {
           {
             return try StandardImageDecoder.decode(selection)
           }
-          return try RawImageDecoder.decode(selection).image
+          return try RawImageDecoder.decode(selection, profile: .rawTherapeeCameraScan).image
         }.value
         try Task.checkCancellation()
         guard gen == self.loadGeneration else {
@@ -136,6 +208,7 @@ final class AppModel: ObservableObject {
         let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
         previewSource = proxy
         previewRenderer = StillPreviewRenderer(image: proxy)
+        isShowingEmbeddedRawPreview = false
         if hasStoredSettings {
           populateFilmNegativeMedians()
         } else {
@@ -143,6 +216,7 @@ final class AppModel: ObservableObject {
         }
         cacheCurrentSession(for: selection)
         scheduleRender(immediate: true)
+        scheduleLookaheadPredecode(after: selection)
       } catch is CancellationError {
         ImportLog.loadSelectionCancelled(path: selection.lastPathComponent)
         return
@@ -544,10 +618,7 @@ final class AppModel: ObservableObject {
       return cached.decodedImage
     }
     return try await Task.detached(priority: .userInitiated) {
-      if StandardImageDecoder.supportedExtensions.contains(url.pathExtension.lowercased()) {
-        return try StandardImageDecoder.decode(url)
-      }
-      return try RawImageDecoder.decode(url).image
+      return try Self.decodeImage(url)
     }.value
   }
 
@@ -604,16 +675,90 @@ final class AppModel: ObservableObject {
     scheduleRender(immediate: true)
   }
 
+  private func scheduleLookaheadPredecode(after selection: URL) {
+    guard Self.predecodeLookaheadLimit > 0, !isExporting else {
+      return
+    }
+    guard let currentIndex = files.firstIndex(of: selection) else {
+      return
+    }
+
+    let candidates = files.dropFirst(currentIndex + 1).prefix(Self.predecodeLookaheadLimit)
+    guard let target = candidates.first else {
+      return
+    }
+    let targetKey = settingsKey(target)
+    guard previewCache[targetKey] == nil else {
+      return
+    }
+
+    predecodeTask?.cancel()
+    ImportLog.loadSelectionDecodeStarted(path: "predecode \(target.lastPathComponent)")
+    predecodeTask = Task { [weak self] in
+      guard let self else { return }
+      do {
+        let session = try await Task.detached(priority: .utility) { () -> CachedPreviewSession? in
+          let decoded = try Self.decodeImage(target)
+          let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
+          guard let renderer = StillPreviewRenderer(image: proxy) else {
+            return nil
+          }
+          return CachedPreviewSession(
+            decodedImage: decoded,
+            previewSource: proxy,
+            previewRenderer: renderer
+          )
+        }.value
+        try Task.checkCancellation()
+        guard let session else {
+          return
+        }
+
+        guard !Task.isCancelled else { return }
+        guard self.selection == selection, self.previewCache[targetKey] == nil else {
+          return
+        }
+
+        if self.settingsByPath[targetKey] == nil {
+          self.settingsByPath[targetKey] = Self.automaticallyClassifiedParameters(
+            base: ProcessingParameters(),
+            image: session.previewSource
+          )
+        }
+        self.cacheSession(session, for: target)
+      } catch is CancellationError {
+        return
+      } catch {
+        ImportLog.loadSelectionDecodeFailed(
+          path: "predecode \(target.lastPathComponent)",
+          error: error.localizedDescription
+        )
+      }
+    }
+  }
+
+  private func cancelPredecode() {
+    predecodeTask?.cancel()
+    predecodeTask = nil
+  }
+
   private func cacheCurrentSession(for selection: URL) {
     guard let decodedImage, let previewSource, let previewRenderer else {
       return
     }
-    let key = settingsKey(selection)
-    previewCache[key] = CachedPreviewSession(
-      decodedImage: decodedImage,
-      previewSource: previewSource,
-      previewRenderer: previewRenderer
+    cacheSession(
+      CachedPreviewSession(
+        decodedImage: decodedImage,
+        previewSource: previewSource,
+        previewRenderer: previewRenderer
+      ),
+      for: selection
     )
+  }
+
+  private func cacheSession(_ session: CachedPreviewSession, for url: URL) {
+    let key = settingsKey(url)
+    previewCache[key] = session
     touchPreviewCache(key)
     while previewCacheOrder.count > Self.previewCacheLimit {
       let evicted = previewCacheOrder.removeFirst()
@@ -691,14 +836,14 @@ final class AppModel: ObservableObject {
       let renderStart = Date()
       let submitTime = request.submitTime
 
-      let preview: CGImage? = await Task.detached(priority: .userInitiated) { () -> CGImage? in
+      let result: RenderedPreview? = await Task.detached(priority: .userInitiated) { () -> RenderedPreview? in
         if let renderer = request.renderer,
           let rendered = renderer.render(
             parameters: request.parameters,
             showOriginal: request.showOriginal
           )
         {
-          return rendered
+          return RenderedPreview(cgImage: rendered, rendererName: "GPU")
         }
         let rendered =
           request.showOriginal
@@ -710,7 +855,10 @@ final class AppModel: ObservableObject {
             image: request.source,
             parameters: request.parameters
           )
-        return rendered.makePreviewCGImage()
+        guard let preview = rendered.makePreviewCGImage() else {
+          return nil
+        }
+        return RenderedPreview(cgImage: preview, rendererName: "CPU")
       }.value
 
       let renderDuration = Date().timeIntervalSince(renderStart) * 1000
@@ -732,10 +880,11 @@ final class AppModel: ObservableObject {
       guard selection == request.selection,
         parameters == request.parameters,
         showOriginal == request.showOriginal,
-        let preview
+        let result
       else {
         continue
       }
+      let preview = result.cgImage
 
       let totalLatency = Date().timeIntervalSince(submitTime) * 1000
       var stats = renderStats
@@ -754,7 +903,7 @@ final class AppModel: ObservableObject {
 
       previewImage = NSImage(cgImage: preview, size: .zero)
       status =
-        "\(request.selection.lastPathComponent) • \(preview.width)×\(preview.height) GPU preview"
+        "\(request.selection.lastPathComponent) • \(preview.width)×\(preview.height) \(result.rendererName) preview"
 
       lastRenderEnd = ContinuousClock.now
       guard pendingRender == nil else {
@@ -787,6 +936,13 @@ final class AppModel: ObservableObject {
   private func settingsKey(_ url: URL) -> String {
     url.standardizedFileURL.path
   }
+
+  nonisolated private static func decodeImage(_ url: URL) throws -> UInt16Image {
+    if StandardImageDecoder.supportedExtensions.contains(url.pathExtension.lowercased()) {
+      return try StandardImageDecoder.decode(url)
+    }
+    return try RawImageDecoder.decode(url, profile: .rawTherapeeCameraScan).image
+  }
 }
 
 private struct PreviewRenderRequest: Sendable {
@@ -798,8 +954,13 @@ private struct PreviewRenderRequest: Sendable {
   let submitTime: Date
 }
 
-private struct CachedPreviewSession {
+private struct CachedPreviewSession: Sendable {
   let decodedImage: UInt16Image
   let previewSource: UInt16Image
   let previewRenderer: StillPreviewRenderer
+}
+
+private struct RenderedPreview: Sendable {
+  let cgImage: CGImage
+  let rendererName: String
 }

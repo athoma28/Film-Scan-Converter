@@ -228,12 +228,20 @@ struct IntegratedCurvesView: View {
       let pt = points[idx]
       return AnyView(
         HStack(spacing: 6) {
-          labeledField("In", value: Int((pt.input * 255).rounded())) {
-            updatePointInput(at: idx, value: Double($0) / 255.0)
-          }
-          labeledField("Out", value: Int((pt.output * 255).rounded())) {
-            updatePointOutput(at: idx, value: Double($0) / 255.0)
-          }
+          labeledField(
+            "In",
+            value: Binding(
+              get: { Int((pt.input * 255).rounded()) },
+              set: { updatePointInput(at: idx, value: Double($0) / 255.0) }
+            )
+          )
+          labeledField(
+            "Out",
+            value: Binding(
+              get: { Int((pt.output * 255).rounded()) },
+              set: { updatePointOutput(at: idx, value: Double($0) / 255.0) }
+            )
+          )
         }
       )
     } else {
@@ -245,13 +253,13 @@ struct IntegratedCurvesView: View {
     }
   }
 
-  private func labeledField(_ label: String, value: Int, set: @escaping (Int) -> Void) -> some View {
+  private func labeledField(_ label: String, value: Binding<Int>) -> some View {
     HStack(spacing: 2) {
       Text(label)
         .font(.system(size: 8))
         .foregroundStyle(.tertiary)
         .frame(width: 16, alignment: .leading)
-      TextField("", value: Binding(get: { value }, set: set), format: .number)
+      TextField("", value: value, format: .number)
         .textFieldStyle(.plain)
         .font(.caption)
         .monospacedDigit()
