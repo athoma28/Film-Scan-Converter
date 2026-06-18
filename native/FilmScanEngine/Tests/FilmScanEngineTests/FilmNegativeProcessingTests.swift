@@ -5,6 +5,17 @@ import Testing
 
 @Suite("Film-specific negative processing")
 struct FilmNegativeProcessingTests {
+  @Test("Rec.2020 working-space matrices round trip linear sRGB")
+  func rec2020WorkingSpaceRoundTrip() {
+    let source = (red: 0.82, green: 0.31, blue: 0.07)
+    let working = FilmNegativeProcessing.linearSRGBToRec2020(
+      red: source.red, green: source.green, blue: source.blue)
+    let restored = FilmNegativeProcessing.linearRec2020ToSRGB(
+      red: working.red, green: working.green, blue: working.blue)
+    #expect(abs(restored.red - source.red) < 0.000001)
+    #expect(abs(restored.green - source.green) < 0.000001)
+    #expect(abs(restored.blue - source.blue) < 0.000001)
+  }
   @Test("Default normalization uses zero black level and preserves measured ratios")
   func defaultNormalization() {
     let image = UInt16Image(width: 1, height: 1, channels: 3, pixels: [10_000, 20_000, 30_000])
@@ -633,6 +644,112 @@ struct FilmNegativeProcessingTests {
       scene,
       [pow(10, 0.1), 1.0, pow(10, -0.1)]
     )
+  }
+
+  @Test("Display renderer is identity for bounded scene-linear input by default")
+  func displayRendererNeutralIdentity() {
+    let scene: [Double] = [0, 0.1, 0.25, 0.5, 0.75, 1.0]
+
+    let display = FilmNegativeProcessing.renderDisplay(sceneLinear: scene)
+
+    assertEqual(display, scene)
+  }
+
+  @Test("Display renderer applies exposure and BGR white balance")
+  func displayRendererExposureAndWhiteBalance() {
+    let scene: [Double] = [0.05, 0.05, 0.05]
+    let parameters = DisplayRenderingParameters(
+      exposureEV: 1,
+      whiteBalance: BGRChannelValues(blue: 0.5, green: 1, red: 2)
+    )
+
+    let display = FilmNegativeProcessing.renderDisplay(
+      sceneLinear: scene,
+      parameters: parameters
+    )
+
+    assertEqual(display, [0.05, 0.1, 0.2])
+  }
+
+  @Test("Reinhard display tone map is monotonic")
+  func displayRendererToneMapMonotonicity() {
+    let scene: [Double] = [0, 0, 0, 0.25, 0.5, 1, 1, 2, 4]
+    let parameters = DisplayRenderingParameters(toneMap: .reinhard)
+
+    let display = FilmNegativeProcessing.renderDisplay(
+      sceneLinear: scene,
+      parameters: parameters
+    )
+
+    for channel in 0..<3 {
+      #expect(display[channel] < display[3 + channel])
+      #expect(display[3 + channel] < display[6 + channel])
+    }
+  }
+
+  @Test("Reinhard display tone map rolls highlights into finite display range")
+  func displayRendererHighlightRolloff() {
+    let scene: [Double] = [1, 2, 100]
+    let parameters = DisplayRenderingParameters(toneMap: .reinhard)
+
+    let display = FilmNegativeProcessing.renderDisplay(
+      sceneLinear: scene,
+      parameters: parameters
+    )
+
+    #expect(display.allSatisfy { $0 >= 0 && $0 < 1 })
+    #expect(display[0] == 0.5)
+    #expect(display[1] == 2.0 / 3.0)
+    #expect(display[2] == 100.0 / 101.0)
+  }
+
+  @Test("Display renderer limits combined exposure and white-balance noise gain")
+  func displayRendererLimitsNoiseGain() {
+    let scene: [Double] = [0.01, 0.01, 0.01]
+    let parameters = DisplayRenderingParameters(
+      exposureEV: 3,
+      whiteBalance: BGRChannelValues(blue: 100, green: 100, red: 100),
+      maximumSceneGain: 4
+    )
+
+    let display = FilmNegativeProcessing.renderDisplay(
+      sceneLinear: scene,
+      parameters: parameters
+    )
+
+    assertEqual(display, [0.04, 0.04, 0.04])
+  }
+
+  @Test("Display renderer sanitizes non-finite and negative scene values")
+  func displayRendererProducesFiniteOutput() {
+    let scene: [Double] = [.nan, .infinity, -.infinity, -1, 1, 10]
+    let parameters = DisplayRenderingParameters(toneMap: .reinhard)
+
+    let display = FilmNegativeProcessing.renderDisplay(
+      sceneLinear: scene,
+      parameters: parameters
+    )
+
+    #expect(display.allSatisfy { $0.isFinite && $0 >= 0 && $0 <= 1 })
+    #expect(display[0] == 0)
+    #expect(display[1] == 1)
+    #expect(display[2] == 0)
+    #expect(display[3] == 0)
+  }
+
+  @Test("Display rendering parameters round trip through JSON")
+  func displayRenderingParametersCodableRoundTrip() throws {
+    let parameters = DisplayRenderingParameters(
+      exposureEV: -0.75,
+      whiteBalance: BGRChannelValues(blue: 1.1, green: 0.95, red: 1.25),
+      toneMap: .reinhard,
+      maximumSceneGain: 6
+    )
+
+    let encoded = try JSONEncoder().encode(parameters)
+    let decoded = try JSONDecoder().decode(DisplayRenderingParameters.self, from: encoded)
+
+    #expect(decoded == parameters)
   }
 
   private func assertEqual(_ actual: [Double], _ expected: [Double], tolerance: Double = 1e-12) {

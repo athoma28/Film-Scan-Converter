@@ -18,8 +18,8 @@
   unbounded detached-task backlog.
 - The kernel is display-only. The existing 16-bit CPU correction path remains
   the authoritative reference and fallback.
-- The latest 500-change 1080×720 runtime benchmark measured 2.73 ms median and
-  3.74 ms p95 for the correction kernel plus `CGImage` render on the
+- The latest 500-change 1080×720 runtime benchmark measured 2.66 ms median and
+  3.37 ms p95 for the correction kernel plus `CGImage` render on the
   development machine.
 - **Stage 2 GPU-vs-CPU equivalence is verified.** The model and production
   renderer are compared against `FilmProcessing.correctedPreview` across the
@@ -31,7 +31,7 @@
 - **The production-renderer Stage 3 performance gate is met.** Display-rate coalescing is implemented
   with a 17 ms inter-frame delay, capping renders at ~60 Hz. A 500-update GPU
   render burst benchmark across current-pipeline parameter combinations,
-  including curves and color wheels, measured 3.74 ms p95 at 1080×720 in the
+  including curves and color wheels, measured 3.37 ms p95 at 1080×720 in the
   latest local run. Scheduling contract tests verify coalescing, latest-value-wins,
   cancellation, and bounded backlog.
 - A Metal-backed preview surface and the idle authoritative preview remain
@@ -171,9 +171,9 @@ does not by itself make the CPU renderer real-time.
   17 ms inter-frame delay, latest-value-wins bounded to 1 in-flight + 1 pending.
 - ~~Benchmark the representative RAF corpus.~~ Done. The 500-update 1080×720
   production-renderer burst benchmark, including curves and color wheels,
-  measured 3.74 ms p95 in the latest local run.
+  measured 3.37 ms p95 in the latest local run.
 - ~~Require 95th-percentile update latency below 33 ms with no render backlog
-  after 500 rapid parameter changes.~~ Verified at 3.74 ms p95 in the latest
+  after 500 rapid parameter changes.~~ Verified at 3.37 ms p95 in the latest
   local run.
   Scheduling contract tests confirm no unbounded backlog and latest-value-wins.
 
@@ -196,7 +196,7 @@ does not by itself make the CPU renderer real-time.
   combinations.~~ Done (2,655 direct production-renderer comparisons,
   maximum difference 2/255).
 - ~~Benchmark drag latency on representative standard images and RAF files.~~ Done.
-  The latest 500-update production-renderer burst benchmark measured 3.74 ms
+  The latest 500-update production-renderer burst benchmark measured 3.37 ms
   p95 at 1080×720.
 - Add a UI smoke test that drags each slider and confirms visible preview
   changes once reliable app automation is available.

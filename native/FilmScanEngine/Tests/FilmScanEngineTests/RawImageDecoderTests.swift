@@ -105,6 +105,47 @@ struct RawImageDecoderTests {
   }
 
   @Test(
+    "RawTherapee camera-scan preset preserves representative RAF tone and chroma",
+    .enabled(if: rawCorpusAvailable, "sample-raw corpus unavailable; camera-scan quality guard skipped")
+  )
+  func rawTherapeeCameraScanQualityGuard() throws {
+    let rawURL = repositoryRoot.appending(path: "sample-raw/DSCF2422.RAF")
+    let result = try RawImageDecoder.decode(rawURL, profile: .rawTherapeeCameraScan)
+    #expect(result.isoSpeed > 0)
+    #expect(result.processing.contains(.isoSharpen) || result.processing.contains(.isoDenoise))
+    let decoded = result.image
+    let proxy = decoded.resizedToFit(maxDimension: 720)
+    var filmNegative = FilmNegativeParams.colourNegative
+    filmNegative.measuredMedians = FilmNegativeProcessing.computeMedians(image: proxy)
+    let corrected = FilmProcessing.correctedPreview(
+      image: proxy,
+      parameters: ProcessingParameters(
+        filmType: .colourNegative,
+        filmNegativeParams: filmNegative
+      )
+    )
+
+    let pixelCount = corrected.width * corrected.height
+    var clippedPixels = 0
+    var chromaSum = 0.0
+    for pixelIndex in 0..<pixelCount {
+      let base = pixelIndex * 3
+      let channels = corrected.pixels[base..<(base + 3)]
+      let minimum = Double(channels.min() ?? 0)
+      let maximum = Double(channels.max() ?? 0)
+      if minimum == 0 || maximum == 65_535 {
+        clippedPixels += 1
+      }
+      chromaSum += maximum > 0 ? (maximum - minimum) / maximum : 0
+    }
+
+    let clippedFraction = Double(clippedPixels) / Double(pixelCount)
+    let meanChroma = chromaSum / Double(pixelCount)
+    #expect(clippedFraction < 0.15, "clipped pixel fraction: \(clippedFraction)")
+    #expect(meanChroma > 0.05, "mean chroma: \(meanChroma)")
+  }
+
+  @Test(
     "Representative RAF embedded thumbnail decodes into a 3-channel preview image",
     .enabled(if: rawCorpusAvailable, "sample-raw corpus unavailable; embedded thumbnail test skipped")
   )

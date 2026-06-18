@@ -7,9 +7,12 @@ The native application is the primary product. It provides:
 
 - Drag-and-drop import of RAW and standard image files.
 - Per-file correction controls: film mode (color negative, B&W negative, slide),
-  RawTherapee-compatible film negative power-law inversion with presets,
+  film-negative inversion using RawTherapee's exponent model and presets,
   orientation, white balance, exposure, shadows, highlights, saturation,
   RGB tone curves, highlight/midtone/shadow color wheels.
+- Camera-scan RAW processing with ISO-tier noise/detail filtering. RCD is an
+  engine capability for explicitly requested full-resolution Bayer decode; the
+  current app RAW path uses half-size decode and therefore bypasses RCD.
 - Interactive GPU-accelerated preview that updates during slider drags.
 - Export to TIFF (16-bit, optional LZW), JPEG (8-bit, configurable quality),
   PNG (16-bit lossless), and DNG (processed 16-bit RGB).
@@ -28,7 +31,9 @@ The native application is the primary product. It provides:
 5. Use the original/corrected comparison toggle to evaluate your adjustments.
 6. Set export options (format, frame, aspect ratio) and choose a destination
    folder.
-7. Click Export Selected or Export All to write processed full-resolution images.
+7. Click Export Selected or Export All to write processed images. Standard
+   images retain source resolution; RAW files currently export from the app's
+   half-size LibRaw decode.
 
 The native app does not yet provide automatic crop detection, perspective
 correction, or dust handling. Those workflows still require the legacy Python

@@ -17,20 +17,21 @@ Cocoa UI.
 The interactive still-preview foundation, histogram equalisation, curves,
 three-way color wheels, RawTherapee-compatible startup inversion, automatic
 film-kind classification, and export are complete. The current product priority
-is the film-specific camera-scan track: manual region wiring or automatic
-rebate estimation, then base density + color-space conversion and flat-field
-calibration. Contour/crop detection, perspective warp, and dust handling remain
-later replacement gates.
+is app wiring for manual/automatic rebate selection and the completed standalone
+density/display contracts, followed by capture/stock/roll profile separation.
+Contour/crop detection, perspective warp, and dust handling remain later
+replacement gates.
 
 The TIFF/JPEG/PNG/DNG export contract is implemented with individual and
 batch-all workflows, cancellation, partial-file cleanup, and 19 focused
 format/manager tests. The app-level Export All path intentionally uses lazy
 sequential decode/classify/process/write for unloaded batch files so large
-import lists do not require all full-resolution decodes to remain resident.
+import lists do not require all decoded working buffers to remain resident.
 `ExportManager.exportBatch()` remains available for callers that already hold
 a bounded prebuilt request set.
-The native app can export processed full-resolution images with applied
-corrections, frame, and aspect ratio.
+The native app exports processed images with applied corrections, frame, and
+aspect ratio. Standard images retain source resolution; RAW exports currently
+use the app's half-size LibRaw decode.
 
 Completed foundations:
 
@@ -76,20 +77,17 @@ Completed foundations:
 
 The immediate goal is to continue the film-specific camera-scan track from
 startup classification, engine-only manual rebate base measurement/roll reuse
-(Slice C), and initial engine-only automatic rebate candidates (Slice D) toward
-manual/automatic UI region selection or density-to-display rendering. Nothing
+(Slice C), automatic rebate candidates (Slice D), density-to-scene conversion
+(Slice E), and scene-to-display rendering (Slice F) toward manual/automatic UI
+region selection and app pipeline integration. Nothing
 later in this roadmap should be interpreted as implemented unless the status
 page says it is.
 
 A parallel film-specific processing track has started from the
 [camera-scan film-processing research brief](../film-processing-research.md).
-Slices A (capture normalization), B (linear-capture diagnostics), and the first
-engine-only C API (manual rebate base measurement, roll profile storage, and
-base-density precedence resolution) are complete as standalone engine APIs. The
-first engine-only Slice D API returns deterministic edge rebate candidates with
-measured base density and confidence. Startup film-kind classification is
-connected to preview and export; the density-domain Slice A/C/D APIs are not yet
-connected to preview or export.
+Slices A through F are complete as standalone APIs. Startup film-kind
+classification is connected to preview and export; rebate selection and the
+density/display pipeline are not yet connected to preview or export.
 
 ### Native Export Contract — Complete
 
@@ -102,7 +100,7 @@ connected to preview or export.
    tests.~~
 5. ~~Add memory-bounded batch export and deterministic progress/error reporting.~~
 
-### Next Implementation Step: Manual Region UI Or Automatic Rebate Estimation
+### Next Implementation Step: Region UI Or Profile Separation
 
 Direct Metal-backed display and idle authoritative rendering remain deferred
 Stage 4 preview work.
@@ -509,7 +507,7 @@ user input, replace the relevant traps with typed errors and test them.
 | C1. Startup film-kind classification | Complete in engine and app | Classify new imports as color negative, B&W negative, or slide and initialize the matching RawTherapee preset without overwriting existing per-file settings. | Synthetic orange-mask, low-chroma, and positive-slide cases; app export coverage proving unloaded files receive automatic settings during lazy batch export. |
 | D. Automatic rebate estimation | Initial engine API complete | Detect edge candidate rebate regions and return base density plus confidence; never silently override a stronger roll/frame base. UI selection and overlay geometry remain deferred. | Synthetic top/left border fixtures, borderless rejection, and explicit precedence below measured roll/frame base. Remaining coverage: rotated frames, dust contamination, and deterministic overlay geometry. |
 | E. Generic C-41 scene estimate | Complete as standalone engine API | Per-channel density slopes/offsets producing scene-linear positive values via `genericC41SceneEstimate()`, exposure normalization via median-green reciprocal (`normalizeSceneExposure()`), and a composed `densityToSceneLinear()` pipeline. | Identity/default profile, monotonicity, channel isolation, extreme density bounds, JSON round-trip, and composed pipeline tests. Focused suite adds 9 tests; all density-domain slices now link into one end-to-end density-to-scene path. |
-| F. Shared display renderer and noise protection | Planned | Stable exposure, white balance, tone map, and bounded noise-safe highlight/shadow behavior. | Neutral identity, monotonic tone curve, finite output, highlight rolloff, noise-gain limiting, and CPU/GPU tolerance before UI integration. |
+| F. Shared display renderer and noise protection | CPU/GPU contract complete | `renderDisplay()` defines the authoritative Double path. `SceneDisplayRenderer` applies the same exposure, per-channel BGR white balance, linear/Reinhard tone maps, finite bounds, and gain limit through a dedicated float Core Image/Metal kernel. App integration remains deferred. | Seven CPU tests plus two production-kernel tests cover identity, channel behavior, monotonicity, finite output, highlight rolloff, gain limiting, Codable round-trip, and CPU/GPU tolerance. The GPU grid stays within 0.000002 across 60 channel comparisons. |
 | G. Capture, stock, and roll profiles | Planned | Separate Codable profile types and precedence rules for capture setup, film stock, and roll-specific corrections. | Schema/version migration, missing-profile fallback, precedence, round-trip serialization, and proof that changing capture profile does not mutate stock curves. |
 | H. Per-stock curves and calibrated matrices | Planned | Monotonic inverse-density LUTs and fitted density/display matrices, initially for Portra 400, Portra 160, Ektar 100, and Gold 200. | LUT monotonicity, interpolation boundaries, held-out validation reports, matrix regularization bounds, and no regression to generic C-41 fallback. |
 | I. Optional residual 3D LUTs | Planned last | Blendable residual LUT after the physical pipeline is stable. | Identity LUT, interpolation boundaries, strength endpoints, held-out improvement, overfit rejection, and deterministic CPU/GPU agreement. |
@@ -552,11 +550,37 @@ This first Slice D ticket is engine-only:
 5. Synthetic tests cover top-border detection, vertical edge detection,
    borderless rejection, and precedence.
 
-Remaining out of scope: UI selection, overlay geometry, rotated-frame candidate
-search, dust-contaminated confidence tests, generic C-41 rendering, GPU kernels,
-and replacing the current preview inversion.
+Remaining out of scope for Slice D: UI selection, overlay geometry,
+rotated-frame candidate search, dust-contaminated confidence tests, GPU kernels,
+and replacing the current preview inversion. Generic C-41 rendering and the
+initial CPU display contract were completed separately in Slices E and F.
 
-#### Next Recommended Ticket: Manual/Automatic Region UI Or Density Rendering
+#### Completed Ticket: Shared Display Renderer CPU/GPU Contract (Slice F)
+
+Slice F now defines an authoritative CPU contract and a matched accelerated path:
+
+1. `DisplayRenderingParameters` stores exposure EV, per-channel BGR white
+   balance, tone-map selection, and a maximum combined scene gain.
+2. Linear mode preserves bounded scene-linear values under neutral parameters.
+3. Reinhard mode provides a monotonic shoulder for unbounded highlights.
+4. Negative and non-finite inputs produce deterministic finite output in the
+   display range.
+5. Combined exposure and white-balance gain is explicitly capped before tone
+   mapping so thin-negative noise cannot be amplified without bound.
+6. Seven focused tests cover identity, channel behavior, monotonicity, highlight
+   rolloff, finite bounds, gain limiting, and serialization.
+7. `SceneDisplayRenderer` uploads float scene-linear pixels without color-space
+   conversion and applies the same transform in a dedicated Core Image kernel.
+8. Two production-kernel tests verify finite invalid-input behavior and a
+   four-configuration parameter grid within 0.000002 of the Double CPU result
+   across 60 channel comparisons.
+
+Remaining out of scope for Slice F: app controls, density-pipeline integration,
+native RawTherapee highlight recovery, and replacing the current preview
+inversion. The separate power-law front-end now places inversion in linear
+Rec.2020 after sRGB decode; direct camera-to-Rec.2020 conversion remains absent.
+
+#### Next Recommended Ticket: Region UI Or Profile Separation
 
 Choose one narrow follow-up:
 
@@ -565,8 +589,8 @@ Choose one narrow follow-up:
    profile;
 2. expose the completed Slice D candidate list as selectable app overlay
    geometry without automatically overriding roll/frame measurements; or
-3. start the generic C-41 density-to-display renderer with CPU contracts before
-   adding preview acceleration.
+3. start Slice G by separating capture, stock, and roll profile schemas and
+   precedence before connecting the density pipeline to preview/export.
 
 The authoritative CPU implementation must define every stage first. Preview
 GPU implementations may follow only after identity, parameter-grid, and
@@ -807,17 +831,22 @@ Git push
     linear-input diagnostics (Slice B), manual rebate base measurement with
     roll-profile storage and precedence resolution (Slice C), initial
     automatic rebate candidates with confidence (Slice D), and generic C-41
-    density-to-scene-linear renderer (Slice E) are complete as
-    standalone engine APIs. Startup film-kind classification initializes new
+    density-to-scene-linear renderer (Slice E), and matched CPU/Core Image
+    display rendering with bounded scene gain (Slice F) are complete as
+    standalone APIs.
+    Startup film-kind classification initializes new
     files as color negative, B&W negative, or slide with matching
     RawTherapee-compatible presets. The RawTherapee-compatible power-law
-    inversion front-end is connected to preview and export, and app RAW
-    imports/exports now use a RawTherapee camera-scan decode profile with
-    linear output, disabled auto-bright/exposure boost, and LibRaw highlight
-    reconstruction while the frozen RawPy decode profile remains available for
-    exact fixture/benchmark parity. Continue with shared display rendering
-    (Slice F), native RawTherapee-style highlight/noise protection, or UI region
-    picking; capture/stock profiles and per-stock curves follow.
+    inversion front-end is connected to preview and export through the
+    app-facing camera-scan decode profile. It now includes the `1/24` output
+    reference, transfer handling, and both bundled Film Negative tone curves;
+    the RawPy-compatible profile remains frozen for fixtures. Linear Rec.2020
+    inversion placement, an RCD callback for explicitly requested
+    full-resolution Bayer decode, and bounded ISO-tier filters are implemented.
+    The app still requests half-size RAW decode, and direct camera-to-Rec.2020
+    conversion plus exact RawTherapee noise kernels remain. Continue
+    with UI region picking, Slice G profile separation, or native RawTherapee-style
+    noise/highlight processing; per-stock curves follow.
 9. **Phase 1.3 and 1.2 cont.** — Contour detection + minAreaRect (OpenCV
    C++ interop), perspective warp (DLT homography + bilinear warp).
 10. **Phase 1.8–1.9** — Dust detection and Telea FMM inpainting.

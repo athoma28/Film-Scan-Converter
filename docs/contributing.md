@@ -17,11 +17,11 @@ starting native work, read
 source for the active step, verified progress, limitations, and ordered next
 tasks.
 
-The current native priority is the film-specific camera-scan track:
-manual/automatic rebate region UI or generic C-41 density-to-display rendering,
-building on the now-operational RawTherapee-compatible power-law inversion,
-startup film-kind classification, and engine-only capture normalization/density
-primitives. TIFF/JPEG/PNG/DNG export,
+The current native priority is the film-specific camera-scan track: wire
+manual/automatic rebate selection and the standalone density/display APIs into
+the app, or begin capture/stock/roll profile separation. This builds on the
+operational RawTherapee-oriented power-law front-end, startup film-kind
+classification, and engine-only Slices A through F. TIFF/JPEG/PNG/DNG export,
 histogram equalisation, curves, color wheels,
 the still-preview latency gate, and the GPU-vs-CPU algorithmic equivalence gate
 are complete. Work on later processing stages or additional SwiftUI

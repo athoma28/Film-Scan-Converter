@@ -30,26 +30,28 @@ public enum GPUKernelModel {
         let gexp = Float(-fnp.greenExp)
         let bexp = Float(-(fnp.greenExp * fnp.blueRatio))
         let multTarget = Float(FilmNegativeProcessing.calibrationTargetFraction)
-        let bM: Float
-        let gM: Float
-        let rM: Float
+        let bBase: Float
+        let gBase: Float
+        let rBase: Float
         if let med = fnp.measuredMedians {
-          bM = Float(med.blue) / 65535.0
-          gM = Float(med.green) / 65535.0
-          rM = Float(med.red) / 65535.0
+          bBase = filmNegativeSRGBToLinear(Float(med.blue) / 65535.0)
+          gBase = filmNegativeSRGBToLinear(Float(med.green) / 65535.0)
+          rBase = filmNegativeSRGBToLinear(Float(med.red) / 65535.0)
         } else {
-          bM = channelMedianFloat(pixels: rgb, channel: 0, pixelCount: pixelCount)
-          gM = channelMedianFloat(pixels: rgb, channel: 1, pixelCount: pixelCount)
-          rM = channelMedianFloat(pixels: rgb, channel: 2, pixelCount: pixelCount)
+          bBase = filmNegativeSRGBToLinear(channelMedianFloat(pixels: rgb, channel: 0, pixelCount: pixelCount))
+          gBase = filmNegativeSRGBToLinear(channelMedianFloat(pixels: rgb, channel: 1, pixelCount: pixelCount))
+          rBase = filmNegativeSRGBToLinear(channelMedianFloat(pixels: rgb, channel: 2, pixelCount: pixelCount))
         }
+        let (rM, gM, bM) = filmNegativeSRGBToRec2020(rBase, gBase, bBase)
         let bMult = multTarget / pow(max(bM, 1.0 / 65535.0), bexp)
         let gMult = multTarget / pow(max(gM, 1.0 / 65535.0), gexp)
         let rMult = multTarget / pow(max(rM, 1.0 / 65535.0), rexp)
         for i in 0..<pixelCount {
           let base = i * 3
-          rgb[base + 2] = clamp(rMult * pow(rgb[base + 2], rexp), 0, 1)
-          rgb[base + 1] = clamp(gMult * pow(rgb[base + 1], gexp), 0, 1)
-          rgb[base] = clamp(bMult * pow(rgb[base], bexp), 0, 1)
+          let display = filmNegativeRec2020Display(
+            rgb[base + 2], rgb[base + 1], rgb[base],
+            rexp, gexp, bexp, rMult, gMult, bMult)
+          rgb[base + 2] = display.0; rgb[base + 1] = display.1; rgb[base] = display.2
         }
         for i in 0..<pixelCount {
           let base = i * 3
@@ -76,26 +78,28 @@ public enum GPUKernelModel {
           let gexp = Float(-fnp.greenExp)
           let bexp = Float(-(fnp.greenExp * fnp.blueRatio))
           let multTarget = Float(FilmNegativeProcessing.calibrationTargetFraction)
-          let bM: Float
-          let gM: Float
-          let rM: Float
+          let bBase: Float
+          let gBase: Float
+          let rBase: Float
           if let med = fnp.measuredMedians {
-            bM = Float(med.blue) / 65535.0
-            gM = Float(med.green) / 65535.0
-            rM = Float(med.red) / 65535.0
+            bBase = filmNegativeSRGBToLinear(Float(med.blue) / 65535.0)
+            gBase = filmNegativeSRGBToLinear(Float(med.green) / 65535.0)
+            rBase = filmNegativeSRGBToLinear(Float(med.red) / 65535.0)
           } else {
-            bM = channelMedianFloat(pixels: rgb, channel: 0, pixelCount: pixelCount)
-            gM = channelMedianFloat(pixels: rgb, channel: 1, pixelCount: pixelCount)
-            rM = channelMedianFloat(pixels: rgb, channel: 2, pixelCount: pixelCount)
+            bBase = filmNegativeSRGBToLinear(channelMedianFloat(pixels: rgb, channel: 0, pixelCount: pixelCount))
+            gBase = filmNegativeSRGBToLinear(channelMedianFloat(pixels: rgb, channel: 1, pixelCount: pixelCount))
+            rBase = filmNegativeSRGBToLinear(channelMedianFloat(pixels: rgb, channel: 2, pixelCount: pixelCount))
           }
+          let (rM, gM, bM) = filmNegativeSRGBToRec2020(rBase, gBase, bBase)
           let bMult = multTarget / pow(max(bM, 1.0 / 65535.0), bexp)
           let gMult = multTarget / pow(max(gM, 1.0 / 65535.0), gexp)
           let rMult = multTarget / pow(max(rM, 1.0 / 65535.0), rexp)
           for i in 0..<pixelCount {
             let base = i * 3
-            rgb[base + 2] = clamp(rMult * pow(rgb[base + 2], rexp), 0, 1)
-            rgb[base + 1] = clamp(gMult * pow(rgb[base + 1], gexp), 0, 1)
-            rgb[base] = clamp(bMult * pow(rgb[base], bexp), 0, 1)
+            let display = filmNegativeRec2020Display(
+              rgb[base + 2], rgb[base + 1], rgb[base],
+              rexp, gexp, bexp, rMult, gMult, bMult)
+            rgb[base + 2] = display.0; rgb[base + 1] = display.1; rgb[base] = display.2
           }
         } else {
           for i in 0..<pixelCount {
@@ -278,6 +282,79 @@ public enum GPUKernelModel {
 
 private func clamp(_ value: Float, _ lo: Float, _ hi: Float) -> Float {
   min(max(value, lo), hi)
+}
+
+private func filmNegativeSRGBToLinear(_ value: Float) -> Float {
+  let x = clamp(value, 0, 1)
+  return x <= 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4)
+}
+
+private func filmNegativeSRGBToRec2020(
+  _ red: Float, _ green: Float, _ blue: Float
+) -> (Float, Float, Float) {
+  (
+    0.6274039 * red + 0.3292830 * green + 0.0433131 * blue,
+    0.0690973 * red + 0.9195404 * green + 0.0113623 * blue,
+    0.0163914 * red + 0.0880133 * green + 0.8955953 * blue
+  )
+}
+
+private func filmNegativeRec2020Display(
+  _ red: Float, _ green: Float, _ blue: Float,
+  _ redExponent: Float, _ greenExponent: Float, _ blueExponent: Float,
+  _ redMultiplier: Float, _ greenMultiplier: Float, _ blueMultiplier: Float
+) -> (Float, Float, Float) {
+  let working = filmNegativeSRGBToRec2020(
+    filmNegativeSRGBToLinear(red), filmNegativeSRGBToLinear(green),
+    filmNegativeSRGBToLinear(blue))
+  let r = redMultiplier * pow(max(working.0, 1.0 / 65535.0), redExponent)
+  let g = greenMultiplier * pow(max(working.1, 1.0 / 65535.0), greenExponent)
+  let b = blueMultiplier * pow(max(working.2, 1.0 / 65535.0), blueExponent)
+  let sr = 1.6604910 * r - 0.5876411 * g - 0.0728499 * b
+  let sg = -0.1245505 * r + 1.1328999 * g - 0.0083494 * b
+  let sb = -0.0181508 * r - 0.1005789 * g + 1.1187297 * b
+  return (
+    filmNegativeToneCurve(filmNegativeLinearToSRGB(sr)),
+    filmNegativeToneCurve(filmNegativeLinearToSRGB(sg)),
+    filmNegativeToneCurve(filmNegativeLinearToSRGB(sb))
+  )
+}
+
+private func filmNegativeLinearToSRGB(_ value: Float) -> Float {
+  let x = clamp(value, 0, 1)
+  return x <= 0.0031308 ? x * 12.92 : 1.055 * pow(x, 1.0 / 2.4) - 0.055
+}
+
+private func filmNegativeToneCurve(_ value: Float) -> Float {
+  let first = clamp(value / 0.8854460, 0, 1)
+  let x0: Float, y0: Float, ypp0: Float
+  let x1: Float, y1: Float, ypp1: Float
+  if first <= 0.03975058 {
+    (x0, y0, ypp0) = (0, 0, 0)
+    (x1, y1, ypp1) = (0.03975058, 0.02017177, 6.2215877)
+  } else if first <= 0.54669745 {
+    (x0, y0, ypp0) = (0.03975058, 0.02017177, 6.2215877)
+    (x1, y1, ypp1) = (0.54669745, 0.69419975, -3.6885633)
+  } else {
+    (x0, y0, ypp0) = (0.54669745, 0.69419975, -3.6885633)
+    (x1, y1, ypp1) = (1, 1, 0)
+  }
+  let h = x1 - x0
+  let a = (x1 - first) / h
+  let b = (first - x0) / h
+  let result = a * y0 + b * y1
+    + ((a * a * a - a) * ypp0 + (b * b * b - b) * ypp1) * h * h / 6.0
+  return clamp(result, 0, 1)
+}
+
+private func filmNegativeDisplayValue(
+  _ value: Float,
+  exponent: Float,
+  multiplier: Float
+) -> Float {
+  let linear = filmNegativeSRGBToLinear(value)
+  let inverted = multiplier * pow(max(linear, 1.0 / 65535.0), exponent)
+  return filmNegativeToneCurve(filmNegativeLinearToSRGB(inverted))
 }
 
 private func channelMedianFloat(pixels: [Float], channel: Int, pixelCount: Int) -> Float {

@@ -1162,7 +1162,7 @@ struct ProcessingTests {
     #expect(lastPixel < firstPixel, "Dense (dark) areas should become bright, clear (bright) areas should become dark")
   }
 
-  @Test("Power-law film negative multipliers map median pixel near target output")
+  @Test("Power-law film negative maps the median through RawTherapee display output")
   func filmNegativeMultiplierCalibration() {
     var pixels = [UInt16](repeating: 10000, count: 32 * 32 * 3)
     var rng = SystemRandomNumberGenerator()
@@ -1183,12 +1183,38 @@ struct ProcessingTests {
     vals.sort()
     medianResult = vals[vals.count / 2]
 
-    let target = UInt16(65535.0 * FilmNegativeProcessing.calibrationTargetFraction)
+    let encodedTarget = FilmNegativeProcessing.linearToSRGB(
+      FilmNegativeProcessing.calibrationTargetFraction
+    )
+    let target = UInt16(
+      65535.0 * FilmNegativeProcessing.rawTherapeeFilmNegativeToneCurve(encodedTarget)
+    )
     #expect(abs(Int(medianResult) - Int(target)) < 1500,
-      "Median output should calibrate near middle gray, got \(medianResult)")
+      "Median output should include transfer encoding and preset curves, got \(medianResult)")
   }
 
-  @Test("Film negative preset keeps representative median out of deep shadows")
+  @Test("RawTherapee film negative preset retains a broad unclipped tonal range")
+  func filmNegativePresetRetainsTonalRange() {
+    let samples: [UInt16] = [8_000, 12_000, 18_000, 24_000, 30_000, 38_000, 46_000, 54_000]
+    let image = UInt16Image(
+      width: samples.count,
+      height: 1,
+      channels: 3,
+      pixels: samples.flatMap { [$0, $0, $0] }
+    )
+    var params = FilmNegativeParams.blackAndWhite
+    params.measuredMedians = BGRChannelValues(blue: 30_000, green: 30_000, red: 30_000)
+
+    let result = FilmNegativeProcessing.applyPowerLawInversion(image: image, params: params)
+    let green = stride(from: 1, to: result.pixels.count, by: 3).map { result.pixels[$0] }
+
+    #expect(green == green.sorted(by: >))
+    #expect(green.filter { $0 == 0 }.count <= 1)
+    #expect(green.filter { $0 == 65_535 }.count <= 1)
+    #expect(Set(green).count >= samples.count - 1)
+  }
+
+  @Test("Film negative preset maps representative median into display quarter tones")
   func filmNegativePresetDoesNotDarkenMedian() {
     let width = 16
     let height = 16
@@ -1209,8 +1235,8 @@ struct ProcessingTests {
     let result = FilmNegativeProcessing.applyPowerLawInversion(image: image, params: params)
     let green = result.pixels[1]
 
-    #expect(green > 20_000, "Preset median should not be calibrated into deep shadows, got \(green)")
-    #expect(green < 45_000, "Preset median should stay near middle gray, got \(green)")
+    #expect(green > 14_000, "Preset median should remain visible after display mapping, got \(green)")
+    #expect(green < 25_000, "Preset median should retain RawTherapee's low reference placement, got \(green)")
   }
 
   @Test("Film negative corrected preview produces valid output")

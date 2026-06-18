@@ -30,7 +30,7 @@ This file contains only package-local build and implementation notes.
   next uncached file into that same bounded cache. The
   actual Core Image renderer is verified against the CPU path across 2,655
   comparisons with a maximum difference of 2/255, and its latest current-pipeline
-  benchmark measured 3.74 ms p95 at 1080×720. End-to-end real-file drag
+  benchmark measured 3.37 ms p95 at 1080×720. End-to-end real-file drag
   latency still requires verification. See the
   [real-time still preview plan](../docs/development/realtime-preview-plan.md).
 - Its optional live camera view uses AVFoundation and a GPU-backed Core Image
@@ -52,13 +52,25 @@ This file contains only package-local build and implementation notes.
 - `FilmNegativeProcessing` provides standalone film-specific engine APIs for
   BGR black-level correction, matched flat-field normalization, optical-density
   conversion, manual base-density subtraction, manual rebate base measurement,
-  roll-profile storage, and base-density precedence resolution. The
-  density-domain primitives and roll profiles are not yet connected to preview
-  or export.
-- RawTherapee-compatible film negative power-law inversion is connected to the
+  roll-profile storage, base-density precedence resolution, generic C-41
+  density-to-scene conversion, and bounded CPU scene-to-display rendering. A
+  dedicated Core Image/Metal float renderer matches the scene-to-display CPU
+  contract within 0.000002 across the committed parameter grid. The
+  density-domain pipeline and roll profiles are not yet connected to preview or
+  export.
+- Film-negative inversion using RawTherapee's exponent model is connected to the
   correction preview and export path through the CPU engine, GPU-equivalent
   model, and Core Image/Metal preview renderer. It uses 20%-border-cut channel
-  medians to calibrate the representative image median to neutral middle gray.
+  medians, RawTherapee's `1/24` linear output reference, sRGB transfer handling,
+  and both tone curves from the bundled Film Negative preset before final clamp.
+  Inversion is evaluated in linear Rec.2020 after sRGB decode on CPU, Float,
+  and Metal paths, then converted back to display sRGB. The camera-scan decoder
+  installs RCD for explicitly requested full-resolution Bayer decode and applies
+  bounded ISO-tier sharpening or denoising while exposing ISO and executed
+  stages in `RawDecodeResult`. The current app requests half-size RAW decode, so
+  its preview/export path bypasses RCD. Native ISO policy sharpens below ISO 800,
+  denoises mildly at ISO 800–3199, and denoises more strongly at ISO 3200+; it is
+  not an exact port of RawTherapee's noise kernels.
 - TIFF, JPEG, PNG, and processed-RGB DNG export are implemented with individual
   and memory-bounded batch workflows, background processing, cancellation,
   per-file errors, frame/aspect-ratio options, JPEG quality, and TIFF LZW

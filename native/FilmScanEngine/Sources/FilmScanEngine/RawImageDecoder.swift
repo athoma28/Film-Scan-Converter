@@ -8,18 +8,33 @@ public struct RawDecodeResult: Sendable {
   public let colorDescription: String
   public let decoderVersion: String
   public let profile: RawDecodeProfile
+  public let isoSpeed: Double
+  public let processing: RawProcessingStages
 
   public init(
     image: UInt16Image,
     colorDescription: String,
     decoderVersion: String,
-    profile: RawDecodeProfile = .rawPyCompatibility
+    profile: RawDecodeProfile = .rawPyCompatibility,
+    isoSpeed: Double = 0,
+    processing: RawProcessingStages = []
   ) {
     self.image = image
     self.colorDescription = colorDescription
     self.decoderVersion = decoderVersion
     self.profile = profile
+    self.isoSpeed = isoSpeed
+    self.processing = processing
   }
+}
+
+public struct RawProcessingStages: OptionSet, Sendable, Equatable {
+  public let rawValue: UInt32
+  public init(rawValue: UInt32) { self.rawValue = rawValue }
+  public static let rcdDemosaic = Self(rawValue: UInt32(FSC_RAW_PROCESSING_RCD))
+  public static let rec2020WorkingSpace = Self(rawValue: UInt32(FSC_RAW_PROCESSING_REC2020))
+  public static let isoDenoise = Self(rawValue: UInt32(FSC_RAW_PROCESSING_ISO_DENOISE))
+  public static let isoSharpen = Self(rawValue: UInt32(FSC_RAW_PROCESSING_ISO_SHARPEN))
 }
 
 public enum RawDecodeProfile: UInt32, Sendable, Codable, Equatable {
@@ -107,7 +122,9 @@ public enum RawImageDecoder {
       ),
       colorDescription: colorDescription,
       decoderVersion: version,
-      profile: profile
+      profile: profile,
+      isoSpeed: Double(output.iso_speed),
+      processing: RawProcessingStages(rawValue: output.processing_flags)
     )
   }
 

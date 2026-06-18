@@ -10,6 +10,14 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+int fsc_decode_rawtherapee_direct(
+    const char *path,
+    int full_resolution,
+    fsc_raw_direct *output,
+    char *error_message,
+    size_t error_message_capacity
+);
+
 #ifdef DEBUG
 static FILE *fsc_log_file = NULL;
 
@@ -110,9 +118,12 @@ static void set_rawtherapee_camera_scan_params(libraw_data_t *raw, int full_reso
     }
     raw->params.user_qual = 2;
     raw->params.fbdd_noiserd = 0;
-    raw->params.output_color = 7;
-    raw->params.gamm[0] = 1.0;
-    raw->params.gamm[1] = 1.0;
+    // Keep the bridge output display-encoded so standard-image and RAW inputs
+    // share one inversion contract. The film-negative stage linearizes before
+    // applying RawTherapee's power law.
+    raw->params.output_color = 1;
+    raw->params.gamm[0] = 1.0 / 2.4;
+    raw->params.gamm[1] = 12.92;
     raw->params.auto_bright_thr = 0.0f;
     raw->params.adjust_maximum_thr = 0.75f;
     raw->params.bright = 1.0f;
@@ -345,6 +356,12 @@ int fsc_decode_raw_direct_with_profile(
     }
     memset(output, 0, sizeof(*output));
 
+    if (profile == FSC_RAW_DECODE_PROFILE_RAWTHERAPEE_CAMERA_SCAN) {
+        return fsc_decode_rawtherapee_direct(
+            path, full_resolution, output, error_message, error_message_capacity
+        );
+    }
+
     int fd = open(path, O_RDONLY);
     if (fd < 0) {
         FSC_LOG("decode_raw_direct FAIL: cannot open file");
@@ -451,6 +468,8 @@ int fsc_decode_raw_direct_with_profile(
     output->height = (uint32_t)height;
     output->channels = (uint32_t)colors;
     output->pixel_count = pixel_count;
+    output->iso_speed = raw->other.iso_speed;
+    output->processing_flags = 0;
     output->bgr_pixels = (const uint16_t *)processed->data;
     snprintf(output->color_description, sizeof(output->color_description), "%.4s", raw->idata.cdesc);
 

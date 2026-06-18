@@ -452,7 +452,7 @@ Then apply a display curve.
 
 ## A slightly better generic model
 
-> **Implemented 2026-06-15:** RawTherapee's power-law inversion has been ported to Swift: `FilmNegativeProcessing.applyPowerLawInversion()`. Per-channel `output = multiplier × pixel^-(greenExp × ratio)`, auto-calibration via 20%-border-cut medians to neutral middle gray, Color Negative (1.36/1.5/0.86) and B&W (1.0/1.5/1.0) presets, CPU/GPU/Metal parity. See `native-macos.md` for status.
+> **Implemented, updated 2026-06-18:** `FilmNegativeProcessing.applyPowerLawInversion()` uses RawTherapee's per-channel exponent model, 20%-border-cut references, `1/24` output reference, bundled tone curves, and linear Rec.2020 placement around inversion with CPU/GPU/Metal parity. LibRaw still converts camera data through sRGB first, so this is not direct camera-to-Rec.2020 parity. See `native-macos.md` for authoritative status.
 
 RawTherapee’s documented model is equivalent in spirit to channel-dependent exponents. In density terms, that means channel-dependent slopes:
 

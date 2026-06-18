@@ -22,8 +22,9 @@ features. Its implemented scope includes:
   colour negative, and slide with base detect.
 - `shrink_box` coordinate math for crop-box adjustment.
 - Float64 NPY fixture infrastructure for intermediate pipeline stages.
-- RawTherapee-compatible film negative power-law inversion with neutral
-  middle-gray auto-calibration via 20%-border-cut channel medians. Per-channel
+- Film-negative inversion using RawTherapee's power-law exponent model, with reference
+  resolution from 20%-border-cut channel medians to RawTherapee's `1/24`
+  linear output reference. Per-channel
   exponent model:
   `output = multiplier × pixel^-(greenExp × ratio)`. Color Negative preset
   (RedRatio=1.36, GreenExp=1.5, BlueRatio=0.86) and Black & White preset (all
@@ -31,6 +32,15 @@ features. Its implemented scope includes:
   Black and White.pp3`. Full CPU (Double), GPU-equivalent (Float), and Metal
   CIKernel processing parity. SwiftUI controls with preset picker and per-channel
   ratio/exponent sliders.
+- Film-negative reference resolution and inversion in linear Rec.2020 after
+  decoding to sRGB, followed by conversion back to display sRGB. This is not a
+  direct camera-to-Rec.2020 transform.
+- Camera-scan RAW metadata and bounded ISO-tier processing: low-ISO sharpening
+  or medium/high-ISO denoising. These filters are native approximations, not
+  ports of RawTherapee's full denoise and capture-sharpening kernels.
+- Engine support for RCD on explicitly requested full-resolution Bayer decode.
+  The current app requests half-size RAW decode, and the available RAF corpus is
+  X-Trans, so neither the app path nor that corpus exercises RCD.
 - Automatic startup classification for new files: low-chroma scans start as
   B&W negative, orange-mask scans start as color negative, and other
   positive-looking scans start as slide. Existing per-file settings are not
@@ -55,13 +65,14 @@ features. Its implemented scope includes:
   cancellation, per-file error reporting, partial-file cleanup, and lazy
   per-file decode/classify/process/write for unloaded batch members.
 - macOS CI that runs the native engine tests and builds the app. The latest
-  local native suite contains 164 tests.
+  local native suite contains 189 tests across 13 test files.
 - Real production-renderer comparison against the authoritative CPU path and an
   actual `AppModel` rapid-update scheduling integration test.
 
 The remaining replacement work is automatic contour/crop detection,
-perspective warp, dust detection/inpainting, film base density + color space
-conversion, and flat-field calibration.
+perspective warp, dust detection/inpainting, app wiring for rebate selection and
+the standalone density/display pipeline, matched flat-field workflow, and
+capture/stock/roll profile separation.
 
 See [Native macOS Development](development/native-macos.md) for the
 authoritative current step, progress, limitations, and next work.

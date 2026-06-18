@@ -36,6 +36,11 @@ public final class StillPreviewRenderer: @unchecked Sendable {
 
   private let correctionKernel: CIKernel
 
+  private static func sRGBToLinear(_ value: Float) -> Float {
+    let x = min(max(value, 0), 1)
+    return x <= 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4)
+  }
+
   public func render(parameters: ProcessingParameters, showOriginal: Bool) -> CGImage? {
     let oriented = orientedSource(parameters: parameters)
     let output: CIImage
@@ -57,9 +62,9 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         fnGExp = Float(-fnp.greenExp)
         fnBExp = Float(-(fnp.greenExp * fnp.blueRatio))
         let target = Float(FilmNegativeProcessing.calibrationTargetFraction)
-        let bM = max(Float(medians.blue) / 65535.0, 1.0 / 65535.0)
-        let gM = max(Float(medians.green) / 65535.0, 1.0 / 65535.0)
-        let rM = max(Float(medians.red) / 65535.0, 1.0 / 65535.0)
+        let bM = max(Self.sRGBToLinear(Float(medians.blue) / 65535.0), 1.0 / 65535.0)
+        let gM = max(Self.sRGBToLinear(Float(medians.green) / 65535.0), 1.0 / 65535.0)
+        let rM = max(Self.sRGBToLinear(Float(medians.red) / 65535.0), 1.0 / 65535.0)
         fnRMult = target / pow(rM, fnRExp)
         fnGMult = target / pow(gM, fnGExp)
         fnBMult = target / pow(bM, fnBExp)
@@ -255,6 +260,56 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       return vec3(hsv.z, p, q);
     }
 
+    float filmNegativeSrgbToLinear(float value) {
+      float x = clamp(value, 0.0, 1.0);
+      return x <= 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4);
+    }
+
+    float filmNegativeLinearToSrgb(float value) {
+      float x = clamp(value, 0.0, 1.0);
+      return x <= 0.0031308 ? x * 12.92 : 1.055 * pow(x, 1.0 / 2.4) - 0.055;
+    }
+
+    float filmNegativeToneCurve(float value) {
+      float first = clamp(value / 0.8854460, 0.0, 1.0);
+      float x0, y0, ypp0, x1, y1, ypp1;
+      if (first <= 0.03975058) {
+        x0 = 0.0; y0 = 0.0; ypp0 = 0.0;
+        x1 = 0.03975058; y1 = 0.02017177; ypp1 = 6.2215877;
+      } else if (first <= 0.54669745) {
+        x0 = 0.03975058; y0 = 0.02017177; ypp0 = 6.2215877;
+        x1 = 0.54669745; y1 = 0.69419975; ypp1 = -3.6885633;
+      } else {
+        x0 = 0.54669745; y0 = 0.69419975; ypp0 = -3.6885633;
+        x1 = 1.0; y1 = 1.0; ypp1 = 0.0;
+      }
+      float h = x1 - x0;
+      float a = (x1 - first) / h;
+      float b = (first - x0) / h;
+      float result = a * y0 + b * y1
+        + ((a * a * a - a) * ypp0 + (b * b * b - b) * ypp1) * h * h / 6.0;
+      return clamp(result, 0.0, 1.0);
+    }
+
+    vec3 filmNegativeDisplayValue(vec3 value, vec3 exponent, vec3 multiplier) {
+      vec3 linear = vec3(filmNegativeSrgbToLinear(value.r),
+                         filmNegativeSrgbToLinear(value.g),
+                         filmNegativeSrgbToLinear(value.b));
+      vec3 working = vec3(
+        0.6274039 * linear.r + 0.3292830 * linear.g + 0.0433131 * linear.b,
+        0.0690973 * linear.r + 0.9195404 * linear.g + 0.0113623 * linear.b,
+        0.0163914 * linear.r + 0.0880133 * linear.g + 0.8955953 * linear.b);
+      vec3 inverted = multiplier * pow(max(working, vec3(1.0 / 65535.0)), exponent);
+      vec3 displayLinear = vec3(
+        1.6604910 * inverted.r - 0.5876411 * inverted.g - 0.0728499 * inverted.b,
+        -0.1245505 * inverted.r + 1.1328999 * inverted.g - 0.0083494 * inverted.b,
+        -0.0181508 * inverted.r - 0.1005789 * inverted.g + 1.1187297 * inverted.b);
+      return vec3(
+        filmNegativeToneCurve(filmNegativeLinearToSrgb(displayLinear.r)),
+        filmNegativeToneCurve(filmNegativeLinearToSrgb(displayLinear.g)),
+        filmNegativeToneCurve(filmNegativeLinearToSrgb(displayLinear.b)));
+    }
+
     float highlightMask(float lum) {
       if (lum <= 0.3) return 0.0;
       if (lum >= 0.7) return 1.0;
@@ -319,9 +374,8 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       bool isBW = (filmType == 0.0);
 
       if (filmNegativeEnabled == 1.0) {
-        rgb.r = clamp(fnRMult * pow(rgb.r, fnRExp), 0.0, 1.0);
-        rgb.g = clamp(fnGMult * pow(rgb.g, fnGExp), 0.0, 1.0);
-        rgb.b = clamp(fnBMult * pow(rgb.b, fnBExp), 0.0, 1.0);
+        rgb = filmNegativeDisplayValue(
+          rgb, vec3(fnRExp, fnGExp, fnBExp), vec3(fnRMult, fnGMult, fnBMult));
         if (isBW) {
           float gray = dot(rgb, vec3(0.299, 0.587, 0.114));
           rgb = vec3(gray);

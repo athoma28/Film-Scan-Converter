@@ -185,9 +185,44 @@ public struct GenericC41Profile: Codable, Equatable, Sendable {
   public static let identity = GenericC41Profile()
 }
 
+public enum DisplayToneMap: String, Codable, Equatable, Sendable {
+  case linear
+  case reinhard
+}
+
+public struct DisplayRenderingParameters: Codable, Equatable, Sendable {
+  public var exposureEV: Double
+  public var whiteBalance: BGRChannelValues
+  public var toneMap: DisplayToneMap
+  public var maximumSceneGain: Double
+
+  public init(
+    exposureEV: Double = 0,
+    whiteBalance: BGRChannelValues = BGRChannelValues(blue: 1, green: 1, red: 1),
+    toneMap: DisplayToneMap = .linear,
+    maximumSceneGain: Double = 16
+  ) {
+    precondition(exposureEV.isFinite, "Display exposure must be finite")
+    precondition(
+      whiteBalance.blue.isFinite && whiteBalance.blue >= 0
+        && whiteBalance.green.isFinite && whiteBalance.green >= 0
+        && whiteBalance.red.isFinite && whiteBalance.red >= 0,
+      "Display white-balance gains must be finite and nonnegative"
+    )
+    precondition(
+      maximumSceneGain.isFinite && maximumSceneGain > 0,
+      "Maximum scene gain must be finite and positive"
+    )
+    self.exposureEV = exposureEV
+    self.whiteBalance = whiteBalance
+    self.toneMap = toneMap
+    self.maximumSceneGain = maximumSceneGain
+  }
+}
+
 public enum FilmNegativeProcessing {
   private static let maxOutput: Double = 65535.0
-  public static let calibrationTargetFraction: Double = 0.5
+  public static let calibrationTargetFraction: Double = 1.0 / 24.0
 
   public static func applyPowerLawInversion(
     image: UInt16Image,
@@ -216,11 +251,16 @@ public enum FilmNegativeProcessing {
       rMedian = image.channelMedian(channel: 2, borderPercent: borderPercent)
     }
 
-    let refInputB = max(bMedian, 1.0)
-    let refInputG = max(gMedian, 1.0)
-    let refInputR = max(rMedian, 1.0)
+    let reference = linearSRGBToRec2020(
+      red: sRGBToLinear(rMedian / maxOutput),
+      green: sRGBToLinear(gMedian / maxOutput),
+      blue: sRGBToLinear(bMedian / maxOutput)
+    )
+    let refInputB = max(reference.blue, 1.0 / maxOutput)
+    let refInputG = max(reference.green, 1.0 / maxOutput)
+    let refInputR = max(reference.red, 1.0 / maxOutput)
 
-    let refOutput = maxOutput * calibrationTargetFraction
+    let refOutput = calibrationTargetFraction
 
     let bMult = refOutput / pow(refInputB, bexp)
     let gMult = refOutput / pow(refInputG, gexp)
@@ -230,13 +270,19 @@ public enum FilmNegativeProcessing {
     let count = image.width * image.height
     for i in 0..<count {
       let base = i * 3
-      let b = Double(image.pixels[base])
-      let g = Double(image.pixels[base + 1])
-      let r = Double(image.pixels[base + 2])
-
-      out[base] = UInt16(min(max(bMult * pow(b, bexp), 0), maxOutput))
-      out[base + 1] = UInt16(min(max(gMult * pow(g, gexp), 0), maxOutput))
-      out[base + 2] = UInt16(min(max(rMult * pow(r, rexp), 0), maxOutput))
+      let working = linearSRGBToRec2020(
+        red: sRGBToLinear(Double(image.pixels[base + 2]) / maxOutput),
+        green: sRGBToLinear(Double(image.pixels[base + 1]) / maxOutput),
+        blue: sRGBToLinear(Double(image.pixels[base]) / maxOutput)
+      )
+      let display = linearRec2020ToSRGB(
+        red: rMult * pow(max(working.red, 1.0 / maxOutput), rexp),
+        green: gMult * pow(max(working.green, 1.0 / maxOutput), gexp),
+        blue: bMult * pow(max(working.blue, 1.0 / maxOutput), bexp)
+      )
+      out[base] = displayEncodedFilmNegativeValue(display.blue)
+      out[base + 1] = displayEncodedFilmNegativeValue(display.green)
+      out[base + 2] = displayEncodedFilmNegativeValue(display.red)
     }
 
     return UInt16Image(width: image.width, height: image.height, channels: 3, pixels: out)
@@ -523,6 +569,34 @@ public enum FilmNegativeProcessing {
     return sceneLinear.map { $0 * scale }
   }
 
+  public static func renderDisplay(
+    sceneLinear: [Double],
+    parameters: DisplayRenderingParameters = DisplayRenderingParameters()
+  ) -> [Double] {
+    precondition(
+      sceneLinear.count.isMultiple(of: 3),
+      "Scene-linear data must contain BGR pixels"
+    )
+
+    let exposureGain = exp2(parameters.exposureEV)
+    return sceneLinear.enumerated().map { index, value in
+      if value.isNaN || value <= 0 { return 0 }
+      if value == .infinity { return 1 }
+
+      let requestedGain = exposureGain * parameters.whiteBalance[index % 3]
+      let gain = min(requestedGain, parameters.maximumSceneGain)
+      let exposed = value * gain
+      if !exposed.isFinite { return 1 }
+
+      switch parameters.toneMap {
+      case .linear:
+        return min(exposed, 1)
+      case .reinhard:
+        return exposed / (1 + exposed)
+      }
+    }
+  }
+
   public static func densityToSceneLinear(
     image: UInt16Image,
     flatField: UInt16Image,
@@ -570,11 +644,103 @@ public enum FilmNegativeProcessing {
     let rexp = -(params.greenExp * params.redRatio)
     let gexp = -params.greenExp
     let bexp = -(params.greenExp * params.blueRatio)
-    let target = maxOutput * calibrationTargetFraction
-    let r = target / pow(max(medians.red, 1.0), rexp)
-    let g = target / pow(max(medians.green, 1.0), gexp)
-    let b = target / pow(max(medians.blue, 1.0), bexp)
+    let target = calibrationTargetFraction
+    let working = linearSRGBToRec2020(
+      red: sRGBToLinear(medians.red / maxOutput),
+      green: sRGBToLinear(medians.green / maxOutput),
+      blue: sRGBToLinear(medians.blue / maxOutput)
+    )
+    let rInput = max(working.red, 1.0 / maxOutput)
+    let gInput = max(working.green, 1.0 / maxOutput)
+    let bInput = max(working.blue, 1.0 / maxOutput)
+    let r = target / pow(rInput, rexp)
+    let g = target / pow(gInput, gexp)
+    let b = target / pow(bInput, bexp)
     return (r, g, b)
+  }
+
+  public static func sRGBToLinear(_ value: Double) -> Double {
+    let clamped = min(max(value, 0), 1)
+    if clamped <= 0.04045 {
+      return clamped / 12.92
+    }
+    return pow((clamped + 0.055) / 1.055, 2.4)
+  }
+
+  public static func linearToSRGB(_ value: Double) -> Double {
+    let clamped = min(max(value, 0), 1)
+    if clamped <= 0.0031308 {
+      return clamped * 12.92
+    }
+    return 1.055 * pow(clamped, 1.0 / 2.4) - 0.055
+  }
+
+  public static func linearSRGBToRec2020(
+    red: Double, green: Double, blue: Double
+  ) -> (red: Double, green: Double, blue: Double) {
+    (
+      0.6274039 * red + 0.3292830 * green + 0.0433131 * blue,
+      0.0690973 * red + 0.9195404 * green + 0.0113623 * blue,
+      0.0163914 * red + 0.0880133 * green + 0.8955953 * blue
+    )
+  }
+
+  public static func linearRec2020ToSRGB(
+    red: Double, green: Double, blue: Double
+  ) -> (red: Double, green: Double, blue: Double) {
+    (
+      1.6604910 * red - 0.5876411 * green - 0.0728499 * blue,
+      -0.1245505 * red + 1.1328999 * green - 0.0083494 * blue,
+      -0.0181508 * red - 0.1005789 * green + 1.1187297 * blue
+    )
+  }
+
+  public static func rawTherapeeFilmNegativeToneCurve(_ value: Double) -> Double {
+    let first = piecewiseLinear(
+      value,
+      points: [(0, 0), (0.8854460194005137, 1)]
+    )
+    let x = [0.0, 0.0397505754145333, 0.5466974543314932, 1.0]
+    let y = [0.0, 0.020171771436200074, 0.6941997473367765, 1.0]
+    let ypp = [0.0, 6.2215877061143505, -3.688563301251906, 0.0]
+    let interval: Int
+    if first <= x[1] {
+      interval = 0
+    } else if first <= x[2] {
+      interval = 1
+    } else {
+      interval = 2
+    }
+    let h = x[interval + 1] - x[interval]
+    let a = (x[interval + 1] - first) / h
+    let b = (first - x[interval]) / h
+    let result = a * y[interval] + b * y[interval + 1]
+      + ((a * a * a - a) * ypp[interval]
+        + (b * b * b - b) * ypp[interval + 1]) * h * h / 6.0
+    return min(max(result, 0), 1)
+  }
+
+  private static func displayEncodedFilmNegativeValue(_ linear: Double) -> UInt16 {
+    let encoded = linearToSRGB(linear)
+    let curved = rawTherapeeFilmNegativeToneCurve(encoded)
+    return UInt16(min(max(curved * maxOutput, 0), maxOutput))
+  }
+
+  private static func piecewiseLinear(
+    _ value: Double,
+    points: [(Double, Double)]
+  ) -> Double {
+    let x = min(max(value, 0), 1)
+    for index in 0..<(points.count - 1) {
+      let lower = points[index]
+      let upper = points[index + 1]
+      if x <= upper.0 {
+        let width = upper.0 - lower.0
+        let t = width > 0 ? (x - lower.0) / width : 0
+        return lower.1 + t * (upper.1 - lower.1)
+      }
+    }
+    return points.last?.1 ?? x
   }
 
   public static func classifyFilmScan(

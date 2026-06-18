@@ -4,6 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct {
     uint32_t width;
     uint32_t height;
@@ -32,9 +36,18 @@ typedef struct {
     uint32_t channels;
     size_t pixel_count;
     char color_description[5];
+    float iso_speed;
+    uint32_t processing_flags;
     const uint16_t *bgr_pixels;
     void *_internal;
 } fsc_raw_direct;
+
+enum {
+    FSC_RAW_PROCESSING_RCD = 1u << 0,
+    FSC_RAW_PROCESSING_REC2020 = 1u << 1,
+    FSC_RAW_PROCESSING_ISO_DENOISE = 1u << 2,
+    FSC_RAW_PROCESSING_ISO_SHARPEN = 1u << 3
+};
 
 typedef enum {
     FSC_RAW_DECODE_PROFILE_RAWPY_COMPATIBILITY = 0,
@@ -76,5 +89,9 @@ int fsc_extract_thumbnail(
 );
 
 void fsc_free_thumbnail(fsc_raw_thumbnail *output);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
