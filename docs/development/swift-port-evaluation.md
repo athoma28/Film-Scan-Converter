@@ -154,7 +154,7 @@ the newest pending snapshot. Render instrumentation (`os_signpost` + latency
 counters) is deployed. It still creates `NSImage`/`CGImage` display results.
 The production renderer is verified against the CPU path across 2,655
 comparisons with a maximum difference of 2/255, and its latest current-pipeline
-1080×720 benchmark measured 3.37 ms p95. End-to-end display latency
+1080×720 benchmark measured 3.50 ms p95. End-to-end display latency
 with a real RAF corpus remains.
 
 ### 2.14 Fixture Loader — Extended
@@ -188,7 +188,8 @@ SHA-256 hashes that are verified at load time, preventing fixture corruption.
 Tests are designed to pass in CI without the `sample-raw/` corpus; RAF-specific
 tests are explicitly reported as disabled when the untracked corpus is absent.
 
-As of 2026-06-18, the native suite contains **189 tests across 13 test files**.
+As of 2026-06-18, the native suite contains **203 tests across 13 test files**.
+The 500-render performance benchmark is opt-in via `RUN_PERFORMANCE_TESTS=1`.
 
 ### 2.9 CI — `.github/workflows/native-engine.yml`
 

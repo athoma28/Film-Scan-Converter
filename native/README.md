@@ -19,9 +19,13 @@ This file contains only package-local build and implementation notes.
 - `FilmScanConverterMac` is the primary SwiftUI application. Dropping supported
   standard or RAW images into its main window decodes and previews them through
   the engine without blocking the main actor.
-- Imported files expose per-file film mode,
-  orientation, white balance, exposure, shadows, highlights, and saturation
-  controls, plus draggable shadow/midtone/highlight color wheels. Interactive
+- Imported files use a fixed Edit/Grade/Export inspector: film setup, light,
+  and basic color adjustments stay in the primary workflow; curves and
+  shadow/midtone/highlight wheels form a separate grading surface; and the
+  existing TIFF/JPEG/PNG/DNG options and batch actions are exposed in a dedicated
+  output page. Centered sliders show signed values and provide neutral reset
+  actions, while advanced film-negative coefficients remain collapsed until
+  needed. Interactive
   rendering uses a bounded 640-pixel, 16-bit proxy with a Core Image/Metal
   correction kernel and bounded latest-value-wins scheduling, while preserving
   the full decoded source for later export work. The two most recent
@@ -30,7 +34,7 @@ This file contains only package-local build and implementation notes.
   next uncached file into that same bounded cache. The
   actual Core Image renderer is verified against the CPU path across 2,655
   comparisons with a maximum difference of 2/255, and its latest current-pipeline
-  benchmark measured 3.37 ms p95 at 1080×720. End-to-end real-file drag
+  benchmark measured 3.50 ms p95 at 1080×720. End-to-end real-file drag
   latency still requires verification. See the
   [real-time still preview plan](../docs/development/realtime-preview-plan.md).
 - Its optional live camera view uses AVFoundation and a GPU-backed Core Image
@@ -59,12 +63,12 @@ This file contains only package-local build and implementation notes.
   density-domain pipeline and roll profiles are not yet connected to preview or
   export.
 - Film-negative inversion using RawTherapee's exponent model is connected to the
-  correction preview and export path through the CPU engine, GPU-equivalent
-  model, and Core Image/Metal preview renderer. It uses 20%-border-cut channel
+  correction preview and export path through the CPU engine and Core Image/Metal
+  preview renderer. It uses 20%-border-cut channel
   medians, RawTherapee's `1/24` linear output reference, sRGB transfer handling,
   and both tone curves from the bundled Film Negative preset before final clamp.
-  Inversion is evaluated in linear Rec.2020 after sRGB decode on CPU, Float,
-  and Metal paths, then converted back to display sRGB. The camera-scan decoder
+  Inversion is evaluated in linear Rec.2020 after sRGB decode on CPU and Metal
+  paths, then converted back to display sRGB. The camera-scan decoder
   installs RCD for explicitly requested full-resolution Bayer decode and applies
   bounded ISO-tier sharpening or denoising while exposing ISO and executed
   stages in `RawDecodeResult`. The current app requests half-size RAW decode, so
@@ -74,7 +78,8 @@ This file contains only package-local build and implementation notes.
 - TIFF, JPEG, PNG, and processed-RGB DNG export are implemented with individual
   and memory-bounded batch workflows, background processing, cancellation,
   per-file errors, frame/aspect-ratio options, JPEG quality, and TIFF LZW
-  compression.
+  compression. Existing and same-basename outputs receive deterministic numeric
+  suffixes instead of being overwritten.
 
 The native application is the primary product and the only target for new
 features. It is not yet a complete replacement for the maintenance-only legacy
@@ -108,6 +113,14 @@ Run the native regression gate:
 swift test --package-path native/FilmScanEngine
 ```
 
+Run the opt-in 500-render latency benchmark:
+
+```sh
+RUN_PERFORMANCE_TESTS=1 swift test \
+  --package-path native/FilmScanEngine \
+  --filter productionRendererBurstBenchmark
+```
+
 Build or run the native app:
 
 ```sh
@@ -121,6 +134,12 @@ Build the native RAW benchmark:
 swift build -c release \
   --package-path native/FilmScanEngine \
   --product FilmScanRawBenchmark
+```
+
+Run the GPU-vs-CPU preview comparator:
+
+```sh
+swift run --package-path native/FilmScanEngine FilmScanPreviewComparator
 ```
 
 ## Live Camera Scope

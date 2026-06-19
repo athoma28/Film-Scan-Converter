@@ -27,7 +27,7 @@ and [Legacy Python Application](legacy-python.md) for the retirement policy.
 3. Build and run the native application:
 
     ```sh
-    # Run the full regression test suite (189 tests)
+    # Run the default regression suite (203 tests; performance benchmark skipped)
     swift test --package-path native/FilmScanEngine
 
     # Build the app

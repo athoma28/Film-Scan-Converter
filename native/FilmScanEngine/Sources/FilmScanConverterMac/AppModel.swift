@@ -22,6 +22,28 @@ final class AppModel: ObservableObject {
   @Published private(set) var exportProgressCurrent = 0
   @Published private(set) var exportProgressTotal = 0
   @Published private(set) var exportErrors: [String] = []
+  @Published private(set) var rebateCandidates: [AutomaticRebateCandidate] = []
+  @Published private(set) var selectedRebateMeasurement: FilmBaseMeasurement?
+  @Published private(set) var selectedRebateRegion: ImageRegion?
+  @Published private(set) var isRebateDetectionRunning = false
+  @Published private(set) var rollProfile: RollProfile?
+  @Published private(set) var rebateStatus: String = ""
+
+  let profileStore: ProfileStore
+
+  init(profileStore: ProfileStore? = nil) {
+    if let profileStore {
+      self.profileStore = profileStore
+      return
+    }
+    if let store = ProfileStore(appGroupIdentifier: "FilmScanConverter") {
+      self.profileStore = store
+    } else {
+      let fallback = FileManager.default.temporaryDirectory
+        .appendingPathComponent("FilmScanConverter")
+      self.profileStore = ProfileStore(baseDirectory: fallback)
+    }
+  }
 
   public struct RenderStats: Sendable {
     public var submittedSnapshots: Int = 0
@@ -40,6 +62,7 @@ final class AppModel: ObservableObject {
   private var loadTask: Task<Void, Never>?
   private var rawSwapTask: Task<Void, Never>?
   private var predecodeTask: Task<Void, Never>?
+  private var rebateTask: Task<Void, Never>?
   private var renderTask: Task<Void, Never>?
   private var pendingRender: PreviewRenderRequest?
   private var renderLoopGeneration = 0
@@ -52,6 +75,10 @@ final class AppModel: ObservableObject {
 
   var previewCacheSessionCount: Int {
     previewCache.count
+  }
+
+  func hasCachedPreview(for url: URL) -> Bool {
+    previewCache[settingsKey(url)] != nil
   }
 
   private static let renderLog = OSLog(
@@ -76,6 +103,7 @@ final class AppModel: ObservableObject {
   }
 
   private var loadGeneration = 0
+  private var rebateGeneration = 0
 
   func loadSelection() {
     loadTask?.cancel()
@@ -83,6 +111,7 @@ final class AppModel: ObservableObject {
     cancelRenderLoop()
     loadGeneration += 1
     let gen = loadGeneration
+    resetRebateState(cancelTask: true)
 
     guard let selection else {
       previewImage = nil
@@ -466,6 +495,154 @@ final class AppModel: ObservableObject {
     exportFiles(files)
   }
 
+  func detectRebate() {
+    guard let source = previewSource, source.channels == 3 else {
+      rebateStatus = "Load an image with 3 channels first."
+      return
+    }
+    rebateTask?.cancel()
+    rebateGeneration += 1
+    let generation = rebateGeneration
+    let selectedURL = selection
+    isRebateDetectionRunning = true
+    rebateStatus = "Searching for rebate edge candidates..."
+    rebateCandidates = []
+    selectedRebateMeasurement = nil
+    selectedRebateRegion = nil
+
+    rebateTask = Task { [weak self] in
+      guard let self else { return }
+      let result: [AutomaticRebateCandidate]
+      if Task.isCancelled { return }
+      result = await Task.detached(priority: .userInitiated) {
+        let flatField = AppModel.unityFlatField(for: source)
+        return FilmNegativeProcessing.automaticRebateCandidates(
+          image: source,
+          flatField: flatField
+        )
+      }.value
+      guard !Task.isCancelled else { return }
+      guard generation == rebateGeneration, selection == selectedURL else { return }
+      rebateCandidates = result
+      isRebateDetectionRunning = false
+      if result.isEmpty {
+        rebateStatus = "No rebate candidates detected."
+      } else {
+        rebateStatus =
+          "Found \(result.count) rebate candidate\(result.count == 1 ? "" : "s")."
+      }
+    }
+  }
+
+  func measureRebateRegion(_ region: ImageRegion) {
+    guard let source = previewSource, source.channels == 3 else {
+      rebateStatus = "Load an image with 3 channels first."
+      return
+    }
+    rebateTask?.cancel()
+    rebateGeneration += 1
+    let generation = rebateGeneration
+    let selectedURL = selection
+    rebateStatus = "Measuring base density..."
+    rebateTask = Task { [weak self] in
+      guard let self else { return }
+      let result: Result<FilmBaseMeasurement, Error>
+      result = await Task.detached(priority: .userInitiated) {
+        let flatField = AppModel.unityFlatField(for: source)
+        return Result {
+          try FilmNegativeProcessing.measureBaseDensity(
+            image: source,
+            flatField: flatField,
+            region: region
+          )
+        }
+      }.value
+      guard !Task.isCancelled else { return }
+      guard generation == rebateGeneration, selection == selectedURL else { return }
+      switch result {
+      case .success(let measurement):
+        selectedRebateMeasurement = measurement
+        selectedRebateRegion = region
+        rebateStatus = String(
+          format:
+            "Base density: B %.3f  G %.3f  R %.3f (confidence %.0f%%)",
+          measurement.baseDensity.blue,
+          measurement.baseDensity.green,
+          measurement.baseDensity.red,
+          measurement.confidence * 100
+        )
+      case .failure(let error):
+        rebateStatus = "Measurement failed: \(error.localizedDescription)"
+      }
+    }
+  }
+
+  func selectRebateCandidate(_ candidate: AutomaticRebateCandidate) {
+    rebateTask?.cancel()
+    rebateTask = nil
+    rebateGeneration += 1
+    selectedRebateMeasurement = candidate.measurement
+    selectedRebateRegion = candidate.region
+    rebateStatus = String(
+      format:
+        "Base density: B %.3f  G %.3f  R %.3f (confidence %.0f%%)",
+      candidate.measurement.baseDensity.blue,
+      candidate.measurement.baseDensity.green,
+      candidate.measurement.baseDensity.red,
+      candidate.measurement.confidence * 100
+    )
+  }
+
+  func createRollProfile(from candidate: AutomaticRebateCandidate) {
+    let measurement = candidate.measurement
+    selectedRebateMeasurement = measurement
+    selectedRebateRegion = candidate.region
+
+    let stockID = FilmStockProfileID(rawValue: "generic_colour_negative")
+    let captureID = CaptureProfileID(rawValue: "default")
+    let rollID = "roll-\(Date().timeIntervalSince1970)"
+
+    let profile = RollProfile(
+      rollID: rollID,
+      filmStockID: stockID,
+      captureProfileID: captureID,
+      measurements: [measurement]
+    )
+    do {
+      try profileStore.saveRollProfile(profile)
+      rollProfile = profile
+      rebateStatus = "Roll profile saved as \(rollID)."
+    } catch {
+      rebateStatus = "Unable to save roll profile: \(error.localizedDescription)"
+    }
+  }
+
+  func clearRebateMeasurement() {
+    resetRebateState(cancelTask: true)
+  }
+
+  private func resetRebateState(cancelTask: Bool) {
+    if cancelTask {
+      rebateTask?.cancel()
+      rebateTask = nil
+      rebateGeneration += 1
+    }
+    rebateCandidates = []
+    selectedRebateMeasurement = nil
+    selectedRebateRegion = nil
+    rollProfile = nil
+    isRebateDetectionRunning = false
+    rebateStatus = ""
+  }
+
+  nonisolated private static func unityFlatField(for image: UInt16Image) -> UInt16Image {
+    let count = image.width * image.height * image.channels
+    let pixels = [UInt16](repeating: 65535, count: count)
+    return UInt16Image(
+      width: image.width, height: image.height, channels: image.channels,
+      pixels: pixels)
+  }
+
   private func exportFiles(_ urls: [URL]) {
     guard !urls.isEmpty else { return }
     guard let destDir = exportParameters.destinationDirectory else {
@@ -476,6 +653,17 @@ final class AppModel: ObservableObject {
     var params = exportParameters
     params.destinationDirectory = destDir
     let exportParams = params
+    let destinations: [URL]
+    do {
+      destinations = try reserveDestinationURLs(
+        for: urls,
+        destinationDirectory: destDir,
+        format: exportParams.format
+      )
+    } catch {
+      status = "Unable to inspect export destination: \(error.localizedDescription)"
+      return
+    }
 
     isExporting = true
     exportProgressCurrent = 0
@@ -490,12 +678,13 @@ final class AppModel: ObservableObject {
       var results: [ExportManager.ExportResult] = []
       results.reserveCapacity(urls.count)
 
-      for (index, url) in urls.enumerated() {
+      for (index, pair) in zip(urls, destinations).enumerated() {
+        let (url, destinationURL) = pair
         if Task.isCancelled {
           results.append(
             ExportManager.ExportResult(
               sourceURL: url,
-              destinationURL: self.destinationURL(for: url, exportParams: exportParams),
+              destinationURL: destinationURL,
               error: ExportManager.ExportManagerError.cancelled
             ))
           continue
@@ -505,7 +694,7 @@ final class AppModel: ObservableObject {
           let request = try await self.makeExportRequest(
             for: url,
             exportParams: exportParams,
-            destinationDirectory: destDir
+            destinationURL: destinationURL
           )
           let fileResults = await manager.export(requests: [request])
           results.append(contentsOf: fileResults)
@@ -513,7 +702,7 @@ final class AppModel: ObservableObject {
           results.append(
             ExportManager.ExportResult(
               sourceURL: url,
-              destinationURL: self.destinationURL(for: url, exportParams: exportParams),
+              destinationURL: destinationURL,
               error: error
             ))
         }
@@ -559,7 +748,7 @@ final class AppModel: ObservableObject {
   private func makeExportRequest(
     for url: URL,
     exportParams: ExportParameters,
-    destinationDirectory: URL
+    destinationURL: URL
   ) async throws -> ExportManager.ExportRequest {
     let key = settingsKey(url)
     let decoded = try await decodedImageForExport(url)
@@ -601,9 +790,7 @@ final class AppModel: ObservableObject {
 
     return ExportManager.ExportRequest(
       sourceURL: url,
-      destinationURL: destinationDirectory.appendingPathComponent(
-        "\(url.deletingPathExtension().lastPathComponent).\(exportParams.format.fileExtension)"
-      ),
+      destinationURL: destinationURL,
       image: processed,
       parameters: exportParams
     )
@@ -622,11 +809,29 @@ final class AppModel: ObservableObject {
     }.value
   }
 
-  private func destinationURL(for url: URL, exportParams: ExportParameters) -> URL {
-    let directory = exportParams.destinationDirectory ?? url.deletingLastPathComponent()
-    return directory.appendingPathComponent(
-      "\(url.deletingPathExtension().lastPathComponent).\(exportParams.format.fileExtension)"
-    )
+  private func reserveDestinationURLs(
+    for urls: [URL],
+    destinationDirectory: URL,
+    format: ExportFormat
+  ) throws -> [URL] {
+    let existingNames = try FileManager.default.contentsOfDirectory(
+      at: destinationDirectory,
+      includingPropertiesForKeys: nil
+    ).map { $0.lastPathComponent.lowercased() }
+    var reservedNames = Set(existingNames)
+
+    return urls.map { sourceURL in
+      let stem = sourceURL.deletingPathExtension().lastPathComponent
+      let ext = format.fileExtension
+      var suffix = 1
+      var filename = "\(stem).\(ext)"
+      while reservedNames.contains(filename.lowercased()) {
+        suffix += 1
+        filename = "\(stem)-\(suffix).\(ext)"
+      }
+      reservedNames.insert(filename.lowercased())
+      return destinationDirectory.appendingPathComponent(filename)
+    }
   }
 
   private static func automaticallyClassifiedParameters(

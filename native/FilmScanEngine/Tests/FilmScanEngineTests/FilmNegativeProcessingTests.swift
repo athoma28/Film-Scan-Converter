@@ -312,8 +312,9 @@ struct FilmNegativeProcessingTests {
     }
 
     let profile = RollProfile(
-      filmStockID: "kodak-gold-200",
-      captureProfileID: "copy-stand-a",
+      rollID: "roll-001",
+      filmStockID: FilmStockProfileID(rawValue: "kodak-gold-200"),
+      captureProfileID: CaptureProfileID(rawValue: "copy-stand-a"),
       measurements: measurements,
       exposureBias: 0.25,
       whiteBalanceCorrection: BGRChannelValues(blue: 1.01, green: 1, red: 0.99)
@@ -326,8 +327,9 @@ struct FilmNegativeProcessingTests {
   @Test("Roll profile round trips through JSON")
   func rollProfileCodableRoundTrip() throws {
     let profile = RollProfile(
-      filmStockID: "portra-400",
-      captureProfileID: "lightbox-v1",
+      rollID: "roll-002",
+      filmStockID: FilmStockProfileID(rawValue: "portra-400"),
+      captureProfileID: CaptureProfileID(rawValue: "lightbox-v1"),
       measuredBaseDensity: BGRChannelValues(blue: 0.3, green: 0.4, red: 0.5),
       exposureBias: -0.1,
       whiteBalanceCorrection: BGRChannelValues(blue: 1.05, green: 1, red: 0.95)
@@ -346,8 +348,9 @@ struct FilmNegativeProcessingTests {
     let automatic = BGRChannelValues(blue: 0.25, green: 0.25, red: 0.25)
     let frame = BGRChannelValues(blue: 0.3, green: 0.3, red: 0.3)
     let roll = RollProfile(
-      filmStockID: "stock",
-      captureProfileID: "capture",
+      rollID: "roll-003",
+      filmStockID: FilmStockProfileID(rawValue: "stock"),
+      captureProfileID: CaptureProfileID(rawValue: "capture"),
       measuredBaseDensity: BGRChannelValues(blue: 0.4, green: 0.4, red: 0.4)
     )
 
@@ -773,6 +776,416 @@ struct FilmNegativeProcessingTests {
       pixels.append(sample.red)
     }
     return UInt16Image(width: width, height: height, channels: 3, pixels: pixels)
+  }
+
+  // ─── Slice G: Capture / Stock / Roll Profile Separation ───
+
+  @Test("CaptureProfile round-trips through JSON")
+  func captureProfileCodableRoundTrip() throws {
+    let profile = CaptureProfile(
+      id: CaptureProfileID(rawValue: "test-capture"),
+      cameraModel: "Fuji X-T5",
+      lensModel: "Tokina 100mm f/2.8",
+      backlightDescription: "CS-Lite LED panel",
+      estimatedColorTemperature: 5000,
+      normalizationParams: CaptureNormalizationParameters(
+        blackLevel: BGRChannelValues(blue: 128, green: 128, red: 128)
+      ),
+      preferredISO: 200,
+      notes: "Standard copy stand setup"
+    )
+    let encoded = try JSONEncoder().encode(profile)
+    let decoded = try JSONDecoder().decode(CaptureProfile.self, from: encoded)
+    #expect(decoded == profile)
+  }
+
+  @Test("FilmStockProfile round-trips through JSON")
+  func filmStockProfileCodableRoundTrip() throws {
+    let profile = FilmStockProfile(
+      id: FilmStockProfileID(rawValue: "portra-400"),
+      displayName: "Portra 400",
+      filmType: .colourNegative,
+      c41Profile: GenericC41Profile(
+        densitySlope: BGRChannelValues(blue: 1.05, green: 1.0, red: 0.95),
+        densityOffset: BGRChannelValues(blue: 0.01, green: 0.0, red: -0.01)
+      ),
+      displayRendering: DisplayRenderingParameters(
+        exposureEV: -0.5,
+        toneMap: .reinhard,
+        maximumSceneGain: 8
+      ),
+      notes: "Calibrated from IT8 target / Portra 400 roll #1"
+    )
+    let encoded = try JSONEncoder().encode(profile)
+    let decoded = try JSONDecoder().decode(FilmStockProfile.self, from: encoded)
+    #expect(decoded == profile)
+  }
+
+  @Test("RollProfile codable round-trip uses type-safe profile IDs")
+  func rollProfileCodableWithTypeSafeIDs() throws {
+    let profile = RollProfile(
+      rollID: "roll-p4-001",
+      filmStockID: FilmStockProfileID(rawValue: "portra-400"),
+      captureProfileID: CaptureProfileID(rawValue: "copy-stand-a"),
+      measuredBaseDensity: BGRChannelValues(blue: 0.32, green: 0.42, red: 0.52),
+      exposureBias: -0.25,
+      whiteBalanceCorrection: BGRChannelValues(blue: 1.02, green: 1, red: 0.98)
+    )
+    let encoded = try JSONEncoder().encode(profile)
+    let decoded = try JSONDecoder().decode(RollProfile.self, from: encoded)
+    #expect(decoded == profile)
+    #expect(decoded.rollID == "roll-p4-001")
+    #expect(decoded.schemaVersion == 2)
+  }
+
+  @Test("ProfileStore saves and loads CaptureProfile")
+  func profileStoreCaptureProfileRoundTrip() throws {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = ProfileStore(baseDirectory: dir)
+    let profile = CaptureProfile(
+      id: CaptureProfileID(rawValue: "stored-capture"),
+      cameraModel: "Test Camera",
+      normalizationParams: CaptureNormalizationParameters(),
+      preferredISO: 400
+    )
+    try store.saveCaptureProfile(profile)
+    let loadedValue = try store.loadCaptureProfile(id: profile.id)
+    let loaded = try #require(loadedValue)
+    #expect(loaded == profile)
+  }
+
+  @Test("ProfileStore saves and loads FilmStockProfile")
+  func profileStoreFilmStockProfileRoundTrip() throws {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = ProfileStore(baseDirectory: dir)
+    let profile = FilmStockProfile(
+      id: FilmStockProfileID(rawValue: "ektar-100"),
+      displayName: "Ektar 100",
+      filmType: .colourNegative,
+      c41Profile: GenericC41Profile()
+    )
+    try store.saveFilmStockProfile(profile)
+    let loadedValue = try store.loadFilmStockProfile(id: profile.id)
+    let loaded = try #require(loadedValue)
+    #expect(loaded == profile)
+  }
+
+  @Test("ProfileStore saves and loads RollProfile")
+  func profileStoreRollProfileRoundTrip() throws {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = ProfileStore(baseDirectory: dir)
+    let profile = RollProfile(
+      rollID: "stored-roll",
+      filmStockID: FilmStockProfileID(rawValue: "portra-400"),
+      captureProfileID: CaptureProfileID(rawValue: "default")
+    )
+    try store.saveRollProfile(profile)
+    let loadedValue = try store.loadRollProfile(rollID: "stored-roll")
+    let loaded = try #require(loadedValue)
+    #expect(loaded == profile)
+  }
+
+  @Test("ProfileStore loads multiple roll profiles")
+  func profileStoreLoadsMultipleRollProfiles() throws {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = ProfileStore(baseDirectory: dir)
+    try store.saveRollProfile(
+      RollProfile(
+        rollID: "r1", filmStockID: FilmStockProfileID(rawValue: "s1"),
+        captureProfileID: CaptureProfileID(rawValue: "c1")))
+    try store.saveRollProfile(
+      RollProfile(
+        rollID: "r2", filmStockID: FilmStockProfileID(rawValue: "s2"),
+        captureProfileID: CaptureProfileID(rawValue: "c2")))
+    let all = try store.loadRollProfiles()
+    #expect(all.count == 2)
+    #expect(all.map(\.rollID).sorted() == ["r1", "r2"])
+  }
+
+  @Test("ProfileStore migrates schema-1 roll profile JSON")
+  func profileStoreMigratesLegacyRollProfile() throws {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let rollDirectory = dir.appendingPathComponent("RollProfiles", isDirectory: true)
+    try FileManager.default.createDirectory(at: rollDirectory, withIntermediateDirectories: true)
+    let legacyJSON = """
+      {
+        "schemaVersion": 1,
+        "filmStockID": "portra-400",
+        "captureProfileID": "copy-stand-a",
+        "measuredBaseDensity": {"blue": 0.3, "green": 0.4, "red": 0.5},
+        "measurementCount": 3,
+        "exposureBias": 0,
+        "whiteBalanceCorrection": {"blue": 1, "green": 1, "red": 1}
+      }
+      """
+    try Data(legacyJSON.utf8).write(
+      to: rollDirectory.appendingPathComponent("legacy-roll.json"))
+
+    let loadedValue = try ProfileStore(baseDirectory: dir).loadRollProfile(
+      rollID: "legacy-roll")
+    let loaded = try #require(loadedValue)
+    #expect(loaded.rollID == "legacy-roll")
+    #expect(loaded.schemaVersion == RollProfile.currentSchemaVersion)
+    #expect(loaded.filmStockID.rawValue == "portra-400")
+    #expect(loaded.captureProfileID.rawValue == "copy-stand-a")
+  }
+
+  @Test("ProfileStore reports corrupt roll profile files")
+  func profileStoreReportsCorruptRollProfiles() throws {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let rollDirectory = dir.appendingPathComponent("RollProfiles", isDirectory: true)
+    try FileManager.default.createDirectory(at: rollDirectory, withIntermediateDirectories: true)
+    try Data("not json".utf8).write(
+      to: rollDirectory.appendingPathComponent("corrupt.json"))
+    let store = ProfileStore(baseDirectory: dir)
+
+    #expect(throws: DecodingError.self) {
+      try store.loadRollProfiles()
+    }
+  }
+
+  @Test("ProfileStore rejects unsupported profile schema versions")
+  func profileStoreRejectsFutureSchema() throws {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = ProfileStore(baseDirectory: dir)
+    let profile = CaptureProfile(
+      schemaVersion: 2,
+      id: CaptureProfileID(rawValue: "future")
+    )
+    try store.saveCaptureProfile(profile)
+
+    #expect(
+      throws: ProfileResolutionError.incompatibleSchemaVersion(2, supported: 1)
+    ) {
+      try store.loadCaptureProfile(id: profile.id)
+    }
+  }
+
+  @Test("Profile resolution resolves built-in profiles when none are stored")
+  func profileResolutionFallsBackToBuiltIn() throws {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = ProfileStore(baseDirectory: dir)
+    let capture = try store.resolveCaptureProfile(id: CaptureProfile.default.id)
+    #expect(capture == CaptureProfile.default)
+    let stock = try store.resolveStockProfile(
+      id: FilmStockProfile.genericColorNegative.id)
+    #expect(stock == FilmStockProfile.genericColorNegative)
+  }
+
+  @Test("Profile resolution returns stored profile over built-in")
+  func profileResolutionPrefersStoredOverBuiltIn() throws {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = ProfileStore(baseDirectory: dir)
+    let modified = CaptureProfile(
+      id: CaptureProfile.default.id,
+      cameraModel: "Overridden",
+      preferredISO: 800
+    )
+    try store.saveCaptureProfile(modified)
+    let resolved = try store.resolveCaptureProfile(id: CaptureProfile.default.id)
+    #expect(resolved.cameraModel == "Overridden")
+    #expect(resolved.preferredISO == 800)
+  }
+
+  @Test("Profile resolution throws for unknown capture profile ID")
+  func profileResolutionThrowsForUnknownCaptureProfile() {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = ProfileStore(baseDirectory: dir)
+    #expect(throws: ProfileResolutionError.self) {
+      try store.resolveCaptureProfile(
+        id: CaptureProfileID(rawValue: "nonexistent"))
+    }
+  }
+
+  @Test("Profile resolution throws for unknown stock profile ID")
+  func profileResolutionThrowsForUnknownStockProfile() {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = ProfileStore(baseDirectory: dir)
+    #expect(throws: ProfileResolutionError.self) {
+      try store.resolveStockProfile(
+        id: FilmStockProfileID(rawValue: "nonexistent"))
+    }
+  }
+
+  @Test("ResolvedPipelineProfile composes capture and stock independently")
+  func resolvedPipelineProfileComposesProfiles() throws {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = ProfileStore(baseDirectory: dir)
+    let captureID = CaptureProfileID(rawValue: "comp-capture")
+    let stockID = FilmStockProfileID(rawValue: "comp-stock")
+    try store.saveCaptureProfile(
+      CaptureProfile(
+        id: captureID,
+        normalizationParams: CaptureNormalizationParameters(
+          blackLevel: BGRChannelValues(blue: 64, green: 64, red: 64)
+        ),
+        preferredISO: 200
+      ))
+    try store.saveFilmStockProfile(
+      FilmStockProfile(
+        id: stockID,
+        displayName: "Composite Test",
+        filmType: .colourNegative,
+        c41Profile: GenericC41Profile(
+          densitySlope: BGRChannelValues(blue: 1.1, green: 1.0, red: 0.9)
+        )
+      ))
+
+    let resolved = try store.resolvePipeline(
+      captureProfileID: captureID,
+      stockProfileID: stockID
+    )
+    #expect(resolved.captureProfile.preferredISO == 200)
+    #expect(resolved.stockProfile.c41Profile.densitySlope.blue == 1.1)
+    #expect(resolved.resolvedBaseDensity == nil)
+  }
+
+  @Test("ResolvedPipelineProfile includes base density from roll profile")
+  func resolvedPipelineProfileIncludesBaseDensity() throws {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = ProfileStore(baseDirectory: dir)
+    let captureID = CaptureProfileID(rawValue: "bd-capture")
+    let stockID = FilmStockProfileID(rawValue: "bd-stock")
+    try store.saveCaptureProfile(CaptureProfile(id: captureID))
+    try store.saveFilmStockProfile(
+      FilmStockProfile(
+        id: stockID, displayName: "BD Test", filmType: .colourNegative))
+
+    let roll = RollProfile(
+      rollID: "bd-roll",
+      filmStockID: stockID,
+      captureProfileID: captureID,
+      measuredBaseDensity: BGRChannelValues(blue: 0.3, green: 0.4, red: 0.5)
+    )
+    let resolved = try store.resolvePipeline(
+      captureProfileID: captureID,
+      stockProfileID: stockID,
+      rollProfile: roll
+    )
+    #expect(
+      resolved.resolvedBaseDensity?.baseDensity
+        == BGRChannelValues(blue: 0.3, green: 0.4, red: 0.5))
+    #expect(resolved.resolvedBaseDensity?.source == .measuredRoll)
+  }
+
+  @Test("CaptureProfile built-in list includes default")
+  func builtInCaptureProfilesIncludesDefault() {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = ProfileStore(baseDirectory: dir)
+    let builtIns = store.builtInCaptureProfiles()
+    #expect(builtIns.contains(CaptureProfile.default))
+  }
+
+  @Test("FilmStockProfile built-in list includes both generics")
+  func builtInFilmStockProfilesIncludesBothGenerics() {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = ProfileStore(baseDirectory: dir)
+    let builtIns = store.builtInFilmStockProfiles()
+    #expect(builtIns.contains(FilmStockProfile.genericColorNegative))
+    #expect(builtIns.contains(FilmStockProfile.genericBW))
+  }
+
+  @Test("ProfileStore lists saved capture profile IDs")
+  func profileStoreListsCaptureProfileIDs() throws {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = ProfileStore(baseDirectory: dir)
+    try store.saveCaptureProfile(CaptureProfile(id: CaptureProfileID(rawValue: "cap-a")))
+    try store.saveCaptureProfile(CaptureProfile(id: CaptureProfileID(rawValue: "cap-b")))
+    let ids = store.listCaptureProfiles()
+    #expect(ids.sorted(by: { $0.rawValue < $1.rawValue }) == [
+      CaptureProfileID(rawValue: "cap-a"), CaptureProfileID(rawValue: "cap-b"),
+    ])
+  }
+
+  @Test("ProfileStore lists saved stock profile IDs")
+  func profileStoreListsStockProfileIDs() throws {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = ProfileStore(baseDirectory: dir)
+    try store.saveFilmStockProfile(
+      FilmStockProfile(
+        id: FilmStockProfileID(rawValue: "stock-x"), displayName: "X",
+        filmType: .colourNegative))
+    let ids = store.listFilmStockProfiles()
+    #expect(ids.contains(FilmStockProfileID(rawValue: "stock-x")))
+  }
+
+  @Test("ResolvedPipelineProfile round-trips through JSON")
+  func resolvedPipelineProfileCodableRoundTrip() throws {
+    let resolved = ResolvedPipelineProfile(
+      captureProfile: .default,
+      stockProfile: .genericColorNegative,
+      resolvedBaseDensity: ResolvedBaseDensity(
+        baseDensity: BGRChannelValues(blue: 0.12, green: 0.15, red: 0.18),
+        source: .manualPicker
+      )
+    )
+    let encoded = try JSONEncoder().encode(resolved)
+    let decoded = try JSONDecoder().decode(
+      ResolvedPipelineProfile.self, from: encoded)
+    #expect(decoded == resolved)
+  }
+
+  @Test("ProfileStore init with app group identifier creates support directory URL")
+  func profileStoreAppGroupInit() throws {
+    let store = ProfileStore(appGroupIdentifier: "TestAppGroup")
+    #expect(store != nil)
+    let storeValue = try #require(store)
+    #expect(storeValue.baseDirectory.lastPathComponent == "TestAppGroup")
+  }
+
+  @Test("Profile resolution passes through frame and automatic base density")
+  func profileResolutionPassesThroughFrameAndAutoBase() throws {
+    let dir = temporaryProfileDirectory()
+    defer { try? FileManager.default.removeItem(at: dir) }
+    let store = ProfileStore(baseDirectory: dir)
+    let captureID = CaptureProfileID(rawValue: "frame-auto-cap")
+    let stockID = FilmStockProfileID(rawValue: "frame-auto-stock")
+    try store.saveCaptureProfile(CaptureProfile(id: captureID))
+    try store.saveFilmStockProfile(
+      FilmStockProfile(
+        id: stockID, displayName: "FA", filmType: .colourNegative))
+
+    let frameBD = BGRChannelValues(blue: 0.11, green: 0.22, red: 0.33)
+    let autoBD = BGRChannelValues(blue: 0.1, green: 0.2, red: 0.3)
+
+    let withFrame = try store.resolvePipeline(
+      captureProfileID: captureID,
+      stockProfileID: stockID,
+      frameMeasurement: frameBD,
+      automaticBaseDensity: autoBD
+    )
+    #expect(withFrame.resolvedBaseDensity?.source == .measuredFrame)
+
+    let withAuto = try store.resolvePipeline(
+      captureProfileID: captureID,
+      stockProfileID: stockID,
+      automaticBaseDensity: autoBD
+    )
+    #expect(withAuto.resolvedBaseDensity?.source == .automaticEstimate)
+  }
+
+  private func temporaryProfileDirectory() -> URL {
+    let dir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("FilmScanEngineTests-\(UUID().uuidString.prefix(8))")
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return dir
   }
 
   private func borderedImage(

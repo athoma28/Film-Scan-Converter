@@ -22,6 +22,9 @@ the current five-file sample-corpus quality and performance results.
 A [real-time still preview plan](realtime-preview-plan.md) records the completed
 interactive-preview work and deferred display-surface/idle-render follow-up.
 
+The `FilmScanPreviewComparator` tool (`swift run FilmScanPreviewComparator`)
+validates GPU-vs-CPU rendering equivalence across 2,655 parameter combinations.
+
 A [comprehensive Swift port evaluation](swift-port-evaluation.md) reviews the
 entire native codebase: architecture, code quality, implemented scope, remaining
 work, risks, and effort estimates.

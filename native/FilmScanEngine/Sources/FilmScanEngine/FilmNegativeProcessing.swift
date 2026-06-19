@@ -81,24 +81,29 @@ public struct FilmBaseMeasurement: Codable, Equatable, Sendable {
 }
 
 public struct RollProfile: Codable, Equatable, Sendable {
+  public static let currentSchemaVersion = 2
+
   public var schemaVersion: Int
-  public var filmStockID: String
-  public var captureProfileID: String
+  public var rollID: String
+  public var filmStockID: FilmStockProfileID
+  public var captureProfileID: CaptureProfileID
   public var measuredBaseDensity: BGRChannelValues?
   public var measurementCount: Int
   public var exposureBias: Double
   public var whiteBalanceCorrection: BGRChannelValues
 
   public init(
-    schemaVersion: Int = 1,
-    filmStockID: String,
-    captureProfileID: String,
+    schemaVersion: Int = 2,
+    rollID: String,
+    filmStockID: FilmStockProfileID,
+    captureProfileID: CaptureProfileID,
     measuredBaseDensity: BGRChannelValues? = nil,
     measurementCount: Int = 0,
     exposureBias: Double = 0,
     whiteBalanceCorrection: BGRChannelValues = BGRChannelValues(blue: 1, green: 1, red: 1)
   ) {
     self.schemaVersion = schemaVersion
+    self.rollID = rollID
     self.filmStockID = filmStockID
     self.captureProfileID = captureProfileID
     self.measuredBaseDensity = measuredBaseDensity
@@ -108,15 +113,17 @@ public struct RollProfile: Codable, Equatable, Sendable {
   }
 
   public init(
-    schemaVersion: Int = 1,
-    filmStockID: String,
-    captureProfileID: String,
+    schemaVersion: Int = 2,
+    rollID: String,
+    filmStockID: FilmStockProfileID,
+    captureProfileID: CaptureProfileID,
     measurements: [FilmBaseMeasurement],
     exposureBias: Double = 0,
     whiteBalanceCorrection: BGRChannelValues = BGRChannelValues(blue: 1, green: 1, red: 1)
   ) {
     self.init(
       schemaVersion: schemaVersion,
+      rollID: rollID,
       filmStockID: filmStockID,
       captureProfileID: captureProfileID,
       measuredBaseDensity: Self.rollBaseDensity(from: measurements),
@@ -133,6 +140,56 @@ public struct RollProfile: Codable, Equatable, Sendable {
       green: median(measurements.map(\.baseDensity.green).sorted()),
       red: median(measurements.map(\.baseDensity.red).sorted())
     )
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case schemaVersion
+    case rollID
+    case filmStockID
+    case captureProfileID
+    case measuredBaseDensity
+    case measurementCount
+    case exposureBias
+    case whiteBalanceCorrection
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+    rollID = try container.decodeIfPresent(String.self, forKey: .rollID) ?? ""
+
+    if let typedID = try? container.decode(FilmStockProfileID.self, forKey: .filmStockID) {
+      filmStockID = typedID
+    } else {
+      filmStockID = FilmStockProfileID(
+        rawValue: try container.decode(String.self, forKey: .filmStockID))
+    }
+    if let typedID = try? container.decode(CaptureProfileID.self, forKey: .captureProfileID) {
+      captureProfileID = typedID
+    } else {
+      captureProfileID = CaptureProfileID(
+        rawValue: try container.decode(String.self, forKey: .captureProfileID))
+    }
+
+    measuredBaseDensity = try container.decodeIfPresent(
+      BGRChannelValues.self, forKey: .measuredBaseDensity)
+    measurementCount = try container.decodeIfPresent(Int.self, forKey: .measurementCount) ?? 0
+    exposureBias = try container.decodeIfPresent(Double.self, forKey: .exposureBias) ?? 0
+    whiteBalanceCorrection = try container.decodeIfPresent(
+      BGRChannelValues.self, forKey: .whiteBalanceCorrection
+    ) ?? BGRChannelValues(blue: 1, green: 1, red: 1)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(schemaVersion, forKey: .schemaVersion)
+    try container.encode(rollID, forKey: .rollID)
+    try container.encode(filmStockID, forKey: .filmStockID)
+    try container.encode(captureProfileID, forKey: .captureProfileID)
+    try container.encodeIfPresent(measuredBaseDensity, forKey: .measuredBaseDensity)
+    try container.encode(measurementCount, forKey: .measurementCount)
+    try container.encode(exposureBias, forKey: .exposureBias)
+    try container.encode(whiteBalanceCorrection, forKey: .whiteBalanceCorrection)
   }
 }
 

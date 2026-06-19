@@ -12,6 +12,7 @@ let package = Package(
     .library(name: "FilmScanPreviewRenderer", targets: ["FilmScanPreviewRenderer"]),
     .executable(name: "FilmScanConverterMac", targets: ["FilmScanConverterMac"]),
     .executable(name: "FilmScanRawBenchmark", targets: ["FilmScanRawBenchmark"]),
+    .executable(name: "FilmScanPreviewComparator", targets: ["FilmScanPreviewComparator"]),
   ],
   targets: [
     .systemLibrary(

@@ -60,7 +60,12 @@ struct StillPreviewBenchmarkTests {
     return parameters
   }
 
-  @Test("Production renderer p95 below 33 ms over 500 current-pipeline changes")
+  @Test(
+    "Production renderer p95 below 33 ms over 500 current-pipeline changes",
+    .enabled(
+      if: ProcessInfo.processInfo.environment["RUN_PERFORMANCE_TESTS"] == "1",
+      "set RUN_PERFORMANCE_TESTS=1 to run the 500-render benchmark")
+  )
   func productionRendererBurstBenchmark() {
     let image = Self.createRandomImage(width: Self.proxyWidth, height: Self.proxyHeight)
     guard let renderer = StillPreviewRenderer(image: image) else {
@@ -283,6 +288,108 @@ struct StillPreviewBenchmarkTests {
     #expect(gpu[1] > 0.999_999)
     #expect(gpu[2] == 0)
     #expect(gpu[3] == 0)
+  }
+
+  @Test("Production renderer matches CPU across parameter grid")
+  func productionRendererMatchesCPUParameterGrid() {
+    let image = Self.createRandomImage(width: 64, height: 48)
+    guard let renderer = StillPreviewRenderer(image: image) else {
+      #expect(Bool(false), "Could not create production still preview renderer")
+      return
+    }
+
+    let curvePoints = [
+      CurvePoint(input: 0, output: 0),
+      CurvePoint(input: 0.3, output: 0.15),
+      CurvePoint(input: 0.7, output: 0.85),
+      CurvePoint(input: 1, output: 1),
+    ]
+
+    let configs: [(String, ProcessingParameters)] = [
+      ("neutral-neg", ProcessingParameters(filmType: .colourNegative)),
+      ("neutral-slide", ProcessingParameters(filmType: .slide)),
+      ("warm", ProcessingParameters(filmType: .colourNegative, temperature: 50, tint: -30)),
+      ("cool", ProcessingParameters(filmType: .colourNegative, temperature: -50, tint: 30)),
+      ("gamma-up", ProcessingParameters(filmType: .colourNegative, gamma: 40)),
+      ("gamma-down", ProcessingParameters(filmType: .colourNegative, gamma: -35)),
+      ("shadows-boost", ProcessingParameters(filmType: .colourNegative, shadows: 60)),
+      ("highlights-pull", ProcessingParameters(filmType: .colourNegative, highlights: -45)),
+      ("sat-boost", ProcessingParameters(filmType: .colourNegative, saturation: 150)),
+      ("sat-zero", ProcessingParameters(filmType: .colourNegative, saturation: 0)),
+      ("exposure-combo", ProcessingParameters(
+        filmType: .colourNegative, gamma: -35, shadows: 60, highlights: -45)),
+      ("wb-combo", ProcessingParameters(
+        filmType: .colourNegative, temperature: 65, tint: -40, saturation: 130)),
+      ("curve-only", ProcessingParameters(
+        filmType: .colourNegative, curveEnabled: true, curveControlPoints: curvePoints)),
+      ("wheels-only", ProcessingParameters(
+        filmType: .colourNegative,
+        highlightWheel: ColorWheel(hue: 35, strength: 0.4),
+        midtoneWheel: ColorWheel(hue: 190, strength: 0.25),
+        shadowWheel: ColorWheel(hue: 285, strength: 0.5))),
+      ("curves-and-wheels", ProcessingParameters(
+        filmType: .colourNegative,
+        curveEnabled: true, curveControlPoints: curvePoints,
+        highlightWheel: ColorWheel(hue: 35, strength: 0.4),
+        midtoneWheel: ColorWheel(hue: 190, strength: 0.25),
+        shadowWheel: ColorWheel(hue: 285, strength: 0.5))),
+      ("full-combo", ProcessingParameters(
+        filmType: .colourNegative,
+        gamma: 35, shadows: 40, highlights: -30,
+        temperature: 45, tint: -25, saturation: 145,
+        curveEnabled: true, curveControlPoints: curvePoints,
+        highlightWheel: ColorWheel(hue: 35, strength: 0.4),
+        midtoneWheel: ColorWheel(hue: 190, strength: 0.25),
+        shadowWheel: ColorWheel(hue: 285, strength: 0.5))),
+      ("per-channel-curves", ProcessingParameters(
+        filmType: .colourNegative,
+        redCurveEnabled: true,
+        redCurveControlPoints: [CurvePoint(input: 0, output: 0.05), CurvePoint(input: 0.45, output: 0.7), CurvePoint(input: 1, output: 0.95)],
+        greenCurveEnabled: true,
+        greenCurveControlPoints: [CurvePoint(input: 0, output: 0), CurvePoint(input: 0.5, output: 0.3), CurvePoint(input: 1, output: 1)],
+        blueCurveEnabled: true,
+        blueCurveControlPoints: [CurvePoint(input: 0, output: 0.1), CurvePoint(input: 0.65, output: 0.45), CurvePoint(input: 1, output: 1)]
+      )),
+      ("slide-curves", ProcessingParameters(
+        filmType: .slide, curveEnabled: true, curveControlPoints: curvePoints)),
+      ("slide-wheels", ProcessingParameters(
+        filmType: .slide,
+        highlightWheel: ColorWheel(hue: 120, strength: 0.3),
+        midtoneWheel: ColorWheel(hue: 60, strength: 0.2),
+        shadowWheel: ColorWheel(hue: 300, strength: 0.4))),
+    ]
+
+    var maxDiff = 0
+    var worstName = ""
+    for (name, parameters) in configs {
+      guard
+        let gpu = renderer.render(parameters: parameters, showOriginal: false),
+        let cpu = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+          .makePreviewCGImage(),
+        let gpuPixels = rgbaPixels(gpu),
+        let cpuPixels = rgbaPixels(cpu)
+      else {
+        #expect(Bool(false), "Render failed for \(name)")
+        continue
+      }
+
+      #expect(gpu.width == cpu.width, "\(name): width mismatch")
+      #expect(gpu.height == cpu.height, "\(name): height mismatch")
+      #expect(gpuPixels.count == cpuPixels.count, "\(name): pixel count mismatch")
+
+      var comboMax = 0
+      for index in gpuPixels.indices {
+        let diff = abs(Int(gpuPixels[index]) - Int(cpuPixels[index]))
+        comboMax = max(comboMax, diff)
+      }
+      if comboMax > maxDiff {
+        maxDiff = comboMax
+        worstName = name
+      }
+    }
+
+    #expect(maxDiff <= 2,
+      "Production renderer max diff \(maxDiff)/255 at '\(worstName)'; should be <= 2 for visual equivalence")
   }
 
   private func rgbaPixels(_ image: CGImage) -> [UInt8]? {

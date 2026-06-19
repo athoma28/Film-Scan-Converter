@@ -29,8 +29,8 @@ features. Its implemented scope includes:
   `output = multiplier × pixel^-(greenExp × ratio)`. Color Negative preset
   (RedRatio=1.36, GreenExp=1.5, BlueRatio=0.86) and Black & White preset (all
   ratios=1.0) matching RawTherapee's `Film Negative.pp3` and `Film Negative -
-  Black and White.pp3`. Full CPU (Double), GPU-equivalent (Float), and Metal
-  CIKernel processing parity. SwiftUI controls with preset picker and per-channel
+  Black and White.pp3`. CPU (Double) and production Metal CIKernel processing
+  parity. SwiftUI controls with preset picker and per-channel
   ratio/exponent sliders.
 - Film-negative reference resolution and inversion in linear Rec.2020 after
   decoding to sRGB, followed by conversion back to display sRGB. This is not a
@@ -62,17 +62,19 @@ features. Its implemented scope includes:
 - TIFF (16-bit, optional LZW compression), JPEG (8-bit, configurable quality),
   PNG (16-bit lossless), and DNG (processed 16-bit RGB in a valid TIFF container)
   export with individual and batch-all workflows, background processing,
-  cancellation, per-file error reporting, partial-file cleanup, and lazy
-  per-file decode/classify/process/write for unloaded batch members.
+  cancellation, per-file error reporting, partial-file cleanup, collision-safe
+  destination naming, and lazy per-file decode/classify/process/write for
+  unloaded batch members.
 - macOS CI that runs the native engine tests and builds the app. The latest
-  local native suite contains 189 tests across 13 test files.
+  local native suite contains 203 tests across 13 test files; the 500-render
+  performance benchmark is opt-in.
 - Real production-renderer comparison against the authoritative CPU path and an
   actual `AppModel` rapid-update scheduling integration test.
 
 The remaining replacement work is automatic contour/crop detection,
-perspective warp, dust detection/inpainting, app wiring for rebate selection and
-the standalone density/display pipeline, matched flat-field workflow, and
-capture/stock/roll profile separation.
+perspective warp, dust detection/inpainting, connecting the standalone
+density/display pipeline to preview and export, and a matched flat-field
+workflow.
 
 See [Native macOS Development](development/native-macos.md) for the
 authoritative current step, progress, limitations, and next work.

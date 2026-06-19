@@ -22,8 +22,9 @@ manual/automatic rebate selection and the standalone density/display APIs into
 the app, or begin capture/stock/roll profile separation. This builds on the
 operational RawTherapee-oriented power-law front-end, startup film-kind
 classification, and engine-only Slices A through F. TIFF/JPEG/PNG/DNG export,
-histogram equalisation, curves, color wheels,
-the still-preview latency gate, and the GPU-vs-CPU algorithmic equivalence gate
+histogram equalisation, curves, color wheels, GPU-vs-CPU equivalence
+(2,655-case comparator tool and 20-configuration automated test),
+the still-preview latency gate, and the algorithmic equivalence gate
 are complete. Work on later processing stages or additional SwiftUI
 controls should not bypass the pixel-equivalence gate or introduce a
 preview-only control without an authoritative processing definition.

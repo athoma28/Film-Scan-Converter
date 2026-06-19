@@ -18,8 +18,8 @@
   unbounded detached-task backlog.
 - The kernel is display-only. The existing 16-bit CPU correction path remains
   the authoritative reference and fallback.
-- The latest 500-change 1080×720 runtime benchmark measured 2.66 ms median and
-  3.37 ms p95 for the correction kernel plus `CGImage` render on the
+- The latest opt-in 500-change 1080×720 runtime benchmark measured 2.43 ms median and
+  3.50 ms p95 for the correction kernel plus `CGImage` render on the
   development machine.
 - **Stage 2 GPU-vs-CPU equivalence is verified.** The model and production
   renderer are compared against `FilmProcessing.correctedPreview` across the
@@ -31,7 +31,7 @@
 - **The production-renderer Stage 3 performance gate is met.** Display-rate coalescing is implemented
   with a 17 ms inter-frame delay, capping renders at ~60 Hz. A 500-update GPU
   render burst benchmark across current-pipeline parameter combinations,
-  including curves and color wheels, measured 3.37 ms p95 at 1080×720 in the
+  including curves and color wheels, measured 3.50 ms p95 at 1080×720 in the
   latest local run. Scheduling contract tests verify coalescing, latest-value-wins,
   cancellation, and bounded backlog.
 - A Metal-backed preview surface and the idle authoritative preview remain
@@ -142,7 +142,7 @@ meaning and output differences must remain bounded and tested.
 - Separate interactive preview requests from authoritative CPU renders.
 - ~~Add bounded latest-value-wins scheduling.~~ Done.
 - ~~Add scheduling tests and latency instrumentation.~~ Done (signposts,
-  renderStats counters, scheduling contract tests).
+  renderStats counters, and a real `AppModel` rapid-update integration test).
 - Preserve the current CPU preview as a temporary idle-render fallback.
 
 This stage makes failures observable and prevents misleading UI behavior, but
@@ -171,11 +171,12 @@ does not by itself make the CPU renderer real-time.
   17 ms inter-frame delay, latest-value-wins bounded to 1 in-flight + 1 pending.
 - ~~Benchmark the representative RAF corpus.~~ Done. The 500-update 1080×720
   production-renderer burst benchmark, including curves and color wheels,
-  measured 3.37 ms p95 in the latest local run.
+  measured 3.50 ms p95 in the latest local run.
 - ~~Require 95th-percentile update latency below 33 ms with no render backlog
-  after 500 rapid parameter changes.~~ Verified at 3.37 ms p95 in the latest
+  after 500 rapid parameter changes.~~ Verified at 3.50 ms p95 in the latest
   local run.
-  Scheduling contract tests confirm no unbounded backlog and latest-value-wins.
+  The bounded queue is implemented directly in `AppModel`; the rapid-update
+  integration test confirms coalescing and the latest displayed parameter state.
 
 ### Stage 4: Idle Authoritative Preview
 
@@ -189,14 +190,15 @@ does not by itself make the CPU renderer real-time.
 - ~~Unit test that every slider setter changes the selected file's parameters.~~ Done.
 - ~~Test that a burst of parameter snapshots displays the newest value and
   discards superseded snapshots without starting unbounded work.~~ Done
-  (scheduling contract tests).
+  (real `AppModel` integration test).
 - ~~Test that switching files cannot display a late result from the previous
-  file.~~ Done (cancellation test, generation-based guard).
+  file.~~ Implemented with cancellation and a generation guard; a dedicated
+  late-render regression test remains to be added.
 - ~~Compare GPU and CPU output across representative film modes and parameter
   combinations.~~ Done (2,655 direct production-renderer comparisons,
   maximum difference 2/255).
 - ~~Benchmark drag latency on representative standard images and RAF files.~~ Done.
-  The latest 500-update production-renderer burst benchmark measured 3.37 ms
+  The latest 500-update production-renderer burst benchmark measured 3.50 ms
   p95 at 1080×720.
 - Add a UI smoke test that drags each slider and confirms visible preview
   changes once reliable app automation is available.

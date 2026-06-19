@@ -18,6 +18,12 @@ swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
 swift run --package-path native/FilmScanEngine FilmScanConverterMac
 ```
 
+Run the GPU-vs-CPU preview comparator:
+
+```sh
+swift run --package-path native/FilmScanEngine FilmScanPreviewComparator
+```
+
 Or use the convenience launcher from the project root:
 
 ```sh

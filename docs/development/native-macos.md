@@ -5,7 +5,7 @@ what works now, the current development step, and the order of upcoming work.
 The detailed [macOS native roadmap](../improvements/MacOS-Native-Roadmap.md) is
 the design reference, not a statement that every listed item is implemented.
 
-**Last updated:** 2026-06-18 (189 tests across 13 files; engine camera-scan processing now provides Bayer RCD when full-resolution decode is explicitly requested, ISO-tier noise/detail filtering, and linear Rec.2020 placement around film-negative inversion; the current app path still requests half-size RAW decode)
+**Last updated:** 2026-06-18 (203 tests across 13 files; the 500-render benchmark is opt-in; FilmScanPreviewComparator is a runnable product; production GPU-vs-CPU equivalence is verified across a 20-configuration parameter grid test; Slice G profile separation and Slice C/D inspector wiring are complete; the current app path still requests half-size RAW decode)
 
 ## Goal
 
@@ -35,21 +35,21 @@ Native export is complete.
 ## Current Development Step
 
 **Active step: film-specific camera-scan track. The app-facing preset includes the RawTherapee exponent model and ratios, 20%-border-cut references, the `1/24` reference-output behavior, linear Rec.2020 placement around inversion, and both bundled Film Negative tone curves. The camera-scan decoder also applies ISO-tier noise/detail filtering. The engine has an RCD callback for explicitly requested full-resolution Bayer decode, but the app currently requests half-size RAW decode, which bypasses Bayer interpolation. Full RawTherapee parity is not claimed: LibRaw converts camera data through sRGB before the Rec.2020 inversion stage, and the native ISO filters are bounded approximations rather than RawTherapee's directional-pyramid denoise and capture-sharpening kernels. Slices A through F are complete as standalone APIs.**
-TIFF, JPEG, PNG, and DNG export is complete with individual and memory-bounded batch workflows, cancellation, partial-file cleanup, and 19 focused tests. Standard-image exports retain source resolution; RAW exports currently use the app's half-size LibRaw decode.
+TIFF, JPEG, PNG, and DNG export is complete with individual and memory-bounded batch workflows, cancellation, partial-file cleanup, collision-safe destination naming, and focused engine/app tests. Standard-image exports retain source resolution; RAW exports currently use the app's half-size LibRaw decode.
 
 ## Next Step
 
-**Wire the completed Slice C/D region APIs into the app, beginning with manual rebate selection, or continue to Slice G profile separation. The density and display stages now have CPU/GPU contracts, but they still need an explicit base-density source and app-level workflow before replacing the current power-law preview front-end.**
-The app now starts new files in color negative, B&W negative, or slide mode from deterministic proxy statistics without overwriting existing per-file settings. The engine also computes robust median/trimmed-mean transmittance and density from a user-selected rebate rectangle, persists measured roll base in a Codable roll profile, resolves base-density precedence, and returns deterministic edge rebate candidates with confidence without overriding stronger roll/frame measurements. Next, expose manual or automatic rebate selection in the app or connect the existing density-domain and display stages to the accelerated renderer, including native RawTherapee-style highlight recovery for thin negative regions.
+**Connect the density pipeline to preview and export. The Slice C/D rebate detection UI is now wired to the app inspector with automatic candidate discovery and manual measurement. Slice G profile separation is complete with Codable CaptureProfile, FilmStockProfile, persisted RollProfile, a ProfileStore with JSON serialization, and precedence resolution. The density and display stages now have CPU/GPU contracts, an explicit base-density source, and an app-level measurement workflow but are not yet connected to the live preview or export pipeline.**
+The app's "Detect Rebate" button runs bounded analysis on the 640-pixel proxy, finds edge candidates via the engine's `automaticRebateCandidates()`, displays per-candidate base density and confidence, and persists roll profiles atomically to `~/Library/Application Support/FilmScanConverter/`. Rebate work is cancelled and discarded when selection changes; schema-1 roll JSON is migrated when loaded, while corrupt or unsupported profiles report errors. The current preview and export still use the power-law (RawTherapee-compatible) inversion front-end. Next: connect the density-to-scene pipeline (`densityToSceneLinear` + `renderDisplay`) to export and preview, add flat-field loading, and implement per-stock inverse density curves (Slice H) for Portra 400, Portra 160, Ektar 100, and Gold 200.
 
 ## Progress
 
 | Area | Status | Current result |
 |---|---|---|
 | Phase 0: regression gate | In progress | Swift tests consume frozen Python-generated `.npy` fixtures and compact RAW hash manifests. Standard decode fixtures cover 8-bit PNG, grayscale PNG, BMP, JPEG, and 16-bit TIFF. Five half-size RAF decodes and one full-resolution RAF decode require exact SHA-256 equality with RawPy when the local `sample-raw` corpus is present; when it is absent, those corpus-specific tests are explicitly reported as disabled rather than silently passing. The full intermediate-stage and parameter-grid corpus is not complete. |
-| Phase 1: processing engine | In progress | The frozen RawPy profile remains exact for fixtures. The camera-scan profile disables auto-bright/exposure boost, enables LibRaw highlight reconstruction, records ISO and executed stages, and selects bounded low-ISO sharpening or medium/high-ISO denoising. An RCD callback runs only for Bayer files when full-resolution decode is explicitly requested; half-size decode and X-Trans files do not use RCD. Film-negative inversion converts the decoded sRGB values to linear Rec.2020, performs reference resolution and inversion there, then converts back to display sRGB; CPU Double, GPU-equivalent Float, and Metal paths match. Direct camera-to-Rec.2020 conversion and exact RawTherapee denoise/sharpen kernels remain limitations. |
-| Phase 2: accelerated rendering | In progress | Live camera preview uses a Metal-backed Core Image context. Still-file correction uploads one bounded 16-bit proxy per selection, applies the current correction controls in one custom GPU kernel, and keeps only one in-flight render plus the newest pending snapshot. The kernel includes the film-negative inversion, curve LUT sampling, and three-way color wheels. The production renderer matches the authoritative CPU path across 2,655 comparisons with a maximum difference of 2/255. Slice F's scene-display CIKernel matches its Double CPU contract within 0.000002 across 60 channel comparisons. The latest 500-change 1080×720 benchmark measured 3.37 ms p95; the app uses a 640-pixel interactive proxy. Density-pipeline app wiring, a direct Metal-backed preview surface, and idle authoritative rendering remain. |
-| Phase 3: SwiftUI application | Interactive correction + export workflow | The app accepts supported files by drag and drop, decodes standard images and RAW files, auto-initializes new files to color negative, B&W negative, or slide mode, and provides per-file film mode, film negative preset (Off/Color Negative/B&W) and per-channel ratio/exp sliders, orientation, white balance, exposure, shadows, highlights, saturation, curves, color wheels, reset, and original/corrected comparison controls. An export section supports TIFF, JPEG (configurable quality), PNG, and DNG output with frame percentage, aspect-ratio presets, TIFF LZW compression, destination folder selection, per-file error reporting, and individual plus batch-all export. Export All decodes and processes unloaded files on demand instead of requiring every batch member to be selected first or retained in an unbounded decoded-image cache. The two most recent decoded/proxy/renderer sessions are cached for immediate back-and-forth switching; after a selection loads, a utility-priority worker predecodes only the immediate next uncached file into that same bounded cache. Slider and wheel bindings remain live during continuous drags; end-to-end latency still requires real-file verification. |
+| Phase 1: processing engine | In progress | The frozen RawPy profile remains exact for fixtures. The camera-scan profile disables auto-bright/exposure boost, enables LibRaw highlight reconstruction, records ISO and executed stages, and selects bounded low-ISO sharpening or medium/high-ISO denoising. An RCD callback runs only for Bayer files when full-resolution decode is explicitly requested; half-size decode and X-Trans files do not use RCD. Film-negative inversion converts the decoded sRGB values to linear Rec.2020, performs reference resolution and inversion there, then converts back to display sRGB; the CPU Double and production Metal paths match within the documented preview tolerance. Direct camera-to-Rec.2020 conversion and exact RawTherapee denoise/sharpen kernels remain limitations. |
+| Phase 2: accelerated rendering | In progress | Live camera preview uses a Metal-backed Core Image context. Still-file correction uploads one bounded 16-bit proxy per selection, applies the current correction controls in one custom GPU kernel, and keeps only one in-flight render plus the newest pending snapshot. The kernel includes the film-negative inversion, curve LUT sampling, and three-way color wheels. The production renderer matches the authoritative CPU path across 2,655 comparisons with a maximum difference of 2/255. Slice F's scene-display CIKernel matches its Double CPU contract within 0.000002 across 60 channel comparisons. The latest opt-in 500-change 1080×720 benchmark measured 3.50 ms p95; the app uses a 640-pixel interactive proxy. Density-pipeline app wiring, a direct Metal-backed preview surface, and idle authoritative rendering remain. |
+| Phase 3: SwiftUI application | Interactive correction + export workflow | The app accepts supported files by drag and drop, decodes standard images and RAW files, and auto-initializes new files to color negative, B&W negative, or slide mode. Its fixed inspector is organized into Edit, Grade, and Export pages: film setup and profile tuning lead into light and basic color controls; curves and three-way color wheels are separated as grading tools; output format, frame, destination, progress, and per-file errors live on the Export page. Orientation and original/corrected comparison remain available above the preview. Centered adjustment sliders expose signed values, neutral reset actions, one-unit steps, and double-click reset; saturation displays as -100...+100 while preserving the engine's 0...200 storage contract. Film-negative ratio/exponent controls use narrower useful ranges and are hidden under advanced profile tuning. Export supports TIFF, JPEG (configurable quality), PNG, and DNG output with frame percentage, aspect-ratio presets, TIFF LZW compression, destination folder selection, per-file error reporting, and individual plus batch-all export. Export All decodes and processes unloaded files on demand instead of requiring every batch member to be selected first or retained in an unbounded decoded-image cache. The two most recent decoded/proxy/renderer sessions are cached for immediate back-and-forth switching; after a selection loads, a utility-priority worker predecodes only the immediate next uncached file into that same bounded cache. Slider and wheel bindings remain live during continuous drags; end-to-end latency still requires real-file verification. |
 | Phase 4: performance and polish | Early measurement | CI builds and tests the current native package. The representative RAW decode and quality benchmark is complete; packaging, UI snapshots, and release work remain. |
 
 ## Planned Native Capabilities
@@ -69,7 +69,8 @@ Export is complete for all four target formats:
   claiming untouched camera RAW);
 - individual and batch-all export with actor-based export primitives,
   memory-bounded sequential app-level Export All, parallel `ExportManager`
-  batch support for prebuilt request sets, cancellation propagation,
+  batch support for prebuilt request sets, collision-safe `-2`, `-3`, ...
+  destination suffixes, cancellation propagation,
   error-per-file reporting, and partial-file cleanup.
 
 Film-specific camera-scan processing now has a separate staged track based on
@@ -160,19 +161,24 @@ The detailed order and acceptance criteria are maintained in the
   16-bit proxy per selection, disables implicit working-space conversion, and
   fuses film negative power-law inversion, grayscale, white balance, tone, HSV
   saturation, curves, and color wheels into one GPU color kernel. The latest
-  500-change 1080×720 runtime benchmark measured 2.66 ms median and 3.37 ms p95
+  opt-in 500-change 1080×720 runtime benchmark measured 2.43 ms median and 3.50 ms p95
   kernel-plus-`CGImage` render latency on the development machine.
 - Bounded latest-value-wins still-preview scheduling with at most one render in
   flight and one newest pending parameter snapshot.
 - Display-rate coalescing with a 17 ms inter-frame delay, capping renders at
   ~60 Hz and preventing render backlog during rapid slider interaction.
-  Verified by scheduling contract tests (coalescing, latest-value-wins,
-  cancellation, bounded backlog) and a 500-update production-renderer benchmark
-  including curves and color wheels (1080×720 proxy, 3.37 ms p95 in the latest
-  local run).
+  The real `AppModel` rapid-update integration test verifies coalescing and the
+  latest displayed parameter state. The opt-in 500-update production-renderer
+  benchmark includes curves and color wheels (1080×720 proxy, 3.50 ms p95 in
+  the latest recorded run).
 - Per-file, session-scoped SwiftUI correction controls for film mode,
   orientation, temperature, tint, gamma, shadows, highlights, and saturation,
   plus reset and original/corrected comparison.
+- A three-page Edit/Grade/Export inspector that keeps primary film, light, and
+  color adjustments separate from curves/color grading and output settings.
+  Adjustment sliders show signed values around a visible neutral point and
+  provide explicit and double-click reset actions. Advanced film-negative
+  profile coefficients are collapsed by default and use preset-centered ranges.
 - Draggable shadow, midtone, and highlight color wheels with hue mapped around
   the wheel, strength mapped from center to edge, position markers, and
   double-click reset.
@@ -215,11 +221,12 @@ The detailed order and acceptance criteria are maintained in the
   `output = multiplier × pixel^-(greenExp × ratio)`. Adopted presets matching
   RawTherapee's `Film Negative.pp3` (RedRatio=1.36, GreenExp=1.5, BlueRatio=0.86
   for color negative) and `Film Negative - Black and White.pp3` (all ratios=1.0).
-  Full processing parity across CPU (Double), GPU-equivalent (Float), and Metal
-  CIKernel paths. SwiftUI controls with preset picker (Off / Color Negative /
+  Processing parity across the CPU (Double) and production Metal CIKernel paths.
+  SwiftUI controls with preset picker (Off / Color Negative /
   Black & White) and per-channel ratio/exponent sliders showing computed exponents
-  and measured medians. 4 processing tests verify inversion direction, multiplier
-  calibration, deep-shadow regression prevention, and GPU-CPU equivalence.
+  and measured medians. Focused processing and production-renderer tests verify
+  inversion direction, multiplier calibration, deep-shadow regression prevention,
+  and CPU/Metal equivalence.
 - Automatic startup classification for new imports: low-chroma scans initialize
   as B&W negative with the RawTherapee B&W preset, orange-mask channel medians
   initialize as color negative with the RawTherapee color-negative preset, and
@@ -302,7 +309,7 @@ The detailed order and acceptance criteria are maintained in the
   coalescing (17 ms inter-frame delay). The actual Core Image renderer is
   verified against the authoritative CPU path across 2,655 comparisons with a
   maximum difference of 2/255. Its latest current-pipeline benchmark measured
-  3.37 ms p95 at
+  3.50 ms p95 at
   1080×720. A direct Metal-backed preview surface and idle authoritative
   rendering remain. See the
   [real-time still preview plan](realtime-preview-plan.md).
@@ -329,8 +336,9 @@ The detailed order and acceptance criteria are maintained in the
   complete historical crop/perspective/dust workflow until the retirement gates
   are complete.
 
-The native test suite currently contains **189 tests** across 13 test files,
-all passing in the latest local run.
+The native test suite currently contains **203 tests** across 13 test files,
+all passing in the latest local run. The 500-render latency benchmark is skipped
+by default and runs when `RUN_PERFORMANCE_TESTS=1` is set.
 
 ## Completed Native Features (newly added)
 
@@ -368,14 +376,16 @@ all passing in the latest local run.
   Luminance is preserved after wheel application.
 - GPU preview kernel: curve LUT passed as a 256×256 8-bit CIImage sampler;
   color wheel masks and gain math mirrored in the Core Image Kernel Language.
-- GPU-model-versus-CPU equivalence verified for curves, color wheels, and both
-  combined. Direct Core Image renderer comparison covers 2,655 cases with zero
-  failures and a maximum difference of 2/255.
-  B&W negative correctly skips curves and color wheels in both CPU and GPU
-  paths. 35 tests cover LUT construction (identity, unsorted input, duplicate
+- Direct production Core Image renderer comparison covers 2,655 cases with zero
+  failures and a maximum difference of 2/255. An automated 20-configuration
+  parameter grid test verifies the production renderer against the authoritative
+  CPU path across film types, WB, exposure, saturation, curves, color wheels,
+  and per-channel curves on every test run.
+  B&W negative correctly skips curves and color wheels in both CPU and production
+  GPU paths. Focused tests cover LUT construction (identity, unsorted input, duplicate
   inputs, extrapolation, boundaries), mask ranges and overlap, hue wrapping,
-  zero-strength identity, three simultaneous wheels, and full GPU-CPU
-  equivalence.
+  zero-strength identity, three simultaneous wheels, and direct production
+  GPU-CPU equivalence.
 
 ## Next Work
 
@@ -439,6 +449,21 @@ brew install libraw
 swift test --package-path native/FilmScanEngine
 swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
 swift run --package-path native/FilmScanEngine FilmScanConverterMac
+```
+
+Run the GPU-vs-CPU preview comparator (comprehensive diagnostic across 2,655
+parameter combinations and five test images):
+
+```sh
+swift run --package-path native/FilmScanEngine FilmScanPreviewComparator
+```
+
+Run the opt-in 500-render latency benchmark:
+
+```sh
+RUN_PERFORMANCE_TESTS=1 swift test \
+  --package-path native/FilmScanEngine \
+  --filter productionRendererBurstBenchmark
 ```
 
 Refresh frozen legacy compatibility fixtures only when intentionally changing
