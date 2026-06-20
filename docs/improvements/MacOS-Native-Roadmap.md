@@ -26,7 +26,10 @@ with continuous Double bindings, and the perceptual regression/visual acceptance
 gate verifying CPU/GPU parity across 2,725 comparisons with 0 failures (max
 2/255). This track improves what the primary controls mean without folding
 every feature from the design primer into the product.
-Dust handling is now the active next step — the primary Python replacement gate.
+Dust handling is paused after native parity-tested mask detection. Telea FMM
+inpainting and app integration remain a deferred Python replacement gate. Work
+has moved to independent workflow/settings slices: per-file correction
+persistence across launches is complete.
 
 The TIFF/JPEG/PNG/DNG export contract is implemented with individual and
 batch-all workflows, cancellation, partial-file cleanup, and 19 focused
@@ -103,12 +106,21 @@ Slices A through G are complete and connected where app interaction is required.
    tests.~~
 5. ~~Add memory-bounded batch export and deterministic progress/error reporting.~~
 
-### Next Implementation Step: Dust Detection And Telea FMM Inpainting
+### Paused: Telea FMM Inpainting And Dust Workflow Integration
 
-Port dust detection and Telea FMM inpainting from the legacy Python application.
-This is the primary remaining Python replacement gate. Once complete, the contour/
-crop/perspective/dust workflow will be fully native. Direct Metal-backed display
-and idle authoritative rendering remain deferred Stage 4 preview work.
+Dust Slice 1 is complete. `DustDetection.findMask` reproduces the legacy
+grayscale, percentile, threshold, morphology, contour-area, filled-mask, and
+final-dilation contract across three frozen Python/OpenCV fixtures. Its
+percentiles use a fixed 256-bin histogram instead of sorting a full image-sized
+sample, and square morphology uses integral-image passes, keeping each pass
+O(pixels) with bounded scratch storage.
+
+When dust development resumes, port per-channel Telea FMM inpainting with
+radius 3, connect the complete
+dust stage to shared preview/export processing, and expose the existing
+`removeDust` state only after the rendered pixels change. This is the primary
+remaining Python replacement gate. Direct Metal-backed display and idle
+authoritative rendering remain deferred Stage 4 preview work.
 
 ---
 
@@ -975,7 +987,9 @@ FilmScanConverter.app
    - Click-to-pick WB base point and base colour on preview
 4. **Advanced settings sheet:** Demosaic algorithm, gamma curve, noise reduction params, dust params, JPEG quality, TIFF compression, processor count override
 5. **Export sheet:** Determinate progress bar (current/total), abort button, per-file error log with expandable details
-6. **Settings management:** Copy/paste settings between photos, reset to defaults, save/load named presets, drag-to-reorder photo batch
+6. **Settings management:** Per-file correction persistence across launches is
+   complete. Copy/paste settings between photos, save/load named presets, and
+   drag-to-reorder photo batch remain; reset to defaults is already available.
 
 ### 3.4 Must-Have UX Improvements (done during port, not after)
 
@@ -1105,10 +1119,12 @@ Git push
 10. **Phase 1.3 and 1.2 cont., complete** — Pure-Swift contour detection,
    minAreaRect, DLT homography, and bilinear perspective crop are connected to
    per-file preview/export processing.
-11. **Phase 1.8–1.9** — Dust detection and Telea FMM inpainting after the
-    focused color/adjustment sequence; this remains a Python-retirement gate.
-12. **Phase 1.10–1.11** — Complete remaining workflow orchestration around
-    dust, persistence, and settings migration. Crop and perspective are wired.
+11. **Phase 1.8–1.9, paused** — Dust detection is complete with frozen
+    Python/OpenCV parity fixtures and bounded-memory morphology. Telea FMM
+    inpainting plus preview/export/app integration is deferred.
+12. **Phase 1.10–1.11, in progress** — Per-file correction persistence across
+    launches is complete with versioned atomic JSON storage, standardized-path
+    keys, and corrupt-file recovery. Named presets and copy/paste settings remain.
 13. **Phase 3** — Finish dust, persistence, packaging, and release workflows.
     Crop/perspective, export UI, and batch export are already implemented.
 14. **Phase 2** — Replace remaining measured hot paths with Metal or Accelerate

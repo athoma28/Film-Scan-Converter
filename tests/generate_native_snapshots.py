@@ -172,6 +172,40 @@ def main():
             elapsed,
         )
 
+    dust_image = _build_dust_image()
+    for name, parameters in (
+        ('dust_mask_default', {
+            'dust_threshold': 10,
+            'max_dust_area': 15,
+            'dust_iter': 5,
+            'ignore_border': [0, 0],
+        }),
+        ('dust_mask_border_ignored', {
+            'dust_threshold': 18,
+            'max_dust_area': 28,
+            'dust_iter': 2,
+            'ignore_border': [12, 8],
+        }),
+        ('dust_mask_contour_area_gate', {
+            'dust_threshold': 18,
+            'max_dust_area': 20,
+            'dust_iter': 2,
+            'ignore_border': [12, 8],
+        }),
+    ):
+        dust_processor = make_processor(RawProcessing, dust_image)
+        dust_processor.class_parameters.update(parameters)
+        result, elapsed = measured(lambda: dust_processor.find_dust(dust_image))
+        write_case(
+            args.output_dir,
+            name,
+            'find_dust',
+            dust_image,
+            result.astype(np.uint16),
+            parameters,
+            elapsed,
+        )
+
     exposure_source = np.array(
         [
             [-1000.0, 0.0, 1.0, 8192.0],
@@ -259,6 +293,28 @@ def _build_threshold_image():
     img[15:30, :] = (60000, 55000, 50000)
     img[45:60, :] = (5000, 4000, 3000)
     return img
+
+
+def _build_dust_image():
+    height, width = 480, 640
+    y, x = np.mgrid[:height, :width]
+    base = 30000 + x * 18 + y * 9
+    image = np.stack((base - 1800, base, base + 1400), axis=-1)
+    image = np.clip(image, 0, 65535).astype(np.uint16)
+
+    for center_x, center_y, radius, value in (
+        (220, 135, 1, 650),
+        (110, 90, 2, 900),
+        (290, 205, 3, 1400),
+        (470, 330, 4, 1200),
+        (18, 24, 3, 700),
+    ):
+        disk = (x - center_x) ** 2 + (y - center_y) ** 2 <= radius ** 2
+        image[disk] = value
+
+    # A large dark object must be rejected by the maximum-particle-area gate.
+    image[355:405, 85:145] = 1100
+    return image
 
 
 if __name__ == '__main__':

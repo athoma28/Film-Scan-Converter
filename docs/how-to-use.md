@@ -29,6 +29,8 @@ The native application is the primary product. It provides:
    semantic exposure/brightness/contrast/highlights/shadows, temperature/tint,
    saturation, vibrance, curves, and color wheels.
    The preview updates in real time as you drag sliders.
+   Corrections are saved automatically for that source file and restored the
+   next time the same path is imported.
 5. In Film Base, optionally load a matching flat field and measure a clear,
    unexposed film edge automatically or by dragging over it. This enables the
    measured density pipeline for negative conversion.
@@ -42,8 +44,9 @@ The native application is the primary product. It provides:
    images retain source resolution; RAW files are re-decoded at full resolution
    one at a time so batch memory remains bounded.
 
-The native app does not yet provide dust detection or inpainting. Use the
-legacy Python application when automatic dust removal is required. See
+The native engine can now detect dust masks, but the app does not expose dust
+removal until Telea inpainting is connected. Use the legacy Python application
+when automatic dust removal is required. See
 [Native macOS Development](development/native-macos.md) for the current status.
 
 ## Legacy Python Application (Maintenance Only)

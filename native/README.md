@@ -37,6 +37,9 @@ This file contains only package-local build and implementation notes.
   benchmark measured 3.50 ms p95 at 1080×720. End-to-end real-file drag
   latency still requires verification. See the
   [real-time still preview plan](../docs/development/realtime-preview-plan.md).
+- Per-file correction settings are loaded from and atomically saved to a
+  versioned JSON document in Application Support, keyed by standardized source
+  path. Invalid persistence data falls back to defaults without blocking launch.
 - Its optional live camera view uses AVFoundation and a GPU-backed Core Image
   context for negative inversion, exposure, and saturation preview corrections.
   Late frames are discarded and processing is throttled to 20 fps to keep the
@@ -66,6 +69,11 @@ This file contains only package-local build and implementation notes.
   unclamped linear BGR adjustment seam. Its deterministic robust statistics are
   hard-capped at 65,536 samples, keeping statistics scratch memory independent
   of full-resolution RAW dimensions.
+- `DustDetection` reproduces the legacy 16-bit-to-gray conversion, percentile
+  threshold, morphological closing, contour-area filtering, filled mask, and
+  final dilation across frozen Python/OpenCV fixtures. Percentiles use a fixed
+  256-bin histogram and square morphology uses O(pixels) integral-image passes.
+  Telea inpainting and app wiring remain pending.
 - Primary color-negative Temperature/Tint, Saturation, and Vibrance operate in
   that linear seam using luminance-preserving Rec.2020 opponent axes, selective
   chroma scaling, highlight/gamut attenuation, and hue-preserving chroma
@@ -94,7 +102,7 @@ This file contains only package-local build and implementation notes.
 
 The native application is the primary product and the only target for new
 features. It is not yet a complete replacement for the maintenance-only legacy
-Python application: dust handling, remaining persistence/workflow validation,
+Python application: dust inpainting and app integration, remaining persistence/workflow validation,
 packaging/release validation, and fixture independence are the current
 retirement gates. See
 [Legacy Python Status And Retirement](../docs/legacy-python.md).

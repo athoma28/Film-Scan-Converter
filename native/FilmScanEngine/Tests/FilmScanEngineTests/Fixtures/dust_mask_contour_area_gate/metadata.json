@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "stage": "find_dust",
+  "inputShape": [
+    480,
+    640,
+    3
+  ],
+  "outputShape": [
+    480,
+    640
+  ],
+  "dtype": "uint16",
+  "inputSHA256": "4b84eac4e3715863951e5cad2ed8afdde1941371137ff4399f4e8927d9aefe23",
+  "outputSHA256": "e58041ec2f6156413507b5d1c22d71cc3f765927604a2d904449fefb38b1d514",
+  "parameters": {
+    "dust_threshold": 18,
+    "max_dust_area": 20,
+    "dust_iter": 2,
+    "ignore_border": [
+      12,
+      8
+    ]
+  },
+  "renderingMilliseconds": 0.6950000024517067,
+  "generator": "tests/generate_native_snapshots.py"
+}

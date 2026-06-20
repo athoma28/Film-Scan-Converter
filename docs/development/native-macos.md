@@ -5,7 +5,7 @@ what works now, the current development step, and the order of upcoming work.
 The detailed [macOS native roadmap](../improvements/MacOS-Native-Roadmap.md) is
 the design reference, not a statement that every listed item is implemented.
 
-**Last updated:** 2026-06-19 (296 tests across 19 files; all six photographic-adjustment slices are complete: semantic parameters, the shared unclamped linear/statistics seam, protected color controls, safe global tone controls, the reusable AdjustmentSlider with continuous Double bindings, and the perceptual regression/visual acceptance gate — all with CPU/GPU parity within the existing 2/255 tolerance across 2,725 comparisons; contour detection and perspective crop are connected to preview/export; density preview/export integration validates and aligns flat fields; RAW preview remains half-size while memory-bounded export re-decodes full-resolution; full-resolution X-Trans camera-scan export uses three-pass Markesteijn interpolation)
+**Last updated:** 2026-06-20 (303 tests across 20 files; per-file correction settings now persist atomically across app launches with corrupt-file recovery; native dust-mask detection matches three frozen Python/OpenCV fixtures but further dust work is paused; all six photographic-adjustment slices are complete with CPU/GPU parity within the existing 2/255 tolerance across 2,725 comparisons; contour detection and perspective crop are connected to preview/export; RAW preview remains half-size while memory-bounded export re-decodes full-resolution)
 
 ## Goal
 
@@ -35,27 +35,34 @@ Native export is complete.
 
 ## Current Development Step
 
-**Active step: the color-accuracy and photographic-adjustment track is
-complete. All six perceptual-slider modernization slices are verified against
+The color-accuracy and photographic-adjustment track is complete. All six
+perceptual-slider modernization slices are verified against
 the CPU authoritative path across 2,725 GPU comparisons (0 failures, max
-2/255). Legacy RGB-gain and HSV functions remain for compatibility fixtures.**
+2/255). Legacy RGB-gain and HSV functions remain for compatibility fixtures.
 The preceding film-specific camera-scan track remains operational: Slices A
 through G are wired into the app, and the density pipeline is connected to both
 preview and export. The power-law (RawTherapee-compatible) inversion remains
 the default front-end; the density pipeline remains an explicit inspector
 option with a CPU render fallback.
 
-**Next: dust detection and Telea FMM inpainting — the primary remaining Python
-replacement gate. This is the next Python-retirement item (gate 2).**
+Dust development is paused after Slice 1: deterministic native dust-mask
+detection matches the frozen Python/OpenCV reference, while Telea inpainting
+and app wiring remain deferred.
+
+**Active step: post-dust workflow and settings work. Per-file correction
+persistence is complete: settings are keyed by standardized source path,
+loaded at launch, and atomically saved after edits. Corrupt settings fall back
+to defaults without preventing startup. Next independent work is named preset
+and copy/paste settings management, followed by packaging/release validation.**
 
 ## Progress
 
 | Area | Status | Current result |
 |---|---|---|
 | Phase 0: regression gate | In progress | Swift tests consume frozen Python-generated `.npy` fixtures and compact RAW hash manifests. Standard decode fixtures cover 8-bit PNG, grayscale PNG, BMP, JPEG, and 16-bit TIFF. Five half-size RAF decodes and one full-resolution RAF decode require exact SHA-256 equality with RawPy when the local `sample-raw` corpus is present; when it is absent, those corpus-specific tests are explicitly reported as disabled rather than silently passing. The full intermediate-stage and parameter-grid corpus is not complete. |
-| Phase 1: processing engine | In progress | The frozen RawPy profile remains exact for fixtures. The camera-scan profile disables auto-bright/exposure boost, enables LibRaw highlight reconstruction, records ISO and executed stages, and selects bounded low-ISO sharpening or medium/high-ISO denoising. Full-resolution Bayer decode uses the RCD callback; full-resolution X-Trans decode uses LibRaw's three-pass Markesteijn interpolation. Half-size preview decode bypasses demosaicing. Film-negative inversion and density processing feed one unclamped linear adjustment seam. Safe global tone controls (Exposure EV, Brightness, Contrast, Highlights, Shadows) and protected color controls use luminance-preserving opponent axes; frozen RGB-gain/HSV operators remain available. Robust statistics use at most 65,536 deterministic samples. Density processing, contour detection, and perspective crop are connected to preview/export. Direct camera-to-Rec.2020 conversion and exact RawTherapee denoise/sharpen kernels remain limitations. |
+| Phase 1: processing engine | In progress | The frozen RawPy profile remains exact for fixtures. The camera-scan profile disables auto-bright/exposure boost, enables LibRaw highlight reconstruction, records ISO and executed stages, and selects bounded low-ISO sharpening or medium/high-ISO denoising. Full-resolution Bayer decode uses the RCD callback; full-resolution X-Trans decode uses LibRaw's three-pass Markesteijn interpolation. Half-size preview decode bypasses demosaicing. Film-negative inversion and density processing feed one unclamped linear adjustment seam. Safe global tone controls (Exposure EV, Brightness, Contrast, Highlights, Shadows) and protected color controls use luminance-preserving opponent axes; frozen RGB-gain/HSV operators remain available. Robust statistics use at most 65,536 deterministic samples. Native dust-mask detection uses fixed-size percentile histograms, O(pixels) square morphology, and bounded connected-component scratch storage; three frozen Python/OpenCV fixtures match exactly. Density processing, contour detection, and perspective crop are connected to preview/export. Telea inpainting, direct camera-to-Rec.2020 conversion, and exact RawTherapee denoise/sharpen kernels remain limitations. |
 | Phase 2: accelerated rendering | In progress | Live camera preview uses a Metal-backed Core Image context. Still-file correction uploads one bounded 16-bit proxy per selection, applies the current correction controls in one custom GPU kernel, and keeps only one in-flight render plus the newest pending snapshot. The kernel includes the power-law film-negative inversion, curve LUT sampling, and three-way color wheels. The production renderer matches the authoritative CPU path across 2,655 comparisons with a maximum difference of 2/255. Slice F's scene-display CIKernel matches its Double CPU contract within 0.000002 across 60 channel comparisons. The latest opt-in 500-change 1080×720 benchmark measured 3.50 ms p95; the app uses a 640-pixel interactive proxy. The density pipeline is connected to preview and export with CPU fallback; a GPU-accelerated density pipeline preview kernel and idle authoritative rendering remain. |
-| Phase 3: SwiftUI application | Interactive correction + export workflow | The app accepts supported files by drag and drop, decodes standard images and RAW files, and auto-initializes new files to color negative, B&W negative, or slide mode. The Edit inspector explains film base as the unexposed film edge, includes automatic and drag-selected measurement, hides the selection rectangle when selection mode ends, and provides validated flat-field loading, measured-base inversion, and automatic film-frame detection. Detected crop geometry is stored per file and perspective-warped in both preview and export. Export supports TIFF, JPEG, PNG, and DNG output with memory-bounded lazy Export All; RAW export re-decodes each file at full resolution. Parameter snapshots are written to the project log so an edit state can be reconstructed. The two most recent decoded/proxy/renderer sessions are cached and only the immediate next uncached file is predecoded. Slider and wheel bindings remain live during continuous drags; end-to-end latency still requires real-file verification. |
+| Phase 3: SwiftUI application | Interactive correction + export workflow | The app accepts supported files by drag and drop, decodes standard images and RAW files, and auto-initializes new files to color negative, B&W negative, or slide mode. Per-file correction settings persist across launches in a versioned, atomically written JSON document keyed by standardized source path; corrupt persistence falls back safely to defaults. The Edit inspector explains film base as the unexposed film edge, includes automatic and drag-selected measurement, and provides validated flat-field loading and automatic film-frame detection. Detected crop geometry is stored per file and perspective-warped in preview/export. Export supports TIFF, JPEG, PNG, and DNG with memory-bounded lazy Export All. The two most recent preview sessions are cached and only the immediate next file is predecoded. Slider and wheel bindings remain live during continuous drags; end-to-end latency still requires real-file verification. |
 | Phase 4: performance and polish | Early measurement | CI builds and tests the current native package. The representative RAW decode and quality benchmark is complete; packaging, UI snapshots, and release work remain. |
 
 ## Planned Native Capabilities
@@ -318,12 +325,13 @@ The detailed order and acceptance criteria are maintained in the
   BMP, and TIFF fixtures. JPEG is locked to the documented tolerance above.
   Broader real-file coverage, including embedded color profiles and orientation
   metadata, remains to be added to the frozen corpus.
-- The native engine still lacks dust detection/inpainting.
-    This is the main remaining replacement gate.
+- The native engine has parity-tested dust-mask detection but still lacks Telea
+  FMM inpainting. The app therefore does not yet expose dust removal. This is
+  the main remaining replacement gate.
 - Interactive previews do not yet integrate histogram equalisation or dust
   removal. Film-base detection, manual rebate selection, crop detection, and
-  perspective correction are integrated; per-file settings remain in-memory
-  rather than persisted across launches.
+  perspective correction are integrated. Per-file correction settings now
+  persist across launches; named presets and copy/paste remain future work.
 - The native RawTherapee parity path is still partial. RawTherapee's source
   order is `preprocess` (black/white scaling, bad pixels, flat field/gain maps,
   green equilibration), `demosaic`, `getImage` (white balance, optional highlight
@@ -519,8 +527,9 @@ Work should proceed in this order:
     and border-constant zero for out-of-bounds source coordinates. It is connected
     to per-file crop processing for preview/export. 18 focused tests cover all eight
     committed fixtures plus identity, translation, homography, and self-consistency.
-13. Port dust detection and Telea FMM inpainting (requires OpenCV interop or
-    custom Metal kernel).
+13. Port dust handling. Dust-mask detection is complete with frozen
+    Python/OpenCV parity fixtures and bounded-memory morphology. Next: Telea FMM
+    inpainting, shared preview/export integration, and the app control.
 14. Expand the frozen corpus to cover intermediate stages and parameter-grid
     variants.
 15. ~~Connect completed engine stages to the SwiftUI preview panel.~~ Initial

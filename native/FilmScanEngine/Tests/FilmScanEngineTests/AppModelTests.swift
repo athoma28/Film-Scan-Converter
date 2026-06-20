@@ -476,6 +476,73 @@ struct AppModelTests {
     #expect(model.parameters.photoAdjustments.vibrance == 0.6)
   }
 
+  @Test("Per-file corrections persist across app model instances")
+  func perFileCorrectionsPersistAcrossLaunches() async throws {
+    let fixture = try #require(
+      Bundle.module.url(
+        forResource: "input",
+        withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"
+      )
+    )
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-settings-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let input = workDir.appendingPathComponent("scan.png")
+    try FileManager.default.copyItem(at: fixture, to: input)
+
+    let first = AppModel(settingsStore: PerFileSettingsStore(baseDirectory: workDir))
+    first.importFiles([input])
+    try await waitUntil { first.decodedImage != nil }
+    first.setFilmType(.colourNegative)
+    first.setExposureEV(1.25)
+    first.setVibrance(0.4)
+
+    let restored = AppModel(settingsStore: PerFileSettingsStore(baseDirectory: workDir))
+    restored.importFiles([input])
+
+    #expect(restored.parameters.filmType == .colourNegative)
+    #expect(restored.parameters.photoAdjustments.exposureEV == 1.25)
+    #expect(restored.parameters.photoAdjustments.vibrance == 0.4)
+  }
+
+  @Test("Persisted corrections remain isolated by standardized file path")
+  func persistedCorrectionsRemainPerFile() throws {
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-settings-isolation-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let store = PerFileSettingsStore(baseDirectory: workDir)
+    let firstPath = workDir.appendingPathComponent("first.tif").standardizedFileURL.path
+    let secondPath = workDir.appendingPathComponent("second.tif").standardizedFileURL.path
+
+    var first = ProcessingParameters()
+    first.photoAdjustments.exposureEV = 2
+    var second = ProcessingParameters()
+    second.photoAdjustments.exposureEV = -1
+    try store.save([firstPath: first, secondPath: second])
+
+    let loaded = try store.load()
+    #expect(loaded[firstPath]?.photoAdjustments.exposureEV == 2)
+    #expect(loaded[secondPath]?.photoAdjustments.exposureEV == -1)
+  }
+
+  @Test("Corrupt persisted corrections do not prevent app startup")
+  func corruptPersistedCorrectionsRecoverSafely() throws {
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-settings-corrupt-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let store = PerFileSettingsStore(baseDirectory: workDir)
+    try Data("not json".utf8).write(to: store.fileURL)
+
+    let model = AppModel(settingsStore: store)
+
+    #expect(model.parameters == ProcessingParameters())
+    #expect(model.status.contains("could not be loaded"))
+  }
+
   private func waitUntil(
     timeout: Duration = .seconds(10),
     condition: @escaping @MainActor () -> Bool

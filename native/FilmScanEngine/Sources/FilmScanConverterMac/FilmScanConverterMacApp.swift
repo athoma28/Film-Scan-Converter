@@ -3,11 +3,16 @@ import SwiftUI
 
 @main
 struct FilmScanConverterMacApp: App {
-  @StateObject private var model = AppModel()
+  @StateObject private var model: AppModel
   @StateObject private var camera = CameraController()
 
   init() {
     FilmScanLog.configureLogDirectory()
+    _model = StateObject(
+      wrappedValue: AppModel(
+        settingsStore: PerFileSettingsStore(applicationName: "FilmScanConverter")
+      )
+    )
   }
 
   var body: some Scene {

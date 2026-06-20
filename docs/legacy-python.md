@@ -24,8 +24,9 @@ Moving `source/` into an archive folder now would break or obscure active
 workflows:
 
 - native export of TIFF, JPEG, PNG, and DNG is now implemented;
-- contour detection, automatic crop-box computation, and perspective warp are
-  implemented natively; dust detection/inpainting is not;
+- contour detection, automatic crop-box computation, perspective warp, and
+  dust-mask detection are implemented natively; Telea inpainting and the app
+  dust-removal workflow are not;
 - the Python application remains the only workflow that includes automatic dust
   handling in the same batch-processing surface;
 - Python/RawPy tools still generate or audit frozen compatibility fixtures and

@@ -16,6 +16,9 @@ features. Its implemented scope includes:
   processing entry point.
 - Threshold generation (grayscale conversion, binary thresholding, morphological
   erosion) matching Python output exactly.
+- Native dust-mask detection matching frozen Python/OpenCV output, including
+  ignored-border percentile sampling, morphology, and contour-area filtering.
+  Telea inpainting and app integration remain pending.
 - White balance coefficient adjustment matching Python float64 output exactly.
 - Saturation adjustment via RGB↔HSV conversion matching Python output within
   documented ≤1 LSB tolerance, including Python-equivalent clipping of
@@ -65,6 +68,8 @@ features. Its implemented scope includes:
   Core Image/Metal preview renderer, bounded latest-value-wins scheduling, and a
   two-session decoded-preview cache with one-file lookahead predecode for the
   next uncached import.
+- Automatic per-file correction persistence across launches using versioned,
+  atomic settings storage with safe recovery from corrupt files.
 - A shared unclamped linear adjustment seam with bounded robust statistics,
   protected Temperature/Tint/Saturation/Vibrance controls, and safe semantic
   Exposure/Brightness/Contrast/Highlights/Shadows controls.
@@ -83,7 +88,8 @@ features. Its implemented scope includes:
 - Real production-renderer comparison against the authoritative CPU path and an
   actual `AppModel` rapid-update scheduling integration test.
 
-The primary remaining processing replacement is dust detection/inpainting.
+The primary remaining processing replacement is Telea dust inpainting and its
+preview/export/app integration.
 Persistence hardening, fixture independence, packaging, release validation,
 and deferred preview-surface work also remain.
 

@@ -36,18 +36,28 @@ final class AppModel: ObservableObject {
   @Published private(set) var cropStatus: String = ""
 
   let profileStore: ProfileStore
+  private let settingsStore: PerFileSettingsStore?
 
-  init(profileStore: ProfileStore? = nil) {
+  init(
+    profileStore: ProfileStore? = nil,
+    settingsStore: PerFileSettingsStore? = nil
+  ) {
+    self.settingsStore = settingsStore
     if let profileStore {
       self.profileStore = profileStore
-      return
-    }
-    if let store = ProfileStore(appGroupIdentifier: "FilmScanConverter") {
+    } else if let store = ProfileStore(appGroupIdentifier: "FilmScanConverter") {
       self.profileStore = store
     } else {
       let fallback = FileManager.default.temporaryDirectory
         .appendingPathComponent("FilmScanConverter")
       self.profileStore = ProfileStore(baseDirectory: fallback)
+    }
+    if let settingsStore {
+      do {
+        settingsByPath = try settingsStore.load()
+      } catch {
+        status = "Saved corrections could not be loaded; defaults are being used."
+      }
     }
   }
 
@@ -1188,6 +1198,11 @@ final class AppModel: ObservableObject {
       return
     }
     settingsByPath[settingsKey(selection)] = parameters
+    do {
+      try settingsStore?.save(settingsByPath)
+    } catch {
+      status = "Corrections changed, but could not be saved for the next launch."
+    }
     EditLog.parametersSaved(path: selection.lastPathComponent, parameters: parameters)
   }
 
