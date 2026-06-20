@@ -97,6 +97,19 @@ public struct UInt16Image: Equatable, Sendable {
     }
   }
 
+  public func resized(width outputWidth: Int, height outputHeight: Int) -> UInt16Image {
+    precondition(outputWidth > 0 && outputHeight > 0, "Output dimensions must be positive")
+    guard outputWidth != width || outputHeight != height else {
+      return self
+    }
+    return remapped(width: outputWidth, height: outputHeight) { x, y in
+      (
+        min(width - 1, x * width / outputWidth),
+        min(height - 1, y * height / outputHeight)
+      )
+    }
+  }
+
   private func remapped(
     width outputWidth: Int,
     height outputHeight: Int,

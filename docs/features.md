@@ -11,12 +11,19 @@ features. Its implemented scope includes:
   Fujifilm X-T5 RAF files at both half and full resolution.
 - Deterministic helper operations: rotation (90° steps), horizontal flip,
   white frame, and aspect-ratio padding.
+- Automatic threshold-based film-frame detection, normalized rotated crop
+  geometry, and perspective-corrected preview/export through the shared
+  processing entry point.
 - Threshold generation (grayscale conversion, binary thresholding, morphological
   erosion) matching Python output exactly.
 - White balance coefficient adjustment matching Python float64 output exactly.
 - Saturation adjustment via RGB↔HSV conversion matching Python output within
   documented ≤1 LSB tolerance, including Python-equivalent clipping of
   white-balanced highlights before HSV conversion.
+- Primary color-negative processing now uses protected linear Rec.2020
+  Temperature/Tint, Saturation, and separate Vibrance controls with luminance,
+  highlight, gamut, and hue safeguards. The legacy RGB/HSV operators remain for
+  compatibility fixtures.
 - Exposure adjustment matching Python float32 rounding exactly.
 - Histogram equalisation with exact float64 pixel equality for B&W negative,
   colour negative, and slide with base detect.
@@ -38,9 +45,10 @@ features. Its implemented scope includes:
 - Camera-scan RAW metadata and bounded ISO-tier processing: low-ISO sharpening
   or medium/high-ISO denoising. These filters are native approximations, not
   ports of RawTherapee's full denoise and capture-sharpening kernels.
-- Engine support for RCD on explicitly requested full-resolution Bayer decode.
-  The current app requests half-size RAW decode, and the available RAF corpus is
-  X-Trans, so neither the app path nor that corpus exercises RCD.
+- Engine support for RCD on full-resolution Bayer decode and three-pass
+  Markesteijn interpolation on full-resolution X-Trans decode. Interactive RAW
+  previews stay half-size; RAW export re-decodes one file at a time at full
+  resolution. The available RAF corpus is X-Trans, so it does not exercise RCD.
 - Automatic startup classification for new files: low-chroma scans start as
   B&W negative, orange-mask scans start as color negative, and other
   positive-looking scans start as slide. Existing per-file settings are not
@@ -57,6 +65,11 @@ features. Its implemented scope includes:
   Core Image/Metal preview renderer, bounded latest-value-wins scheduling, and a
   two-session decoded-preview cache with one-file lookahead predecode for the
   next uncached import.
+- A shared unclamped linear adjustment seam with bounded robust statistics,
+  protected Temperature/Tint/Saturation/Vibrance controls, and safe semantic
+  Exposure/Brightness/Contrast/Highlights/Shadows controls.
+- Manual or automatic unexposed-film-edge measurement, optional flat-field
+  calibration, roll-profile storage, and density-pipeline preview/export.
 - Render instrumentation with `os_signpost` profiling markers and published
   snapshot/display/drop counters.
 - TIFF (16-bit, optional LZW compression), JPEG (8-bit, configurable quality),
@@ -65,16 +78,14 @@ features. Its implemented scope includes:
   cancellation, per-file error reporting, partial-file cleanup, collision-safe
   destination naming, and lazy per-file decode/classify/process/write for
   unloaded batch members.
-- macOS CI that runs the native engine tests and builds the app. The latest
-  local native suite contains 203 tests across 13 test files; the 500-render
+- macOS CI that runs the native engine tests and builds the app. The 500-render
   performance benchmark is opt-in.
 - Real production-renderer comparison against the authoritative CPU path and an
   actual `AppModel` rapid-update scheduling integration test.
 
-The remaining replacement work is automatic contour/crop detection,
-perspective warp, dust detection/inpainting, connecting the standalone
-density/display pipeline to preview and export, and a matched flat-field
-workflow.
+The primary remaining processing replacement is dust detection/inpainting.
+Persistence hardening, fixture independence, packaging, release validation,
+and deferred preview-surface work also remain.
 
 See [Native macOS Development](development/native-macos.md) for the
 authoritative current step, progress, limitations, and next work.
@@ -91,6 +102,6 @@ workflow:
 - individual and batch export;
 - dust detection and inpainting.
 
-It remains available for compatibility while those replacement gates are
-completed, but it is not a target for new features. See
+It remains available for dust handling and compatibility while the remaining
+retirement gates are completed, but it is not a target for new features. See
 [Legacy Python Application](legacy-python.md).

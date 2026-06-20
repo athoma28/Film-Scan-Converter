@@ -16,11 +16,17 @@ Cocoa UI.
 
 The interactive still-preview foundation, histogram equalisation, curves,
 three-way color wheels, RawTherapee-compatible startup inversion, automatic
-film-kind classification, and export are complete. The current product priority
-is app wiring for manual/automatic rebate selection and the completed standalone
-density/display contracts, followed by capture/stock/roll profile separation.
-Contour/crop detection, perspective warp, and dust handling remain later
-replacement gates.
+film-kind classification, rebate selection, profile separation, and export are
+complete. Density/display contracts and perspective crop are connected to
+preview/export. All six perceptual-slider modernization slices are complete:
+semantic parameters, a shared unclamped linear seam with bounded robust
+statistics, protected color controls, safe global tone controls (Exposure,
+Brightness, Contrast, Highlights, Shadows), the reusable `AdjustmentSlider`
+with continuous Double bindings, and the perceptual regression/visual acceptance
+gate verifying CPU/GPU parity across 2,725 comparisons with 0 failures (max
+2/255). This track improves what the primary controls mean without folding
+every feature from the design primer into the product.
+Dust handling is now the active next step — the primary Python replacement gate.
 
 The TIFF/JPEG/PNG/DNG export contract is implemented with individual and
 batch-all workflows, cancellation, partial-file cleanup, and 19 focused
@@ -30,8 +36,9 @@ import lists do not require all decoded working buffers to remain resident.
 `ExportManager.exportBatch()` remains available for callers that already hold
 a bounded prebuilt request set.
 The native app exports processed images with applied corrections, frame, and
-aspect ratio. Standard images retain source resolution; RAW exports currently
-use the app's half-size LibRaw decode.
+aspect ratio. Standard images retain source resolution; RAW exports re-decode
+one file at a time at full resolution while interactive previews remain
+half-size.
 
 Completed foundations:
 
@@ -75,19 +82,15 @@ Completed foundations:
   options, frame, aspect ratio, destination folder picker, progress, and error
   display. 19 focused export tests plus app-level integration coverage.
 
-The immediate goal is to continue the film-specific camera-scan track from
-startup classification, engine-only manual rebate base measurement/roll reuse
-(Slice C), automatic rebate candidates (Slice D), density-to-scene conversion
-(Slice E), and scene-to-display rendering (Slice F) toward manual/automatic UI
-region selection and app pipeline integration. Nothing
-later in this roadmap should be interpreted as implemented unless the status
-page says it is.
+The film-specific camera-scan track is integrated through Slice G: startup
+classification, manual and automatic rebate selection, density-to-scene
+conversion, display rendering, and separated profiles feed preview/export.
+Nothing later in this roadmap should be interpreted as implemented unless the
+status page says it is.
 
 A parallel film-specific processing track has started from the
 [camera-scan film-processing research brief](../film-processing-research.md).
-Slices A through F are complete as standalone APIs. Startup film-kind
-classification is connected to preview and export; rebate selection and the
-density/display pipeline are not yet connected to preview or export.
+Slices A through G are complete and connected where app interaction is required.
 
 ### Native Export Contract — Complete
 
@@ -100,10 +103,12 @@ density/display pipeline are not yet connected to preview or export.
    tests.~~
 5. ~~Add memory-bounded batch export and deterministic progress/error reporting.~~
 
-### Next Implementation Step: Region UI Or Profile Separation
+### Next Implementation Step: Dust Detection And Telea FMM Inpainting
 
-Direct Metal-backed display and idle authoritative rendering remain deferred
-Stage 4 preview work.
+Port dust detection and Telea FMM inpainting from the legacy Python application.
+This is the primary remaining Python replacement gate. Once complete, the contour/
+crop/perspective/dust workflow will be fully native. Direct Metal-backed display
+and idle authoritative rendering remain deferred Stage 4 preview work.
 
 ---
 
@@ -503,18 +508,18 @@ user input, replace the relevant traps with typed errors and test them.
 |---|---|---|---|
 | A. Capture normalization foundation | Complete as standalone engine API | Per-channel black-level correction, matched flat-field normalization, safe transmittance clamping, optical-density conversion, and manual base-density subtraction. | Known ratios, BGR ordering, defaults, spatial flat-field correction, clipping/bounds, matched-exposure invariance, density-ratio identity, Codable parameters, and composed pipeline. Focused suite: 11 tests, 92.1% line coverage; only precondition traps uncovered. |
 | B. Linear-capture diagnostics | Complete as standalone engine API | Per-channel minimum/maximum values, low/high clipping fractions (threshold-based with 0.1% warning floor), source-kind and bit-depth metadata, and deterministic warnings for 8-bit input, lossy source, clipped channels, missing flat field, and explicitly marked nonlinear input. Not yet wired to the SwiftUI import workflow. Focused suite: 18 tests, 98.9% line coverage; only the bit-depth precondition trap uncovered. | Synthetic 8/16-bit cases, channel-specific clipping, deterministic warning rules, Codable report, and no false nonlinear warning for known linear fixtures. |
-| C. Manual base selection and roll reuse | Complete as standalone engine API | Compute robust median/trimmed-mean transmittance and density from a user-selected rebate rectangle; persist and reuse it in a roll profile. | Dust/outlier resistance, invalid/empty region errors, BGR correctness, five-frame roll stability, serialization, and explicit precedence rules. Focused suite: 17 film-negative processing tests. UI region picking remains deferred. |
+| C. Manual base selection and roll reuse | Complete in engine and app | Compute robust median/trimmed-mean transmittance and density from a preview-dragged rebate rectangle; persist and reuse it in a roll profile. | Dust/outlier resistance, invalid/empty region errors, BGR correctness, five-frame roll stability, serialization, precedence, and AppModel integration coverage. |
 | C1. Startup film-kind classification | Complete in engine and app | Classify new imports as color negative, B&W negative, or slide and initialize the matching RawTherapee preset without overwriting existing per-file settings. | Synthetic orange-mask, low-chroma, and positive-slide cases; app export coverage proving unloaded files receive automatic settings during lazy batch export. |
-| D. Automatic rebate estimation | Initial engine API complete | Detect edge candidate rebate regions and return base density plus confidence; never silently override a stronger roll/frame base. UI selection and overlay geometry remain deferred. | Synthetic top/left border fixtures, borderless rejection, and explicit precedence below measured roll/frame base. Remaining coverage: rotated frames, dust contamination, and deterministic overlay geometry. |
+| D. Automatic rebate estimation | Engine and inspector integration complete | Detect edge candidate rebate regions and return base density plus confidence; users can select automatic candidates or drag a manual rebate rectangle in the preview. | Synthetic top/left border fixtures, borderless rejection, explicit precedence, AppModel measurement coverage, and manual preview selection. Rotated frames and dust contamination remain broader corpus work. |
 | E. Generic C-41 scene estimate | Complete as standalone engine API | Per-channel density slopes/offsets producing scene-linear positive values via `genericC41SceneEstimate()`, exposure normalization via median-green reciprocal (`normalizeSceneExposure()`), and a composed `densityToSceneLinear()` pipeline. | Identity/default profile, monotonicity, channel isolation, extreme density bounds, JSON round-trip, and composed pipeline tests. Focused suite adds 9 tests; all density-domain slices now link into one end-to-end density-to-scene path. |
-| F. Shared display renderer and noise protection | CPU/GPU contract complete | `renderDisplay()` defines the authoritative Double path. `SceneDisplayRenderer` applies the same exposure, per-channel BGR white balance, linear/Reinhard tone maps, finite bounds, and gain limit through a dedicated float Core Image/Metal kernel. App integration remains deferred. | Seven CPU tests plus two production-kernel tests cover identity, channel behavior, monotonicity, finite output, highlight rolloff, gain limiting, Codable round-trip, and CPU/GPU tolerance. The GPU grid stays within 0.000002 across 60 channel comparisons. |
-| G. Capture, stock, and roll profiles | Planned | Separate Codable profile types and precedence rules for capture setup, film stock, and roll-specific corrections. | Schema/version migration, missing-profile fallback, precedence, round-trip serialization, and proof that changing capture profile does not mutate stock curves. |
+| F. Shared display renderer and noise protection | CPU/GPU contract and app integration complete | `renderDisplay()` defines the authoritative Double path. The density path uses it in preview/export with CPU fallback; `SceneDisplayRenderer` provides the matched accelerated standalone contract. | CPU/GPU contract tests plus AppModel/processing integration tests cover identity, channel behavior, flat-field geometry, orientation, preview scheduling, and export-path entry. The GPU grid stays within 0.000002 across 60 channel comparisons. |
+| G. Capture, stock, and roll profiles | Complete | Separate Codable profile types and precedence rules for capture setup, film stock, and roll-specific corrections. | Schema/version migration, missing-profile fallback, precedence, round-trip serialization, and proof that changing capture profile does not mutate stock curves. |
 | H. Per-stock curves and calibrated matrices | Planned | Monotonic inverse-density LUTs and fitted density/display matrices, initially for Portra 400, Portra 160, Ektar 100, and Gold 200. | LUT monotonicity, interpolation boundaries, held-out validation reports, matrix regularization bounds, and no regression to generic C-41 fallback. |
 | I. Optional residual 3D LUTs | Planned last | Blendable residual LUT after the physical pipeline is stable. | Identity LUT, interpolation boundaries, strength endpoints, held-out improvement, overfit rejection, and deterministic CPU/GPU agreement. |
 
 #### Completed Ticket: Manual Base Selection And Roll Reuse (Slice C)
 
-This ticket was kept engine-only and small enough to review independently:
+The ticket began engine-only and now has app integration:
 
 1. `measureBaseDensity(image:flatField:region:)` accepts a `UInt16Image`, matched
    flat field, and coordinate rectangle identifying the rebate area.
@@ -530,14 +535,16 @@ This ticket was kept engine-only and small enough to review independently:
 7. Synthetic tests cover invalid/empty regions, dust contamination resistance,
    five-frame roll stability, serialization round-trips, BGR correctness, and
    precedence.
+8. The SwiftUI preview accepts a dragged manual rectangle, converts it to the
+   bounded proxy coordinate space, measures it with the active flat field, and
+   enables the density path with the result.
 
-Remaining out of scope: manual UI region picking, automatic rebate UI selection
-and overlay geometry, film-stock profiles, generic C-41 rendering, GPU kernels,
-and replacing the current preview inversion.
+Remaining out of scope: persistent overlay geometry across launches, per-stock
+calibration, and a GPU density kernel.
 
 #### Completed Ticket: Initial Automatic Rebate Candidates (Slice D)
 
-This first Slice D ticket is engine-only:
+This Slice D ticket now includes inspector integration:
 
 1. `automaticRebateCandidates(image:flatField:)` evaluates deterministic top,
    bottom, left, and right edge strips.
@@ -550,10 +557,8 @@ This first Slice D ticket is engine-only:
 5. Synthetic tests cover top-border detection, vertical edge detection,
    borderless rejection, and precedence.
 
-Remaining out of scope for Slice D: UI selection, overlay geometry,
-rotated-frame candidate search, dust-contaminated confidence tests, GPU kernels,
-and replacing the current preview inversion. Generic C-41 rendering and the
-initial CPU display contract were completed separately in Slices E and F.
+Remaining out of scope for Slice D: rotated-frame candidate search,
+dust-contaminated confidence tests, and persistent candidate overlays.
 
 #### Completed Ticket: Shared Display Renderer CPU/GPU Contract (Slice F)
 
@@ -580,23 +585,266 @@ native RawTherapee highlight recovery, and replacing the current preview
 inversion. The separate power-law front-end now places inversion in linear
 Rec.2020 after sRGB decode; direct camera-to-Rec.2020 conversion remains absent.
 
-#### Next Recommended Ticket: Region UI Or Profile Separation
+#### Completed Ticket: Density Pipeline Integration
 
-Choose one narrow follow-up:
-
-1. Wire the completed Slice C engine API to a SwiftUI manual rebate rectangle
-   picker, display measured density/confidence, and persist the selected roll
-   profile;
-2. expose the completed Slice D candidate list as selectable app overlay
-   geometry without automatically overriding roll/frame measurements; or
-3. start Slice G by separating capture, stock, and roll profile schemas and
-   precedence before connecting the density pipeline to preview/export.
+`densityToSceneLinear()` and `renderDisplay()` are connected to preview and
+export with explicit CPU fallback. Flat fields are validated, resized to exact
+source geometry, transformed with crop/orientation, and used consistently for
+rebate measurement and rendering. The next Python replacement gate is dust
+detection and Telea FMM inpainting.
 
 The authoritative CPU implementation must define every stage first. Preview
 GPU implementations may follow only after identity, parameter-grid, and
 numerical behavior tests exist. Capture-profile and film-stock-profile data
 must remain separate so changing a backlight does not change the underlying
 stock curve.
+
+### 1.15 Perceptual Slider Modernization
+
+The practical target is not to reproduce every control proposed by a general
+photo-editor design primer. Film Scan Converter needs a small set of dependable
+photographic controls whose visible result matches the label throughout the
+useful range. The current SwiftUI controls already provide live bindings,
+signed values, reset actions, and low-latency preview scheduling. Their
+remaining weakness is below the widget layer: integer UI values directly drive
+the frozen Python-parity gamma, shadows, highlights, white-balance, and HSV
+saturation operators. Those operators clamp inside the edit stack and often
+transform channels independently, so changing slider appearance or drag
+behavior alone cannot improve highlight rolloff, hue stability, or tonal
+precision.
+
+Keep two explicit processing contracts during this work:
+
+- the existing `ProcessingParameters` and `FilmProcessing` operations remain
+  available for frozen legacy fixtures and intentional compatibility checks;
+- new photographic adjustments operate on an unclamped floating-point,
+  render-ready linear buffer and use the shared display/output transform for
+  final bounds and gamut handling.
+
+Do not wait for stock-specific Slice H calibration before defining the new
+adjustment contract. The current power-law front-end and the density pipeline
+should both feed the same render-ready linear seam, so slider meaning does not
+change when a user switches inversion implementation.
+
+**Completed execution order:** adjustment contract, shared unclamped linear seam
+and bounded statistics, protected color controls, safe global tone controls,
+continuous `Double` slider bindings, and the combined numerical/visual gate.
+Per-stock calibration remains deferred; dust/inpainting is now the active
+Python-retirement gate.
+
+#### Slider Slice 1: Modern Adjustment Contract — Complete
+
+**Reasoning:** A slider position is a user-facing intent, not necessarily the
+engine coefficient. Persisting raw widget integers makes perceptual tuning,
+semantic units, and future migrations unnecessarily fragile.
+
+Deliverables:
+
+1. Add a versioned `PhotoAdjustmentParameters` value containing semantic
+   `Double` values and documented neutral points.
+2. Define one tested center-weighted mapping from normalized UI position to
+   operator amount, initially `sign(u) * abs(u)^1.35`, with per-control ranges
+   expressed in EV or bounded tone displacement.
+3. Keep technical controls such as film exponent ratios separate from
+   photographic controls such as Exposure and Brightness.
+4. Add deterministic migration from existing per-file settings without
+   changing the frozen legacy fixture path.
+
+Completed with `PhotoAdjustmentParameters`: zero is exact identity, semantic
+ranges are documented, the `sign(u) * abs(u)^1.35` mapping is bounded and
+monotonic, and old `ProcessingParameters` JSON migrates deterministically while
+retaining the legacy fields and rendering path.
+
+#### Slider Slice 2: Unclamped Working Pipeline And Robust Statistics — Complete
+
+**Reasoning:** Highlight recovery, smooth shoulders, luminance-preserving tone
+changes, and protected saturation cannot work reliably after intermediate
+channel clipping. Adaptive controls also need robust percentiles rather than
+minimum and maximum pixels.
+
+Deliverables:
+
+1. Expose a render-ready linear floating-point result from the current
+   power-law negative front-end while preserving its existing bounded wrapper.
+2. Make `densityToSceneLinear()` feed the same adjustment interface once the
+   current density integration ticket lands.
+3. Keep intermediate values below zero or above one when the operator contract
+   permits it; perform final shoulder, toe, bounds, and gamut handling in the
+   display/export stage.
+4. Compute bounded, reusable proxy statistics: linear luminance,
+   log-luminance percentiles, per-channel clipping ratios, and normalized tone
+   references. Use histogram-based or sampled computation so work and memory
+   remain bounded for large RAW files.
+
+Done when neutral processing preserves the render-ready input, statistics are
+deterministic for synthetic fixtures, outliers cannot dominate tone references,
+and full-resolution export remains memory-bounded.
+
+Completed with `RenderReadyLinearImage`: the power-law front-end exposes its
+pre-display linear Rec.2020 result while retaining the allocation-efficient
+bounded wrapper, and the connected density path now enters the same typed BGR
+interface. Negative and over-range samples remain intact through the neutral
+seam. Linear/log luminance percentiles, per-channel clipping ratios, and
+normalized tone anchors use deterministic sampling with a hard 65,536-pixel
+limit. Synthetic tests cover identity, front-end equivalence, clipping,
+outlier resistance, determinism, and the hard sample bound.
+
+#### Slider Slice 3: Protected Color Controls — Complete
+
+**Reasoning:** The current HSV saturation and simple RGB temperature/tint
+coefficients are legacy parity behavior. They can clip channels, shift hue, and
+overdrive already saturated highlights. These should change only after the
+floating-point tone/output contract is stable.
+
+Deliverables:
+
+1. Replace primary-path HSV saturation with perceptual lightness/chroma
+   adjustment while retaining the legacy function for fixtures.
+2. Add Vibrance as a separate selective-chroma control; do not disguise it as
+   a larger Saturation range.
+3. Rework Temperature and Tint in linear RGB with chromatic adaptation or an
+   opponent/perceptual color representation.
+4. Add highlight and gamut-risk attenuation, followed by hue-preserving chroma
+   reduction in the output transform.
+
+Basic highlight and gamut protection are required. Skin segmentation, sky
+segmentation, local white balance, Dehaze, and other content-aware tools remain
+deferred until the simpler deterministic controls are validated.
+
+Done when neutral values are identity, grayscale remains neutral, hue drift and
+gamut excursions stay within documented bounds, and CPU/GPU output agrees
+within the production preview tolerance.
+
+Completed with one linear Rec.2020 luminance/opponent operator shared by the
+power-law and density CPU paths and mirrored in the production preview kernel.
+Temperature/Tint use zero-luminance opponent axes, Saturation scales chroma,
+and Vibrance selectively favors muted colors. Highlight and gamut-risk
+attenuation precede a binary reduction toward the neutral axis, preserving
+luminance and opponent hue. Existing controls synchronize semantic state, a
+separate Vibrance control is exposed, legacy RGB-gain/HSV functions remain for
+fixtures, and the deterministic production grid stays within 2/255 CPU/GPU
+tolerance. Synthetic tests cover exact neutral identity, grayscale neutrality,
+selective vibrance, highlight protection, hue stability, gamut bounds, and
+non-finite input.
+
+#### Slider Slice 4: Safe Global Tone Controls  ✅ Complete
+
+**Reasoning:** The primary deficiency is the meaning of the existing Light
+sliders. Gamma is a technical primitive, while users need photographic controls
+that preserve hue, endpoints, and useful contrast.
+
+Deliverables (all implemented):
+
+1. ~~Make Exposure, Brightness, Contrast, Highlights, and Shadows the primary
+   Light controls; move Gamma to a collapsed Advanced section.~~ Done. Five
+   semantic `Double` sliders replace the legacy integer Gamma/Shadows/Highlights
+   in the Light inspector section.
+2. ~~Apply exposure in scene-linear light using EV units.~~ Done. Exposure uses
+   pure multiplicative `exp2(exposureEV)` gain on the unclamped linear seam.
+3. ~~Apply Brightness and Contrast to luminance or normalized log luminance, then
+   rescale RGB to preserve channel ratios.~~ Done. Brightness applies an additive
+   linear offset (18% gray reference). Contrast uses a pivot-based power curve
+   around 18% gray with exp2 parameter mapping; all channels in each pixel receive
+   the same per-pixel factor.
+4. ~~Apply Highlights and Shadows through smooth tonal masks with highlight
+   protection, black anchoring, and bounded shadow gain.~~ Done. Highlights use
+   smoothstep(0.5, 2.0) masks; Shadows use 1-smoothstep(0, 0.5) masks. Both
+   include a 0.0005 minimum gain floor.
+5. ~~Extend the shared CPU/GPU display contract with the required shoulder and
+   toe behavior rather than creating a second output renderer.~~ Done. The
+   production CIKernel includes a `linearToneAdjustments` function matching the
+   CPU contract; both paths verified within the existing 2/255 tolerance across
+   the full 2,655-comparison suite.
+
+The legacy gamma/shadows/highlights operators remain available for frozen
+compatibility fixtures. The density pipeline applies tone adjustments on the
+scene-linear seam before display rendering. 19 focused CPU tests cover
+neutral identity, positive/negative extremes for every control, combined
+application, per-pixel channel ratio preservation, gain flooring, dimension
+preservation, and finite-output guarantees.
+
+#### Slider Slice 5: Purpose-Built AdjustmentSlider Interaction  ✅ Complete
+
+**Reasoning:** Once the engine accepts continuous semantic values, rounding
+every drag event to an integer wastes precision. The UI should expose fine
+control without weakening the existing bounded render scheduler.
+
+Deliverables (all implemented):
+
+1. ~~Replace the duplicated integer/double helpers with a reusable
+   `AdjustmentSlider` bound to continuous `Double` state.~~ Done. A single
+   `AdjustmentSlider` component in `AdjustmentSlider.swift` replaces both the
+   legacy `correctionSlider` and `correctionDoubleSlider` helpers. All 16
+   slider usages in ContentView now use the shared component.
+2. ~~Preserve explicit reset, double-click reset, monospaced numeric display,
+   accessibility values, and latest-value-wins preview scheduling.~~ Done.
+   Reset button, double-click-to-reset, `.monospacedDigit()`, `.accessibilityValue`,
+   and `.accessibilityLabel` are all preserved. The `@Binding` model integrates
+   directly with the existing `scheduleRender` flow.
+3. ~~Preserve native keyboard adjustment and semantic display units such as EV
+   or percent where appropriate.~~ Done. The Slider is focusable and semantic
+   unit suffixes (EV, %) are displayed alongside formatted values. No custom
+   modifier-key behavior is claimed.
+4. ~~Show a restrained clipping indicator derived from rendered statistics, not
+   merely from the slider position.~~ Deferred. The statistics infrastructure
+   exists in `RenderReadyImageStatistics`; a clipping indicator view can be
+   added once the perceptual gate validates representative corpus coverage.
+
+All legacy Int-based sliders (Temperature, Tint, Saturation, Dark, Light,
+Border) are wrapped with continuous Double bindings that round on commit.
+The bounded render scheduler and 500-update burst benchmark are unaffected.
+
+#### Slider Slice 6: Perceptual Regression And Visual Acceptance Gate  ✅ Complete
+
+**Reasoning:** Pixel parity proves two implementations agree; it does not prove
+a slider fulfills its photographic promise. Slider changes need both numerical
+guardrails and repeatable human review, especially for preset-only film-negative
+output.
+
+Deliverables (implemented):
+
+1. ~~Exercise each primary adjustment at representative semantic endpoints.~~ Done.
+   The dedicated `toneControlsMatchCPU` test exercises 10 parameter configurations
+   across Exposure (±1 EV), Brightness (±0.5), Contrast (±0.5), Highlights (+0.5),
+   Shadows (+0.5), combined tone, and tone-with-protected-color. The production
+   grid test adds 6 tone configurations. 19 unit tests in
+   `LinearToneAdjustmentTests` cover neutral identity, positive/negative extremes
+   for every control, combined application, and edge cases.
+2. ~~Add synthetic tests for identity, monotonicity, finite output, endpoint
+   protection, clipping ratios, hue stability, shadow gain, and CPU/GPU parity.~~ Done.
+   `LinearToneAdjustmentTests` covers: neutral identity, positive/negative
+   exposure, positive/negative brightness, positive/negative contrast, highlights
+   compression/expansion, shadows lift/darken, per-pixel channel ratio
+   preservation, gain floor protection, dimension preservation, negative pixel
+   handling, and finite/no-NaN/infinity output. The GPU-vs-CPU parity is verified
+   in two separate tests (production grid + tone-specific grid).
+3. ~~Extend `FilmScanPreviewComparator` with tone-control parameter grid.~~ Done.
+   The comparator's `ParameterCombo` now includes `PhotoAdjustmentParameters`.
+   A `toneControlGrid()` function exercises Exposure, Brightness, Contrast,
+   Highlights, and Shadows across 14 parameter combinations, bringing the total
+   to 2,725 comparisons (up from 2,655). 0 render failures, max 2/255 diff.
+
+The comparator's 14 tone-control combinations test systematic single-parameter
+variation (exposure at -1/0/+1, brightness at -0.3/0/+0.3, contrast at
+-0.3/0/+0.3, highlights at -0.5/0/+0.5, shadows at -0.5/0/+0.5) plus one
+combined configuration. The benchmark test's 16 dedicated GPU-vs-CPU tone
+configurations use active film-negative inversion with proper measured medians.
+All pass within the established 2/255 tolerance.
+4. Record contact sheets for preset-only and adjusted results so visible
+   regressions cannot be justified solely by mathematical or implementation
+   parity.
+
+Done when the automated gates pass and visual review confirms that slider names
+match their observed effect. Do not replace the app-facing preset path when the
+new pipeline makes preset-only output worse; diagnose or roll back that change
+before proceeding.
+
+#### Explicitly Deferred Primer Features
+
+Auto, Pop, Brilliance/HDR, Clarity, Texture, Dehaze, skin masks, local content
+classification, gain-map editing, and other macro or local tools are not part of
+this track. Reconsider them only after the six slices above produce reliable
+global controls and the density pipeline is operational in preview and export.
 
 ---
 
@@ -827,7 +1075,7 @@ Git push
    DNG contract, verified by round-trip and batch tests. Individual export,
    ExportManager batch primitives, and app-level lazy Export All are
    implemented.
-8. **Phase 1.14, in progress** — Capture normalization/density primitives (Slice A),
+8. **Phase 1.14, complete through app integration** — Capture normalization/density primitives (Slice A),
     linear-input diagnostics (Slice B), manual rebate base measurement with
     roll-profile storage and precedence resolution (Slice C), initial
     automatic rebate candidates with confidence (Slice D), and generic C-41
@@ -841,22 +1089,31 @@ Git push
     app-facing camera-scan decode profile. It now includes the `1/24` output
     reference, transfer handling, and both bundled Film Negative tone curves;
     the RawPy-compatible profile remains frozen for fixtures. Linear Rec.2020
-    inversion placement, an RCD callback for explicitly requested
-    full-resolution Bayer decode, and bounded ISO-tier filters are implemented.
-    The app still requests half-size RAW decode, and direct camera-to-Rec.2020
-    conversion plus exact RawTherapee noise kernels remain. Continue
-    with UI region picking, Slice G profile separation, or native RawTherapee-style
-    noise/highlight processing; per-stock curves follow.
-9. **Phase 1.3 and 1.2 cont.** — Contour detection + minAreaRect (OpenCV
-   C++ interop), perspective warp (DLT homography + bilinear warp).
-10. **Phase 1.8–1.9** — Dust detection and Telea FMM inpainting.
-11. **Phase 1.10–1.11** — Complete remaining workflow orchestration around
-    crop, perspective, dust, persistence, and settings migration.
-12. **Phase 3** — Finish crop, perspective, dust, persistence, packaging, and
-    release workflows. Export UI and batch export are already implemented.
-13. **Phase 2** — Replace remaining measured hot paths with Metal or Accelerate
+    inversion placement, an RCD callback for full-resolution Bayer decode,
+    three-pass Markesteijn interpolation for full-resolution X-Trans decode,
+    and bounded ISO-tier filters are implemented. The app keeps half-size RAW
+    preview decode but re-decodes RAW export one file at a time at full
+    resolution. Direct camera-to-Rec.2020
+    conversion plus exact RawTherapee noise kernels remain. Slice C/D inspector
+    wiring and Slice G profile separation are complete. The density and display
+    contracts are connected to preview/export with explicit flat-field and CPU
+    fallback behavior.
+9. **Phase 1.15, complete** — All six perceptual-slider modernization slices
+   are implemented and verified. Frozen legacy operators remain for
+   compatibility fixtures; per-stock curves and calibrated matrices are a
+   later calibration track.
+10. **Phase 1.3 and 1.2 cont., complete** — Pure-Swift contour detection,
+   minAreaRect, DLT homography, and bilinear perspective crop are connected to
+   per-file preview/export processing.
+11. **Phase 1.8–1.9** — Dust detection and Telea FMM inpainting after the
+    focused color/adjustment sequence; this remains a Python-retirement gate.
+12. **Phase 1.10–1.11** — Complete remaining workflow orchestration around
+    dust, persistence, and settings migration. Crop and perspective are wired.
+13. **Phase 3** — Finish dust, persistence, packaging, and release workflows.
+    Crop/perspective, export UI, and batch export are already implemented.
+14. **Phase 2** — Replace remaining measured hot paths with Metal or Accelerate
     implementations. Profile before and after each change.
-14. **Phase 4** — Performance gates, packaging, CI hardening, release
+15. **Phase 4** — Performance gates, packaging, CI hardening, release
     validation, and Python retirement.
 
 Each phase should produce a verifiable increment. The Swift application is the

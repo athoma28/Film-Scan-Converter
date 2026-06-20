@@ -8,8 +8,9 @@ target for new features. Start with
 known limitations, the current step, and ordered next work.
 
 The Python/Tkinter application is retained as a maintenance-only legacy
-workflow until the native app completes automatic crop/perspective correction,
-dust handling, and release packaging. Native TIFF, JPEG, PNG, and processed-RGB
-DNG export is implemented. The legacy installation and usage guides remain
-available for users who need the complete crop/perspective/dust workflow. See
+workflow until the native app completes dust handling, release packaging, and
+fixture-tooling retirement. Native automatic crop/perspective correction and
+TIFF, JPEG, PNG, and processed-RGB DNG export are implemented. The legacy
+installation and usage guides remain available for users who need dust removal
+or the historical all-in-one workflow. See
 [Legacy Python Application](legacy-python.md) for the retirement policy.

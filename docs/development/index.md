@@ -23,7 +23,9 @@ A [real-time still preview plan](realtime-preview-plan.md) records the completed
 interactive-preview work and deferred display-surface/idle-render follow-up.
 
 The `FilmScanPreviewComparator` tool (`swift run FilmScanPreviewComparator`)
-validates GPU-vs-CPU rendering equivalence across 2,655 parameter combinations.
+supports visual review of GPU and CPU rendering. The current automated
+parameter grids perform 2,725 channel comparisons within the documented
+2/255 tolerance.
 
 A [comprehensive Swift port evaluation](swift-port-evaluation.md) reviews the
 entire native codebase: architecture, code quality, implemented scope, remaining
@@ -31,11 +33,10 @@ work, risks, and effort estimates.
 
 ## Legacy Python Maintenance
 
-The Python application is maintenance-only. It remains in place because it is
-still the only complete workflow for crop/perspective correction, dust handling,
-and the legacy all-in-one batch workflow, and because fixture/benchmark tools
-still import it. Native TIFF, JPEG, PNG, and processed-RGB DNG export is
-implemented. Shared legacy behavior is preserved by frozen fixtures; new
+The Python application is maintenance-only. It remains in place for dust
+handling, the historical all-in-one batch workflow, and fixture/benchmark tools
+that still import it. Native crop/perspective correction and TIFF, JPEG, PNG,
+and processed-RGB DNG export are implemented. Shared legacy behavior is preserved by frozen fixtures; new
 native-only behavior is governed by deterministic Swift CPU contracts. See
 [Legacy Python Application](../legacy-python.md) for retirement gates.
 

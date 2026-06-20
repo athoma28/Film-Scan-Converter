@@ -2,7 +2,7 @@
 
 The native Swift/macOS application is the primary product. The legacy Python
 application is maintenance-only and remains available for workflows the native
-app has not yet replaced (crop/perspective, dust handling). See
+app has not yet replaced, primarily dust handling and packaged legacy releases. See
 [Native macOS Development](development/native-macos.md) for the active product
 and [Legacy Python Application](legacy-python.md) for the retirement policy.
 
@@ -27,7 +27,7 @@ and [Legacy Python Application](legacy-python.md) for the retirement policy.
 3. Build and run the native application:
 
     ```sh
-    # Run the default regression suite (203 tests; performance benchmark skipped)
+    # Run the default regression suite (performance benchmark skipped)
     swift test --package-path native/FilmScanEngine
 
     # Build the app

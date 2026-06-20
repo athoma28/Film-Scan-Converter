@@ -11,10 +11,11 @@ remaining replacement work, and ordered next steps are tracked in the
 [native macOS development status](docs/development/native-macos.md).
 
 The Python/Tkinter application remains available as a maintenance-only legacy
-workflow because native automatic crop/perspective correction and dust handling
-are not complete. Native TIFF, JPEG, PNG, and processed-RGB DNG export is
-implemented. See [Legacy Python Application](docs/legacy-python.md) for the
-legacy app's limited role and retirement gates.
+workflow because native dust removal, release packaging, and fixture-tooling
+retirement are not complete. Native crop/perspective correction and
+TIFF/JPEG/PNG/processed-RGB-DNG export are implemented. See
+[Legacy Python Application](docs/legacy-python.md) for the legacy app's limited
+role and retirement gates.
 
 ## Documentation
 

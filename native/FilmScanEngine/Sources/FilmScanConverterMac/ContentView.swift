@@ -8,6 +8,10 @@ struct ContentView: View {
   @State private var dropTargeted = false
   @State private var showLivePreview = false
   @State private var inspectorPage: InspectorPage = .edit
+  @State private var isPickingRebateRegion = false
+  @State private var rebateDragStart: CGPoint?
+  @State private var rebateDragEnd: CGPoint?
+  @State private var rebateSelectionPreviousShowOriginal = false
 
   private enum InspectorPage: String, CaseIterable, Identifiable {
     case edit = "Edit"
@@ -46,6 +50,7 @@ struct ContentView: View {
       .navigationTitle("Scans")
       .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
       .onChange(of: model.selection) {
+        endRebateSelection()
         model.loadSelection()
       }
     } detail: {
@@ -127,6 +132,7 @@ struct ContentView: View {
           Label("Original", systemImage: "rectangle.on.rectangle")
         }
         .toggleStyle(.button)
+        .disabled(isPickingRebateRegion)
         .help("Press and hold the comparison visually by toggling the original")
 
         Button(action: model.rotateCounterclockwise) {
@@ -235,18 +241,32 @@ struct ContentView: View {
 
           DisclosureGroup("Advanced profile tuning") {
             VStack(spacing: 10) {
-              correctionDoubleSlider(
-                "Red Ratio", value: { fn.redRatio }, range: 0.8...1.8,
-                neutral: FilmNegativeParams.colourNegative.redRatio
-              ) { model.setFilmNegativeRedRatio($0) }
-              correctionDoubleSlider(
-                "Green Exponent", value: { fn.greenExp }, range: 1.0...2.0,
-                neutral: 1.5
-              ) { model.setFilmNegativeGreenExp($0) }
-              correctionDoubleSlider(
-                "Blue Ratio", value: { fn.blueRatio }, range: 0.6...1.4,
-                neutral: FilmNegativeParams.colourNegative.blueRatio
-              ) { model.setFilmNegativeBlueRatio($0) }
+              AdjustmentSlider(
+                "Red Ratio",
+                value: Binding(
+                  get: { fn.redRatio },
+                  set: { model.setFilmNegativeRedRatio($0) }
+                ),
+                range: 0.8...1.8, neutral: FilmNegativeParams.colourNegative.redRatio,
+                valueFormat: "%.3f"
+              )
+              AdjustmentSlider(
+                "Green Exponent",
+                value: Binding(
+                  get: { fn.greenExp },
+                  set: { model.setFilmNegativeGreenExp($0) }
+                ),
+                range: 1.0...2.0, neutral: 1.5, valueFormat: "%.3f"
+              )
+              AdjustmentSlider(
+                "Blue Ratio",
+                value: Binding(
+                  get: { fn.blueRatio },
+                  set: { model.setFilmNegativeBlueRatio($0) }
+                ),
+                range: 0.6...1.4, neutral: FilmNegativeParams.colourNegative.blueRatio,
+                valueFormat: "%.3f"
+              )
             }
             .padding(.top, 8)
           }
@@ -269,34 +289,113 @@ struct ContentView: View {
       }
 
       InspectorSection("Light", systemImage: "sun.max") {
-        correctionSlider("Gamma", value: { model.parameters.gamma }, range: -100...100) {
-          model.setGamma($0)
-        }
-        correctionSlider("Shadows", value: { model.parameters.shadows }, range: -100...100) {
-          model.setShadows($0)
-        }
-        correctionSlider("Highlights", value: { model.parameters.highlights }, range: -100...100) {
-          model.setHighlights($0)
-        }
+        AdjustmentSlider(
+          "Exposure",
+          value: Binding(
+            get: { model.parameters.photoAdjustments.exposureEV },
+            set: { model.setExposureEV($0) }
+          ),
+          range: -4...4, neutral: 0, valueFormat: "%.2f", unitSuffix: "EV"
+        )
+        AdjustmentSlider(
+          "Brightness",
+          value: Binding(
+            get: { model.parameters.photoAdjustments.brightness },
+            set: { model.setBrightness($0) }
+          ),
+          range: -1...1, neutral: 0, valueFormat: "%.3f"
+        )
+        AdjustmentSlider(
+          "Contrast",
+          value: Binding(
+            get: { model.parameters.photoAdjustments.contrast },
+            set: { model.setContrast($0) }
+          ),
+          range: -1...1, neutral: 0, valueFormat: "%.3f"
+        )
+        AdjustmentSlider(
+          "Highlights",
+          value: Binding(
+            get: { model.parameters.photoAdjustments.highlights },
+            set: { model.setSemanticHighlights($0) }
+          ),
+          range: -1...1, neutral: 0, valueFormat: "%.3f"
+        )
+        AdjustmentSlider(
+          "Shadows",
+          value: Binding(
+            get: { model.parameters.photoAdjustments.shadows },
+            set: { model.setSemanticShadows($0) }
+          ),
+          range: -1...1, neutral: 0, valueFormat: "%.3f"
+        )
       }
       .disabled(!model.parameters.filmType.supportsToneCorrections)
 
       InspectorSection("Color", systemImage: "thermometer.medium") {
-        correctionSlider("Temperature", value: { model.parameters.temperature }, range: -100...100) {
-          model.setTemperature($0)
-        }
-        correctionSlider("Tint", value: { model.parameters.tint }, range: -100...100) {
-          model.setTint($0)
-        }
-        correctionSlider(
-          "Saturation", value: { model.parameters.saturation - 100 }, range: -100...100
-        ) {
-          model.setSaturation($0 + 100)
-        }
+        AdjustmentSlider(
+          "Temperature",
+          value: Binding(
+            get: { Double(model.parameters.temperature) },
+            set: { model.setTemperature(Int($0.rounded())) }
+          ),
+          range: -100...100, neutral: 0, valueFormat: "%.0f", step: 1
+        )
+        AdjustmentSlider(
+          "Tint",
+          value: Binding(
+            get: { Double(model.parameters.tint) },
+            set: { model.setTint(Int($0.rounded())) }
+          ),
+          range: -100...100, neutral: 0, valueFormat: "%.0f", step: 1
+        )
+        AdjustmentSlider(
+          "Saturation",
+          value: Binding(
+            get: { Double(model.parameters.saturation - 100) },
+            set: { model.setSaturation(Int($0.rounded()) + 100) }
+          ),
+          range: -100...100, neutral: 0, valueFormat: "%.0f", step: 1
+        )
+        AdjustmentSlider(
+          "Vibrance",
+          value: Binding(
+            get: { model.parameters.photoAdjustments.vibrance },
+            set: { model.setVibrance($0) }
+          ),
+          range: -1...1, neutral: 0, valueFormat: "%.3f"
+        )
       }
       .disabled(!model.parameters.filmType.supportsColorCorrections)
 
       InspectorSection("Film Base", systemImage: "viewfinder") {
+        HStack {
+          Button(action: model.loadFlatField) {
+            Label("Flat Field", systemImage: "rectangle.split.1x2")
+          }
+          .controlSize(.small)
+          if model.flatFieldURL != nil {
+            Button(action: model.clearFlatField) {
+              Image(systemName: "xmark.circle.fill")
+                .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .controlSize(.small)
+          }
+          Spacer()
+          if let ffURL = model.flatFieldURL {
+            Text(ffURL.lastPathComponent)
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+              .lineLimit(1)
+          }
+        }
+
+        Text("Film base is the clear, unexposed film edge outside the photographed frame. Measuring it removes the orange mask from colour negatives.")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+
         Button(action: model.detectRebate) {
           if model.isRebateDetectionRunning {
             HStack {
@@ -306,16 +405,41 @@ struct ContentView: View {
               Text("Detecting...")
             }
           } else {
-            Label("Detect Rebate", systemImage: "viewfinder")
+            Label("Find Unexposed Film Edge", systemImage: "viewfinder")
           }
         }
         .disabled(
           model.decodedImage == nil || model.isRebateDetectionRunning
             || !supportsFilmNegative(filmType: model.parameters.filmType))
 
+        Button {
+          if isPickingRebateRegion {
+            endRebateSelection()
+          } else {
+            rebateSelectionPreviousShowOriginal = model.showOriginal
+            model.showOriginal = true
+            isPickingRebateRegion = true
+            rebateDragStart = nil
+            rebateDragEnd = nil
+          }
+        } label: {
+          Label(
+            isPickingRebateRegion ? "Cancel Film Base Selection" : "Select Film Base Area",
+            systemImage: isPickingRebateRegion ? "xmark" : "rectangle.dashed"
+          )
+        }
+        .controlSize(.small)
+        .disabled(model.decodedImage == nil)
+
+        if isPickingRebateRegion {
+          Text("Drag over a clear, unexposed strip of film—not the picture area.")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+
         if !model.rebateCandidates.isEmpty {
           VStack(alignment: .leading, spacing: 2) {
-            Text("Candidates:")
+            Text("Possible unexposed edges:")
               .font(.caption)
               .foregroundStyle(.secondary)
             ForEach(Array(model.rebateCandidates.enumerated()), id: \.offset) {
@@ -397,6 +521,99 @@ struct ContentView: View {
         }
       }
       .disabled(!supportsFilmNegative(filmType: model.parameters.filmType))
+
+      InspectorSection("Film Frame", systemImage: "crop") {
+        AdjustmentSlider(
+          "Dark",
+          value: Binding(
+            get: { Double(model.parameters.darkThreshold) },
+            set: { model.setDarkThreshold(Int($0.rounded())) }
+          ),
+          range: 0...100, neutral: 25, valueFormat: "%.0f", unitSuffix: "%", step: 1
+        )
+        AdjustmentSlider(
+          "Light",
+          value: Binding(
+            get: { Double(model.parameters.lightThreshold) },
+            set: { model.setLightThreshold(Int($0.rounded())) }
+          ),
+          range: 0...100, neutral: 100, valueFormat: "%.0f", unitSuffix: "%", step: 1
+        )
+
+        Button(action: model.detectCrop) {
+          if model.isCropDetectionRunning {
+            HStack {
+              ProgressView()
+                .scaleEffect(0.7)
+                .frame(width: 16, height: 16)
+              Text("Detecting...")
+            }
+          } else {
+            Label("Detect Frame", systemImage: "crop.rotate")
+          }
+        }
+        .disabled(model.decodedImage == nil || model.isCropDetectionRunning)
+
+        if let cropRect = model.cropRect {
+          Divider()
+          VStack(alignment: .leading, spacing: 2) {
+            Text("Angle: \(String(format: "%.1f", cropRect.angle))°")
+              .font(.caption2)
+            Text("Size: \(String(format: "%.3f", cropRect.width)) × \(String(format: "%.3f", cropRect.height))")
+              .font(.caption2)
+            Text("Center: (\(String(format: "%.3f", cropRect.centerX)), \(String(format: "%.3f", cropRect.centerY)))")
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+          }
+          Button("Clear") { model.clearCrop() }
+            .controlSize(.small)
+            .font(.caption2)
+        }
+
+        if !model.cropStatus.isEmpty && model.cropRect == nil && !model.isCropDetectionRunning {
+          Text(model.cropStatus)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+      }
+
+      if model.selectedRebateMeasurement != nil
+        || model.rollProfile?.measuredBaseDensity != nil
+      {
+        InspectorSection("Density Pipeline", systemImage: "arrow.triangle.branch") {
+          VStack(alignment: .leading, spacing: 6) {
+            Toggle(
+              "Use Measured Film Base",
+              isOn: Binding(
+                get: { model.parameters.densityPipelineEnabled },
+                set: { model.setDensityPipelineEnabled($0) }
+              )
+            )
+            .font(.callout)
+
+            if model.parameters.densityPipelineEnabled,
+              let baseDensity = model.parameters.densityBaseDensity
+            {
+              Text("Base: B \(String(format: "%.3f", baseDensity.blue))  G \(String(format: "%.3f", baseDensity.green))  R \(String(format: "%.3f", baseDensity.red))")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+              Text(
+                "C-41: slopes B\(String(format: "%.2f", model.parameters.densityC41Profile.densitySlope.blue)) G\(String(format: "%.2f", model.parameters.densityC41Profile.densitySlope.green)) R\(String(format: "%.2f", model.parameters.densityC41Profile.densitySlope.red))"
+              )
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+            }
+
+            if model.parameters.densityPipelineEnabled {
+              Text("This uses the measured film edge for inversion. Turn it off to compare with the basic negative conversion.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+          }
+        }
+      }
+
       Button(role: .destructive, action: model.resetCorrections) {
         Label("Reset All Adjustments", systemImage: "arrow.counterclockwise")
           .frame(maxWidth: .infinity)
@@ -461,13 +678,14 @@ struct ContentView: View {
         .pickerStyle(.segmented)
 
         if model.exportParameters.format == .jpeg {
-          correctionDoubleSlider(
+          AdjustmentSlider(
             "JPEG Quality",
-            value: { model.exportParameters.jpegQuality * 100 },
-            range: 40...100,
-            neutral: 95,
-            valueFormat: "%.0f%%"
-          ) { model.setJpegQuality($0 / 100) }
+            value: Binding(
+              get: { model.exportParameters.jpegQuality * 100 },
+              set: { model.setJpegQuality($0 / 100) }
+            ),
+            range: 40...100, neutral: 95, valueFormat: "%.0f", unitSuffix: "%"
+          )
         }
 
         if model.exportParameters.format == .tiff {
@@ -486,10 +704,14 @@ struct ContentView: View {
       }
 
       InspectorSection("Frame", systemImage: "aspectratio") {
-        correctionSlider(
-          "Border", value: { model.exportParameters.framePercent }, range: 0...20,
-          neutral: 0, valueSuffix: "%"
-        ) { model.setExportFramePercent($0) }
+        AdjustmentSlider(
+          "Border",
+          value: Binding(
+            get: { Double(model.exportParameters.framePercent) },
+            set: { model.setExportFramePercent(Int($0.rounded())) }
+          ),
+          range: 0...20, neutral: 0, valueFormat: "%.0f", unitSuffix: "%", step: 1
+        )
 
         Picker(
           "Aspect Ratio",
@@ -552,11 +774,27 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.black)
     } else if let image = model.previewImage {
-      Image(nsImage: image)
-        .resizable()
-        .scaledToFit()
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.black)
+      ZStack {
+        Image(nsImage: image)
+          .resizable()
+          .scaledToFit()
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .background(.black)
+        RebateRegionSelectionOverlay(
+          isActive: isPickingRebateRegion,
+          imageSize: image.size,
+          dragStart: $rebateDragStart,
+          dragEnd: $rebateDragEnd
+        ) { x, y, width, height in
+          model.measureRebateRegion(
+            normalizedX: x,
+            normalizedY: y,
+            normalizedWidth: width,
+            normalizedHeight: height
+          )
+          endRebateSelection()
+        }
+      }
     } else {
       ContentUnavailableView {
         Label("Drop Film Scans Here", systemImage: "photo.on.rectangle.angled")
@@ -566,90 +804,6 @@ struct ContentView: View {
         Button("Choose Files", action: model.showImportPanel)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-  }
-
-  private func correctionSlider(
-    _ title: String,
-    value: @escaping () -> Int,
-    range: ClosedRange<Int>,
-    neutral: Int = 0,
-    valueSuffix: String = "",
-    set: @escaping (Int) -> Void
-  ) -> some View {
-    VStack(alignment: .leading, spacing: 5) {
-      HStack {
-        Text(title)
-          .font(.callout)
-        Spacer()
-        Text("\(value() > 0 ? "+" : "")\(value().formatted())\(valueSuffix)")
-          .font(.caption)
-          .monospacedDigit()
-          .foregroundStyle(.secondary)
-          .frame(minWidth: 42, alignment: .trailing)
-        Button {
-          set(neutral)
-        } label: {
-          Image(systemName: "arrow.counterclockwise")
-            .font(.caption2)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(value() == neutral ? .tertiary : .secondary)
-        .disabled(value() == neutral)
-        .help("Reset \(title)")
-      }
-      Slider(
-        value: Binding(
-          get: { Double(value()) },
-          set: { set(Int($0.rounded())) }
-        ),
-        in: Double(range.lowerBound)...Double(range.upperBound),
-        step: 1
-      )
-      .controlSize(.small)
-      .onTapGesture(count: 2) { set(neutral) }
-      .accessibilityValue(value().formatted() + valueSuffix)
-    }
-  }
-
-  private func correctionDoubleSlider(
-    _ title: String,
-    value: @escaping () -> Double,
-    range: ClosedRange<Double>,
-    neutral: Double,
-    valueFormat: String = "%.3f",
-    set: @escaping (Double) -> Void
-  ) -> some View {
-    VStack(alignment: .leading, spacing: 5) {
-      HStack {
-        Text(title)
-          .font(.callout)
-        Spacer()
-        Text(String(format: valueFormat, value()))
-          .font(.caption)
-          .monospacedDigit()
-          .foregroundStyle(.secondary)
-          .frame(minWidth: 46, alignment: .trailing)
-        Button {
-          set(neutral)
-        } label: {
-          Image(systemName: "arrow.counterclockwise")
-            .font(.caption2)
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(abs(value() - neutral) < 0.000_001 ? .tertiary : .secondary)
-        .disabled(abs(value() - neutral) < 0.000_001)
-        .help("Reset \(title)")
-      }
-      Slider(
-        value: Binding(
-          get: { value() },
-          set: { set($0) }
-        ),
-        in: range
-      )
-      .controlSize(.small)
-      .onTapGesture(count: 2) { set(neutral) }
     }
   }
 
@@ -710,6 +864,95 @@ struct ContentView: View {
       return region.x == 0 ? "Left" : "Right"
     }
     return "x:\(region.x) y:\(region.y)"
+  }
+
+  private func endRebateSelection() {
+    guard isPickingRebateRegion else { return }
+    isPickingRebateRegion = false
+    rebateDragStart = nil
+    rebateDragEnd = nil
+    model.showOriginal = rebateSelectionPreviousShowOriginal
+  }
+}
+
+private struct RebateRegionSelectionOverlay: View {
+  let isActive: Bool
+  let imageSize: CGSize
+  @Binding var dragStart: CGPoint?
+  @Binding var dragEnd: CGPoint?
+  let onSelection: (Double, Double, Double, Double) -> Void
+
+  var body: some View {
+    GeometryReader { geometry in
+      let imageRect = aspectFitRect(imageSize: imageSize, containerSize: geometry.size)
+      ZStack {
+        Color.clear
+          .contentShape(Rectangle())
+        if isActive, let dragStart, let dragEnd {
+          Rectangle()
+            .fill(Color.accentColor.opacity(0.15))
+            .stroke(Color.accentColor, lineWidth: 2)
+            .frame(
+              width: abs(dragEnd.x - dragStart.x),
+              height: abs(dragEnd.y - dragStart.y)
+            )
+            .position(
+              x: (dragStart.x + dragEnd.x) / 2,
+              y: (dragStart.y + dragEnd.y) / 2
+            )
+        }
+      }
+      .gesture(
+        DragGesture(minimumDistance: 0)
+          .onChanged { value in
+            let point = clamped(value.location, to: imageRect)
+            if dragStart == nil {
+              dragStart = point
+            }
+            dragEnd = point
+          }
+          .onEnded { value in
+            guard let start = dragStart else { return }
+            let end = clamped(value.location, to: imageRect)
+            dragEnd = end
+            let selection = CGRect(
+              x: min(start.x, end.x),
+              y: min(start.y, end.y),
+              width: abs(end.x - start.x),
+              height: abs(end.y - start.y)
+            )
+            guard selection.width >= 2, selection.height >= 2,
+              imageRect.width > 0, imageRect.height > 0
+            else { return }
+            onSelection(
+              Double((selection.minX - imageRect.minX) / imageRect.width),
+              Double((selection.minY - imageRect.minY) / imageRect.height),
+              Double(selection.width / imageRect.width),
+              Double(selection.height / imageRect.height)
+            )
+          }
+      )
+      .allowsHitTesting(isActive)
+    }
+  }
+
+  private func aspectFitRect(imageSize: CGSize, containerSize: CGSize) -> CGRect {
+    guard imageSize.width > 0, imageSize.height > 0 else { return .zero }
+    let scale = min(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
+    let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+    return CGRect(
+      x: (containerSize.width - size.width) / 2,
+      y: (containerSize.height - size.height) / 2,
+      width: size.width,
+      height: size.height
+    )
+  }
+
+  private func clamped(_ point: CGPoint, to rect: CGRect) -> CGPoint {
+    CGPoint(
+      x: min(max(point.x, rect.minX), rect.maxX),
+      y: min(max(point.y, rect.minY), rect.maxY)
+    )
   }
 }
 

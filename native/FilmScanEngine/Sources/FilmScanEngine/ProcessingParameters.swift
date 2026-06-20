@@ -130,6 +130,14 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
   public var midtoneWheel: ColorWheel
   public var shadowWheel: ColorWheel
   public var filmNegativeParams: FilmNegativeParams
+  public var photoAdjustments: PhotoAdjustmentParameters
+  public var densityPipelineEnabled: Bool
+  public var densityBaseDensity: BGRChannelValues?
+  public var densityC41Profile: GenericC41Profile
+  public var densityDisplayParams: DisplayRenderingParameters
+  public var darkThreshold: Int
+  public var lightThreshold: Int
+  public var cropRect: RotatedRect?
 
   public init(
     borderCrop: Double = 0,
@@ -156,7 +164,15 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     highlightWheel: ColorWheel = ColorWheel(),
     midtoneWheel: ColorWheel = ColorWheel(),
     shadowWheel: ColorWheel = ColorWheel(),
-    filmNegativeParams: FilmNegativeParams = FilmNegativeParams()
+    filmNegativeParams: FilmNegativeParams = FilmNegativeParams(),
+    photoAdjustments: PhotoAdjustmentParameters? = nil,
+    densityPipelineEnabled: Bool = false,
+    densityBaseDensity: BGRChannelValues? = nil,
+    densityC41Profile: GenericC41Profile = .identity,
+    densityDisplayParams: DisplayRenderingParameters = DisplayRenderingParameters(),
+    darkThreshold: Int = 25,
+    lightThreshold: Int = 100,
+    cropRect: RotatedRect? = nil
   ) {
     self.borderCrop = borderCrop
     self.flip = flip
@@ -183,6 +199,83 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     self.midtoneWheel = midtoneWheel
     self.shadowWheel = shadowWheel
     self.filmNegativeParams = filmNegativeParams
+    self.photoAdjustments = photoAdjustments ?? .migratingLegacy(
+      gamma: gamma,
+      shadows: shadows,
+      highlights: highlights,
+      temperature: temperature,
+      tint: tint,
+      saturation: saturation
+    )
+    self.densityPipelineEnabled = densityPipelineEnabled
+    self.densityBaseDensity = densityBaseDensity
+    self.densityC41Profile = densityC41Profile
+    self.densityDisplayParams = densityDisplayParams
+    self.darkThreshold = darkThreshold
+    self.lightThreshold = lightThreshold
+    self.cropRect = cropRect
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case borderCrop, flip, rotation, filmType
+    case whitePoint, blackPoint, gamma, shadows, highlights
+    case temperature, tint, saturation, removeDust
+    case curveEnabled, curveControlPoints
+    case redCurveEnabled, redCurveControlPoints
+    case greenCurveEnabled, greenCurveControlPoints
+    case blueCurveEnabled, blueCurveControlPoints
+    case highlightWheel, midtoneWheel, shadowWheel
+    case filmNegativeParams
+    case photoAdjustments
+    case densityPipelineEnabled, densityBaseDensity
+    case densityC41Profile, densityDisplayParams
+    case darkThreshold, lightThreshold, cropRect
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    borderCrop = try container.decodeIfPresent(Double.self, forKey: .borderCrop) ?? 0
+    flip = try container.decodeIfPresent(Bool.self, forKey: .flip) ?? false
+    rotation = try container.decodeIfPresent(Int.self, forKey: .rotation) ?? 0
+    filmType = try container.decodeIfPresent(FilmType.self, forKey: .filmType) ?? .cropOnly
+    whitePoint = try container.decodeIfPresent(Int.self, forKey: .whitePoint) ?? 0
+    blackPoint = try container.decodeIfPresent(Int.self, forKey: .blackPoint) ?? 0
+    gamma = try container.decodeIfPresent(Int.self, forKey: .gamma) ?? 0
+    shadows = try container.decodeIfPresent(Int.self, forKey: .shadows) ?? 0
+    highlights = try container.decodeIfPresent(Int.self, forKey: .highlights) ?? 0
+    temperature = try container.decodeIfPresent(Int.self, forKey: .temperature) ?? 0
+    tint = try container.decodeIfPresent(Int.self, forKey: .tint) ?? 0
+    saturation = try container.decodeIfPresent(Int.self, forKey: .saturation) ?? 100
+    removeDust = try container.decodeIfPresent(Bool.self, forKey: .removeDust) ?? false
+    curveEnabled = try container.decodeIfPresent(Bool.self, forKey: .curveEnabled) ?? false
+    curveControlPoints = try container.decodeIfPresent([CurvePoint].self, forKey: .curveControlPoints) ?? []
+    redCurveEnabled = try container.decodeIfPresent(Bool.self, forKey: .redCurveEnabled) ?? false
+    redCurveControlPoints = try container.decodeIfPresent([CurvePoint].self, forKey: .redCurveControlPoints) ?? []
+    greenCurveEnabled = try container.decodeIfPresent(Bool.self, forKey: .greenCurveEnabled) ?? false
+    greenCurveControlPoints = try container.decodeIfPresent([CurvePoint].self, forKey: .greenCurveControlPoints) ?? []
+    blueCurveEnabled = try container.decodeIfPresent(Bool.self, forKey: .blueCurveEnabled) ?? false
+    blueCurveControlPoints = try container.decodeIfPresent([CurvePoint].self, forKey: .blueCurveControlPoints) ?? []
+    highlightWheel = try container.decodeIfPresent(ColorWheel.self, forKey: .highlightWheel) ?? ColorWheel()
+    midtoneWheel = try container.decodeIfPresent(ColorWheel.self, forKey: .midtoneWheel) ?? ColorWheel()
+    shadowWheel = try container.decodeIfPresent(ColorWheel.self, forKey: .shadowWheel) ?? ColorWheel()
+    filmNegativeParams = try container.decodeIfPresent(FilmNegativeParams.self, forKey: .filmNegativeParams) ?? FilmNegativeParams()
+    photoAdjustments = try container.decodeIfPresent(
+      PhotoAdjustmentParameters.self, forKey: .photoAdjustments
+    ) ?? .migratingLegacy(
+      gamma: gamma,
+      shadows: shadows,
+      highlights: highlights,
+      temperature: temperature,
+      tint: tint,
+      saturation: saturation
+    )
+    densityPipelineEnabled = try container.decodeIfPresent(Bool.self, forKey: .densityPipelineEnabled) ?? false
+    densityBaseDensity = try container.decodeIfPresent(BGRChannelValues.self, forKey: .densityBaseDensity)
+    densityC41Profile = try container.decodeIfPresent(GenericC41Profile.self, forKey: .densityC41Profile) ?? .identity
+    densityDisplayParams = try container.decodeIfPresent(DisplayRenderingParameters.self, forKey: .densityDisplayParams) ?? DisplayRenderingParameters()
+    darkThreshold = try container.decodeIfPresent(Int.self, forKey: .darkThreshold) ?? 25
+    lightThreshold = try container.decodeIfPresent(Int.self, forKey: .lightThreshold) ?? 100
+    cropRect = try container.decodeIfPresent(RotatedRect.self, forKey: .cropRect)
   }
 }
 

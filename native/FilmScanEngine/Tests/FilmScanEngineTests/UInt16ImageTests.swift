@@ -40,7 +40,8 @@ struct UInt16ImageTests {
       gamma: 25,
       temperature: -10,
       saturation: 120,
-      removeDust: true
+      removeDust: true,
+      cropRect: RotatedRect(centerX: 0.5, centerY: 0.5, width: 0.8, height: 0.7, angle: 2)
     )
 
     let encoded = try JSONEncoder().encode(parameters)
@@ -75,6 +76,20 @@ struct UInt16ImageTests {
     #expect(resized.width == 2)
     #expect(resized.height == 1)
     #expect(resized.pixels == [0, 2])
+  }
+
+  @Test("Exact resize produces requested geometry")
+  func exactResize() {
+    let image = UInt16Image(
+      width: 4, height: 2, channels: 1,
+      pixels: [0, 1, 2, 3, 4, 5, 6, 7]
+    )
+
+    let resized = image.resized(width: 2, height: 4)
+
+    #expect(resized.width == 2)
+    #expect(resized.height == 4)
+    #expect(resized.pixels.count == 8)
   }
 
   @Test("16-bit preview image preserves dimensions and component depth")

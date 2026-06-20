@@ -24,14 +24,28 @@ T limited(T value, T lower, T upper) {
 class FSCRawTherapeeDecoder final : public LibRaw {
 public:
     bool usedRCD = false;
+    bool usedXTransThreePass = false;
 
     FSCRawTherapeeDecoder() : LibRaw(LIBRAW_OPTIONS_NONE) {
         callbacks.interpolate_bayer_cb = &FSCRawTherapeeDecoder::rcdCallback;
+        callbacks.interpolate_xtrans_cb = &FSCRawTherapeeDecoder::xtransCallback;
     }
 
 private:
     static void rcdCallback(void *context) {
         static_cast<FSCRawTherapeeDecoder *>(context)->rcdDemosaic();
+    }
+
+    static void xtransCallback(void *context) {
+        static_cast<FSCRawTherapeeDecoder *>(context)->xtransThreePassDemosaic();
+    }
+
+    void xtransThreePassDemosaic() {
+        // LibRaw's X-Trans implementation is Markesteijn-derived. Three passes
+        // trade decode time for the cleaner fine colour detail RawTherapee
+        // recommends for final-quality X-Trans output.
+        xtrans_interpolate(3);
+        usedXTransThreePass = true;
     }
 
     int colorAt(int row, int col) const {
@@ -266,6 +280,7 @@ extern "C" int fsc_decode_rawtherapee_direct(
     }
     uint32_t flags = 0;
     if (raw->usedRCD) { flags |= FSC_RAW_PROCESSING_RCD; }
+    if (raw->usedXTransThreePass) { flags |= FSC_RAW_PROCESSING_XTRANS_THREE_PASS; }
     isoAdaptiveFilter(processed, raw->imgdata.other.iso_speed, flags);
     output->width = processed->width; output->height = processed->height;
     output->channels = processed->colors;

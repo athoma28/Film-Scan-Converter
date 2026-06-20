@@ -1,9 +1,9 @@
 # Legacy Python Application
 
 The Python/Tkinter application is now a **maintenance-only legacy
-implementation**. It remains in `source/` because it is still the only complete
-end-to-end workflow for automatic crop detection, perspective correction, dust
-handling, and individual or batch export.
+implementation**. It remains in `source/` because it still provides dust
+handling, the historical all-in-one workflow, and fixture-generation utilities
+that the native replacement has not retired.
 
 All new product features and new processing functionality belong in the native
 Swift/macOS project. Python changes should be limited to:
@@ -24,10 +24,10 @@ Moving `source/` into an archive folder now would break or obscure active
 workflows:
 
 - native export of TIFF, JPEG, PNG, and DNG is now implemented;
-- contour detection, automatic crop-box computation, perspective warp, and dust
-  detection/inpainting are not yet implemented natively;
-- the Python application remains the only complete batch-export workflow that
-  includes crop, perspective correction, and dust handling;
+- contour detection, automatic crop-box computation, and perspective warp are
+  implemented natively; dust detection/inpainting is not;
+- the Python application remains the only workflow that includes automatic dust
+  handling in the same batch-processing surface;
 - Python/RawPy tools still generate or audit frozen compatibility fixtures and
   decode benchmarks.
 
@@ -39,8 +39,9 @@ true:
 1. ~~Native individual and memory-bounded batch export pass round-trip,
    cancellation, partial-file cleanup, metadata, orientation, and collision
    tests.~~ Done. ExportManager + ExportFormat + UInt16Image.write with 19 tests.
-2. Native contour detection, crop-box computation, perspective warp, and dust
-   handling meet their documented compatibility or replacement contracts.
+2. ~~Native contour detection, crop-box computation, and perspective warp meet
+   their documented compatibility or replacement contracts.~~ Done. Native
+   dust handling remains.
 3. A representative RAW corpus completes import, correction, and export through
    the native application with verified output.
 4. Native packaging and release installation are documented and tested.

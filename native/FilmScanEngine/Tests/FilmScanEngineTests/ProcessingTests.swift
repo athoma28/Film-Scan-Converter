@@ -922,4 +922,157 @@ struct ProcessingTests {
     #expect(cpuResult.width == 8)
     #expect(!cpuResult.pixels.isEmpty)
   }
+
+  @Test("Density preview aligns resized flat field through orientation")
+  func densityPreviewAlignsFlatFieldGeometry() {
+    let image = UInt16Image(
+      width: 6, height: 4, channels: 3,
+      pixels: [UInt16](repeating: 30_000, count: 6 * 4 * 3)
+    )
+    let flatField = UInt16Image(
+      width: 3, height: 2, channels: 3,
+      pixels: [UInt16](repeating: 60_000, count: 3 * 2 * 3)
+    )
+    let parameters = ProcessingParameters(
+      rotation: 1,
+      filmType: .colourNegative,
+      densityPipelineEnabled: true,
+      densityBaseDensity: BGRChannelValues(blue: 0, green: 0, red: 0)
+    )
+
+    let result = FilmProcessing.correctedPreview(
+      image: image,
+      parameters: parameters,
+      flatField: flatField
+    )
+
+    #expect(result.width == 4)
+    #expect(result.height == 6)
+    #expect(result.pixels.count == 4 * 6 * 3)
+  }
+
+  @Test("Detected crop geometry is applied by the processing entry point")
+  func correctedPreviewAppliesCrop() {
+    let image = UInt16Image(
+      width: 100, height: 80, channels: 3,
+      pixels: [UInt16](repeating: 20_000, count: 100 * 80 * 3)
+    )
+    let pixelRect = RotatedRect(centerX: 50, centerY: 40, width: 60, height: 40, angle: 0)
+    let normalized = ContourDetection.normalizeToUnit(
+      pixelRect, imageWidth: image.width, imageHeight: image.height)
+    let parameters = ProcessingParameters(filmType: .cropOnly, cropRect: normalized)
+
+    let result = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+
+    #expect(result.width == 60)
+    #expect(result.height == 40)
+  }
+
+  @Test("Power-law processing applies protected color before the display transform")
+  func powerLawProcessingUsesProtectedColorSeam() {
+    let image = UInt16Image(
+      width: 2,
+      height: 1,
+      channels: 3,
+      pixels: [8_000, 18_000, 42_000, 30_000, 34_000, 38_000]
+    )
+    var filmNegative = FilmNegativeParams.colourNegative
+    filmNegative.measuredMedians = BGRChannelValues(blue: 20_000, green: 26_000, red: 32_000)
+    let adjustments = PhotoAdjustmentParameters(
+      temperatureShiftMired: 35,
+      tint: -0.2,
+      saturation: 0.45,
+      vibrance: 0.6
+    )
+    let parameters = ProcessingParameters(
+      filmType: .colourNegative,
+      filmNegativeParams: filmNegative,
+      photoAdjustments: adjustments
+    )
+
+    let actual = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+    let expected = FilmNegativeProcessing.renderPowerLawDisplay(
+      FilmNegativeProcessing.powerLawRenderReadyLinear(image: image, params: filmNegative)
+        .applyingProtectedColorAdjustments(adjustments)
+    )
+
+    #expect(actual == expected)
+  }
+
+  @Test("Density processing applies protected color on the shared linear seam")
+  func densityProcessingUsesProtectedColorSeam() {
+    let image = UInt16Image(width: 1, height: 1, channels: 3, pixels: [12_000, 20_000, 36_000])
+    let baseDensity = BGRChannelValues(blue: 0, green: 0, red: 0)
+    let adjustments = PhotoAdjustmentParameters(saturation: 0.5, vibrance: 0.75)
+    let parameters = ProcessingParameters(
+      filmType: .colourNegative,
+      photoAdjustments: adjustments,
+      densityPipelineEnabled: true,
+      densityBaseDensity: baseDensity
+    )
+    let flatField = UInt16Image(
+      width: 1,
+      height: 1,
+      channels: 3,
+      pixels: [UInt16](repeating: 65_535, count: 3)
+    )
+
+    let actual = FilmProcessing.correctedPreview(
+      image: image,
+      parameters: parameters,
+      flatField: flatField
+    )
+    let renderReady = FilmNegativeProcessing.densityToRenderReadyLinear(
+      image: image,
+      flatField: flatField,
+      baseDensity: baseDensity
+    ).applyingProtectedColorAdjustments(adjustments)
+    let expectedPixels = FilmNegativeProcessing.renderDisplay(sceneLinear: renderReady.pixels)
+      .map { UInt16(min(max($0 * 65_535, 0), 65_535)) }
+
+    #expect(actual.pixels == expectedPixels)
+  }
+
+  @Test("Semantic light controls affect slide processing")
+  func semanticToneControlsAffectSlides() {
+    let image = UInt16Image(
+      width: 2, height: 1, channels: 3,
+      pixels: [8_000, 12_000, 18_000, 24_000, 28_000, 32_000])
+    let neutral = FilmProcessing.correctedPreview(
+      image: image, parameters: ProcessingParameters(filmType: .slide))
+    let adjusted = FilmProcessing.correctedPreview(
+      image: image,
+      parameters: ProcessingParameters(
+        filmType: .slide,
+        photoAdjustments: PhotoAdjustmentParameters(exposureEV: 1)))
+
+    #expect(adjusted != neutral)
+    #expect(zip(adjusted.pixels, neutral.pixels).allSatisfy { adjusted, neutral in
+      adjusted >= neutral
+    })
+  }
+
+  @Test("Semantic light controls affect power-law black-and-white negatives")
+  func semanticToneControlsAffectBlackAndWhiteNegatives() {
+    let image = UInt16Image(
+      width: 2, height: 1, channels: 3,
+      pixels: [8_000, 12_000, 18_000, 24_000, 28_000, 32_000])
+    var filmNegative = FilmNegativeParams.blackAndWhite
+    filmNegative.measuredMedians = BGRChannelValues(blue: 16_000, green: 20_000, red: 24_000)
+    let neutral = FilmProcessing.correctedPreview(
+      image: image,
+      parameters: ProcessingParameters(
+        filmType: .blackAndWhiteNegative, filmNegativeParams: filmNegative))
+    let adjusted = FilmProcessing.correctedPreview(
+      image: image,
+      parameters: ProcessingParameters(
+        filmType: .blackAndWhiteNegative,
+        filmNegativeParams: filmNegative,
+        photoAdjustments: PhotoAdjustmentParameters(exposureEV: -1)))
+
+    #expect(adjusted != neutral)
+    #expect(zip(adjusted.pixels, neutral.pixels).allSatisfy { adjusted, neutral in
+      adjusted <= neutral
+    })
+  }
 }

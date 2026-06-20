@@ -93,9 +93,84 @@ struct ParameterCombo: Hashable, CustomStringConvertible {
   let saturation: Int
   let curveEnabled: Bool
   let wheelsEnabled: Bool
-  var description: String {
-    "\(filmType) T\(temperature) tint\(tint) γ\(gamma) s\(shadows) h\(highlights) sat\(saturation) curve=\(curveEnabled) wheels=\(wheelsEnabled)"
+  let photo: PhotoAdjustmentParameters
+  init(
+    filmType: FilmType,
+    temperature: Int = 0,
+    tint: Int = 0,
+    gamma: Int = 0,
+    shadows: Int = 0,
+    highlights: Int = 0,
+    saturation: Int = 100,
+    curveEnabled: Bool = false,
+    wheelsEnabled: Bool = false,
+    photo: PhotoAdjustmentParameters = PhotoAdjustmentParameters()
+  ) {
+    self.filmType = filmType
+    self.temperature = temperature
+    self.tint = tint
+    self.gamma = gamma
+    self.shadows = shadows
+    self.highlights = highlights
+    self.saturation = saturation
+    self.curveEnabled = curveEnabled
+    self.wheelsEnabled = wheelsEnabled
+    self.photo = photo
   }
+  var description: String {
+    var parts = "\(filmType) T\(temperature) tint\(tint) γ\(gamma) s\(shadows) h\(highlights) sat\(saturation) curve=\(curveEnabled) wheels=\(wheelsEnabled)"
+    if photo.exposureEV != 0 { parts += " EV=\(String(format: "%.1f", photo.exposureEV))" }
+    if photo.brightness != 0 { parts += " bri=\(String(format: "%.2f", photo.brightness))" }
+    if photo.contrast != 0 { parts += " con=\(String(format: "%.2f", photo.contrast))" }
+    if photo.highlights != 0 { parts += " hl=\(String(format: "%.2f", photo.highlights))" }
+    if photo.shadows != 0 { parts += " sh=\(String(format: "%.2f", photo.shadows))" }
+    return parts
+  }
+}
+
+func toneControlGrid() -> [ParameterCombo] {
+  var combos = [ParameterCombo]()
+  let filmTypes: [FilmType] = [.colourNegative]
+
+  let exposureValues: [Double] = [-1, 0, 1]
+  let brightnessValues: [Double] = [-0.3, 0, 0.3]
+  let contrastValues: [Double] = [-0.3, 0, 0.3]
+  let highlightValues: [Double] = [-0.5, 0, 0.5]
+  let shadowValues: [Double] = [-0.5, 0, 0.5]
+
+  for ft in filmTypes {
+    for ev in exposureValues {
+      for bri in brightnessValues {
+        for con in contrastValues {
+          let active =
+            [ev != 0, bri != 0, con != 0].filter { $0 }.count
+          guard active <= 1 else { continue }
+          combos.append(ParameterCombo(
+            filmType: ft,
+            photo: PhotoAdjustmentParameters(
+              exposureEV: ev, brightness: bri, contrast: con)))
+        }
+      }
+    }
+
+    for hl in highlightValues {
+      combos.append(ParameterCombo(
+        filmType: ft,
+        photo: PhotoAdjustmentParameters(highlights: hl)))
+    }
+    for sh in shadowValues {
+      combos.append(ParameterCombo(
+        filmType: ft,
+        photo: PhotoAdjustmentParameters(shadows: sh)))
+    }
+
+    combos.append(ParameterCombo(
+      filmType: ft,
+      photo: PhotoAdjustmentParameters(
+        exposureEV: 0.5, brightness: 0.2, contrast: 0.3,
+        highlights: -0.3, shadows: 0.3)))
+  }
+  return combos
 }
 
 func parameterGrid() -> [ParameterCombo] {
@@ -171,8 +246,10 @@ let images: [(String, UInt16Image)] = [
   ("solid-bright", makeSolid(65535, width: imageSize, height: imageSize)),
 ]
 
-let combos = parameterGrid()
-print("Parameter combinations to test: \(combos.count)")
+let baseCombos = parameterGrid()
+let toneCombos = toneControlGrid()
+let combos = baseCombos + toneCombos
+print("Parameter combinations to test: \(combos.count) (base: \(baseCombos.count), tone: \(toneCombos.count))")
 print()
 
 var totalComparisons = 0
@@ -210,7 +287,8 @@ for (imageName, image) in images {
         ] : [],
       highlightWheel: combo.wheelsEnabled ? ColorWheel(hue: 35, strength: 0.4) : ColorWheel(),
       midtoneWheel: combo.wheelsEnabled ? ColorWheel(hue: 190, strength: 0.25) : ColorWheel(),
-      shadowWheel: combo.wheelsEnabled ? ColorWheel(hue: 285, strength: 0.5) : ColorWheel()
+      shadowWheel: combo.wheelsEnabled ? ColorWheel(hue: 285, strength: 0.5) : ColorWheel(),
+      photoAdjustments: combo.photo
     )
 
     guard let gpuCG = renderer.render(parameters: parameters, showOriginal: false),
@@ -325,7 +403,8 @@ if worstMaxDiff <= tolerance {
       ] : [],
     highlightWheel: wc.wheelsEnabled ? ColorWheel(hue: 35, strength: 0.4) : ColorWheel(),
     midtoneWheel: wc.wheelsEnabled ? ColorWheel(hue: 190, strength: 0.25) : ColorWheel(),
-    shadowWheel: wc.wheelsEnabled ? ColorWheel(hue: 285, strength: 0.5) : ColorWheel()
+    shadowWheel: wc.wheelsEnabled ? ColorWheel(hue: 285, strength: 0.5) : ColorWheel(),
+    photoAdjustments: wc.photo
   )
   guard let gc = renderer.render(parameters: params, showOriginal: false),
     let gp = extractRGBAPixels(gc),

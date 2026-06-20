@@ -35,6 +35,8 @@ public struct RawProcessingStages: OptionSet, Sendable, Equatable {
   public static let rec2020WorkingSpace = Self(rawValue: UInt32(FSC_RAW_PROCESSING_REC2020))
   public static let isoDenoise = Self(rawValue: UInt32(FSC_RAW_PROCESSING_ISO_DENOISE))
   public static let isoSharpen = Self(rawValue: UInt32(FSC_RAW_PROCESSING_ISO_SHARPEN))
+  public static let xTransThreePass = Self(
+    rawValue: UInt32(FSC_RAW_PROCESSING_XTRANS_THREE_PASS))
 }
 
 public enum RawDecodeProfile: UInt32, Sendable, Codable, Equatable {
@@ -106,12 +108,15 @@ public enum RawImageDecoder {
       }
     }
     let version = String(cString: fsc_libraw_version())
+    let processing = RawProcessingStages(rawValue: output.processing_flags)
     DecodeLog.rawDecodeComplete(
       path: url.lastPathComponent,
       width: Int(output.width),
       height: Int(output.height),
       colorDescription: colorDescription,
-      version: version
+      version: version,
+      profile: profile,
+      processing: processing
     )
     return RawDecodeResult(
       image: UInt16Image(
@@ -124,7 +129,7 @@ public enum RawImageDecoder {
       decoderVersion: version,
       profile: profile,
       isoSpeed: Double(output.iso_speed),
-      processing: RawProcessingStages(rawValue: output.processing_flags)
+      processing: processing
     )
   }
 

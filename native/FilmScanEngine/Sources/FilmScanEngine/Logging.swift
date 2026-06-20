@@ -74,6 +74,26 @@ public enum FilmScanLog {
   }
 }
 
+public enum EditLog {
+  private static let logger = Logger(
+    subsystem: "film.scan.converter",
+    category: "Edit"
+  )
+
+  public static func parametersSaved(path: String, parameters: ProcessingParameters) {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    guard let data = try? encoder.encode(parameters),
+      let snapshot = String(data: data, encoding: .utf8)
+    else {
+      return
+    }
+    let msg = "Parameters saved: \(path) \(snapshot)"
+    logger.debug("\(msg, privacy: .public)")
+    LogFile.write("[Edit] \(msg)")
+  }
+}
+
 public enum ImportLog {
   private static let logger = Logger(
     subsystem: "film.scan.converter",
@@ -194,9 +214,19 @@ public enum DecodeLog {
     width: Int,
     height: Int,
     colorDescription: String,
-    version: String
+    version: String,
+    profile: RawDecodeProfile? = nil,
+    processing: RawProcessingStages = []
   ) {
-    let msg = "RAW decode complete: \(path) \(width)×\(height) color=\(colorDescription) libraw=\(version)"
+    var stages: [String] = []
+    if processing.contains(.rcdDemosaic) { stages.append("rcd") }
+    if processing.contains(.xTransThreePass) { stages.append("xtrans-3-pass") }
+    if processing.contains(.rec2020WorkingSpace) { stages.append("rec2020") }
+    if processing.contains(.isoDenoise) { stages.append("iso-denoise") }
+    if processing.contains(.isoSharpen) { stages.append("iso-sharpen") }
+    let profileText = profile.map { " profile=\($0.rawValue)" } ?? ""
+    let stageText = stages.isEmpty ? "" : " stages=\(stages.joined(separator: ","))"
+    let msg = "RAW decode complete: \(path) \(width)×\(height) color=\(colorDescription) libraw=\(version)\(profileText)\(stageText)"
     logger.info("\(msg, privacy: .public)")
     LogFile.write("[Decode] \(msg)")
   }

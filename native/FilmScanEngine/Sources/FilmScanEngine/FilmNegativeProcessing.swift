@@ -344,6 +344,71 @@ public enum FilmNegativeProcessing {
 
     return UInt16Image(width: image.width, height: image.height, channels: 3, pixels: out)
   }
+
+  /// Produces the unclamped linear Rec.2020 result used by the modern
+  /// photographic-adjustment path. The retained UInt16 wrapper above remains
+  /// allocation-efficient for legacy preview/export compatibility.
+  public static func powerLawRenderReadyLinear(
+    image: UInt16Image,
+    params: FilmNegativeParams,
+    borderPercent: Double = 20.0
+  ) -> RenderReadyLinearImage {
+    precondition(image.channels == 3, "Film negative inversion requires 3-channel BGR image")
+
+    let multipliers = params.enabled
+      ? computeMultipliers(
+        medians: params.measuredMedians ?? computeMedians(image: image, borderPercent: borderPercent),
+        params: params
+      )
+      : (r: 1.0, g: 1.0, b: 1.0)
+    let redExponent = -(params.greenExp * params.redRatio)
+    let greenExponent = -params.greenExp
+    let blueExponent = -(params.greenExp * params.blueRatio)
+    let inputFloor = 1.0 / maxOutput
+    var output = [Double](repeating: 0, count: image.pixels.count)
+
+    for pixelIndex in 0..<(image.width * image.height) {
+      let base = pixelIndex * 3
+      let source = linearSRGBToRec2020(
+        red: sRGBToLinear(Double(image.pixels[base + 2]) / maxOutput),
+        green: sRGBToLinear(Double(image.pixels[base + 1]) / maxOutput),
+        blue: sRGBToLinear(Double(image.pixels[base]) / maxOutput)
+      )
+
+      if params.enabled {
+        output[base] = multipliers.b * pow(max(source.blue, inputFloor), blueExponent)
+        output[base + 1] = multipliers.g * pow(max(source.green, inputFloor), greenExponent)
+        output[base + 2] = multipliers.r * pow(max(source.red, inputFloor), redExponent)
+      } else {
+        output[base] = source.blue
+        output[base + 1] = source.green
+        output[base + 2] = source.red
+      }
+    }
+
+    return RenderReadyLinearImage(width: image.width, height: image.height, pixels: output)
+  }
+
+  /// Applies the existing RawTherapee-compatible display encoding and tone
+  /// curve to an unclamped power-law result.
+  public static func renderPowerLawDisplay(
+    _ image: RenderReadyLinearImage
+  ) -> UInt16Image {
+    var output = [UInt16](repeating: 0, count: image.pixels.count)
+    for pixelIndex in 0..<image.pixelCount {
+      let base = pixelIndex * 3
+      let display = linearRec2020ToSRGB(
+        red: image.pixels[base + 2],
+        green: image.pixels[base + 1],
+        blue: image.pixels[base]
+      )
+      output[base] = displayEncodedFilmNegativeValue(display.blue)
+      output[base + 1] = displayEncodedFilmNegativeValue(display.green)
+      output[base + 2] = displayEncodedFilmNegativeValue(display.red)
+    }
+    return UInt16Image(width: image.width, height: image.height, channels: 3, pixels: output)
+  }
+
   public static func normalizedTransmittance(
     image: UInt16Image,
     flatField: UInt16Image,
@@ -672,6 +737,26 @@ public enum FilmNegativeProcessing {
       profile: c41Profile
     )
     return normalizeSceneExposure(sceneLinear: scene)
+  }
+
+  public static func densityToRenderReadyLinear(
+    image: UInt16Image,
+    flatField: UInt16Image,
+    baseDensity: BGRChannelValues,
+    c41Profile: GenericC41Profile = .identity,
+    parameters: CaptureNormalizationParameters = CaptureNormalizationParameters()
+  ) -> RenderReadyLinearImage {
+    RenderReadyLinearImage(
+      width: image.width,
+      height: image.height,
+      pixels: densityToSceneLinear(
+        image: image,
+        flatField: flatField,
+        baseDensity: baseDensity,
+        c41Profile: c41Profile,
+        parameters: parameters
+      )
+    )
   }
 
   fileprivate static func medianOfSorted(_ sorted: [Double]) -> Double {

@@ -292,7 +292,19 @@ struct StillPreviewBenchmarkTests {
 
   @Test("Production renderer matches CPU across parameter grid")
   func productionRendererMatchesCPUParameterGrid() {
-    let image = Self.createRandomImage(width: 64, height: 48)
+    let width = 64
+    let height = 48
+    var deterministicPixels = [UInt16]()
+    deterministicPixels.reserveCapacity(width * height * 3)
+    for index in 0..<(width * height * 3) {
+      deterministicPixels.append(UInt16((index * 7_919 + (index / 3) * 10_471) % 65_536))
+    }
+    let image = UInt16Image(
+      width: width,
+      height: height,
+      channels: 3,
+      pixels: deterministicPixels
+    )
     guard let renderer = StillPreviewRenderer(image: image) else {
       #expect(Bool(false), "Could not create production still preview renderer")
       return
@@ -304,6 +316,59 @@ struct StillPreviewBenchmarkTests {
       CurvePoint(input: 0.7, output: 0.85),
       CurvePoint(input: 1, output: 1),
     ]
+    var protectedFilmNegative = FilmNegativeParams.colourNegative
+    protectedFilmNegative.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
+    let protectedWarmVibrance = ProcessingParameters(
+      filmType: .colourNegative,
+      filmNegativeParams: protectedFilmNegative,
+      photoAdjustments: PhotoAdjustmentParameters(
+        temperatureShiftMired: 55,
+        tint: -0.3,
+        saturation: 0.4,
+        vibrance: 0.7
+      )
+    )
+    let protectedGamutEdge = ProcessingParameters(
+      filmType: .colourNegative,
+      filmNegativeParams: protectedFilmNegative,
+      photoAdjustments: PhotoAdjustmentParameters(saturation: 0.8, vibrance: 0.8)
+    )
+    let toneExposurePlus = ProcessingParameters(
+      filmType: .colourNegative,
+      filmNegativeParams: protectedFilmNegative,
+      photoAdjustments: PhotoAdjustmentParameters(exposureEV: 1)
+    )
+    let toneExposureMinus = ProcessingParameters(
+      filmType: .colourNegative,
+      filmNegativeParams: protectedFilmNegative,
+      photoAdjustments: PhotoAdjustmentParameters(exposureEV: -1)
+    )
+    let toneContrastPlus = ProcessingParameters(
+      filmType: .colourNegative,
+      filmNegativeParams: protectedFilmNegative,
+      photoAdjustments: PhotoAdjustmentParameters(contrast: 0.5)
+    )
+    let toneHighlightsRecover = ProcessingParameters(
+      filmType: .colourNegative,
+      filmNegativeParams: protectedFilmNegative,
+      photoAdjustments: PhotoAdjustmentParameters(highlights: 0.5)
+    )
+    let toneShadowsLift = ProcessingParameters(
+      filmType: .colourNegative,
+      filmNegativeParams: protectedFilmNegative,
+      photoAdjustments: PhotoAdjustmentParameters(shadows: 0.5)
+    )
+    let toneFullCombo = ProcessingParameters(
+      filmType: .colourNegative,
+      filmNegativeParams: protectedFilmNegative,
+      photoAdjustments: PhotoAdjustmentParameters(
+        exposureEV: 0.5,
+        brightness: 0.2,
+        contrast: 0.3,
+        highlights: -0.3,
+        shadows: 0.3
+      )
+    )
 
     let configs: [(String, ProcessingParameters)] = [
       ("neutral-neg", ProcessingParameters(filmType: .colourNegative)),
@@ -320,6 +385,14 @@ struct StillPreviewBenchmarkTests {
         filmType: .colourNegative, gamma: -35, shadows: 60, highlights: -45)),
       ("wb-combo", ProcessingParameters(
         filmType: .colourNegative, temperature: 65, tint: -40, saturation: 130)),
+      ("protected-warm-vibrance", protectedWarmVibrance),
+      ("protected-gamut-edge", protectedGamutEdge),
+      ("tone-exposure-plus", toneExposurePlus),
+      ("tone-exposure-minus", toneExposureMinus),
+      ("tone-contrast-plus", toneContrastPlus),
+      ("tone-highlights-recover", toneHighlightsRecover),
+      ("tone-shadows-lift", toneShadowsLift),
+      ("tone-full-combo", toneFullCombo),
       ("curve-only", ProcessingParameters(
         filmType: .colourNegative, curveEnabled: true, curveControlPoints: curvePoints)),
       ("wheels-only", ProcessingParameters(
@@ -390,6 +463,107 @@ struct StillPreviewBenchmarkTests {
 
     #expect(maxDiff <= 2,
       "Production renderer max diff \(maxDiff)/255 at '\(worstName)'; should be <= 2 for visual equivalence")
+  }
+
+  @Test("Tone controls match CPU within 2/255 across representative parameter grid")
+  func toneControlsMatchCPU() {
+    let width = 64
+    let height = 48
+    var deterministicPixels = [UInt16]()
+    deterministicPixels.reserveCapacity(width * height * 3)
+    for index in 0..<(width * height * 3) {
+      deterministicPixels.append(UInt16((index * 7_919 + (index / 3) * 10_471) % 65_536))
+    }
+    let image = UInt16Image(
+      width: width,
+      height: height,
+      channels: 3,
+      pixels: deterministicPixels
+    )
+    guard let renderer = StillPreviewRenderer(image: image) else {
+      #expect(Bool(false), "Could not create production still preview renderer")
+      return
+    }
+
+    var filmNegative = FilmNegativeParams.colourNegative
+    filmNegative.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
+    var blackAndWhiteNegative = FilmNegativeParams.blackAndWhite
+    blackAndWhiteNegative.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
+
+    let configs: [(String, ProcessingParameters)] = [
+      ("exposure+1", ProcessingParameters(
+        filmType: .colourNegative, filmNegativeParams: filmNegative,
+        photoAdjustments: PhotoAdjustmentParameters(exposureEV: 1))),
+      ("exposure-1", ProcessingParameters(
+        filmType: .colourNegative, filmNegativeParams: filmNegative,
+        photoAdjustments: PhotoAdjustmentParameters(exposureEV: -1))),
+      ("brightness+0.5", ProcessingParameters(
+        filmType: .colourNegative, filmNegativeParams: filmNegative,
+        photoAdjustments: PhotoAdjustmentParameters(brightness: 0.5))),
+      ("brightness-0.5", ProcessingParameters(
+        filmType: .colourNegative, filmNegativeParams: filmNegative,
+        photoAdjustments: PhotoAdjustmentParameters(brightness: -0.5))),
+      ("contrast+0.5", ProcessingParameters(
+        filmType: .colourNegative, filmNegativeParams: filmNegative,
+        photoAdjustments: PhotoAdjustmentParameters(contrast: 0.5))),
+      ("contrast-0.5", ProcessingParameters(
+        filmType: .colourNegative, filmNegativeParams: filmNegative,
+        photoAdjustments: PhotoAdjustmentParameters(contrast: -0.5))),
+      ("highlights+0.5", ProcessingParameters(
+        filmType: .colourNegative, filmNegativeParams: filmNegative,
+        photoAdjustments: PhotoAdjustmentParameters(highlights: 0.5))),
+      ("shadows+0.5", ProcessingParameters(
+        filmType: .colourNegative, filmNegativeParams: filmNegative,
+        photoAdjustments: PhotoAdjustmentParameters(shadows: 0.5))),
+      ("tone-combo", ProcessingParameters(
+        filmType: .colourNegative, filmNegativeParams: filmNegative,
+        photoAdjustments: PhotoAdjustmentParameters(
+          exposureEV: 0.5, brightness: 0.2, contrast: 0.3,
+          highlights: -0.3, shadows: 0.3))),
+      ("tone-with-color", ProcessingParameters(
+        filmType: .colourNegative, filmNegativeParams: filmNegative,
+        photoAdjustments: PhotoAdjustmentParameters(
+          exposureEV: 0.5, contrast: 0.3,
+          temperatureShiftMired: 20, tint: -0.2, saturation: 0.3))),
+      ("slide-exposure", ProcessingParameters(
+        filmType: .slide,
+        photoAdjustments: PhotoAdjustmentParameters(exposureEV: 0.5))),
+      ("bw-negative-exposure", ProcessingParameters(
+        filmType: .blackAndWhiteNegative, filmNegativeParams: blackAndWhiteNegative,
+        photoAdjustments: PhotoAdjustmentParameters(exposureEV: -0.5))),
+    ]
+
+    var maxDiff = 0
+    var worstName = ""
+    for (name, parameters) in configs {
+      guard
+        let gpu = renderer.render(parameters: parameters, showOriginal: false),
+        let cpu = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+          .makePreviewCGImage(),
+        let gpuPixels = rgbaPixels(gpu),
+        let cpuPixels = rgbaPixels(cpu)
+      else {
+        #expect(Bool(false), "Render failed for \(name)")
+        continue
+      }
+
+      #expect(gpu.width == cpu.width, "\(name): width mismatch")
+      #expect(gpu.height == cpu.height, "\(name): height mismatch")
+      #expect(gpuPixels.count == cpuPixels.count, "\(name): pixel count mismatch")
+
+      var comboMax = 0
+      for index in gpuPixels.indices {
+        let diff = abs(Int(gpuPixels[index]) - Int(cpuPixels[index]))
+        comboMax = max(comboMax, diff)
+      }
+      if comboMax > maxDiff {
+        maxDiff = comboMax
+        worstName = name
+      }
+    }
+
+    #expect(maxDiff <= 2,
+      "Tone control GPU renderer max diff \(maxDiff)/255 at '\(worstName)'; should be <= 2 for visual equivalence")
   }
 
   private func rgbaPixels(_ image: CGImage) -> [UInt8]? {

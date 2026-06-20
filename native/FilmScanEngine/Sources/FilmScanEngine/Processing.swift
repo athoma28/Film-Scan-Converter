@@ -6,9 +6,31 @@ private func clamp(_ value: Float, _ lo: Float, _ hi: Float) -> Float {
 public enum FilmProcessing {
   public static func correctedPreview(
     image: UInt16Image,
+    parameters: ProcessingParameters,
+    flatField: UInt16Image? = nil
+  ) -> UInt16Image {
+    if parameters.densityPipelineEnabled,
+      parameters.densityBaseDensity != nil,
+      (parameters.filmType == .colourNegative
+        || parameters.filmType == .blackAndWhiteNegative)
+    {
+      return correctedPreviewDensity(
+        image: image,
+        parameters: parameters,
+        flatField: flatField
+      )
+    }
+    return correctedPreviewPowerLaw(image: image, parameters: parameters)
+  }
+
+  private static func correctedPreviewPowerLaw(
+    image: UInt16Image,
     parameters: ProcessingParameters
   ) -> UInt16Image {
-    var working = image.rotated(
+    let cropped = parameters.cropRect.flatMap {
+      PerspectiveTransform.crop(image, normalizedRect: $0, borderPercent: parameters.borderCrop)
+    } ?? image
+    var working = cropped.rotated(
       quarterTurns: parameters.rotation,
       flipHorizontally: parameters.flip
     )
@@ -16,36 +38,74 @@ public enum FilmProcessing {
       return working
     }
 
+    var usedLinearColorSeam = false
+    var usedLinearToneSeam = false
     if parameters.filmType == .blackAndWhiteNegative {
       if parameters.filmNegativeParams.enabled {
-        working = FilmNegativeProcessing.applyPowerLawInversion(
-          image: working, params: parameters.filmNegativeParams
-        )
+        if parameters.photoAdjustments.hasToneAdjustment {
+          let renderReady = FilmNegativeProcessing.powerLawRenderReadyLinear(
+            image: working, params: parameters.filmNegativeParams
+          ).applyingLinearToneAdjustments(parameters.photoAdjustments)
+          working = FilmNegativeProcessing.renderPowerLawDisplay(renderReady)
+          usedLinearToneSeam = true
+        } else {
+          working = FilmNegativeProcessing.applyPowerLawInversion(
+            image: working, params: parameters.filmNegativeParams
+          )
+        }
         working = grayscale(working, inverted: false)
       } else {
         working = grayscale(working, inverted: true)
       }
     } else if parameters.filmType == .colourNegative {
       if parameters.filmNegativeParams.enabled {
-        working = FilmNegativeProcessing.applyPowerLawInversion(
-          image: working, params: parameters.filmNegativeParams
-        )
+        let needsLinearSeam = parameters.photoAdjustments.hasColorAdjustment
+          || parameters.photoAdjustments.hasToneAdjustment
+        if needsLinearSeam {
+          var renderReady = FilmNegativeProcessing.powerLawRenderReadyLinear(
+            image: working,
+            params: parameters.filmNegativeParams
+          )
+          if parameters.photoAdjustments.hasToneAdjustment {
+            renderReady = renderReady.applyingLinearToneAdjustments(
+              parameters.photoAdjustments)
+            usedLinearToneSeam = true
+          }
+          if parameters.photoAdjustments.hasColorAdjustment {
+            renderReady = renderReady.applyingProtectedColorAdjustments(
+              parameters.photoAdjustments)
+            usedLinearColorSeam = true
+          }
+          working = FilmNegativeProcessing.renderPowerLawDisplay(renderReady)
+        } else {
+          working = FilmNegativeProcessing.applyPowerLawInversion(
+            image: working, params: parameters.filmNegativeParams
+          )
+        }
       } else {
         working = inverted(working)
       }
     }
 
+    if parameters.photoAdjustments.hasToneAdjustment && !usedLinearToneSeam {
+      working = applySemanticToneToDisplayImage(
+        working, parameters: parameters.photoAdjustments)
+      usedLinearToneSeam = true
+    }
+
     let adjustWhiteBalance =
-      working.channels == 3 && (parameters.temperature != 0 || parameters.tint != 0)
-    let adjustExposure =
-      parameters.gamma != 0 || parameters.shadows != 0 || parameters.highlights != 0
+      working.channels == 3 && !usedLinearColorSeam
+        && (parameters.temperature != 0 || parameters.tint != 0)
+    let adjustExposure = !usedLinearToneSeam
+      && (parameters.gamma != 0 || parameters.shadows != 0 || parameters.highlights != 0)
     let adjustCurves =
       working.channels == 3 && (parameters.curveEnabled || parameters.redCurveEnabled
         || parameters.greenCurveEnabled || parameters.blueCurveEnabled)
     let adjustColorWheels =
       working.channels == 3 && (!parameters.highlightWheel.isNeutral
         || !parameters.midtoneWheel.isNeutral || !parameters.shadowWheel.isNeutral)
-    let adjustSaturation = working.channels == 3 && parameters.saturation != 100
+    let adjustSaturation = working.channels == 3 && !usedLinearColorSeam
+      && parameters.saturation != 100
     guard adjustWhiteBalance || adjustExposure || adjustCurves || adjustColorWheels
       || adjustSaturation
     else {
@@ -106,6 +166,170 @@ public enum FilmProcessing {
       channels: working.channels,
       pixels: values.map { UInt16(min(max($0, 0), 65535)) }
     )
+  }
+
+  public static func correctedPreviewDensity(
+    image: UInt16Image,
+    parameters: ProcessingParameters,
+    flatField: UInt16Image? = nil
+  ) -> UInt16Image {
+    let croppedImage = parameters.cropRect.flatMap {
+      PerspectiveTransform.crop(image, normalizedRect: $0, borderPercent: parameters.borderCrop)
+    } ?? image
+    let sourceFlatField = flatField.flatMap { field in
+      field.channels == image.channels
+        ? field.resized(width: image.width, height: image.height)
+        : nil
+    }
+    let croppedFlatField = sourceFlatField.flatMap { field in
+      parameters.cropRect.flatMap {
+        PerspectiveTransform.crop(field, normalizedRect: $0, borderPercent: parameters.borderCrop)
+      } ?? field
+    }
+    let working = croppedImage.rotated(
+      quarterTurns: parameters.rotation,
+      flipHorizontally: parameters.flip
+    )
+    let orientedFlatField = croppedFlatField?.rotated(
+      quarterTurns: parameters.rotation,
+      flipHorizontally: parameters.flip
+    )
+    guard parameters.filmType != .cropOnly else {
+      return working
+    }
+
+    guard parameters.densityPipelineEnabled,
+      let baseDensity = parameters.densityBaseDensity,
+      working.channels == 3
+    else {
+      return working
+    }
+
+    let ff = orientedFlatField ?? Self.unityFlatField(for: working)
+    var renderReady = FilmNegativeProcessing.densityToRenderReadyLinear(
+      image: working,
+      flatField: ff,
+      baseDensity: baseDensity,
+      c41Profile: parameters.densityC41Profile
+    )
+    if parameters.photoAdjustments.hasToneAdjustment {
+      renderReady = renderReady.applyingLinearToneAdjustments(parameters.photoAdjustments)
+    }
+    let usedLinearSeam = parameters.filmType == .colourNegative
+      && parameters.photoAdjustments.hasColorAdjustment
+    if usedLinearSeam {
+      renderReady = renderReady.applyingProtectedColorAdjustments(parameters.photoAdjustments)
+    }
+    var display = FilmNegativeProcessing.renderDisplay(
+      sceneLinear: renderReady.pixels,
+      parameters: parameters.densityDisplayParams
+    )
+
+    if parameters.filmType == .blackAndWhiteNegative {
+      let pixelCount = working.width * working.height
+      for i in 0..<pixelCount {
+        let b = display[i * 3]
+        let g = display[i * 3 + 1]
+        let r = display[i * 3 + 2]
+        let gray = 0.114 * b + 0.587 * g + 0.299 * r
+        display[i * 3] = gray
+        display[i * 3 + 1] = gray
+        display[i * 3 + 2] = gray
+      }
+    }
+
+    let adjustCurves =
+      working.channels == 3 && (parameters.curveEnabled || parameters.redCurveEnabled
+        || parameters.greenCurveEnabled || parameters.blueCurveEnabled)
+    let adjustColorWheels =
+      working.channels == 3 && (!parameters.highlightWheel.isNeutral
+        || !parameters.midtoneWheel.isNeutral || !parameters.shadowWheel.isNeutral)
+    let adjustSaturation = working.channels == 3 && !usedLinearSeam
+      && parameters.saturation != 100
+
+    var values = display.map { min(max($0, 0), 1) * 65535.0 }
+    let pixelCount = working.width * working.height
+    let channels = working.channels
+
+    if adjustCurves {
+      values = applyCurves(
+        image: values,
+        pixelCount: pixelCount,
+        channels: channels,
+        parameters: parameters
+      )
+    }
+    if adjustColorWheels {
+      values = applyColorWheels(
+        image: values,
+        pixelCount: pixelCount,
+        channels: channels,
+        parameters: parameters
+      )
+    }
+    if adjustSaturation {
+      values = satAdjust(
+        image: values,
+        width: working.width,
+        height: working.height,
+        channels: channels,
+        saturation: parameters.saturation
+      )
+    }
+
+    return UInt16Image(
+      width: working.width,
+      height: working.height,
+      channels: working.channels,
+      pixels: values.map { UInt16(min(max($0, 0), 65535)) }
+    )
+  }
+
+  private static func unityFlatField(for image: UInt16Image) -> UInt16Image {
+    let count = image.width * image.height * image.channels
+    let pixels = [UInt16](repeating: 65535, count: count)
+    return UInt16Image(
+      width: image.width, height: image.height, channels: image.channels,
+      pixels: pixels)
+  }
+
+  private static func applySemanticToneToDisplayImage(
+    _ image: UInt16Image,
+    parameters: PhotoAdjustmentParameters
+  ) -> UInt16Image {
+    guard image.channels == 3 else { return image }
+    var linearPixels = [Double](repeating: 0, count: image.pixels.count)
+    for pixelIndex in 0..<(image.width * image.height) {
+      let base = pixelIndex * 3
+      let linear = FilmNegativeProcessing.linearSRGBToRec2020(
+        red: FilmNegativeProcessing.sRGBToLinear(Double(image.pixels[base + 2]) / 65_535),
+        green: FilmNegativeProcessing.sRGBToLinear(Double(image.pixels[base + 1]) / 65_535),
+        blue: FilmNegativeProcessing.sRGBToLinear(Double(image.pixels[base]) / 65_535)
+      )
+      linearPixels[base] = linear.blue
+      linearPixels[base + 1] = linear.green
+      linearPixels[base + 2] = linear.red
+    }
+    let adjusted = RenderReadyLinearImage(
+      width: image.width, height: image.height, pixels: linearPixels
+    ).applyingLinearToneAdjustments(parameters)
+    var output = [UInt16](repeating: 0, count: image.pixels.count)
+    for pixelIndex in 0..<(image.width * image.height) {
+      let base = pixelIndex * 3
+      let display = FilmNegativeProcessing.linearRec2020ToSRGB(
+        red: adjusted.pixels[base + 2],
+        green: adjusted.pixels[base + 1],
+        blue: adjusted.pixels[base]
+      )
+      output[base] = UInt16(
+        min(max(FilmNegativeProcessing.linearToSRGB(display.blue) * 65_535, 0), 65_535))
+      output[base + 1] = UInt16(
+        min(max(FilmNegativeProcessing.linearToSRGB(display.green) * 65_535, 0), 65_535))
+      output[base + 2] = UInt16(
+        min(max(FilmNegativeProcessing.linearToSRGB(display.red) * 65_535, 0), 65_535))
+    }
+    return UInt16Image(
+      width: image.width, height: image.height, channels: image.channels, pixels: output)
   }
 
   public static func wbAdjustCoeff(

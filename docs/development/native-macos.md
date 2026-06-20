@@ -5,7 +5,7 @@ what works now, the current development step, and the order of upcoming work.
 The detailed [macOS native roadmap](../improvements/MacOS-Native-Roadmap.md) is
 the design reference, not a statement that every listed item is implemented.
 
-**Last updated:** 2026-06-18 (203 tests across 13 files; the 500-render benchmark is opt-in; FilmScanPreviewComparator is a runnable product; production GPU-vs-CPU equivalence is verified across a 20-configuration parameter grid test; Slice G profile separation and Slice C/D inspector wiring are complete; the current app path still requests half-size RAW decode)
+**Last updated:** 2026-06-19 (296 tests across 19 files; all six photographic-adjustment slices are complete: semantic parameters, the shared unclamped linear/statistics seam, protected color controls, safe global tone controls, the reusable AdjustmentSlider with continuous Double bindings, and the perceptual regression/visual acceptance gate — all with CPU/GPU parity within the existing 2/255 tolerance across 2,725 comparisons; contour detection and perspective crop are connected to preview/export; density preview/export integration validates and aligns flat fields; RAW preview remains half-size while memory-bounded export re-decodes full-resolution; full-resolution X-Trans camera-scan export uses three-pass Markesteijn interpolation)
 
 ## Goal
 
@@ -28,28 +28,34 @@ yet replaced.
 
 The Python source must not move to `archive/python/` until the retirement gates
 in [Legacy Python Status And Retirement](../legacy-python.md) are complete.
-Those gates include the remaining crop/perspective/dust
-workflow, settings migration, fixture independence, and release validation.
+Those gates include dust handling, remaining settings/persistence migration,
+fixture independence, and release validation. Native crop detection and
+perspective correction are connected to preview and export.
 Native export is complete.
 
 ## Current Development Step
 
-**Active step: film-specific camera-scan track. The app-facing preset includes the RawTherapee exponent model and ratios, 20%-border-cut references, the `1/24` reference-output behavior, linear Rec.2020 placement around inversion, and both bundled Film Negative tone curves. The camera-scan decoder also applies ISO-tier noise/detail filtering. The engine has an RCD callback for explicitly requested full-resolution Bayer decode, but the app currently requests half-size RAW decode, which bypasses Bayer interpolation. Full RawTherapee parity is not claimed: LibRaw converts camera data through sRGB before the Rec.2020 inversion stage, and the native ISO filters are bounded approximations rather than RawTherapee's directional-pyramid denoise and capture-sharpening kernels. Slices A through F are complete as standalone APIs.**
-TIFF, JPEG, PNG, and DNG export is complete with individual and memory-bounded batch workflows, cancellation, partial-file cleanup, collision-safe destination naming, and focused engine/app tests. Standard-image exports retain source resolution; RAW exports currently use the app's half-size LibRaw decode.
+**Active step: the color-accuracy and photographic-adjustment track is
+complete. All six perceptual-slider modernization slices are verified against
+the CPU authoritative path across 2,725 GPU comparisons (0 failures, max
+2/255). Legacy RGB-gain and HSV functions remain for compatibility fixtures.**
+The preceding film-specific camera-scan track remains operational: Slices A
+through G are wired into the app, and the density pipeline is connected to both
+preview and export. The power-law (RawTherapee-compatible) inversion remains
+the default front-end; the density pipeline remains an explicit inspector
+option with a CPU render fallback.
 
-## Next Step
-
-**Connect the density pipeline to preview and export. The Slice C/D rebate detection UI is now wired to the app inspector with automatic candidate discovery and manual measurement. Slice G profile separation is complete with Codable CaptureProfile, FilmStockProfile, persisted RollProfile, a ProfileStore with JSON serialization, and precedence resolution. The density and display stages now have CPU/GPU contracts, an explicit base-density source, and an app-level measurement workflow but are not yet connected to the live preview or export pipeline.**
-The app's "Detect Rebate" button runs bounded analysis on the 640-pixel proxy, finds edge candidates via the engine's `automaticRebateCandidates()`, displays per-candidate base density and confidence, and persists roll profiles atomically to `~/Library/Application Support/FilmScanConverter/`. Rebate work is cancelled and discarded when selection changes; schema-1 roll JSON is migrated when loaded, while corrupt or unsupported profiles report errors. The current preview and export still use the power-law (RawTherapee-compatible) inversion front-end. Next: connect the density-to-scene pipeline (`densityToSceneLinear` + `renderDisplay`) to export and preview, add flat-field loading, and implement per-stock inverse density curves (Slice H) for Portra 400, Portra 160, Ektar 100, and Gold 200.
+**Next: dust detection and Telea FMM inpainting — the primary remaining Python
+replacement gate. This is the next Python-retirement item (gate 2).**
 
 ## Progress
 
 | Area | Status | Current result |
 |---|---|---|
 | Phase 0: regression gate | In progress | Swift tests consume frozen Python-generated `.npy` fixtures and compact RAW hash manifests. Standard decode fixtures cover 8-bit PNG, grayscale PNG, BMP, JPEG, and 16-bit TIFF. Five half-size RAF decodes and one full-resolution RAF decode require exact SHA-256 equality with RawPy when the local `sample-raw` corpus is present; when it is absent, those corpus-specific tests are explicitly reported as disabled rather than silently passing. The full intermediate-stage and parameter-grid corpus is not complete. |
-| Phase 1: processing engine | In progress | The frozen RawPy profile remains exact for fixtures. The camera-scan profile disables auto-bright/exposure boost, enables LibRaw highlight reconstruction, records ISO and executed stages, and selects bounded low-ISO sharpening or medium/high-ISO denoising. An RCD callback runs only for Bayer files when full-resolution decode is explicitly requested; half-size decode and X-Trans files do not use RCD. Film-negative inversion converts the decoded sRGB values to linear Rec.2020, performs reference resolution and inversion there, then converts back to display sRGB; the CPU Double and production Metal paths match within the documented preview tolerance. Direct camera-to-Rec.2020 conversion and exact RawTherapee denoise/sharpen kernels remain limitations. |
-| Phase 2: accelerated rendering | In progress | Live camera preview uses a Metal-backed Core Image context. Still-file correction uploads one bounded 16-bit proxy per selection, applies the current correction controls in one custom GPU kernel, and keeps only one in-flight render plus the newest pending snapshot. The kernel includes the film-negative inversion, curve LUT sampling, and three-way color wheels. The production renderer matches the authoritative CPU path across 2,655 comparisons with a maximum difference of 2/255. Slice F's scene-display CIKernel matches its Double CPU contract within 0.000002 across 60 channel comparisons. The latest opt-in 500-change 1080×720 benchmark measured 3.50 ms p95; the app uses a 640-pixel interactive proxy. Density-pipeline app wiring, a direct Metal-backed preview surface, and idle authoritative rendering remain. |
-| Phase 3: SwiftUI application | Interactive correction + export workflow | The app accepts supported files by drag and drop, decodes standard images and RAW files, and auto-initializes new files to color negative, B&W negative, or slide mode. Its fixed inspector is organized into Edit, Grade, and Export pages: film setup and profile tuning lead into light and basic color controls; curves and three-way color wheels are separated as grading tools; output format, frame, destination, progress, and per-file errors live on the Export page. Orientation and original/corrected comparison remain available above the preview. Centered adjustment sliders expose signed values, neutral reset actions, one-unit steps, and double-click reset; saturation displays as -100...+100 while preserving the engine's 0...200 storage contract. Film-negative ratio/exponent controls use narrower useful ranges and are hidden under advanced profile tuning. Export supports TIFF, JPEG (configurable quality), PNG, and DNG output with frame percentage, aspect-ratio presets, TIFF LZW compression, destination folder selection, per-file error reporting, and individual plus batch-all export. Export All decodes and processes unloaded files on demand instead of requiring every batch member to be selected first or retained in an unbounded decoded-image cache. The two most recent decoded/proxy/renderer sessions are cached for immediate back-and-forth switching; after a selection loads, a utility-priority worker predecodes only the immediate next uncached file into that same bounded cache. Slider and wheel bindings remain live during continuous drags; end-to-end latency still requires real-file verification. |
+| Phase 1: processing engine | In progress | The frozen RawPy profile remains exact for fixtures. The camera-scan profile disables auto-bright/exposure boost, enables LibRaw highlight reconstruction, records ISO and executed stages, and selects bounded low-ISO sharpening or medium/high-ISO denoising. Full-resolution Bayer decode uses the RCD callback; full-resolution X-Trans decode uses LibRaw's three-pass Markesteijn interpolation. Half-size preview decode bypasses demosaicing. Film-negative inversion and density processing feed one unclamped linear adjustment seam. Safe global tone controls (Exposure EV, Brightness, Contrast, Highlights, Shadows) and protected color controls use luminance-preserving opponent axes; frozen RGB-gain/HSV operators remain available. Robust statistics use at most 65,536 deterministic samples. Density processing, contour detection, and perspective crop are connected to preview/export. Direct camera-to-Rec.2020 conversion and exact RawTherapee denoise/sharpen kernels remain limitations. |
+| Phase 2: accelerated rendering | In progress | Live camera preview uses a Metal-backed Core Image context. Still-file correction uploads one bounded 16-bit proxy per selection, applies the current correction controls in one custom GPU kernel, and keeps only one in-flight render plus the newest pending snapshot. The kernel includes the power-law film-negative inversion, curve LUT sampling, and three-way color wheels. The production renderer matches the authoritative CPU path across 2,655 comparisons with a maximum difference of 2/255. Slice F's scene-display CIKernel matches its Double CPU contract within 0.000002 across 60 channel comparisons. The latest opt-in 500-change 1080×720 benchmark measured 3.50 ms p95; the app uses a 640-pixel interactive proxy. The density pipeline is connected to preview and export with CPU fallback; a GPU-accelerated density pipeline preview kernel and idle authoritative rendering remain. |
+| Phase 3: SwiftUI application | Interactive correction + export workflow | The app accepts supported files by drag and drop, decodes standard images and RAW files, and auto-initializes new files to color negative, B&W negative, or slide mode. The Edit inspector explains film base as the unexposed film edge, includes automatic and drag-selected measurement, hides the selection rectangle when selection mode ends, and provides validated flat-field loading, measured-base inversion, and automatic film-frame detection. Detected crop geometry is stored per file and perspective-warped in both preview and export. Export supports TIFF, JPEG, PNG, and DNG output with memory-bounded lazy Export All; RAW export re-decodes each file at full resolution. Parameter snapshots are written to the project log so an edit state can be reconstructed. The two most recent decoded/proxy/renderer sessions are cached and only the immediate next uncached file is predecoded. Slider and wheel bindings remain live during continuous drags; end-to-end latency still requires real-file verification. |
 | Phase 4: performance and polish | Early measurement | CI builds and tests the current native package. The representative RAW decode and quality benchmark is complete; packaging, UI snapshots, and release work remain. |
 
 ## Planned Native Capabilities
@@ -76,15 +82,17 @@ Export is complete for all four target formats:
 Film-specific camera-scan processing now has a separate staged track based on
 the [film-processing research brief](../film-processing-research.md). The
 RawTherapee-compatible power-law inversion is complete and operational as
-a preview-compatible front-end. Upcoming phases add film base density and color
-space conversion, then flat-field calibration (geometry + density-domain
-normalization). The first engine-only slice (capture normalization + density
-primitives) and second engine-only slice (linear-capture diagnostics) remain
-complete, the first Slice C engine API now measures manual rebate base
-density and persists roll-level reuse metadata, and the first Slice D engine API
-returns automatic edge rebate candidates with confidence. Upcoming slices add UI region
-picking, generic C-41 rendering, capture profiles,
-per-stock inverse density curves, fitted matrices, and optional residual LUTs.
+a preview-compatible front-end. Slices A through G are implemented: capture
+normalization, diagnostics, manual and automatic rebate measurement, generic
+C-41 conversion, shared display rendering, and separated capture/stock/roll
+profiles. Preview and export share the density path, including aligned flat-field
+calibration. Per-stock inverse-density curves, fitted matrices, and optional
+residual LUTs remain future work.
+The shared color/adjustment foundation is complete: versioned semantic
+parameters, the unclamped linear seam with robust statistics, protected color
+controls, safe global tone controls, continuous UI bindings, and numerical plus
+visual regression gates. Stock-specific calibration follows after the active
+dust-removal replacement gate.
 The detailed order and acceptance criteria are maintained in the
 [native roadmap](../improvements/MacOS-Native-Roadmap.md#film-specific-camera-scan-processing-track).
 
@@ -123,8 +131,8 @@ The detailed order and acceptance criteria are maintained in the
   exact algorithm ports.
 - A GPL-compatible RCD callback is installed at LibRaw's Bayer interpolation
   boundary. It runs only for explicitly requested full-resolution Bayer decode.
-  Half-size decode bypasses interpolation, and X-Trans uses LibRaw's X-Trans
-  path. No Bayer RAW exists in the current local corpus, so RCD has compile and
+  Half-size decode bypasses interpolation. Full-resolution X-Trans camera-scan
+  decode explicitly uses LibRaw's three-pass Markesteijn interpolation. No Bayer RAW exists in the current local corpus, so RCD has compile and
   routing coverage but not a committed real-file pixel fixture.
 - C bridge debug logging (`FSC_LOG` macro) is compile-time gated on `#ifdef DEBUG`,
   eliminating `fprintf` + `fflush` overhead from release builds. Debug builds retain
@@ -174,11 +182,43 @@ The detailed order and acceptance criteria are maintained in the
 - Per-file, session-scoped SwiftUI correction controls for film mode,
   orientation, temperature, tint, gamma, shadows, highlights, and saturation,
   plus reset and original/corrected comparison.
+- A versioned `PhotoAdjustmentParameters` contract with semantic floating-point
+  exposure, tone, temperature-in-mired, tint, saturation, and vibrance intent.
+  Its tested center-weighted mapping preserves exact neutral values and old
+  JSON settings migrate deterministically while the legacy pixel operators
+  remain unchanged.
+- A shared `RenderReadyLinearImage` BGR contract for the power-law and density
+  front-ends. It preserves negative and over-range floating-point samples until
+  the display/output transform. Reusable statistics report linear and
+  log-luminance p01/p50/p99, per-channel low/high clipping ratios, and normalized
+  tone anchors from deterministic sampling hard-capped at 65,536 pixels.
+- Protected color processing on the shared linear seam: Temperature and Tint
+  use zero-luminance Rec.2020 opponent axes; Saturation changes chroma while
+  preserving luminance; Vibrance selectively favors muted colors. Highlight
+  and gamut-risk attenuation plus binary hue-preserving chroma reduction keep
+  output finite and bounded without rotating opponent hue. The same operator
+  is implemented in the production Core Image kernel and tested within 2/255
+  of the authoritative CPU path.
+- Safe global tone controls on the shared unclamped linear seam: Exposure (EV,
+  pure multiplicative gain), Brightness (additive linear offset at 18% gray
+  reference), Contrast (pivot-based power curve around 18% gray with exp2
+  mapping), Highlights (soft compression/expansion weighted on values above 0.5
+  linear), and Shadows (gain-weighted lift/darken for values below 0.5 linear).
+  All five controls operate before display rendering, preserve luminance
+  uniformity (same per-pixel factor applied to all channels), and have CPU/GPU
+  parity within the existing 2/255 tolerance. The legacy integer
+  gamma/shadows/highlights path is retained for frozen compatibility fixtures.
+  19 focused tests cover neutral identity, positive/negative extremes,
+  combined application, channel ratio preservation, gain flooring, dimension
+  preservation, and finite-output guarantees.
 - A three-page Edit/Grade/Export inspector that keeps primary film, light, and
   color adjustments separate from curves/color grading and output settings.
-  Adjustment sliders show signed values around a visible neutral point and
-  provide explicit and double-click reset actions. Advanced film-negative
-  profile coefficients are collapsed by default and use preset-centered ranges.
+  A reusable `AdjustmentSlider` component bound to continuous `Double` state
+  with focusable native keyboard interaction, formatted value display with
+  semantic unit suffixes (EV, %), reset button, double-click reset, and
+  accessibility labels. All 16 inspector sliders use this shared
+  component. Advanced film-negative profile coefficients are collapsed by
+  default and use preset-centered ranges.
 - Draggable shadow, midtone, and highlight color wheels with hue mapped around
   the wheel, strength mapped from center to edge, position markers, and
   double-click reset.
@@ -188,7 +228,12 @@ The detailed order and acceptance criteria are maintained in the
   ignores.
 - A piecewise-linear curves graph that displays the same interpolation used by
   the authoritative engine and GPU LUT.
-- Exact threshold generation from 16-bit BGR images matching Python `get_threshold`
+- Perspective warp via DLT homography solver (8×8 LU decomposition via LAPACK `dgesv_`)
+  and bilinear interpolation with border-constant zero for out-of-bounds source
+  coordinates. Matches OpenCV `getPerspectiveTransform` homography output exactly
+  and produces standard bilinear interpolation with documented tolerance against
+  OpenCV `warpPerspective` for out-of-bounds regions. 14 tests covering identity,
+  translation, perspective, self-consistency, round-trip, and multi-channel support.
   for five dark/light parameter combinations. Covers `convertScaleAbs` (16-to-8
   bit), BGR-to-grayscale via OpenCV fixed-point coefficients, `inRange` binary
   thresholding, and 7×7 binary erosion (2 iterations) with default border handling.
@@ -262,7 +307,8 @@ The detailed order and acceptance criteria are maintained in the
   error-per-file reporting, and partial-file cleanup. The app-level Export All
   path lazily decodes, classifies, processes, and writes unloaded files one at a
   time so memory does not grow with the import list. Standard-image exports
-  retain source resolution; app RAW export currently uses half-size decode.
+  retain source resolution; RAW export re-decodes one file at a time at full
+  resolution while interactive previews retain the bounded half-size decode.
 
 ## Important Limitations
 
@@ -272,13 +318,12 @@ The detailed order and acceptance criteria are maintained in the
   BMP, and TIFF fixtures. JPEG is locked to the documented tolerance above.
   Broader real-file coverage, including embedded color profiles and orientation
   metadata, remains to be added to the frozen corpus.
-- The native engine still lacks contour/crop detection, perspective warp, dust
-  detection/inpainting. These are the main remaining
-  replacement gates.
-- Interactive previews do not yet integrate histogram equalisation, film-base
-  detection, crop detection, perspective correction, dust removal, or
-  persistence across launches. They are suitable for evaluating the current
-  correction interaction and loaded-file flow, not final output.
+- The native engine still lacks dust detection/inpainting.
+    This is the main remaining replacement gate.
+- Interactive previews do not yet integrate histogram equalisation or dust
+  removal. Film-base detection, manual rebate selection, crop detection, and
+  perspective correction are integrated; per-file settings remain in-memory
+  rather than persisted across launches.
 - The native RawTherapee parity path is still partial. RawTherapee's source
   order is `preprocess` (black/white scaling, bad pixels, flat field/gain maps,
   green equilibration), `demosaic`, `getImage` (white balance, optional highlight
@@ -289,21 +334,20 @@ The detailed order and acceptance criteria are maintained in the
   RawTherapee's default output reference and the two Film Negative preset curves.
   Linear Rec.2020 inversion placement, an RCD callback for explicitly requested
   full-resolution Bayer decode, and ISO-tier noise/detail processing are
-  implemented. Direct camera-to-Rec.2020 conversion, app-path RCD, and exact
+  implemented. Full-resolution X-Trans export uses three-pass Markesteijn
+  demosaicing. Direct camera-to-Rec.2020 conversion, app-path Bayer RCD, and exact
   RawTherapee noise kernels remain pending.
-- The new density-domain film-negative API is not yet connected to the
-  interactive preview or export pipeline. The power-law film negative inversion
-  (RawTherapee-compatible) now serves as the primary inversion front-end for
-  color and B&W negative films, with auto-calibration from image medians. The
-  density-domain primitives (capture normalization, optical density, base
-  subtraction) are complete as standalone APIs but require a matched flat field
-  and supplied base density. Import diagnostics (Slice B, complete as engine
-  API), and manual rebate/roll-reuse base measurement (Slice C, complete as an
-  engine API), and automatic rebate candidates (initial Slice D, complete as an
-  engine API) remain separate from the interactive workflow. Generic C-41 scene
-  rendering (Slice E) and the initial CPU scene-to-display contract (Slice F)
-  are complete as standalone APIs with CPU/GPU tolerance locked for Slice F;
-  app integration and stored capture profiles remain roadmap work.
+- The density-domain film-negative API is now connected to preview and export
+   via the `densityPipelineEnabled` toggle. When enabled, `densityToSceneLinear`
+   + `renderDisplay` replaces the power-law inversion in both the preview and
+   export paths. The power-law (RawTherapee-compatible) inversion remains the
+   default. The density pipeline currently uses a CPU render path with GPU
+   fallback; a dedicated GPU-accelerated density pipeline kernel is future work.
+   Flat-field loading is supported but the flat-field must be manually selected;
+   automatic flat-field association per capture profile remains roadmap work.
+   Per-stock inverse density curves (Slice H) for Portra 400, Portra 160,
+   Ektar 100, and Gold 200 follow the shared color/adjustment contract and its
+   regression gate rather than preceding them.
 - Still-image slider bindings and the initial GPU correction renderer are
   implemented with bounded latest-value-wins scheduling and display-rate
   coalescing (17 ms inter-frame delay). The actual Core Image renderer is
@@ -333,14 +377,14 @@ The detailed order and acceptance criteria are maintained in the
 - Live camera preview is an 8-bit alignment and correction aid. Final output
   must continue to use the full 16-bit RAW capture and pixel-equivalent pipeline.
 - The Python application is maintenance-only legacy code, but remains the only
-  complete historical crop/perspective/dust workflow until the retirement gates
-  are complete.
+  complete historical workflow with dust removal until the retirement gates are
+  complete. Native crop/perspective processing is operational.
 
-The native test suite currently contains **203 tests** across 13 test files,
+The native test suite currently contains **296 tests** across 19 test files,
 all passing in the latest local run. The 500-render latency benchmark is skipped
 by default and runs when `RUN_PERFORMANCE_TESTS=1` is set.
 
-## Completed Native Features (newly added)
+## Verified Native Features
 
 - TIFF/JPEG/PNG/DNG export contract with individual and lazy batch-all
   workflows. TIFF exports 16-bit deep with optional LZW compression; JPEG
@@ -381,11 +425,45 @@ by default and runs when `RUN_PERFORMANCE_TESTS=1` is set.
   parameter grid test verifies the production renderer against the authoritative
   CPU path across film types, WB, exposure, saturation, curves, color wheels,
   and per-channel curves on every test run.
-  B&W negative correctly skips curves and color wheels in both CPU and production
-  GPU paths. Focused tests cover LUT construction (identity, unsorted input, duplicate
-  inputs, extrapolation, boundaries), mask ranges and overlap, hue wrapping,
-  zero-strength identity, three simultaneous wheels, and direct production
-  GPU-CPU equivalence.
+   B&W negative correctly skips curves and color wheels in both CPU and production
+   GPU paths. Focused tests cover LUT construction (identity, unsorted input, duplicate
+   inputs, extrapolation, boundaries), mask ranges and overlap, hue wrapping,
+   zero-strength identity, three simultaneous wheels, and direct production
+   GPU-CPU equivalence.
+- Density pipeline connected to preview and export. The `correctedPreview()`
+  entry point branches to the density pipeline path (`densityToSceneLinear` +
+  `renderDisplay`) when `densityPipelineEnabled` is true and a base density is
+  available. The existing power-law path is preserved as the default.
+- `ProcessingParameters` extended with `densityPipelineEnabled`,
+  `densityBaseDensity`, `densityC41Profile`, and `densityDisplayParams`.
+- Rebate detection auto-wires base density: selecting a rebate candidate or
+  saving a roll profile automatically enables the density pipeline and populates
+  the base density, C-41 profile, and display rendering parameters from the
+  resolved `ResolvedPipelineProfile`.
+- `resolveAndApplyDensityPipeline()` composes CaptureProfile, FilmStockProfile,
+  RollProfile, and frame measurements through the ProfileStore resolution
+  pipeline and applies the result to the current processing parameters.
+- Flat-field calibration image loading via open panel with channel/aspect-ratio
+  validation. The flat field is resized to exact source geometry, receives the
+  same crop/orientation transform as the scan, and is used for rebate
+  measurement plus preview/export rendering. Loading or clearing it immediately
+  submits a new preview.
+- Density pipeline toggle and status display in the Film Base inspector section.
+- Manual rebate rectangle selection by dragging over the displayed preview.
+- Contour detection and crop box computation ported in pure Swift
+  (`ContourDetection.swift`, 18 tests). Connected-component analysis via
+  Union-Find, convex hull via Andrew's monotone chain, and minimum-area
+  bounding rectangle via rotating calipers. `findOptimalCrop()` returns a
+  normalized `RotatedRect` matching the Python `find_optimal_crop` contract.
+  `RotatedRect.boxPoints` produces 4 float-precision corner points.
+  Wired into AppModel with `detectCrop()`, configurable `darkThreshold`/
+  `lightThreshold` sliders, and a Film Frame inspector section with crop
+  status display (`detectCrop` triggers threshold generation then contour
+  detection on a bounded worker task). Large-image contour coordinates are
+  restored to full-resolution space before return.
+- Per-file crop geometry is Codable in `ProcessingParameters` and is applied by
+  the shared processing entry point through the native homography/bilinear warp,
+  so preview and export use the same perspective-corrected result.
 
 ## Next Work
 
@@ -412,20 +490,35 @@ Work should proceed in this order:
    including metadata, round-trip, cancellation, and batch-export tests.~~ Done.
    19 export tests covering all four formats, round-trip decode, batch
    parallelism, cancellation, frame/aspect ratio, and JSON coding.
-9. Continue the film-specific camera-scan track from the completed engine-only
-   manual/rebate base selection and roll-level reuse API plus automatic rebate
-   candidates toward UI region picking and density/display app integration;
-   keep each stage separate and testable. Slices A through F are complete as
-   standalone APIs. RawTherapee-compatible
-   film negative power-law inversion is complete and operational as a
-   preview-compatible front-end with working-space reference placement, presets,
-   and CPU/GPU/Metal parity. Slices E and F define standalone density-to-scene
-   and scene-to-display contracts but are not wired into the app.
-10. Wire manual/automatic rebate selection and the completed density/display
-    APIs into preview/export, then separate capture, stock, and roll profiles.
-11. Port contour detection and crop box computation (requires OpenCV C++ interop
-    for `findContours` + `minAreaRect`).
-12. Port perspective warp (DLT homography solve + bilinear warp).
+9. ~~Complete the color-accuracy and perceptual-slider modernization track.~~
+   All six slices are done: semantic adjustment contract, shared unclamped
+   linear/statistics seam, protected color controls, safe global tone controls,
+   reusable continuous-Double AdjustmentSlider, and the perceptual regression
+   gate with 2,725 GPU-vs-CPU comparison verifications (0 failures, max
+   2/255). Per-stock Slice H calibration remains deferred.
+10. ~~Wire manual/automatic rebate selection and the completed density/display
+     APIs into preview/export, then separate capture, stock, and roll profiles.~~ Done.
+     The density pipeline (`densityToSceneLinear` + `renderDisplay`) is connected to
+     both preview and export via `ProcessingParameters.densityPipelineEnabled`. Rebate
+     detection auto-wires base density into the density pipeline. `resolveAndApplyDensityPipeline`
+     composes CaptureProfile, FilmStockProfile, and RollProfile into the processing
+     parameters. Flat-field calibration validates geometry and is aligned through
+     rebate measurement, preview, crop, orientation, and export. GPU density
+     pipeline kernel remains future work.
+11. ~~Port contour detection and crop box computation (requires OpenCV C++ interop
+      for `findContours` + `minAreaRect`).~~ Done. Connected-component analysis
+      (Union-Find), convex hull (Andrew's monotone chain), and minimum-area
+      bounding rectangle (rotating calipers) implemented in pure Swift
+      (`ContourDetection.swift`, 18 tests). Returns a normalized `RotatedRect`
+      matching the Python `find_optimal_crop` contract. Wired into AppModel with
+      `detectCrop()`, `darkThreshold`/`lightThreshold` sliders, and crop status
+      display in the Film Frame inspector section. Perspective warp remains for item 12.
+12. ~~Port perspective warp (DLT homography solve + bilinear warp).~~ Done.
+    `PerspectiveTransform.computeHomography` and `PerspectiveTransform.warpPerspective`
+    implemented in `PerspectiveWarp.swift` with Double precision bilinear interpolation
+    and border-constant zero for out-of-bounds source coordinates. It is connected
+    to per-file crop processing for preview/export. 18 focused tests cover all eight
+    committed fixtures plus identity, translation, homography, and self-consistency.
 13. Port dust detection and Telea FMM inpainting (requires OpenCV interop or
     custom Metal kernel).
 14. Expand the frozen corpus to cover intermediate stages and parameter-grid

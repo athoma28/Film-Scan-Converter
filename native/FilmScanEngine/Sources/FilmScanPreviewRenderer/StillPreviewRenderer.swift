@@ -36,11 +36,6 @@ public final class StillPreviewRenderer: @unchecked Sendable {
 
   private let correctionKernel: CIKernel
 
-  private static func sRGBToLinear(_ value: Float) -> Float {
-    let x = min(max(value, 0), 1)
-    return x <= 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4)
-  }
-
   public func render(parameters: ProcessingParameters, showOriginal: Bool) -> CGImage? {
     let oriented = orientedSource(parameters: parameters)
     let output: CIImage
@@ -61,13 +56,13 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         fnRExp = Float(-(fnp.greenExp * fnp.redRatio))
         fnGExp = Float(-fnp.greenExp)
         fnBExp = Float(-(fnp.greenExp * fnp.blueRatio))
-        let target = Float(FilmNegativeProcessing.calibrationTargetFraction)
-        let bM = max(Self.sRGBToLinear(Float(medians.blue) / 65535.0), 1.0 / 65535.0)
-        let gM = max(Self.sRGBToLinear(Float(medians.green) / 65535.0), 1.0 / 65535.0)
-        let rM = max(Self.sRGBToLinear(Float(medians.red) / 65535.0), 1.0 / 65535.0)
-        fnRMult = target / pow(rM, fnRExp)
-        fnGMult = target / pow(gM, fnGExp)
-        fnBMult = target / pow(bM, fnBExp)
+        let multipliers = FilmNegativeProcessing.computeMultipliers(
+          medians: medians,
+          params: fnp
+        )
+        fnRMult = Float(multipliers.r)
+        fnGMult = Float(multipliers.g)
+        fnBMult = Float(multipliers.b)
       } else {
         fnRExp = 0; fnGExp = 0; fnBExp = 0
         fnRMult = 1; fnGMult = 1; fnBMult = 1
@@ -89,6 +84,15 @@ public final class StillPreviewRenderer: @unchecked Sendable {
             Float(parameters.shadows),
             Float(parameters.highlights),
             Float(parameters.saturation),
+            Float(parameters.photoAdjustments.exposureEV),
+            Float(parameters.photoAdjustments.brightness),
+            Float(parameters.photoAdjustments.contrast),
+            Float(parameters.photoAdjustments.highlights),
+            Float(parameters.photoAdjustments.shadows),
+            Float(parameters.photoAdjustments.temperatureShiftMired),
+            Float(parameters.photoAdjustments.tint),
+            Float(parameters.photoAdjustments.saturation),
+            Float(parameters.photoAdjustments.vibrance),
             Float(parameters.highlightWheel.hue),
             Float(parameters.highlightWheel.strength),
             Float(parameters.midtoneWheel.hue),
@@ -291,7 +295,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       return clamp(result, 0.0, 1.0);
     }
 
-    vec3 filmNegativeDisplayValue(vec3 value, vec3 exponent, vec3 multiplier) {
+    vec3 filmNegativeLinearValue(vec3 value, vec3 exponent, vec3 multiplier) {
       vec3 linear = vec3(filmNegativeSrgbToLinear(value.r),
                          filmNegativeSrgbToLinear(value.g),
                          filmNegativeSrgbToLinear(value.b));
@@ -299,7 +303,10 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         0.6274039 * linear.r + 0.3292830 * linear.g + 0.0433131 * linear.b,
         0.0690973 * linear.r + 0.9195404 * linear.g + 0.0113623 * linear.b,
         0.0163914 * linear.r + 0.0880133 * linear.g + 0.8955953 * linear.b);
-      vec3 inverted = multiplier * pow(max(working, vec3(1.0 / 65535.0)), exponent);
+      return multiplier * pow(max(working, vec3(1.0 / 65535.0)), exponent);
+    }
+
+    vec3 filmNegativeDisplayFromLinear(vec3 inverted) {
       vec3 displayLinear = vec3(
         1.6604910 * inverted.r - 0.5876411 * inverted.g - 0.0728499 * inverted.b,
         -0.1245505 * inverted.r + 1.1328999 * inverted.g - 0.0083494 * inverted.b,
@@ -308,6 +315,90 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         filmNegativeToneCurve(filmNegativeLinearToSrgb(displayLinear.r)),
         filmNegativeToneCurve(filmNegativeLinearToSrgb(displayLinear.g)),
         filmNegativeToneCurve(filmNegativeLinearToSrgb(displayLinear.b)));
+    }
+
+    vec3 displayLinearValue(vec3 value) {
+      vec3 linear = vec3(filmNegativeSrgbToLinear(value.r),
+                         filmNegativeSrgbToLinear(value.g),
+                         filmNegativeSrgbToLinear(value.b));
+      return vec3(
+        0.6274039 * linear.r + 0.3292830 * linear.g + 0.0433131 * linear.b,
+        0.0690973 * linear.r + 0.9195404 * linear.g + 0.0113623 * linear.b,
+        0.0163914 * linear.r + 0.0880133 * linear.g + 0.8955953 * linear.b);
+    }
+
+    vec3 displayFromLinear(vec3 value) {
+      vec3 displayLinear = vec3(
+        1.6604910 * value.r - 0.5876411 * value.g - 0.0728499 * value.b,
+        -0.1245505 * value.r + 1.1328999 * value.g - 0.0083494 * value.b,
+        -0.0181508 * value.r - 0.1005789 * value.g + 1.1187297 * value.b);
+      return vec3(
+        filmNegativeLinearToSrgb(displayLinear.r),
+        filmNegativeLinearToSrgb(displayLinear.g),
+        filmNegativeLinearToSrgb(displayLinear.b));
+    }
+
+    bool protectedColorInGamut(vec3 value, float ceiling) {
+      return min(value.r, min(value.g, value.b)) >= 0.0
+        && max(value.r, max(value.g, value.b)) <= ceiling;
+    }
+
+    vec3 protectedColor(
+      vec3 rgb,
+      float temperatureMired,
+      float tint,
+      float saturation,
+      float vibrance
+    ) {
+      const vec3 luminanceWeights = vec3(0.2626983, 0.6780, 0.0593017);
+      float luminance = dot(rgb, luminanceWeights);
+      if (luminance <= 0.0) return rgb;
+
+      vec3 neutral = vec3(luminance);
+      vec3 chroma = rgb - neutral;
+      float mx = max(rgb.r, max(rgb.g, rgb.b));
+      float mn = min(rgb.r, min(rgb.g, rgb.b));
+      float saturationMetric = clamp((mx - mn) / max(abs(mx), 1e-9), 0.0, 1.0);
+      float gamutProtection = 1.0 - 0.75 * smoothstep(0.75, 1.0, saturationMetric);
+      float highlightProtection = 1.0 - 0.85 * smoothstep(0.75, 1.5, luminance);
+
+      float saturationFactor = pow(2.0, clamp(saturation, -1.0, 1.0));
+      float protectedSaturation = 1.0
+        + (saturationFactor - 1.0) * gamutProtection * highlightProtection;
+      float boundedVibrance = clamp(vibrance, -1.0, 1.0);
+      float vibranceFactor;
+      if (boundedVibrance >= 0.0) {
+        float selectivity = (1.0 - saturationMetric) * (1.0 - saturationMetric);
+        vibranceFactor = 1.0 + boundedVibrance * selectivity
+          * gamutProtection * highlightProtection;
+      } else {
+        vibranceFactor = 1.0 + boundedVibrance * highlightProtection;
+      }
+      chroma *= max(protectedSaturation * vibranceFactor, 0.0);
+
+      float temperature = clamp(temperatureMired / 100.0, -1.0, 1.0);
+      float boundedTint = clamp(tint, -1.0, 1.0);
+      float shift = 0.08 * luminance * highlightProtection;
+      float temperatureGreen = -(0.2626983 - 0.0593017) / 0.6780;
+      float tintGreen = -(0.2626983 + 0.0593017) / 0.6780;
+      chroma += vec3(temperature, temperature * temperatureGreen, -temperature) * shift;
+      chroma += vec3(boundedTint, boundedTint * tintGreen, boundedTint) * shift;
+
+      vec3 desired = neutral + chroma;
+      float ceiling = max(1.0, luminance * 1.5);
+      if (protectedColorInGamut(desired, ceiling)) return desired;
+
+      float lower = 0.0;
+      float upper = 1.0;
+      for (int iteration = 0; iteration < 24; iteration++) {
+        float amount = (lower + upper) * 0.5;
+        if (protectedColorInGamut(neutral + chroma * amount, ceiling)) {
+          lower = amount;
+        } else {
+          upper = amount;
+        }
+      }
+      return neutral + chroma * lower;
     }
 
     float highlightMask(float lum) {
@@ -345,6 +436,56 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       return full * strength * 0.3;
     }
 
+    const float linearTonePivot = 0.18;
+    const float linearToneMinGain = 0.0005;
+
+    vec3 linearToneAdjustments(
+      vec3 rgb,
+      float exposureEV,
+      float brightness,
+      float contrast,
+      float highlights,
+      float shadows
+    ) {
+      float exposureGain = pow(2.0, exposureEV);
+      float brightnessOffset = brightness * 0.18;
+      float contrastGamma = pow(2.0, contrast);
+
+      rgb *= exposureGain;
+      rgb += vec3(brightnessOffset);
+
+      if (abs(contrast) > 0.0) {
+        float luminance = dot(rgb, vec3(0.2626983, 0.6780, 0.0593017));
+        if (luminance > 0.0) {
+          float normalized = luminance / linearTonePivot;
+          float adjustedLuminance = pow(
+            clamp(normalized, 1e-12, 1e12), contrastGamma) * linearTonePivot;
+          float scale = adjustedLuminance / luminance;
+          rgb *= scale;
+        }
+      }
+
+      if (abs(highlights) > 0.0 || abs(shadows) > 0.0) {
+        float luminance = dot(rgb, vec3(0.2626983, 0.6780, 0.0593017));
+
+        if (abs(highlights) > 0.0) {
+          float highlightWeight = smoothstep(0.5, 2.0, luminance);
+          float highlightGain = max(
+            1.0 - highlights * 0.8 * highlightWeight, linearToneMinGain);
+          rgb *= highlightGain;
+        }
+
+        if (abs(shadows) > 0.0) {
+          float shadowWeight = 1.0 - smoothstep(0.0, 0.5, luminance);
+          float shadowGain = max(
+            1.0 + shadows * 0.8 * shadowWeight, linearToneMinGain);
+          rgb *= shadowGain;
+        }
+      }
+
+      return rgb;
+    }
+
     kernel vec4 correction(
       sampler image,
       sampler lutImage,
@@ -355,6 +496,15 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       float shadows,
       float highlights,
       float saturation,
+      float photoExposureEV,
+      float photoBrightness,
+      float photoContrast,
+      float photoHighlights,
+      float photoShadows,
+      float photoTemperatureMired,
+      float photoTint,
+      float photoSaturation,
+      float photoVibrance,
       float highlightHue,
       float highlightStrength,
       float midtoneHue,
@@ -372,10 +522,26 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       vec4 pixel = sample(image, samplerCoord(image));
       vec3 rgb = pixel.rgb;
       bool isBW = (filmType == 0.0);
+      bool useProtectedColor = filmNegativeEnabled == 1.0 && !isBW
+        && (photoTemperatureMired != 0.0 || photoTint != 0.0
+          || photoSaturation != 0.0 || photoVibrance != 0.0);
+      bool useLinearTone = abs(photoExposureEV) > 0.0
+        || abs(photoBrightness) > 0.0 || abs(photoContrast) > 0.0
+        || abs(photoHighlights) > 0.0 || abs(photoShadows) > 0.0;
 
       if (filmNegativeEnabled == 1.0) {
-        rgb = filmNegativeDisplayValue(
+        vec3 filmLinear = filmNegativeLinearValue(
           rgb, vec3(fnRExp, fnGExp, fnBExp), vec3(fnRMult, fnGMult, fnBMult));
+        if (useLinearTone) {
+          filmLinear = linearToneAdjustments(
+            filmLinear, photoExposureEV, photoBrightness, photoContrast,
+            photoHighlights, photoShadows);
+        }
+        if (useProtectedColor) {
+          filmLinear = protectedColor(
+            filmLinear, photoTemperatureMired, photoTint, photoSaturation, photoVibrance);
+        }
+        rgb = filmNegativeDisplayFromLinear(filmLinear);
         if (isBW) {
           float gray = dot(rgb, vec3(0.299, 0.587, 0.114));
           rgb = vec3(gray);
@@ -387,9 +553,16 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         } else if (filmType == 1.0) {
           rgb = 1.0 - rgb;
         }
+        if (useLinearTone) {
+          vec3 linear = displayLinearValue(rgb);
+          linear = linearToneAdjustments(
+            linear, photoExposureEV, photoBrightness, photoContrast,
+            photoHighlights, photoShadows);
+          rgb = displayFromLinear(linear);
+        }
       }
 
-      if (!isBW) {
+      if (!isBW && !useProtectedColor) {
         rgb *= vec3(
           1.0 + temperature / 200.0 + tint / 400.0,
           1.0 - tint / 200.0,
@@ -397,7 +570,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         );
       }
 
-      if (gamma != 0.0 || shadows != 0.0 || highlights != 0.0) {
+      if (!useLinearTone && (gamma != 0.0 || shadows != 0.0 || highlights != 0.0)) {
         rgb = clamp(rgb, 0.0, 1.0);
         if (gamma != 0.0) {
           rgb = pow(rgb, vec3(pow(2.0, -gamma / 100.0)));
@@ -439,7 +612,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         }
       }
 
-      if (!isBW && saturation != 100.0) {
+      if (!isBW && !useProtectedColor && saturation != 100.0) {
         vec3 hsv = rgbToHsv(clamp(rgb, 0.0, 1.0));
         hsv.y = clamp(hsv.y * saturation / 100.0, 0.0, 1.0);
         rgb = hsvToRgb(hsv);

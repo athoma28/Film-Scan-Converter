@@ -28,6 +28,12 @@ final class AppModel: ObservableObject {
   @Published private(set) var isRebateDetectionRunning = false
   @Published private(set) var rollProfile: RollProfile?
   @Published private(set) var rebateStatus: String = ""
+  @Published private(set) var flatFieldImage: UInt16Image?
+  @Published private(set) var flatFieldURL: URL?
+  @Published private(set) var cropRect: RotatedRect?
+  @Published private(set) var cropThresholdPreview: UInt16Image?
+  @Published private(set) var isCropDetectionRunning = false
+  @Published private(set) var cropStatus: String = ""
 
   let profileStore: ProfileStore
 
@@ -63,6 +69,7 @@ final class AppModel: ObservableObject {
   private var rawSwapTask: Task<Void, Never>?
   private var predecodeTask: Task<Void, Never>?
   private var rebateTask: Task<Void, Never>?
+  private var cropDetectionTask: Task<Void, Never>?
   private var renderTask: Task<Void, Never>?
   private var pendingRender: PreviewRenderRequest?
   private var renderLoopGeneration = 0
@@ -112,6 +119,7 @@ final class AppModel: ObservableObject {
     loadGeneration += 1
     let gen = loadGeneration
     resetRebateState(cancelTask: true)
+    resetCropState(cancelTask: true)
 
     guard let selection else {
       previewImage = nil
@@ -135,6 +143,7 @@ final class AppModel: ObservableObject {
     let key = settingsKey(selection)
     let hasStoredSettings = settingsByPath[key] != nil
     parameters = settingsByPath[key] ?? ProcessingParameters()
+    cropRect = parameters.cropRect
     showOriginal = false
 
     if let cached = previewCache[key] {
@@ -272,11 +281,25 @@ final class AppModel: ObservableObject {
   }
 
   func setTemperature(_ value: Int) {
-    updateParameters { $0.temperature = value }
+    updateParameters {
+      $0.temperature = value
+      $0.photoAdjustments.updateColorIntentFromLegacy(
+        temperature: value,
+        tint: $0.tint,
+        saturation: $0.saturation
+      )
+    }
   }
 
   func setTint(_ value: Int) {
-    updateParameters { $0.tint = value }
+    updateParameters {
+      $0.tint = value
+      $0.photoAdjustments.updateColorIntentFromLegacy(
+        temperature: $0.temperature,
+        tint: value,
+        saturation: $0.saturation
+      )
+    }
   }
 
   func setGamma(_ value: Int) {
@@ -292,7 +315,38 @@ final class AppModel: ObservableObject {
   }
 
   func setSaturation(_ value: Int) {
-    updateParameters { $0.saturation = value }
+    updateParameters {
+      $0.saturation = value
+      $0.photoAdjustments.updateColorIntentFromLegacy(
+        temperature: $0.temperature,
+        tint: $0.tint,
+        saturation: value
+      )
+    }
+  }
+
+  func setVibrance(_ value: Double) {
+    updateParameters { $0.photoAdjustments.vibrance = min(max(value, -1), 1) }
+  }
+
+  func setExposureEV(_ value: Double) {
+    updateParameters { $0.photoAdjustments.exposureEV = value }
+  }
+
+  func setBrightness(_ value: Double) {
+    updateParameters { $0.photoAdjustments.brightness = value }
+  }
+
+  func setContrast(_ value: Double) {
+    updateParameters { $0.photoAdjustments.contrast = value }
+  }
+
+  func setSemanticHighlights(_ value: Double) {
+    updateParameters { $0.photoAdjustments.highlights = value }
+  }
+
+  func setSemanticShadows(_ value: Double) {
+    updateParameters { $0.photoAdjustments.shadows = value }
   }
 
   func setCurveEnabled(_ value: Bool) {
@@ -413,8 +467,55 @@ final class AppModel: ObservableObject {
     }
   }
 
+  func setDensityPipelineEnabled(_ value: Bool) {
+    updateParameters {
+      $0.densityPipelineEnabled = value
+      if value, let measurement = selectedRebateMeasurement {
+        $0.densityBaseDensity = measurement.baseDensity
+      } else if value, let rollBase = rollProfile?.measuredBaseDensity {
+        $0.densityBaseDensity = rollBase
+      }
+    }
+  }
+
+  func setDensityC41Profile(_ profile: GenericC41Profile) {
+    updateParameters { $0.densityC41Profile = profile }
+  }
+
+  func setDensityDisplayParams(_ params: DisplayRenderingParameters) {
+    updateParameters { $0.densityDisplayParams = params }
+  }
+
+  func resolveAndApplyDensityPipeline(
+    captureProfileID: CaptureProfileID = CaptureProfileID(rawValue: "default"),
+    stockProfileID: FilmStockProfileID = FilmStockProfileID(rawValue: "generic_colour_negative")
+  ) {
+    do {
+      let resolved = try profileStore.resolvePipeline(
+        captureProfileID: captureProfileID,
+        stockProfileID: stockProfileID,
+        rollProfile: rollProfile,
+        frameMeasurement: selectedRebateMeasurement?.baseDensity
+      )
+      updateParameters {
+        $0.densityPipelineEnabled = true
+        if let baseDensity = resolved.resolvedBaseDensity?.baseDensity {
+          $0.densityBaseDensity = baseDensity
+        }
+        $0.densityC41Profile = resolved.stockProfile.c41Profile
+        $0.densityDisplayParams = resolved.stockProfile.displayRendering
+      }
+      let baseMessage = rebateStatus.isEmpty ? "" : rebateStatus + " "
+      rebateStatus = baseMessage
+        + "Density pipeline active (stock: \(resolved.stockProfile.displayName))."
+    } catch {
+      rebateStatus = "Pipeline resolution failed: \(error.localizedDescription)"
+    }
+  }
+
   func resetCorrections() {
     parameters = ProcessingParameters()
+    resetCropState(cancelTask: true)
     saveParameters()
     if showOriginal {
       showOriginal = false
@@ -504,8 +605,9 @@ final class AppModel: ObservableObject {
     rebateGeneration += 1
     let generation = rebateGeneration
     let selectedURL = selection
+    let flatField = preparedFlatField(for: source)
     isRebateDetectionRunning = true
-    rebateStatus = "Searching for rebate edge candidates..."
+    rebateStatus = "Searching for unexposed film edges..."
     rebateCandidates = []
     selectedRebateMeasurement = nil
     selectedRebateRegion = nil
@@ -515,7 +617,6 @@ final class AppModel: ObservableObject {
       let result: [AutomaticRebateCandidate]
       if Task.isCancelled { return }
       result = await Task.detached(priority: .userInitiated) {
-        let flatField = AppModel.unityFlatField(for: source)
         return FilmNegativeProcessing.automaticRebateCandidates(
           image: source,
           flatField: flatField
@@ -526,10 +627,10 @@ final class AppModel: ObservableObject {
       rebateCandidates = result
       isRebateDetectionRunning = false
       if result.isEmpty {
-        rebateStatus = "No rebate candidates detected."
+        rebateStatus = "No clear unexposed film edge detected."
       } else {
         rebateStatus =
-          "Found \(result.count) rebate candidate\(result.count == 1 ? "" : "s")."
+          "Found \(result.count) possible film edge\(result.count == 1 ? "" : "s")."
       }
     }
   }
@@ -543,12 +644,12 @@ final class AppModel: ObservableObject {
     rebateGeneration += 1
     let generation = rebateGeneration
     let selectedURL = selection
+    let flatField = preparedFlatField(for: source)
     rebateStatus = "Measuring base density..."
     rebateTask = Task { [weak self] in
       guard let self else { return }
       let result: Result<FilmBaseMeasurement, Error>
       result = await Task.detached(priority: .userInitiated) {
-        let flatField = AppModel.unityFlatField(for: source)
         return Result {
           try FilmNegativeProcessing.measureBaseDensity(
             image: source,
@@ -563,6 +664,10 @@ final class AppModel: ObservableObject {
       case .success(let measurement):
         selectedRebateMeasurement = measurement
         selectedRebateRegion = region
+        updateParameters {
+          $0.densityPipelineEnabled = true
+          $0.densityBaseDensity = measurement.baseDensity
+        }
         rebateStatus = String(
           format:
             "Base density: B %.3f  G %.3f  R %.3f (confidence %.0f%%)",
@@ -575,6 +680,61 @@ final class AppModel: ObservableObject {
         rebateStatus = "Measurement failed: \(error.localizedDescription)"
       }
     }
+  }
+
+  func measureRebateRegion(
+    normalizedX: Double,
+    normalizedY: Double,
+    normalizedWidth: Double,
+    normalizedHeight: Double
+  ) {
+    guard let source = previewSource else { return }
+    let sourceRect = Self.sourceNormalizedRect(
+      fromDisplayedRect: CGRect(
+        x: normalizedX, y: normalizedY,
+        width: normalizedWidth, height: normalizedHeight),
+      rotation: parameters.rotation,
+      flippedHorizontally: parameters.flip
+    )
+    let x = min(max(sourceRect.minX, 0), 1)
+    let y = min(max(sourceRect.minY, 0), 1)
+    let width = min(max(sourceRect.width, 0), 1 - x)
+    let height = min(max(sourceRect.height, 0), 1 - y)
+    let region = ImageRegion(
+      x: min(source.width - 1, Int((x * Double(source.width)).rounded(.down))),
+      y: min(source.height - 1, Int((y * Double(source.height)).rounded(.down))),
+      width: max(1, Int((width * Double(source.width)).rounded())),
+      height: max(1, Int((height * Double(source.height)).rounded()))
+    )
+    measureRebateRegion(region)
+  }
+
+  nonisolated static func sourceNormalizedRect(
+    fromDisplayedRect rect: CGRect,
+    rotation: Int,
+    flippedHorizontally: Bool
+  ) -> CGRect {
+    let normalizedTurns = ((rotation % 4) + 4) % 4
+    let corners = [
+      CGPoint(x: rect.minX, y: rect.minY),
+      CGPoint(x: rect.maxX, y: rect.minY),
+      CGPoint(x: rect.minX, y: rect.maxY),
+      CGPoint(x: rect.maxX, y: rect.maxY),
+    ].map { displayed -> CGPoint in
+      let x = flippedHorizontally ? 1 - displayed.x : displayed.x
+      let y = displayed.y
+      switch normalizedTurns {
+      case 1: return CGPoint(x: y, y: 1 - x)
+      case 2: return CGPoint(x: 1 - x, y: 1 - y)
+      case 3: return CGPoint(x: 1 - y, y: x)
+      default: return CGPoint(x: x, y: y)
+      }
+    }
+    let minX = corners.map(\.x).min() ?? 0
+    let maxX = corners.map(\.x).max() ?? 0
+    let minY = corners.map(\.y).min() ?? 0
+    let maxY = corners.map(\.y).max() ?? 0
+    return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
   }
 
   func selectRebateCandidate(_ candidate: AutomaticRebateCandidate) {
@@ -591,6 +751,12 @@ final class AppModel: ObservableObject {
       candidate.measurement.baseDensity.red,
       candidate.measurement.confidence * 100
     )
+    updateParameters {
+      $0.densityPipelineEnabled = true
+      $0.densityBaseDensity = candidate.measurement.baseDensity
+    }
+    saveParameters()
+    scheduleRender()
   }
 
   func createRollProfile(from candidate: AutomaticRebateCandidate) {
@@ -612,6 +778,10 @@ final class AppModel: ObservableObject {
       try profileStore.saveRollProfile(profile)
       rollProfile = profile
       rebateStatus = "Roll profile saved as \(rollID)."
+      resolveAndApplyDensityPipeline(
+        captureProfileID: captureID,
+        stockProfileID: stockID
+      )
     } catch {
       rebateStatus = "Unable to save roll profile: \(error.localizedDescription)"
     }
@@ -619,6 +789,128 @@ final class AppModel: ObservableObject {
 
   func clearRebateMeasurement() {
     resetRebateState(cancelTask: true)
+    updateParameters {
+      $0.densityPipelineEnabled = false
+      $0.densityBaseDensity = nil
+    }
+  }
+
+  func loadFlatField() {
+    let panel = NSOpenPanel()
+    panel.allowsMultipleSelection = false
+    panel.canChooseDirectories = false
+    panel.allowedContentTypes = []
+    panel.message = "Select a flat-field calibration image."
+    guard panel.runModal() == .OK, let url = panel.url else {
+      return
+    }
+    do {
+      let decoded = try Self.decodeImage(url)
+      setFlatField(decoded, url: url)
+    } catch {
+      rebateStatus = "Failed to load flat-field: \(error.localizedDescription)"
+    }
+  }
+
+  func clearFlatField() {
+    setFlatField(nil)
+  }
+
+  func setFlatField(_ image: UInt16Image?, url: URL? = nil) {
+    guard let image else {
+      flatFieldImage = nil
+      flatFieldURL = nil
+      rebateStatus = "Flat-field cleared."
+      scheduleRender(immediate: true)
+      return
+    }
+    guard image.channels == 3 else {
+      rebateStatus = "Flat field must be a three-channel image."
+      return
+    }
+    if let decodedImage {
+      let sourceAspect = Double(decodedImage.width) / Double(decodedImage.height)
+      let fieldAspect = Double(image.width) / Double(image.height)
+      guard abs(sourceAspect - fieldAspect) / sourceAspect <= 0.01 else {
+        rebateStatus = "Flat field aspect ratio must match the selected scan."
+        return
+      }
+    }
+    flatFieldImage = image
+    flatFieldURL = url
+    rebateStatus = "Flat-field loaded\(url.map { ": \($0.lastPathComponent)" } ?? ".")"
+    scheduleRender(immediate: true)
+  }
+
+  func detectCrop() {
+    guard let source = previewSource, source.channels == 3 else {
+      cropStatus = "Load an image with 3 channels first."
+      return
+    }
+    cropDetectionTask?.cancel()
+    cropDetectionTask = nil
+    cropThresholdPreview = nil
+    isCropDetectionRunning = true
+    cropStatus = "Finding film frame..."
+
+    let proxy = source
+    let dark = parameters.darkThreshold
+    let light = parameters.lightThreshold
+    let maxDim = 2000
+    let selectedURL = selection
+
+    cropDetectionTask = Task { [weak self] in
+      guard let self else { return }
+
+      let result: (threshold: UInt16Image, rect: RotatedRect, contourPoints: [SIMD2<Double>])? =
+        await Task.detached(priority: .userInitiated) {
+          let thresh = proxy.getThreshold(darkThreshold: dark, lightThreshold: light)
+          return ContourDetection.findOptimalCrop(threshold: thresh, maxDimension: maxDim)
+        }.value
+
+      guard !Task.isCancelled else { return }
+      guard self.selection == selectedURL else { return }
+
+      isCropDetectionRunning = false
+      guard let result else {
+        cropStatus = "No crop frame detected."
+        return
+      }
+      applyCrop(result.rect, render: false)
+      cropThresholdPreview = result.threshold
+      cropStatus = String(
+        format: "Crop: %.1f°  w:%.3f  h:%.3f  at (%.3f, %.3f)",
+        result.rect.angle,
+        result.rect.width,
+        result.rect.height,
+        result.rect.centerX,
+        result.rect.centerY
+      )
+      scheduleRender(immediate: true)
+    }
+  }
+
+  func clearCrop() {
+    resetCropState(cancelTask: true)
+    parameters.cropRect = nil
+    saveParameters()
+    scheduleRender(immediate: true)
+  }
+
+  func setCropRect(_ rect: RotatedRect?) {
+    if let rect {
+      applyCrop(rect, render: true)
+    } else {
+      clearCrop()
+    }
+  }
+
+  func setDarkThreshold(_ value: Int) {
+    updateParameters { $0.darkThreshold = value }
+  }
+
+  func setLightThreshold(_ value: Int) {
+    updateParameters { $0.lightThreshold = value }
   }
 
   private func resetRebateState(cancelTask: Bool) {
@@ -633,6 +925,26 @@ final class AppModel: ObservableObject {
     rollProfile = nil
     isRebateDetectionRunning = false
     rebateStatus = ""
+  }
+
+  private func resetCropState(cancelTask: Bool) {
+    if cancelTask {
+      cropDetectionTask?.cancel()
+      cropDetectionTask = nil
+    }
+    cropRect = nil
+    cropThresholdPreview = nil
+    isCropDetectionRunning = false
+    cropStatus = ""
+  }
+
+  private func applyCrop(_ rect: RotatedRect, render: Bool) {
+    cropRect = rect
+    parameters.cropRect = rect
+    saveParameters()
+    if render {
+      scheduleRender(immediate: true)
+    }
   }
 
   nonisolated private static func unityFlatField(for image: UInt16Image) -> UInt16Image {
@@ -765,19 +1077,13 @@ final class AppModel: ObservableObject {
       fileParams = automatic
     }
 
+    let ff = compatibleFlatField(for: decoded)
     let processed = await Task.detached(priority: .userInitiated) {
-      var output: UInt16Image
-      if fileParams.filmType == .cropOnly || fileParams == ProcessingParameters() {
-        output = decoded.rotated(
-          quarterTurns: fileParams.rotation,
-          flipHorizontally: fileParams.flip
-        )
-      } else {
-        output = FilmProcessing.correctedPreview(
-          image: decoded,
-          parameters: fileParams
-        )
-      }
+      var output = FilmProcessing.correctedPreview(
+        image: decoded,
+        parameters: fileParams,
+        flatField: ff
+      )
 
       if exportParams.framePercent > 0 || exportParams.aspectRatio != nil {
         output = output.addingFrame(
@@ -797,6 +1103,15 @@ final class AppModel: ObservableObject {
   }
 
   private func decodedImageForExport(_ url: URL) async throws -> UInt16Image {
+    if Self.requiresFullResolutionExportDecode(url) {
+      return try await Task.detached(priority: .userInitiated) {
+        try RawImageDecoder.decode(
+          url,
+          fullResolution: true,
+          profile: .rawTherapeeCameraScan
+        ).image
+      }.value
+    }
     let key = settingsKey(url)
     if selection == url, let decodedImage {
       return decodedImage
@@ -807,6 +1122,10 @@ final class AppModel: ObservableObject {
     return try await Task.detached(priority: .userInitiated) {
       return try Self.decodeImage(url)
     }.value
+  }
+
+  nonisolated static func requiresFullResolutionExportDecode(_ url: URL) -> Bool {
+    FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased())
   }
 
   private func reserveDestinationURLs(
@@ -869,6 +1188,7 @@ final class AppModel: ObservableObject {
       return
     }
     settingsByPath[settingsKey(selection)] = parameters
+    EditLog.parametersSaved(path: selection.lastPathComponent, parameters: parameters)
   }
 
   private func applyCachedSession(_ session: CachedPreviewSession, selection: URL) {
@@ -982,13 +1302,15 @@ final class AppModel: ObservableObject {
     }
 
     let previousHadPending = pendingRender != nil
+    let ff = preparedFlatField(for: previewSource)
     pendingRender = PreviewRenderRequest(
       selection: selection,
       source: previewSource,
       renderer: previewRenderer,
       parameters: parameters,
       showOriginal: showOriginal,
-      submitTime: Date()
+      submitTime: Date(),
+      flatField: ff
     )
 
     if previousHadPending {
@@ -1034,6 +1356,21 @@ final class AppModel: ObservableObject {
     }
   }
 
+  private func preparedFlatField(for image: UInt16Image) -> UInt16Image {
+    guard let flatField = compatibleFlatField(for: image) else {
+      return Self.unityFlatField(for: image)
+    }
+    return flatField.resized(width: image.width, height: image.height)
+  }
+
+  private func compatibleFlatField(for image: UInt16Image) -> UInt16Image? {
+    guard let flatFieldImage, flatFieldImage.channels == image.channels else { return nil }
+    let imageAspect = Double(image.width) / Double(image.height)
+    let fieldAspect = Double(flatFieldImage.width) / Double(flatFieldImage.height)
+    guard abs(imageAspect - fieldAspect) / imageAspect <= 0.01 else { return nil }
+    return flatFieldImage
+  }
+
   private func processRenderQueue(generation: Int) async {
     while !Task.isCancelled, let request = pendingRender {
       pendingRender = nil
@@ -1042,8 +1379,11 @@ final class AppModel: ObservableObject {
       let submitTime = request.submitTime
 
       let result: RenderedPreview? = await Task.detached(priority: .userInitiated) { () -> RenderedPreview? in
-        if let renderer = request.renderer,
-          let rendered = renderer.render(
+        let useGPU = request.renderer != nil
+          && !request.parameters.densityPipelineEnabled
+          && request.parameters.cropRect == nil
+        if useGPU,
+          let rendered = request.renderer?.render(
             parameters: request.parameters,
             showOriginal: request.showOriginal
           )
@@ -1058,7 +1398,8 @@ final class AppModel: ObservableObject {
           )
           : FilmProcessing.correctedPreview(
             image: request.source,
-            parameters: request.parameters
+            parameters: request.parameters,
+            flatField: request.flatField
           )
         guard let preview = rendered.makePreviewCGImage() else {
           return nil
@@ -1157,6 +1498,7 @@ private struct PreviewRenderRequest: Sendable {
   let parameters: ProcessingParameters
   let showOriginal: Bool
   let submitTime: Date
+  let flatField: UInt16Image?
 }
 
 private struct CachedPreviewSession: Sendable {

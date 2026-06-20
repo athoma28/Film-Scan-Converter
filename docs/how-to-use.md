@@ -10,9 +10,9 @@ The native application is the primary product. It provides:
   film-negative inversion using RawTherapee's exponent model and presets,
   orientation, white balance, exposure, shadows, highlights, saturation,
   RGB tone curves, highlight/midtone/shadow color wheels.
-- Camera-scan RAW processing with ISO-tier noise/detail filtering. RCD is an
-  engine capability for explicitly requested full-resolution Bayer decode; the
-  current app RAW path uses half-size decode and therefore bypasses RCD.
+- Camera-scan RAW processing with ISO-tier noise/detail filtering. Preview uses
+  a bounded half-size decode. Export re-decodes RAW files at full resolution,
+  using RCD for Bayer data or three-pass Markesteijn interpolation for X-Trans.
 - Interactive GPU-accelerated preview that updates during slider drags.
 - Export to TIFF (16-bit, optional LZW), JPEG (8-bit, configurable quality),
   PNG (16-bit lossless), and DNG (processed 16-bit RGB).
@@ -26,18 +26,24 @@ The native application is the primary product. It provides:
 3. New files are automatically classified as color negative, B&W negative, or
    slide. Review and adjust the film mode and film negative preset as needed.
 4. Adjust corrections in the inspector panel: orientation, white balance,
-   exposure, shadows/highlights, saturation, curves, and color wheels.
+   semantic exposure/brightness/contrast/highlights/shadows, temperature/tint,
+   saturation, vibrance, curves, and color wheels.
    The preview updates in real time as you drag sliders.
-5. Use the original/corrected comparison toggle to evaluate your adjustments.
-6. Set export options (format, frame, aspect ratio) and choose a destination
+5. In Film Base, optionally load a matching flat field and measure a clear,
+   unexposed film edge automatically or by dragging over it. This enables the
+   measured density pipeline for negative conversion.
+6. In Film Frame, tune the dark/light thresholds and choose **Detect Frame** to
+   apply a perspective-corrected crop. Preview and export use the same stored
+   crop geometry.
+7. Use the original/corrected comparison toggle to evaluate your adjustments.
+8. Set export options (format, frame, aspect ratio) and choose a destination
    folder.
-7. Click Export Selected or Export All to write processed images. Standard
-   images retain source resolution; RAW files currently export from the app's
-   half-size LibRaw decode.
+9. Click Export Selected or Export All to write processed images. Standard
+   images retain source resolution; RAW files are re-decoded at full resolution
+   one at a time so batch memory remains bounded.
 
-The native app does not yet provide automatic crop detection, perspective
-correction, or dust handling. Those workflows still require the legacy Python
-application. See
+The native app does not yet provide dust detection or inpainting. Use the
+legacy Python application when automatic dust removal is required. See
 [Native macOS Development](development/native-macos.md) for the current status.
 
 ## Legacy Python Application (Maintenance Only)

@@ -59,9 +59,19 @@ This file contains only package-local build and implementation notes.
   roll-profile storage, base-density precedence resolution, generic C-41
   density-to-scene conversion, and bounded CPU scene-to-display rendering. A
   dedicated Core Image/Metal float renderer matches the scene-to-display CPU
-  contract within 0.000002 across the committed parameter grid. The
-  density-domain pipeline and roll profiles are not yet connected to preview or
-  export.
+  contract within 0.000002 across the committed parameter grid. The density
+  pipeline and roll profiles are connected to preview and export, including
+  flat-field geometry validation and alignment through crop/orientation.
+- `RenderReadyLinearImage` gives the power-law and density front-ends a shared
+  unclamped linear BGR adjustment seam. Its deterministic robust statistics are
+  hard-capped at 65,536 samples, keeping statistics scratch memory independent
+  of full-resolution RAW dimensions.
+- Primary color-negative Temperature/Tint, Saturation, and Vibrance operate in
+  that linear seam using luminance-preserving Rec.2020 opponent axes, selective
+  chroma scaling, highlight/gamut attenuation, and hue-preserving chroma
+  reduction. CPU preview/export and the production Core Image kernel share the
+  contract and remain within the 2/255 preview tolerance; legacy RGB/HSV helpers
+  remain available for fixture parity.
 - Film-negative inversion using RawTherapee's exponent model is connected to the
   correction preview and export path through the CPU engine and Core Image/Metal
   preview renderer. It uses 20%-border-cut channel
@@ -69,10 +79,11 @@ This file contains only package-local build and implementation notes.
   and both tone curves from the bundled Film Negative preset before final clamp.
   Inversion is evaluated in linear Rec.2020 after sRGB decode on CPU and Metal
   paths, then converted back to display sRGB. The camera-scan decoder
-  installs RCD for explicitly requested full-resolution Bayer decode and applies
+  installs RCD for full-resolution Bayer decode, installs three-pass
+  Markesteijn interpolation for full-resolution X-Trans decode, and applies
   bounded ISO-tier sharpening or denoising while exposing ISO and executed
-  stages in `RawDecodeResult`. The current app requests half-size RAW decode, so
-  its preview/export path bypasses RCD. Native ISO policy sharpens below ISO 800,
+  stages in `RawDecodeResult`. The app uses half-size RAW preview decode and
+  memory-bounded full-resolution RAW export. Native ISO policy sharpens below ISO 800,
   denoises mildly at ISO 800–3199, and denoises more strongly at ISO 3200+; it is
   not an exact port of RawTherapee's noise kernels.
 - TIFF, JPEG, PNG, and processed-RGB DNG export are implemented with individual
@@ -83,9 +94,9 @@ This file contains only package-local build and implementation notes.
 
 The native application is the primary product and the only target for new
 features. It is not yet a complete replacement for the maintenance-only legacy
-Python application: automatic crop detection, perspective warp, dust handling,
-settings migration, packaging/release validation, and fixture independence are
-the current retirement gates. See
+Python application: dust handling, remaining persistence/workflow validation,
+packaging/release validation, and fixture independence are the current
+retirement gates. See
 [Legacy Python Status And Retirement](../docs/legacy-python.md).
 Threshold generation, white balance, saturation, exposure, histogram
 equalisation, highlight/midtone/shadow color wheels, and overall and per-channel

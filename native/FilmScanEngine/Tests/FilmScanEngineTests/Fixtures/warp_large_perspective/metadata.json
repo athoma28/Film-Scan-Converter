@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "stage": "perspective_warp",
+  "inputShape": [
+    40,
+    60,
+    1
+  ],
+  "outputShape": [
+    40,
+    60
+  ],
+  "dtype": "uint16",
+  "inputSHA256": "4264a275323b3133690e0176f7102f9bda5ef0baed54a0dc52443f603974b71d",
+  "outputSHA256": "3f54002a2ca323081a9f0e5a965c0009f568536a8ef7ccdffc6d872cfd5371eb",
+  "parameters": {
+    "srcPoints": [
+      [
+        0.0,
+        0.0
+      ],
+      [
+        59.0,
+        0.0
+      ],
+      [
+        59.0,
+        39.0
+      ],
+      [
+        0.0,
+        39.0
+      ]
+    ],
+    "dstPoints": [
+      [
+        5.0,
+        3.0
+      ],
+      [
+        55.0,
+        2.0
+      ],
+      [
+        58.0,
+        37.0
+      ],
+      [
+        2.0,
+        38.0
+      ]
+    ],
+    "outputWidth": 60,
+    "outputHeight": 40,
+    "homography": [
+      0.8446083044803441,
+      -0.08240918531290413,
+      5.0,
+      -0.0170527642746747,
+      0.7931998380291808,
+      3.0,
+      -5.180586615091049e-05,
+      -0.002743054194913594,
+      1.0
+    ]
+  },
+  "generator": "perspective_warp_fixtures"
+}

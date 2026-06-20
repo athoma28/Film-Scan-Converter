@@ -146,6 +146,24 @@ struct RawImageDecoderTests {
   }
 
   @Test(
+    "Full-resolution X-Trans camera-scan decode uses three-pass interpolation",
+    .enabled(if: rawCorpusAvailable, "sample-raw corpus unavailable; X-Trans demosaic test skipped")
+  )
+  func fullResolutionXTransUsesThreePassInterpolation() throws {
+    let rawURL = repositoryRoot.appending(path: "sample-raw/DSCF2422.RAF")
+
+    let result = try RawImageDecoder.decode(
+      rawURL,
+      fullResolution: true,
+      profile: .rawTherapeeCameraScan
+    )
+
+    #expect(result.processing.contains(.xTransThreePass))
+    #expect(result.image.width > 3_876)
+    #expect(result.image.height > 2_592)
+  }
+
+  @Test(
     "Representative RAF embedded thumbnail decodes into a 3-channel preview image",
     .enabled(if: rawCorpusAvailable, "sample-raw corpus unavailable; embedded thumbnail test skipped")
   )

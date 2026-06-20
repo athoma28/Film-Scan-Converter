@@ -1,6 +1,6 @@
 # Swift Port Evaluation
 
-**Date:** 2026-06-14 (updated 2026-06-15)
+**Date:** 2026-06-14 (snapshot updated 2026-06-18)
 **Scope:** Historical review of the native Swift/macOS rewrite against the
 legacy Python/Tkinter application, covering architecture, implemented features,
 code quality, test coverage, and remaining work at the time of review.
@@ -188,7 +188,9 @@ SHA-256 hashes that are verified at load time, preventing fixture corruption.
 Tests are designed to pass in CI without the `sample-raw/` corpus; RAF-specific
 tests are explicitly reported as disabled when the untracked corpus is absent.
 
-As of 2026-06-18, the native suite contains **203 tests across 13 test files**.
+At this evaluation's 2026-06-18 snapshot, the native suite contained **203
+tests across 13 test files**. See the authoritative status page for the current
+count.
 The 500-render performance benchmark is opt-in via `RUN_PERFORMANCE_TESTS=1`.
 
 ### 2.9 CI — `.github/workflows/native-engine.yml`
