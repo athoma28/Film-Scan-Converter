@@ -40,6 +40,10 @@ This file contains only package-local build and implementation notes.
 - Per-file correction settings are loaded from and atomically saved to a
   versioned JSON document in Application Support, keyed by standardized source
   path. Invalid persistence data falls back to defaults without blocking launch.
+- User-named correction presets are saved in a separate versioned atomic store.
+  The Edit inspector can copy/paste a versioned correction payload through the
+  system clipboard. Applying presets or pasted settings preserves the target
+  frame's rotation, flip, crop geometry, and measured film-base state.
 - Its optional live camera view uses AVFoundation and a GPU-backed Core Image
   context for negative inversion, exposure, and saturation preview corrections.
   Late frames are discarded and processing is throttled to 20 fps to keep the
@@ -60,10 +64,8 @@ This file contains only package-local build and implementation notes.
   BGR black-level correction, matched flat-field normalization, optical-density
   conversion, manual base-density subtraction, manual rebate base measurement,
   roll-profile storage, base-density precedence resolution, generic C-41
-  density-to-scene conversion, and bounded CPU scene-to-display rendering. A
-  dedicated Core Image/Metal float renderer matches the scene-to-display CPU
-  contract within 0.000002 across the committed parameter grid. The density
-  pipeline and roll profiles are connected to preview and export, including
+  density-to-scene conversion, and bounded CPU scene-to-display rendering. The
+  density pipeline and roll profiles are connected to preview and export, including
   flat-field geometry validation and alignment through crop/orientation.
 - `RenderReadyLinearImage` gives the power-law and density front-ends a shared
   unclamped linear BGR adjustment seam. Its deterministic robust statistics are
@@ -102,12 +104,12 @@ This file contains only package-local build and implementation notes.
 
 The native application is the primary product and the only target for new
 features. It is not yet a complete replacement for the maintenance-only legacy
-Python application: dust inpainting and app integration, remaining persistence/workflow validation,
-packaging/release validation, and fixture independence are the current
+Python application: dust inpainting and app integration, packaging/release
+validation, and fixture independence are the current
 retirement gates. See
 [Legacy Python Status And Retirement](../docs/legacy-python.md).
-Threshold generation, white balance, saturation, exposure, histogram
-equalisation, highlight/midtone/shadow color wheels, and overall and per-channel
+Threshold generation, white balance, saturation, exposure,
+highlight/midtone/shadow color wheels, and overall and per-channel
 RGB curves are implemented.
 Standard images with alpha channels are intentionally rejected until the
 processing pipeline defines four-channel behavior.

@@ -2,7 +2,7 @@
 
 ## Context
 
-Film Scan Converter is a Swift desktop app that processes RAW scans of film negatives and slides. The initial "inversion" step for colour negative film was mathematically trivial: `65535 - pixel_value` (a simple per-pixel negation in 16-bit). After inversion, the same generic color adjustments (histogram equalization, gamma, shadows/highlights, saturation, white balance, RGB curves, color wheels) were applied identically regardless of film stock.
+Film Scan Converter is a Swift desktop app that processes RAW scans of film negatives and slides. In the legacy design, the initial "inversion" step for colour negative film was mathematically trivial: `65535 - pixel_value` (a simple per-pixel negation in 16-bit), followed by generic color adjustments applied identically regardless of film stock.
 
 **Milestone: RawTherapee-oriented power-law front-end implemented (updated 2026-06-18).** The inversion step uses `output = multiplier × pixel^-(greenExp × ratio)`, 20%-border-cut references, RawTherapee's `1/24` output reference, and the two bundled Film Negative tone curves. Reference resolution and inversion run in linear Rec.2020 after LibRaw's sRGB conversion, then return to display sRGB. Color Negative (RedRatio=1.36, GreenExp=1.5, BlueRatio=0.86) and Black & White (all ratios=1.0) presets match the bundled profiles. This remains an operational front-end, not full RawTherapee pipeline parity or the final physical density pipeline.
 

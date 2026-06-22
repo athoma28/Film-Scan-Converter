@@ -267,8 +267,6 @@ struct LinearToneAdjustmentTests {
 
     let result = image.applyingLinearToneAdjustments(params)
 
-    let expectedOffset = 0.5 * 0.18
-
     let d0_orig = pixels[2] - pixels[0]
     let d0_result = result.pixels[2] - result.pixels[0]
     #expect(abs(d0_result - d0_orig) < 1e-12)

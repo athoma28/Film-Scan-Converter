@@ -11,6 +11,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var decodedImage: UInt16Image?
   @Published private(set) var parameters = ProcessingParameters()
   @Published private(set) var isRendering = false
+  @Published private(set) var isLoading = false
   @Published var showOriginal = false {
     didSet { scheduleRender() }
   }
@@ -34,15 +35,23 @@ final class AppModel: ObservableObject {
   @Published private(set) var cropThresholdPreview: UInt16Image?
   @Published private(set) var isCropDetectionRunning = false
   @Published private(set) var cropStatus: String = ""
+  @Published private(set) var namedCorrectionPresets: [NamedCorrectionPreset] = []
+  @Published private(set) var settingsStatus: String = ""
 
   let profileStore: ProfileStore
   private let settingsStore: PerFileSettingsStore?
+  private let presetStore: NamedCorrectionPresetStore?
+  private let settingsClipboard: CorrectionSettingsClipboard
 
   init(
     profileStore: ProfileStore? = nil,
-    settingsStore: PerFileSettingsStore? = nil
+    settingsStore: PerFileSettingsStore? = nil,
+    presetStore: NamedCorrectionPresetStore? = nil,
+    settingsClipboard: CorrectionSettingsClipboard = CorrectionSettingsClipboard()
   ) {
     self.settingsStore = settingsStore
+    self.presetStore = presetStore
+    self.settingsClipboard = settingsClipboard
     if let profileStore {
       self.profileStore = profileStore
     } else if let store = ProfileStore(appGroupIdentifier: "FilmScanConverter") {
@@ -57,6 +66,13 @@ final class AppModel: ObservableObject {
         settingsByPath = try settingsStore.load()
       } catch {
         status = "Saved corrections could not be loaded; defaults are being used."
+      }
+    }
+    if let presetStore {
+      do {
+        namedCorrectionPresets = try presetStore.load()
+      } catch {
+        settingsStatus = "Saved presets could not be loaded."
       }
     }
   }
@@ -137,15 +153,17 @@ final class AppModel: ObservableObject {
       previewSource = nil
       previewRenderer = nil
       isShowingEmbeddedRawPreview = false
+      isLoading = false
       cancelPredecode()
       status = "Drop film scans into the window to begin."
       return
     }
 
+    isLoading = true
+
     cancelPredecode()
     ImportLog.loadSelectionStarted(path: selection.lastPathComponent)
 
-    previewImage = nil
     decodedImage = nil
     previewSource = nil
     previewRenderer = nil
@@ -158,6 +176,7 @@ final class AppModel: ObservableObject {
 
     if let cached = previewCache[key] {
       ImportLog.loadSelectionCacheHit(path: selection.lastPathComponent)
+      isLoading = false
       applyCachedSession(cached, selection: selection)
       touchPreviewCache(key)
       scheduleLookaheadPredecode(after: selection)
@@ -173,6 +192,7 @@ final class AppModel: ObservableObject {
       previewSource = proxy
       previewRenderer = StillPreviewRenderer(image: proxy)
       isShowingEmbeddedRawPreview = true
+      isLoading = false
       status = "Loading \(selection.lastPathComponent)..."
       if hasStoredSettings {
         populateFilmNegativeMedians()
@@ -201,6 +221,7 @@ final class AppModel: ObservableObject {
           let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
           previewSource = proxy
           previewRenderer = StillPreviewRenderer(image: proxy)
+          isLoading = false
           if hasStoredSettings {
             populateFilmNegativeMedians()
           } else {
@@ -217,6 +238,7 @@ final class AppModel: ObservableObject {
             path: selection.lastPathComponent,
             error: error.localizedDescription
           )
+          isLoading = false
           status = "Unable to decode \(selection.lastPathComponent): \(error.localizedDescription)"
         }
       }
@@ -256,6 +278,7 @@ final class AppModel: ObservableObject {
         let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
         previewSource = proxy
         previewRenderer = StillPreviewRenderer(image: proxy)
+        isLoading = false
         isShowingEmbeddedRawPreview = false
         if hasStoredSettings {
           populateFilmNegativeMedians()
@@ -281,6 +304,7 @@ final class AppModel: ObservableObject {
           path: selection.lastPathComponent,
           error: error.localizedDescription
         )
+        isLoading = false
         status = "Unable to decode \(selection.lastPathComponent): \(error.localizedDescription)"
       }
     }
@@ -310,18 +334,6 @@ final class AppModel: ObservableObject {
         saturation: $0.saturation
       )
     }
-  }
-
-  func setGamma(_ value: Int) {
-    updateParameters { $0.gamma = value }
-  }
-
-  func setShadows(_ value: Int) {
-    updateParameters { $0.shadows = value }
-  }
-
-  func setHighlights(_ value: Int) {
-    updateParameters { $0.highlights = value }
   }
 
   func setSaturation(_ value: Int) {
@@ -438,16 +450,6 @@ final class AppModel: ObservableObject {
     updateParameters { $0.flip.toggle() }
   }
 
-  func setFilmNegativeEnabled(_ value: Bool) {
-    let medians = value ? computeFilmNegativeMedians() : nil
-    updateParameters {
-      $0.filmNegativeParams.enabled = value
-      if let medians {
-        $0.filmNegativeParams.measuredMedians = medians
-      }
-    }
-  }
-
   func setFilmNegativeRedRatio(_ value: Double) {
     updateParameters { $0.filmNegativeParams.redRatio = value }
   }
@@ -488,14 +490,6 @@ final class AppModel: ObservableObject {
     }
   }
 
-  func setDensityC41Profile(_ profile: GenericC41Profile) {
-    updateParameters { $0.densityC41Profile = profile }
-  }
-
-  func setDensityDisplayParams(_ params: DisplayRenderingParameters) {
-    updateParameters { $0.densityDisplayParams = params }
-  }
-
   func resolveAndApplyDensityPipeline(
     captureProfileID: CaptureProfileID = CaptureProfileID(rawValue: "default"),
     stockProfileID: FilmStockProfileID = FilmStockProfileID(rawValue: "generic_colour_negative")
@@ -532,6 +526,75 @@ final class AppModel: ObservableObject {
     } else {
       scheduleRender(immediate: true)
     }
+  }
+
+  var canPasteCorrectionSettings: Bool {
+    (try? settingsClipboard.read()) != nil
+  }
+
+  func copyCorrectionSettings() {
+    do {
+      try settingsClipboard.write(CorrectionSettings(capturing: parameters))
+      settingsStatus = "Correction settings copied."
+    } catch {
+      settingsStatus = "Correction settings could not be copied."
+    }
+  }
+
+  func pasteCorrectionSettings() {
+    do {
+      guard let settings = try settingsClipboard.read() else {
+        settingsStatus = "The clipboard does not contain correction settings."
+        return
+      }
+      applyCorrectionSettings(settings)
+      settingsStatus = "Correction settings pasted."
+    } catch {
+      settingsStatus = "Clipboard correction settings are not valid."
+    }
+  }
+
+  func saveCorrectionPreset(named name: String) {
+    guard let presetStore else {
+      settingsStatus = "Preset storage is unavailable."
+      return
+    }
+    do {
+      namedCorrectionPresets = try presetStore.savePreset(
+        named: name,
+        settings: CorrectionSettings(capturing: parameters)
+      )
+      settingsStatus = "Preset saved."
+    } catch NamedCorrectionPresetStore.StoreError.emptyName {
+      settingsStatus = "Enter a preset name."
+    } catch {
+      settingsStatus = "Preset could not be saved."
+    }
+  }
+
+  func applyCorrectionPreset(_ preset: NamedCorrectionPreset) {
+    applyCorrectionSettings(preset.settings)
+    settingsStatus = "Applied preset “\(preset.name)”."
+  }
+
+  func deleteCorrectionPreset(_ preset: NamedCorrectionPreset) {
+    guard let presetStore else {
+      settingsStatus = "Preset storage is unavailable."
+      return
+    }
+    do {
+      namedCorrectionPresets = try presetStore.deletePreset(id: preset.id)
+      settingsStatus = "Deleted preset “\(preset.name)”."
+    } catch {
+      settingsStatus = "Preset could not be deleted."
+    }
+  }
+
+  private func applyCorrectionSettings(_ settings: CorrectionSettings) {
+    updateParameters { current in
+      current = settings.applying(to: current)
+    }
+    cropRect = parameters.cropRect
   }
 
   func showImportPanel() {
@@ -1352,7 +1415,6 @@ final class AppModel: ObservableObject {
       Int(parameters.shadowWheel.hue), Int(parameters.shadowWheel.strength * 100))
 
     isRendering = true
-    status = "Rendering \(selection.lastPathComponent)..."
     guard renderTask == nil else {
       return
     }

@@ -23,13 +23,6 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
 
   public var pixelCount: Int { width * height }
 
-  /// Slice 2 establishes the adjustment seam before Slice 3 adds operators.
-  /// Its neutral path deliberately preserves all finite, negative, and
-  /// over-range values without copying or clamping them.
-  public func applyingNeutralAdjustments() -> RenderReadyLinearImage {
-    self
-  }
-
   /// Slice 4: safe luminance-preserving global tone controls on the shared
   /// unclamped linear seam. All operations multiply every channel equally so
   /// hue is preserved. The legacy integer gamma/shadows/highlights path is

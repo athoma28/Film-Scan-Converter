@@ -78,10 +78,10 @@ struct PhotoAdjustmentParametersTests {
     #expect(migrated.vibrance == 0)
   }
 
-  @Test("Processing settings decode old JSON into the versioned adjustment contract")
+  @Test("Processing settings migrate useful legacy controls and ignore removed no-op fields")
   func processingParametersMigratesOldJSON() throws {
     let json = Data(
-      #"{"filmType":1,"gamma":50,"shadows":-25,"highlights":80,"temperature":40,"tint":-20,"saturation":125}"#.utf8
+      #"{"filmType":1,"whitePoint":30,"blackPoint":-20,"removeDust":true,"gamma":50,"shadows":-25,"highlights":80,"temperature":40,"tint":-20,"saturation":125}"#.utf8
     )
 
     let decoded = try JSONDecoder().decode(ProcessingParameters.self, from: json)
@@ -96,6 +96,10 @@ struct PhotoAdjustmentParametersTests {
       tint: -20,
       saturation: 125
     ))
+    let migratedJSON = String(decoding: try JSONEncoder().encode(decoded), as: UTF8.self)
+    #expect(!migratedJSON.contains("whitePoint"))
+    #expect(!migratedJSON.contains("blackPoint"))
+    #expect(!migratedJSON.contains("removeDust"))
   }
 
   @Test("Versioned adjustment parameters round trip through JSON")

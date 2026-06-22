@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import FilmScanEngine
 import Testing
@@ -17,7 +18,7 @@ private var appModelRawCorpusAvailable: Bool {
   )
 }
 
-@Suite("Native app model integration")
+@Suite("Native app model integration", .serialized)
 @MainActor
 struct AppModelTests {
   private enum WaitError: Error {
@@ -541,6 +542,106 @@ struct AppModelTests {
 
     #expect(model.parameters == ProcessingParameters())
     #expect(model.status.contains("could not be loaded"))
+  }
+
+  @Test("Transferable correction settings preserve frame-specific geometry and film base")
+  func correctionSettingsPreserveFrameSpecificState() {
+    var source = ProcessingParameters()
+    source.filmType = .colourNegative
+    source.photoAdjustments.exposureEV = 1.5
+    source.photoAdjustments.vibrance = 0.35
+    source.rotation = 1
+    source.flip = true
+    source.cropRect = RotatedRect(
+      centerX: 0.4, centerY: 0.5, width: 0.7, height: 0.8, angle: 2
+    )
+    source.densityPipelineEnabled = true
+    source.densityBaseDensity = BGRChannelValues(blue: 0.2, green: 0.3, red: 0.4)
+
+    var destination = ProcessingParameters()
+    destination.rotation = 3
+    destination.flip = false
+    destination.cropRect = RotatedRect(
+      centerX: 0.5, centerY: 0.5, width: 0.9, height: 0.6, angle: -1
+    )
+    destination.densityPipelineEnabled = true
+    destination.densityBaseDensity = BGRChannelValues(blue: 0.8, green: 0.7, red: 0.6)
+
+    let applied = CorrectionSettings(capturing: source).applying(to: destination)
+
+    #expect(applied.filmType == .colourNegative)
+    #expect(applied.photoAdjustments.exposureEV == 1.5)
+    #expect(applied.photoAdjustments.vibrance == 0.35)
+    #expect(applied.rotation == destination.rotation)
+    #expect(applied.flip == destination.flip)
+    #expect(applied.cropRect == destination.cropRect)
+    #expect(applied.densityPipelineEnabled == destination.densityPipelineEnabled)
+    #expect(applied.densityBaseDensity == destination.densityBaseDensity)
+  }
+
+  @Test("Named correction presets persist atomically and replace names case-insensitively")
+  func namedCorrectionPresetsPersistAndReplace() throws {
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-presets-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let store = NamedCorrectionPresetStore(baseDirectory: workDir)
+    var first = ProcessingParameters()
+    first.photoAdjustments.exposureEV = 1
+    var replacement = ProcessingParameters()
+    replacement.photoAdjustments.exposureEV = 2
+
+    try store.savePreset(named: "Warm Print", settings: CorrectionSettings(capturing: first))
+    try store.savePreset(named: " warm print ", settings: CorrectionSettings(capturing: replacement))
+
+    let loaded = try store.load()
+    #expect(loaded.count == 1)
+    #expect(loaded[0].name == "warm print")
+    #expect(loaded[0].settings.parameters.photoAdjustments.exposureEV == 2)
+  }
+
+  @Test("App model copies and pastes corrections through the system pasteboard contract")
+  func appModelCopiesAndPastesCorrections() {
+    let pasteboard = NSPasteboard(name: .init("fsc-tests-\(UUID().uuidString)"))
+    pasteboard.clearContents()
+    let clipboard = CorrectionSettingsClipboard(pasteboard: pasteboard)
+    let source = AppModel(settingsClipboard: clipboard)
+    source.setFilmType(.colourNegative)
+    source.setExposureEV(1.75)
+    source.setVibrance(0.5)
+    source.copyCorrectionSettings()
+
+    let destination = AppModel(settingsClipboard: clipboard)
+    #expect(destination.canPasteCorrectionSettings)
+    destination.pasteCorrectionSettings()
+
+    #expect(destination.parameters.filmType == .colourNegative)
+    #expect(destination.parameters.photoAdjustments.exposureEV == 1.75)
+    #expect(destination.parameters.photoAdjustments.vibrance == 0.5)
+  }
+
+  @Test("App model saves, applies, and deletes named correction presets")
+  func appModelManagesNamedCorrectionPresets() throws {
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-model-presets-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let store = NamedCorrectionPresetStore(baseDirectory: workDir)
+    let model = AppModel(presetStore: store)
+    model.setFilmType(.slide)
+    model.setExposureEV(1.25)
+    model.saveCorrectionPreset(named: "Projection")
+    let preset = try #require(model.namedCorrectionPresets.first)
+
+    model.setExposureEV(-2)
+    model.rotateClockwise()
+    model.applyCorrectionPreset(preset)
+
+    #expect(model.parameters.filmType == .slide)
+    #expect(model.parameters.photoAdjustments.exposureEV == 1.25)
+    #expect(model.parameters.rotation == 1)
+
+    model.deleteCorrectionPreset(preset)
+    #expect(model.namedCorrectionPresets.isEmpty)
+    #expect(AppModel(presetStore: store).namedCorrectionPresets.isEmpty)
   }
 
   private func waitUntil(

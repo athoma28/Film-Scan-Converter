@@ -17,17 +17,12 @@ starting native work, read
 source for the active step, verified progress, limitations, and ordered next
 tasks.
 
-The current native priority is the film-specific camera-scan track: wire
-manual/automatic rebate selection and the standalone density/display APIs into
-the app, or begin capture/stock/roll profile separation. This builds on the
-operational RawTherapee-oriented power-law front-end, startup film-kind
-classification, and engine-only Slices A through F. TIFF/JPEG/PNG/DNG export,
-histogram equalisation, curves, color wheels, GPU-vs-CPU equivalence
-(2,655-case comparator tool and 20-configuration automated test),
-the still-preview latency gate, and the algorithmic equivalence gate
-are complete. Work on later processing stages or additional SwiftUI
-controls should not bypass the pixel-equivalence gate or introduce a
-preview-only control without an authoritative processing definition.
+The current native priority is packaging and release validation. The processing,
+crop, export, persistence, preset, and correction-transfer workflows described
+on the status page are already integrated. Dust inpainting remains paused.
+Additional processing or SwiftUI controls must use a shared preview/export
+definition and add workflow-level coverage; standalone prototypes are not
+counted as product progress.
 
 Useful contribution areas:
 

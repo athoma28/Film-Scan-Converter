@@ -86,14 +86,6 @@ struct RenderReadyLinearImageTests {
     #expect(renderReady.pixels == legacyArray)
   }
 
-  @Test("Neutral adjustment seam preserves every finite and out-of-range sample")
-  func neutralAdjustmentSeamIsIdentity() {
-    let samples: [Double] = [-0.25, 0, 0.18, 1, 1.5, 8]
-    let image = RenderReadyLinearImage(width: 2, height: 1, pixels: samples)
-
-    #expect(image.applyingNeutralAdjustments().pixels == samples)
-  }
-
   @Test("Statistics use deterministic bounded sampling")
   func statisticsAreDeterministicAndBounded() {
     let pixels = (0..<100).flatMap { value -> [Double] in

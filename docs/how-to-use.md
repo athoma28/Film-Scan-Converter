@@ -31,16 +31,19 @@ The native application is the primary product. It provides:
    The preview updates in real time as you drag sliders.
    Corrections are saved automatically for that source file and restored the
    next time the same path is imported.
-5. In Film Base, optionally load a matching flat field and measure a clear,
+5. Use the Settings section to copy or paste a look, or save, apply, and delete
+   named presets. Transferred looks keep the destination scan's rotation, crop,
+   and measured film-base state.
+6. In Film Base, optionally load a matching flat field and measure a clear,
    unexposed film edge automatically or by dragging over it. This enables the
    measured density pipeline for negative conversion.
-6. In Film Frame, tune the dark/light thresholds and choose **Detect Frame** to
+7. In Film Frame, tune the dark/light thresholds and choose **Detect Frame** to
    apply a perspective-corrected crop. Preview and export use the same stored
    crop geometry.
-7. Use the original/corrected comparison toggle to evaluate your adjustments.
-8. Set export options (format, frame, aspect ratio) and choose a destination
+8. Use the original/corrected comparison toggle to evaluate your adjustments.
+9. Set export options (format, frame, aspect ratio) and choose a destination
    folder.
-9. Click Export Selected or Export All to write processed images. Standard
+10. Click Export Selected or Export All to write processed images. Standard
    images retain source resolution; RAW files are re-decoded at full resolution
    one at a time so batch memory remains bounded.
 

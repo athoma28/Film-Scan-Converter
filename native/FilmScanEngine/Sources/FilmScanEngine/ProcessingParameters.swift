@@ -109,15 +109,12 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
   public var flip: Bool
   public var rotation: Int
   public var filmType: FilmType
-  public var whitePoint: Int
-  public var blackPoint: Int
   public var gamma: Int
   public var shadows: Int
   public var highlights: Int
   public var temperature: Int
   public var tint: Int
   public var saturation: Int
-  public var removeDust: Bool
   public var curveEnabled: Bool
   public var curveControlPoints: [CurvePoint]
   public var redCurveEnabled: Bool
@@ -144,15 +141,12 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     flip: Bool = false,
     rotation: Int = 0,
     filmType: FilmType = .cropOnly,
-    whitePoint: Int = 0,
-    blackPoint: Int = 0,
     gamma: Int = 0,
     shadows: Int = 0,
     highlights: Int = 0,
     temperature: Int = 0,
     tint: Int = 0,
     saturation: Int = 100,
-    removeDust: Bool = false,
     curveEnabled: Bool = false,
     curveControlPoints: [CurvePoint] = [],
     redCurveEnabled: Bool = false,
@@ -178,15 +172,12 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     self.flip = flip
     self.rotation = rotation
     self.filmType = filmType
-    self.whitePoint = whitePoint
-    self.blackPoint = blackPoint
     self.gamma = gamma
     self.shadows = shadows
     self.highlights = highlights
     self.temperature = temperature
     self.tint = tint
     self.saturation = saturation
-    self.removeDust = removeDust
     self.curveEnabled = curveEnabled
     self.curveControlPoints = curveControlPoints
     self.redCurveEnabled = redCurveEnabled
@@ -218,8 +209,8 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
 
   private enum CodingKeys: String, CodingKey {
     case borderCrop, flip, rotation, filmType
-    case whitePoint, blackPoint, gamma, shadows, highlights
-    case temperature, tint, saturation, removeDust
+    case gamma, shadows, highlights
+    case temperature, tint, saturation
     case curveEnabled, curveControlPoints
     case redCurveEnabled, redCurveControlPoints
     case greenCurveEnabled, greenCurveControlPoints
@@ -238,15 +229,12 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     flip = try container.decodeIfPresent(Bool.self, forKey: .flip) ?? false
     rotation = try container.decodeIfPresent(Int.self, forKey: .rotation) ?? 0
     filmType = try container.decodeIfPresent(FilmType.self, forKey: .filmType) ?? .cropOnly
-    whitePoint = try container.decodeIfPresent(Int.self, forKey: .whitePoint) ?? 0
-    blackPoint = try container.decodeIfPresent(Int.self, forKey: .blackPoint) ?? 0
     gamma = try container.decodeIfPresent(Int.self, forKey: .gamma) ?? 0
     shadows = try container.decodeIfPresent(Int.self, forKey: .shadows) ?? 0
     highlights = try container.decodeIfPresent(Int.self, forKey: .highlights) ?? 0
     temperature = try container.decodeIfPresent(Int.self, forKey: .temperature) ?? 0
     tint = try container.decodeIfPresent(Int.self, forKey: .tint) ?? 0
     saturation = try container.decodeIfPresent(Int.self, forKey: .saturation) ?? 100
-    removeDust = try container.decodeIfPresent(Bool.self, forKey: .removeDust) ?? false
     curveEnabled = try container.decodeIfPresent(Bool.self, forKey: .curveEnabled) ?? false
     curveControlPoints = try container.decodeIfPresent([CurvePoint].self, forKey: .curveControlPoints) ?? []
     redCurveEnabled = try container.decodeIfPresent(Bool.self, forKey: .redCurveEnabled) ?? false

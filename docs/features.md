@@ -28,8 +28,6 @@ features. Its implemented scope includes:
   highlight, gamut, and hue safeguards. The legacy RGB/HSV operators remain for
   compatibility fixtures.
 - Exposure adjustment matching Python float32 rounding exactly.
-- Histogram equalisation with exact float64 pixel equality for B&W negative,
-  colour negative, and slide with base detect.
 - `shrink_box` coordinate math for crop-box adjustment.
 - Float64 NPY fixture infrastructure for intermediate pipeline stages.
 - Film-negative inversion using RawTherapee's power-law exponent model, with reference
@@ -70,6 +68,9 @@ features. Its implemented scope includes:
   next uncached import.
 - Automatic per-file correction persistence across launches using versioned,
   atomic settings storage with safe recovery from corrupt files.
+- Named correction presets with versioned atomic persistence, plus copy/paste
+  through a versioned system-clipboard payload. Applying a look preserves the
+  target scan's crop/orientation and measured film-base state.
 - A shared unclamped linear adjustment seam with bounded robust statistics,
   protected Temperature/Tint/Saturation/Vibrance controls, and safe semantic
   Exposure/Brightness/Contrast/Highlights/Shadows controls.
@@ -90,8 +91,8 @@ features. Its implemented scope includes:
 
 The primary remaining processing replacement is Telea dust inpainting and its
 preview/export/app integration.
-Persistence hardening, fixture independence, packaging, release validation,
-and deferred preview-surface work also remain.
+Fixture independence, packaging, release validation, and deferred
+preview-surface work also remain.
 
 See [Native macOS Development](development/native-macos.md) for the
 authoritative current step, progress, limitations, and next work.

@@ -10,7 +10,8 @@ struct FilmScanConverterMacApp: App {
     FilmScanLog.configureLogDirectory()
     _model = StateObject(
       wrappedValue: AppModel(
-        settingsStore: PerFileSettingsStore(applicationName: "FilmScanConverter")
+        settingsStore: PerFileSettingsStore(applicationName: "FilmScanConverter"),
+        presetStore: NamedCorrectionPresetStore(applicationName: "FilmScanConverter")
       )
     )
   }

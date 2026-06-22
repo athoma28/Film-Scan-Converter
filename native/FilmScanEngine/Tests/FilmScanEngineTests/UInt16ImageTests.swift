@@ -40,7 +40,6 @@ struct UInt16ImageTests {
       gamma: 25,
       temperature: -10,
       saturation: 120,
-      removeDust: true,
       cropRect: RotatedRect(centerX: 0.5, centerY: 0.5, width: 0.8, height: 0.7, angle: 2)
     )
 

@@ -12,6 +12,7 @@ struct ContentView: View {
   @State private var rebateDragStart: CGPoint?
   @State private var rebateDragEnd: CGPoint?
   @State private var rebateSelectionPreviousShowOriginal = false
+  @State private var presetName = ""
 
   private enum InspectorPage: String, CaseIterable, Identifiable {
     case edit = "Edit"
@@ -38,7 +39,11 @@ struct ContentView: View {
           Text(url.lastPathComponent)
             .lineLimit(1)
           Spacer(minLength: 4)
-          if model.hasCachedPreview(for: url) {
+          if model.selection == url && model.isLoading {
+            ProgressView()
+              .controlSize(.mini)
+              .frame(width: 16, height: 16)
+          } else if model.hasCachedPreview(for: url) {
             Circle()
               .fill(Color.accentColor)
               .frame(width: 5, height: 5)
@@ -66,10 +71,19 @@ struct ContentView: View {
           }
         }
         Divider()
-        Text(showLivePreview ? camera.status : model.status)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(10)
-          .foregroundStyle(.secondary)
+        HStack(spacing: 6) {
+          if model.selection != nil && model.isLoading {
+            ProgressView()
+              .controlSize(.mini)
+              .scaleEffect(0.7)
+          }
+          Text(showLivePreview ? camera.status : model.status)
+            .foregroundStyle(model.status.contains("Unable") ? .red : model.status.contains("error") ? .red : .secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .font(.caption)
       }
       .background(dropTargeted ? Color.accentColor.opacity(0.12) : Color.clear)
       .dropDestination(for: URL.self) { urls, _ in
@@ -168,11 +182,23 @@ struct ContentView: View {
           }
           Spacer()
           if model.isRendering {
-            ProgressView()
-              .controlSize(.small)
-              .help("Updating preview")
+            HStack(spacing: 4) {
+              ProgressView()
+                .controlSize(.small)
+              Text("Processing")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(
+              RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.accentColor.opacity(0.08))
+            )
+            .transition(.opacity.combined(with: .scale(scale: 0.95)))
           }
         }
+        .animation(.easeInOut(duration: 0.2), value: model.isRendering)
 
         Picker("Inspector", selection: $inspectorPage) {
           ForEach(InspectorPage.allCases) { page in
@@ -200,12 +226,64 @@ struct ContentView: View {
         }
         .padding(12)
       }
+      .scrollBounceBehavior(.basedOnSize)
     }
     .background(Color(nsColor: .controlBackgroundColor))
   }
 
   private var editInspector: some View {
     Group {
+      InspectorSection("Settings", systemImage: "slider.horizontal.2.square") {
+        HStack {
+          Button(action: model.copyCorrectionSettings) {
+            Label("Copy", systemImage: "doc.on.doc")
+          }
+          Button(action: model.pasteCorrectionSettings) {
+            Label("Paste", systemImage: "doc.on.clipboard")
+          }
+          .disabled(!model.canPasteCorrectionSettings)
+        }
+        .controlSize(.small)
+
+        HStack {
+          TextField("Preset name", text: $presetName)
+            .textFieldStyle(.roundedBorder)
+            .onSubmit(saveNamedPreset)
+          Button("Save", action: saveNamedPreset)
+            .disabled(presetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .controlSize(.small)
+
+        if !model.namedCorrectionPresets.isEmpty {
+          VStack(spacing: 4) {
+            ForEach(model.namedCorrectionPresets) { preset in
+              HStack {
+                Button(preset.name) {
+                  model.applyCorrectionPreset(preset)
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .help("Apply \(preset.name)")
+                Button(role: .destructive) {
+                  model.deleteCorrectionPreset(preset)
+                } label: {
+                  Image(systemName: "trash")
+                }
+                .buttonStyle(.plain)
+                .help("Delete \(preset.name)")
+              }
+              .font(.caption)
+            }
+          }
+        }
+
+        if !model.settingsStatus.isEmpty {
+          Text(model.settingsStatus)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+      }
+
       InspectorSection("Film Setup", systemImage: "film.stack") {
         Picker(
           "Film Type",
@@ -619,7 +697,15 @@ struct ContentView: View {
           .frame(maxWidth: .infinity)
       }
       .buttonStyle(.bordered)
+      .disabled(model.decodedImage == nil)
     }
+  }
+
+  private func saveNamedPreset() {
+    let name = presetName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !name.isEmpty else { return }
+    model.saveCorrectionPreset(named: name)
+    presetName = ""
   }
 
   private var gradeInspector: some View {
@@ -773,16 +859,45 @@ struct ContentView: View {
         .scaledToFit()
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.black)
-    } else if let image = model.previewImage {
+    } else if model.selection != nil {
       ZStack {
-        Image(nsImage: image)
-          .resizable()
-          .scaledToFit()
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .background(.black)
+        Color.black
+
+        if let image = model.previewImage {
+          Image(nsImage: image)
+            .resizable()
+            .scaledToFit()
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+          VStack(spacing: 16) {
+            ProgressView()
+              .controlSize(.regular)
+            Text(model.selection?.lastPathComponent ?? "")
+              .font(.callout)
+              .foregroundStyle(.secondary)
+            Text("Decoding image…")
+              .font(.caption)
+              .foregroundStyle(.tertiary)
+          }
+        }
+
+        if model.isLoading || model.isRendering {
+          Rectangle()
+            .fill(.black.opacity(model.isLoading ? 0.25 : 0.10))
+            .allowsHitTesting(false)
+            .animation(.easeInOut(duration: 0.25), value: model.isLoading)
+          if model.isRendering {
+            ProgressView()
+              .controlSize(.small)
+              .scaleEffect(0.9)
+              .tint(.white)
+              .animation(.easeInOut(duration: 0.25), value: model.isRendering)
+          }
+        }
+
         RebateRegionSelectionOverlay(
           isActive: isPickingRebateRegion,
-          imageSize: image.size,
+          imageSize: model.previewImage?.size ?? .zero,
           dragStart: $rebateDragStart,
           dragEnd: $rebateDragEnd
         ) { x, y, width, height in

@@ -14,8 +14,8 @@ Cocoa UI.
 
 ## Current Position
 
-The interactive still-preview foundation, histogram equalisation, curves,
-three-way color wheels, RawTherapee-compatible startup inversion, automatic
+The interactive still-preview foundation, curves, three-way color wheels,
+RawTherapee-compatible startup inversion, automatic
 film-kind classification, rebate selection, profile separation, and export are
 complete. Density/display contracts and perspective crop are connected to
 preview/export. All six perceptual-slider modernization slices are complete:
@@ -28,8 +28,10 @@ gate verifying CPU/GPU parity across 2,725 comparisons with 0 failures (max
 every feature from the design primer into the product.
 Dust handling is paused after native parity-tested mask detection. Telea FMM
 inpainting and app integration remain a deferred Python replacement gate. Work
-has moved to independent workflow/settings slices: per-file correction
-persistence across launches is complete.
+has moved through the independent workflow/settings slices: per-file correction
+persistence, named presets, and system-clipboard copy/paste are complete.
+Transferred settings intentionally preserve each target frame's orientation,
+crop geometry, and measured film-base state.
 
 The TIFF/JPEG/PNG/DNG export contract is implemented with individual and
 batch-all workflows, cancellation, partial-file cleanup, and 19 focused
@@ -62,8 +64,6 @@ Completed foundations:
   ≤1 LSB tolerance for 5 saturation levels.
 - Exposure adjustment with exact Python float32-rounding equivalence for 5
   parameter combinations.
-- Histogram equalisation with exact float64 equality for the current
-  three-fixture corpus.
 - Authoritative overall/per-channel curves and highlight/midtone/shadow color
   wheels with matching GPU preview behavior.
 - Deterministic startup classification for color negative, B&W negative, and
@@ -118,7 +118,7 @@ O(pixels) with bounded scratch storage.
 When dust development resumes, port per-channel Telea FMM inpainting with
 radius 3, connect the complete
 dust stage to shared preview/export processing, and expose the existing
-`removeDust` state only after the rendered pixels change. This is the primary
+new dust-removal state only after the rendered pixels change. This is the primary
 remaining Python replacement gate. Direct Metal-backed display and idle
 authoritative rendering remain deferred Stage 4 preview work.
 
@@ -136,7 +136,7 @@ Generate a locked set of intermediate and final outputs from the Python app:
 |---|---|---|
 | Synthetic images | `np.random.default_rng(0).integers(0, 65536, size=(H, W, 3), dtype=np.uint16)` at 4 resolutions (240×360, 2000×3000, 4000×6000, 8000×12000) | 4 images |
 | Real RAW corpus | 5 RAF files from `sample-raw/` (DSCF0669, DSCF0718, DSCF0729, DSCF2417, DSCF2422) | 5 images |
-| Intermediate stages | RAW (after RawPy decode + black border trim), threshold, contour image, histogram, histogram EQ result, exposure result, WB result, final export | ~8 per image |
+| Intermediate stages | RAW (after RawPy decode + black border trim), threshold, contour image, exposure result, WB result, final export | ~6 per image |
 | Parameter grid | Each parameter varied across its full range at representative points | ~200 variants |
 
 ### 0.2 Snapshot Format
@@ -170,7 +170,6 @@ Swift Test Target (XCTest)
 - **First pass:** Exact bit-for-bit equality (`UInt16` arrays)
 - **Where floating-point accumulates differently (e.g. `pow`, `divide`):** Tolerance of ≤1 LSB in 16-bit (`±1` in `UInt16` range) with per-stage documented waivers
 - **OpenCV operations (`warpPerspective`, `inpaint`, `threshold`):** Must match exactly — these are deterministic algorithms with well-defined behaviour. Note that `inpaint` (Telea FMM) is numerically sensitive; start with OpenCV interop for correctness.
-- **Histogram equalisation:** Exact match for percentile-based calculations; OK to differ at floating-point accumulation edges only (document each waiver). The Python code uses `np.percentile` with linear interpolation; replicate exactly.
 - **Native-only grading features:** Define the authoritative CPU math first,
   freeze identity and parameter-grid fixtures, then require the GPU preview to
   stay within a documented tolerance.
@@ -184,7 +183,6 @@ Record minimum/median times for each pipeline stage on the reference corpus runn
 - `get_threshold` — crop detection (grayscale + threshold + erode)
 - `find_optimal_crop` — contour extraction + minAreaRect
 - `crop` — perspective warp with homography
-- `hist_EQ` — percentile-based histogram equalization
 - `wb_adjust_coeff` — coefficient-based white balance
 - `exposure` — gamma + shadows + highlights
 - `sat_adjust` — RGB→HSV→multiply saturation→HSV→RGB
@@ -212,7 +210,6 @@ Current full-suite coverage snapshot from 2026-06-16:
 | `FilmScanEngine` sources | 85.8% | Solid engine baseline after RAW direct decode, export, and thumbnail work; remaining gaps include logging, platform/error branches, optional-output fallbacks, and older processing paths. |
 | All included native targets | 55.6% | App/view code is intentionally much less covered than engine code; app workflow tests should be prioritized over broad view-line coverage. |
 | `FilmNegativeProcessing.swift` | 92.3% | Normal math paths are well covered; remaining gaps are mostly validation traps and rare fallback branches. |
-| `CaptureDiagnostics.swift` | 98.9% | All normal paths covered. The single uncovered line is the bit-depth `precondition` trap. |
 
 Use the full native suite to regenerate coverage:
 
@@ -279,6 +276,10 @@ Port `RawProcessing.py` (769 lines) to pure Swift, with zero UI. Deliverable: a 
 Must match OpenCV's `WARP_INVERSE_MAP` behaviour and interpolation (`INTER_LINEAR`). Test at rotation angles 0–359°.
 
 ### 1.4 Histogram Equalization
+
+This remains historical design material. The standalone prototype and its
+fixtures were removed because no preview, export, or app workflow called it.
+Do not reintroduce it without a product requirement and shared-path integration.
 
 | Python | Swift replacement |
 |---|---|
@@ -370,7 +371,7 @@ Swift replacement:
 ### 1.12 Advanced Grading: Curves And Three-Way Color Wheels
 
 Add authoritative, deterministic grading stages after base inversion, white
-balance, histogram equalisation, and exposure, but before final output framing.
+balance, and exposure, but before final output framing.
 
 **Curves:**
 
@@ -519,12 +520,12 @@ user input, replace the relevant traps with typed errors and test them.
 | Slice | Status | Deliverable | Required tests and done criteria |
 |---|---|---|---|
 | A. Capture normalization foundation | Complete as standalone engine API | Per-channel black-level correction, matched flat-field normalization, safe transmittance clamping, optical-density conversion, and manual base-density subtraction. | Known ratios, BGR ordering, defaults, spatial flat-field correction, clipping/bounds, matched-exposure invariance, density-ratio identity, Codable parameters, and composed pipeline. Focused suite: 11 tests, 92.1% line coverage; only precondition traps uncovered. |
-| B. Linear-capture diagnostics | Complete as standalone engine API | Per-channel minimum/maximum values, low/high clipping fractions (threshold-based with 0.1% warning floor), source-kind and bit-depth metadata, and deterministic warnings for 8-bit input, lossy source, clipped channels, missing flat field, and explicitly marked nonlinear input. Not yet wired to the SwiftUI import workflow. Focused suite: 18 tests, 98.9% line coverage; only the bit-depth precondition trap uncovered. | Synthetic 8/16-bit cases, channel-specific clipping, deterministic warning rules, Codable report, and no false nonlinear warning for known linear fixtures. |
+| B. Linear-capture diagnostics | Deferred; disconnected prototype removed | Reintroduce diagnostics only as part of a visible import or export workflow. | Workflow coverage must prove warnings are computed from actual decoded inputs and presented to users. |
 | C. Manual base selection and roll reuse | Complete in engine and app | Compute robust median/trimmed-mean transmittance and density from a preview-dragged rebate rectangle; persist and reuse it in a roll profile. | Dust/outlier resistance, invalid/empty region errors, BGR correctness, five-frame roll stability, serialization, precedence, and AppModel integration coverage. |
 | C1. Startup film-kind classification | Complete in engine and app | Classify new imports as color negative, B&W negative, or slide and initialize the matching RawTherapee preset without overwriting existing per-file settings. | Synthetic orange-mask, low-chroma, and positive-slide cases; app export coverage proving unloaded files receive automatic settings during lazy batch export. |
 | D. Automatic rebate estimation | Engine and inspector integration complete | Detect edge candidate rebate regions and return base density plus confidence; users can select automatic candidates or drag a manual rebate rectangle in the preview. | Synthetic top/left border fixtures, borderless rejection, explicit precedence, AppModel measurement coverage, and manual preview selection. Rotated frames and dust contamination remain broader corpus work. |
 | E. Generic C-41 scene estimate | Complete as standalone engine API | Per-channel density slopes/offsets producing scene-linear positive values via `genericC41SceneEstimate()`, exposure normalization via median-green reciprocal (`normalizeSceneExposure()`), and a composed `densityToSceneLinear()` pipeline. | Identity/default profile, monotonicity, channel isolation, extreme density bounds, JSON round-trip, and composed pipeline tests. Focused suite adds 9 tests; all density-domain slices now link into one end-to-end density-to-scene path. |
-| F. Shared display renderer and noise protection | CPU/GPU contract and app integration complete | `renderDisplay()` defines the authoritative Double path. The density path uses it in preview/export with CPU fallback; `SceneDisplayRenderer` provides the matched accelerated standalone contract. | CPU/GPU contract tests plus AppModel/processing integration tests cover identity, channel behavior, flat-field geometry, orientation, preview scheduling, and export-path entry. The GPU grid stays within 0.000002 across 60 channel comparisons. |
+| F. Shared display renderer and noise protection | Authoritative CPU contract and app integration complete | `renderDisplay()` defines the authoritative Double path used by density preview/export. The disconnected standalone GPU prototype was removed. | CPU and AppModel integration tests cover identity, channel behavior, flat-field geometry, orientation, preview scheduling, and export-path entry. A future GPU path must be integrated before it is retained. |
 | G. Capture, stock, and roll profiles | Complete | Separate Codable profile types and precedence rules for capture setup, film stock, and roll-specific corrections. | Schema/version migration, missing-profile fallback, precedence, round-trip serialization, and proof that changing capture profile does not mutate stock curves. |
 | H. Per-stock curves and calibrated matrices | Planned | Monotonic inverse-density LUTs and fitted density/display matrices, initially for Portra 400, Portra 160, Ektar 100, and Gold 200. | LUT monotonicity, interpolation boundaries, held-out validation reports, matrix regularization bounds, and no regression to generic C-41 fallback. |
 | I. Optional residual 3D LUTs | Planned last | Blendable residual LUT after the physical pipeline is stable. | Identity LUT, interpolation boundaries, strength endpoints, held-out improvement, overfit rejection, and deterministic CPU/GPU agreement. |
@@ -572,9 +573,9 @@ This Slice D ticket now includes inspector integration:
 Remaining out of scope for Slice D: rotated-frame candidate search,
 dust-contaminated confidence tests, and persistent candidate overlays.
 
-#### Completed Ticket: Shared Display Renderer CPU/GPU Contract (Slice F)
+#### Completed Ticket: Shared Display Renderer Contract (Slice F)
 
-Slice F now defines an authoritative CPU contract and a matched accelerated path:
+Slice F defines the authoritative CPU contract used by the app:
 
 1. `DisplayRenderingParameters` stores exposure EV, per-channel BGR white
    balance, tone-map selection, and a maximum combined scene gain.
@@ -586,11 +587,8 @@ Slice F now defines an authoritative CPU contract and a matched accelerated path
    mapping so thin-negative noise cannot be amplified without bound.
 6. Seven focused tests cover identity, channel behavior, monotonicity, highlight
    rolloff, finite bounds, gain limiting, and serialization.
-7. `SceneDisplayRenderer` uploads float scene-linear pixels without color-space
-   conversion and applies the same transform in a dedicated Core Image kernel.
-8. Two production-kernel tests verify finite invalid-input behavior and a
-   four-configuration parameter grid within 0.000002 of the Double CPU result
-   across 60 channel comparisons.
+7. The disconnected standalone GPU prototype was removed. A replacement must
+   use the live density preview path and carry workflow-level coverage.
 
 Remaining out of scope for Slice F: app controls, density-pipeline integration,
 native RawTherapee highlight recovery, and replacing the current preview
@@ -987,9 +985,10 @@ FilmScanConverter.app
    - Click-to-pick WB base point and base colour on preview
 4. **Advanced settings sheet:** Demosaic algorithm, gamma curve, noise reduction params, dust params, JPEG quality, TIFF compression, processor count override
 5. **Export sheet:** Determinate progress bar (current/total), abort button, per-file error log with expandable details
-6. **Settings management:** Per-file correction persistence across launches is
-   complete. Copy/paste settings between photos, save/load named presets, and
-   drag-to-reorder photo batch remain; reset to defaults is already available.
+6. **Settings management:** Per-file correction persistence across launches,
+   system-clipboard copy/paste, save/apply/delete named presets, and reset to
+   defaults are complete. Transfers preserve target-specific crop/orientation
+   and measured film-base state. Drag-to-reorder photo batches remains.
 
 ### 3.4 Must-Have UX Improvements (done during port, not after)
 
@@ -1079,8 +1078,8 @@ Git push
    dark/light combinations, matching Python `get_threshold` output.
 4. **Phase 1.5 and 1.7, complete** — White balance coefficient adjustment and
    saturation adjustment are verified against Python float64 reference fixtures.
-5. **Phase 1.4, complete** — Histogram equalisation has exact float64 equality
-   for the current three-fixture corpus.
+5. **Phase 1.4, deferred** — The disconnected histogram-equalisation prototype
+   was removed. Reintroduce it only through shared preview/export processing.
 6. **Phase 1.12 and Phase 2 preview foundation, complete through Stage 3** —
    Curves, color wheels, live bindings, bounded scheduling, equivalence, and
    latency gates are implemented. Direct Metal-backed display and idle
@@ -1090,12 +1089,11 @@ Git push
    ExportManager batch primitives, and app-level lazy Export All are
    implemented.
 8. **Phase 1.14, complete through app integration** — Capture normalization/density primitives (Slice A),
-    linear-input diagnostics (Slice B), manual rebate base measurement with
+    manual rebate base measurement with
     roll-profile storage and precedence resolution (Slice C), initial
-    automatic rebate candidates with confidence (Slice D), and generic C-41
-    density-to-scene-linear renderer (Slice E), and matched CPU/Core Image
-    display rendering with bounded scene gain (Slice F) are complete as
-    standalone APIs.
+    automatic rebate candidates with confidence (Slice D), generic C-41
+    density-to-scene-linear rendering (Slice E), and authoritative CPU display
+    rendering with bounded scene gain (Slice F) are integrated.
     Startup film-kind classification initializes new
     files as color negative, B&W negative, or slide with matching
     RawTherapee-compatible presets. The RawTherapee-compatible power-law
@@ -1122,11 +1120,14 @@ Git push
 11. **Phase 1.8–1.9, paused** — Dust detection is complete with frozen
     Python/OpenCV parity fixtures and bounded-memory morphology. Telea FMM
     inpainting plus preview/export/app integration is deferred.
-12. **Phase 1.10–1.11, in progress** — Per-file correction persistence across
-    launches is complete with versioned atomic JSON storage, standardized-path
-    keys, and corrupt-file recovery. Named presets and copy/paste settings remain.
-13. **Phase 3** — Finish dust, persistence, packaging, and release workflows.
-    Crop/perspective, export UI, and batch export are already implemented.
+12. **Phase 1.10–1.11, complete for settings management** — Per-file correction
+    persistence uses versioned atomic JSON storage, standardized-path keys, and
+    corrupt-file recovery. Named presets use a separate versioned atomic store;
+    system-clipboard copy/paste uses a versioned payload and preserves the
+    destination frame's crop/orientation and measured film-base state.
+13. **Phase 3** — Packaging and release validation are active. Dust inpainting
+    remains paused; crop/perspective, export UI, batch export, and settings
+    management are already implemented.
 14. **Phase 2** — Replace remaining measured hot paths with Metal or Accelerate
     implementations. Profile before and after each change.
 15. **Phase 4** — Performance gates, packaging, CI hardening, release
