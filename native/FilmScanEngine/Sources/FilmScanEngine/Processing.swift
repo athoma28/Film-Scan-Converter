@@ -34,6 +34,7 @@ public enum FilmProcessing {
       quarterTurns: parameters.rotation,
       flipHorizontally: parameters.flip
     )
+    let sensorSource = working
     guard parameters.filmType != .cropOnly else {
       return working
     }
@@ -109,6 +110,7 @@ public enum FilmProcessing {
     guard adjustWhiteBalance || adjustExposure || adjustCurves || adjustColorWheels
       || adjustSaturation
     else {
+      preserveSensorBlack(source: sensorSource, output: &working, parameters: parameters)
       return working
     }
 
@@ -160,12 +162,14 @@ public enum FilmProcessing {
       )
     }
 
-    return UInt16Image(
+    var output = UInt16Image(
       width: working.width,
       height: working.height,
       channels: working.channels,
       pixels: values.map { UInt16(min(max($0, 0), 65535)) }
     )
+    preserveSensorBlack(source: sensorSource, output: &output, parameters: parameters)
+    return output
   }
 
   public static func correctedPreviewDensity(
@@ -277,11 +281,35 @@ public enum FilmProcessing {
       )
     }
 
-    return UInt16Image(
+    var output = UInt16Image(
       width: working.width,
       height: working.height,
       channels: working.channels,
       pixels: values.map { UInt16(min(max($0, 0), 65535)) }
+    )
+    preserveSensorBlack(source: working, output: &output, parameters: parameters)
+    return output
+  }
+
+  private static func preserveSensorBlack(
+    source: UInt16Image,
+    output: inout UInt16Image,
+    parameters: ProcessingParameters
+  ) {
+    guard parameters.filmNegativeParams.enabled,
+      parameters.filmType == .colourNegative
+        || parameters.filmType == .blackAndWhiteNegative,
+      source.channels == 3,
+      output.channels == 3,
+      source.width == output.width,
+      source.height == output.height
+    else {
+      return
+    }
+
+    output.preserveBlackMask(
+      from: source,
+      threshold: FilmNegativeProcessing.sensorBlackThreshold
     )
   }
 

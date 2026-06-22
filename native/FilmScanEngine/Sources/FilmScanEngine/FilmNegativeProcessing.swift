@@ -280,6 +280,7 @@ public struct DisplayRenderingParameters: Codable, Equatable, Sendable {
 public enum FilmNegativeProcessing {
   private static let maxOutput: Double = 65535.0
   public static let calibrationTargetFraction: Double = 1.0 / 24.0
+  public static let sensorBlackThreshold: UInt16 = 256
 
   public static func applyPowerLawInversion(
     image: UInt16Image,

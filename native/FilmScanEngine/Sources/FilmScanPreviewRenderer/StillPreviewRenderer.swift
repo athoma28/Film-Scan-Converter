@@ -521,6 +521,8 @@ public final class StillPreviewRenderer: @unchecked Sendable {
     ) {
       vec4 pixel = sample(image, samplerCoord(image));
       vec3 rgb = pixel.rgb;
+      bool sensorBlack = max(rgb.r, max(rgb.g, rgb.b))
+        <= 256.0 / 65535.0;
       bool isBW = (filmType == 0.0);
       bool useProtectedColor = filmNegativeEnabled == 1.0 && !isBW
         && (photoTemperatureMired != 0.0 || photoTint != 0.0
@@ -616,6 +618,9 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         vec3 hsv = rgbToHsv(clamp(rgb, 0.0, 1.0));
         hsv.y = clamp(hsv.y * saturation / 100.0, 0.0, 1.0);
         rgb = hsvToRgb(hsv);
+      }
+      if (filmNegativeEnabled == 1.0 && sensorBlack) {
+        rgb = vec3(0.0);
       }
       return vec4(clamp(rgb, 0.0, 1.0), pixel.a);
     }

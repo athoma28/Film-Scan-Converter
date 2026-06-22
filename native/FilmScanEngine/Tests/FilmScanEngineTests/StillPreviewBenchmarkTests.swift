@@ -214,6 +214,35 @@ struct StillPreviewBenchmarkTests {
     #expect(maxDifference <= 2, "Production renderer differs from CPU by \(maxDifference)/255")
   }
 
+  @Test("Production renderer preserves the sensor-black mask")
+  func productionRendererPreservesSensorBlack() {
+    let image = UInt16Image(
+      width: 2, height: 1, channels: 3,
+      pixels: [0, 128, 256, 512, 512, 512]
+    )
+    guard let renderer = StillPreviewRenderer(image: image) else {
+      #expect(Bool(false), "Could not create production still preview renderer")
+      return
+    }
+    var filmNegative = FilmNegativeParams.colourNegative
+    filmNegative.measuredMedians = BGRChannelValues(blue: 20_000, green: 20_000, red: 20_000)
+    let parameters = ProcessingParameters(
+      filmType: .colourNegative,
+      filmNegativeParams: filmNegative,
+      photoAdjustments: PhotoAdjustmentParameters(brightness: 0.5)
+    )
+
+    guard let rendered = renderer.render(parameters: parameters, showOriginal: false),
+      let pixels = rgbaPixels(rendered)
+    else {
+      #expect(Bool(false), "Could not render or extract sensor-black comparison pixels")
+      return
+    }
+
+    #expect(Array(pixels[0..<3]) == [0, 0, 0])
+    #expect(pixels[4..<7].contains { $0 > 0 })
+  }
+
   @Test("Production renderer matches CPU across parameter grid")
   func productionRendererMatchesCPUParameterGrid() {
     let width = 64

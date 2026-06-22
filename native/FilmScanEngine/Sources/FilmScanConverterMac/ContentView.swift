@@ -38,12 +38,15 @@ struct ContentView: View {
             .foregroundStyle(.secondary)
           Text(url.lastPathComponent)
             .lineLimit(1)
-          Spacer(minLength: 4)
-          if model.selection == url && model.isLoading {
+          if model.selection == url && (model.isLoading || model.isRendering) {
             ProgressView()
               .controlSize(.mini)
               .frame(width: 16, height: 16)
-          } else if model.hasCachedPreview(for: url) {
+          }
+          Spacer(minLength: 4)
+          if !(model.selection == url && (model.isLoading || model.isRendering)),
+            model.hasCachedPreview(for: url)
+          {
             Circle()
               .fill(Color.accentColor)
               .frame(width: 5, height: 5)
@@ -72,11 +75,6 @@ struct ContentView: View {
         }
         Divider()
         HStack(spacing: 6) {
-          if model.selection != nil && model.isLoading {
-            ProgressView()
-              .controlSize(.mini)
-              .scaleEffect(0.7)
-          }
           Text(showLivePreview ? camera.status : model.status)
             .foregroundStyle(model.status.contains("Unable") ? .red : model.status.contains("error") ? .red : .secondary)
         }
@@ -181,24 +179,7 @@ struct ContentView: View {
             }
           }
           Spacer()
-          if model.isRendering {
-            HStack(spacing: 4) {
-              ProgressView()
-                .controlSize(.small)
-              Text("Processing")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(
-              RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Color.accentColor.opacity(0.08))
-            )
-            .transition(.opacity.combined(with: .scale(scale: 0.95)))
-          }
         }
-        .animation(.easeInOut(duration: 0.2), value: model.isRendering)
 
         Picker("Inspector", selection: $inspectorPage) {
           ForEach(InspectorPage.allCases) { page in
@@ -870,28 +851,12 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
           VStack(spacing: 16) {
-            ProgressView()
-              .controlSize(.regular)
             Text(model.selection?.lastPathComponent ?? "")
               .font(.callout)
               .foregroundStyle(.secondary)
             Text("Decoding image…")
               .font(.caption)
               .foregroundStyle(.tertiary)
-          }
-        }
-
-        if model.isLoading || model.isRendering {
-          Rectangle()
-            .fill(.black.opacity(model.isLoading ? 0.25 : 0.10))
-            .allowsHitTesting(false)
-            .animation(.easeInOut(duration: 0.25), value: model.isLoading)
-          if model.isRendering {
-            ProgressView()
-              .controlSize(.small)
-              .scaleEffect(0.9)
-              .tint(.white)
-              .animation(.easeInOut(duration: 0.25), value: model.isRendering)
           }
         }
 

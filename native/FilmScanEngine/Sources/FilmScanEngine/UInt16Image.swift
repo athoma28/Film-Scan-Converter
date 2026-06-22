@@ -19,6 +19,25 @@ public struct UInt16Image: Equatable, Sendable {
     self.pixels = pixels
   }
 
+  mutating func preserveBlackMask(from source: UInt16Image, threshold: UInt16) {
+    precondition(
+      width == source.width && height == source.height && channels == source.channels,
+      "Black-mask source must match the output image"
+    )
+    for pixelIndex in 0..<(width * height) {
+      let base = pixelIndex * channels
+      var sourceMaximum: UInt16 = 0
+      for channel in 0..<channels {
+        sourceMaximum = max(sourceMaximum, source.pixels[base + channel])
+      }
+      if sourceMaximum <= threshold {
+        for channel in 0..<channels {
+          pixels[base + channel] = 0
+        }
+      }
+    }
+  }
+
   public func rotated(quarterTurns: Int, flipHorizontally: Bool = false) -> UInt16Image {
     let normalizedTurns = ((quarterTurns % 4) + 4) % 4
     let rotated: UInt16Image
