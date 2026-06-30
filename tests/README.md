@@ -37,6 +37,14 @@ Performance benchmarks are opt-in so normal test runs remain stable:
 RUN_PERFORMANCE_TESTS=1 .venv/bin/python -m unittest tests.test_performance -v
 ```
 
+The deterministic Metal adjustment benchmark runs a fixed 1080×720 workload
+with protected tone/color controls, curves, and color wheels:
+
+```sh
+swift run -c release --package-path native/FilmScanEngine \
+  FilmScanAdjustmentBenchmark
+```
+
 Benchmarks report best-of-several timings and do not enforce hardware-specific timing thresholds.
 
 The representative RAF corpus benchmark uses decoded 16-bit BGR arrays:

@@ -12,6 +12,7 @@ let package = Package(
     .library(name: "FilmScanPreviewRenderer", targets: ["FilmScanPreviewRenderer"]),
     .executable(name: "FilmScanConverterMac", targets: ["FilmScanConverterMac"]),
     .executable(name: "FilmScanRawBenchmark", targets: ["FilmScanRawBenchmark"]),
+    .executable(name: "FilmScanAdjustmentBenchmark", targets: ["FilmScanAdjustmentBenchmark"]),
     .executable(name: "FilmScanPreviewComparator", targets: ["FilmScanPreviewComparator"]),
   ],
   targets: [
@@ -39,6 +40,10 @@ let package = Package(
     .executableTarget(
       name: "FilmScanRawBenchmark",
       dependencies: ["FilmScanEngine"]
+    ),
+    .executableTarget(
+      name: "FilmScanAdjustmentBenchmark",
+      dependencies: ["FilmScanEngine", "FilmScanPreviewRenderer"]
     ),
     .executableTarget(
       name: "FilmScanPreviewComparator",

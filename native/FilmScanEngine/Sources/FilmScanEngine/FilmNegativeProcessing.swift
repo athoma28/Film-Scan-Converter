@@ -889,7 +889,8 @@ public enum FilmNegativeProcessing {
   public static func classifyFilmScan(
     image: UInt16Image,
     borderPercent: Double = 20.0,
-    maxSamples: Int = 4_096
+    maxSamples: Int = 4_096,
+    weakPrior: FilmType? = nil
   ) -> FilmClassification {
     guard image.channels == 3 else {
       return FilmClassification(
@@ -910,28 +911,56 @@ public enum FilmNegativeProcessing {
     let orangeMaskScore = min(max(orangeOrderScore * 0.65 + redBlueSeparation * 0.35, 0), 1)
 
     let chroma = sampledChroma(image: image, maxSamples: maxSamples)
+    let classification: FilmClassification
     if chroma.mean < 0.045 && chroma.median < 0.055 {
       let confidence = min(max(1.0 - chroma.mean / 0.045, 0), 1)
-      return FilmClassification(
+      classification = FilmClassification(
         filmType: .blackAndWhiteNegative,
         filmNegativePreset: .blackAndWhite,
         confidence: max(confidence, 0.75)
       )
-    }
-
-    if orangeMaskScore >= 0.45 {
-      return FilmClassification(
+    } else if orangeMaskScore >= 0.45 {
+      classification = FilmClassification(
         filmType: .colourNegative,
         filmNegativePreset: .colourNegative,
         confidence: orangeMaskScore
       )
+    } else {
+      classification = FilmClassification(
+        filmType: .slide,
+        filmNegativePreset: .off,
+        confidence: max(0.55, 1.0 - orangeMaskScore)
+      )
     }
 
-    return FilmClassification(
-      filmType: .slide,
-      filmNegativePreset: .off,
-      confidence: max(0.55, 1.0 - orangeMaskScore)
-    )
+    // A user-confirmed roll identity is deliberately weaker than confident
+    // per-image evidence. It only resolves the classifier's narrow uncertain
+    // band and never turns crop-only mode into an automatic film identity.
+    guard classification.confidence < 0.65, let weakPrior else {
+      return classification
+    }
+    switch weakPrior {
+    case .blackAndWhiteNegative:
+      return FilmClassification(
+        filmType: .blackAndWhiteNegative,
+        filmNegativePreset: .blackAndWhite,
+        confidence: classification.confidence
+      )
+    case .colourNegative:
+      return FilmClassification(
+        filmType: .colourNegative,
+        filmNegativePreset: .colourNegative,
+        confidence: classification.confidence
+      )
+    case .slide:
+      return FilmClassification(
+        filmType: .slide,
+        filmNegativePreset: .off,
+        confidence: classification.confidence
+      )
+    case .cropOnly:
+      return classification
+    }
   }
 }
 

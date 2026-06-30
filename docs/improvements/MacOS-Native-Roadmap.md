@@ -1002,6 +1002,61 @@ FilmScanConverter.app
   color wheels in collapsible advanced sections while preserving immediate
   preview feedback and numeric reset controls.
 
+### 3.5 Deferred Batch Workflow Follow-Ups
+
+The following are accepted roadmap items, but are deferred until after the
+active packaging/release-validation work:
+
+- **Native sidebar multi-selection:** model the selected files as an ordered
+  projection of a `Set<URL>` while retaining one primary file for preview and
+  editing. Support Shift-click ranges and Command-click toggles, and route
+  Export Selected through the existing lazy sequential export machinery rather
+  than building a decoded in-memory request batch.
+- ~~**Same-roll classification prior:**~~ Implemented. An explicit first-file
+  film-kind choice is retained only for the current import session and resolves
+  later classifications only below 0.65 confidence. Strong per-image evidence,
+  persisted settings, and user edits remain authoritative; no correction
+  settings are propagated. Deterministic tests cover the engine boundary and
+  the predecoded app workflow.
+- **PNG export regression:** diagnostic and write-safety hardening is complete;
+  reproduction of the originally reported environment-specific failure remains.
+  PNG has a verified 16-bit little-endian RGBA/no-alpha CGImage contract and now
+  writes via same-directory atomic staging with cleanup. Contextual errors name
+  the destination and ImageIO stage and retain underlying filesystem errors.
+  Engine and app-path PNG coverage passes, but the original source/destination
+  must still be exercised before closing the regression.
+- **Contact-sheet export:** use selected files (or an explicit all-files mode),
+  apply either the primary file's settings or a chosen named preset, render
+  aspect-fit thumbnails with a default maximum dimension of 500 pixels, and
+  compose one balanced grid with predictable ordering, gutters, and background.
+  Decode/process sources sequentially and retain only bounded thumbnails; cap
+  final canvas dimensions/pixel count and cover cancellation, mixed
+  orientations, ordering, and preset behavior in workflow tests.
+- **Appendable export queue:** put one actor in charge of an active export job
+  and an ordered list of frozen pending jobs. New individual, selection, batch,
+  and contact-sheet requests append while an export is running. Keep execution
+  sequential for bounded RAW memory; expose active versus pending cancellation,
+  pending reorder/removal, progress, errors, and destination/settings summaries.
+  Do not persist unfinished jobs across launches until security-scoped output
+  destinations have a defined bookmark lifecycle.
+- **Learned progress/ETA heuristics:** aggregate stage-completion signposts into
+  a small versioned, atomically replaced application-support file. Maintain
+  bounded rolling or exponentially weighted statistics keyed by operation and
+  coarse cost drivers such as megapixels, source type/demosaic path, output
+  format, and compression. Store no paths or image data, decay stale samples,
+  reject extreme outliers, and require a minimum sample count before presenting
+  an ETA. Queue progress should be the sum of predicted remaining stage costs,
+  with an indeterminate/equal-weight fallback when history is insufficient.
+- **40 MP export performance track:** add a release-mode representative-RAW
+  benchmark and signpost decode/demosaic, processing, geometry/frame, color
+  conversion, and writer finalization separately. Capture cold/warm duration,
+  per-stage share, peak memory, and output hashes. Then address only measured
+  hot paths by evaluating copy removal, scratch-buffer reuse, tiled operators,
+  Accelerate/Metal kernels, and encoder configuration. Acceptance requires
+  unchanged full-resolution pixels within the existing contract, metadata,
+  cleanup/cancellation behavior, and one-full-resolution-RAW-at-a-time memory
+  bounds; fidelity-reducing shortcuts belong behind a future explicit fast mode.
+
 ---
 
 ## Phase 4: Performance Verification & Polish

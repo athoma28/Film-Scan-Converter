@@ -33,8 +33,11 @@ This file contains only package-local build and implementation notes.
   app uses a cancellable utility-priority worker to predecode only the immediate
   next uncached file into that same bounded cache. The
   actual Core Image renderer is verified against the CPU path across 2,655
-  comparisons with a maximum difference of 2/255, and its latest current-pipeline
-  benchmark measured 3.50 ms p95 at 1080×720. End-to-end real-file drag
+  comparisons with a maximum difference of 2/255. Constant-time gamut limiting
+  replaced a serial 24-step per-pixel GPU loop, and the adjustment-heavy release
+  benchmark improved from a 3.9959 ms p95 baseline to 2.9641–3.0286 ms across
+  four post-change runs (at least 24.2%) at unchanged 1080×720 dimensions.
+  End-to-end real-file drag
   latency still requires verification. See the
   [real-time still preview plan](../docs/development/realtime-preview-plan.md).
 - Per-file correction settings are loaded from and atomically saved to a
@@ -44,6 +47,13 @@ This file contains only package-local build and implementation notes.
   The Edit inspector can copy/paste a versioned correction payload through the
   system clipboard. Applying presets or pasted settings preserves the target
   frame's rotation, flip, crop geometry, and measured film-base state.
+- After an explicit film-kind choice on the first imported file, ambiguous
+  later automatic classifications can use that identity as a session-only weak
+  prior. Confident per-image evidence, persisted settings, and subsequent user
+  edits remain authoritative.
+- PNG export uses a verified 16-bit little-endian RGBA/no-alpha CGImage layout
+  and same-directory staging before atomic commit. Failure paths remove staging
+  files and report the destination and failing ImageIO/filesystem stage.
 - Its optional live camera view uses AVFoundation and a GPU-backed Core Image
   context for negative inversion, exposure, and saturation preview corrections.
   Late frames are discarded and processing is throttled to 20 fps to keep the
@@ -60,6 +70,9 @@ This file contains only package-local build and implementation notes.
 - `FilmScanRawBenchmark` compares release-mode native decode speed and decoded
   quality against the RawPy corpus runner. See the
   [benchmark report](../docs/development/native-raw-benchmark.md).
+- `FilmScanAdjustmentBenchmark` measures deterministic release-mode Metal
+  rendering for protected tone/color adjustments, curves, and color wheels at
+  1080×720 without changing the render dimensions.
 - `FilmNegativeProcessing` provides standalone film-specific engine APIs for
   BGR black-level correction, matched flat-field normalization, optical-density
   conversion, manual base-density subtraction, manual rebate base measurement,
@@ -140,6 +153,13 @@ Run the opt-in 500-render latency benchmark:
 RUN_PERFORMANCE_TESTS=1 swift test \
   --package-path native/FilmScanEngine \
   --filter productionRendererBurstBenchmark
+```
+
+Run the deterministic adjustment-heavy release benchmark:
+
+```sh
+swift run -c release --package-path native/FilmScanEngine \
+  FilmScanAdjustmentBenchmark
 ```
 
 Build or run the native app:

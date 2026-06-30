@@ -99,12 +99,48 @@ struct ExportTests {
     let params = ExportParameters(format: .png)
     let url = tempDir.appendingPathComponent("test.png")
     try original.write(to: url, format: .png, parameters: params)
+    try original.write(to: url, format: .png, parameters: params)
     #expect(FileManager.default.fileExists(atPath: url.path))
 
     let imported = try StandardImageDecoder.decode(url)
     #expect(imported.width == original.width)
     #expect(imported.height == original.height)
     #expect(imported.channels == 3)
+  }
+
+  @Test func pngExportUsesExplicit16BitRGBAComponentLayout() throws {
+    let image = makeTestImage(width: 7, height: 5)
+    let cgImage = try #require(image.makeExportCGImage16())
+
+    #expect(cgImage.bitsPerComponent == 16)
+    #expect(cgImage.bitsPerPixel == 64)
+    #expect(cgImage.bytesPerRow == 7 * 8)
+    #expect(cgImage.alphaInfo == .noneSkipLast)
+    #expect(cgImage.bitmapInfo.contains(.byteOrder16Little))
+  }
+
+  @Test func pngExportReportsDestinationAndRemovesStagingFileOnFailure() throws {
+    let blockedParent = tempDir.appendingPathComponent("not-a-directory")
+    try Data("occupied".utf8).write(to: blockedParent)
+    let destination = blockedParent.appendingPathComponent("failed.png")
+
+    do {
+      try makeTestImage().write(
+        to: destination,
+        format: .png,
+        parameters: ExportParameters(format: .png)
+      )
+      Issue.record("PNG export unexpectedly succeeded")
+    } catch {
+      #expect(error.localizedDescription.contains("failed.png"))
+      #expect(!error.localizedDescription.contains("ExportError error"))
+    }
+
+    let leftovers = try FileManager.default.contentsOfDirectory(
+      at: tempDir,
+      includingPropertiesForKeys: nil
+    ).filter { $0.lastPathComponent.contains("failed.png") }
+    #expect(leftovers.isEmpty)
   }
 
   @Test func dngExportProducesReadableFile() throws {

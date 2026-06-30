@@ -131,6 +131,47 @@ struct AppModelTests {
     #expect(model.hasCachedPreview(for: secondCopy))
   }
 
+  @Test("Explicit first-file film identity becomes a weak hint for ambiguous later files")
+  func firstFileFilmIdentityHintsLaterAutomaticClassification() async throws {
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-roll-hint-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+
+    let first = workDir.appendingPathComponent("first.png")
+    let second = workDir.appendingPathComponent("second.png")
+    let firstImage = UInt16Image(
+      width: 8,
+      height: 8,
+      channels: 3,
+      pixels: [UInt16](repeating: 20_000, count: 8 * 8 * 3)
+    )
+    var ambiguousPixels: [UInt16] = []
+    for index in 0..<(8 * 8) {
+      ambiguousPixels.append(index.isMultiple(of: 2) ? 20_000 : 18_000)
+      ambiguousPixels.append(index.isMultiple(of: 2) ? 23_600 : 21_200)
+      ambiguousPixels.append(index.isMultiple(of: 2) ? 27_800 : 25_000)
+    }
+    try firstImage.write(to: first, format: .png, parameters: ExportParameters(format: .png))
+    try UInt16Image(
+      width: 8,
+      height: 8,
+      channels: 3,
+      pixels: ambiguousPixels
+    ).write(to: second, format: .png, parameters: ExportParameters(format: .png))
+
+    let model = AppModel()
+    model.importFiles([first, second])
+    try await waitUntil { model.decodedImage != nil && model.selection == first }
+    model.setFilmType(.colourNegative)
+    try await waitUntil { model.hasCachedPreview(for: second) }
+
+    model.selection = second
+    model.loadSelection()
+
+    #expect(model.parameters.filmType == .colourNegative)
+  }
+
   @Test("Export all assigns unique destinations to duplicate basenames")
   func exportAllAvoidsDuplicateBasenameCollisions() async throws {
     let input = try #require(

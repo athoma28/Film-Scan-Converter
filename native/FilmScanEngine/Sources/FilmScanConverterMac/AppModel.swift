@@ -87,6 +87,8 @@ final class AppModel: ObservableObject {
   }
 
   private var settingsByPath: [String: ProcessingParameters] = [:]
+  private var automaticallyClassifiedKeys: Set<String> = []
+  private var sameRollFilmTypeHint: FilmType?
   private var previewCache: [String: CachedPreviewSession] = [:]
   private var previewCacheOrder: [String] = []
   private var previewSource: UInt16Image?
@@ -101,7 +103,9 @@ final class AppModel: ObservableObject {
   private var renderLoopGeneration = 0
   private var lastSubmitTime: Date = .distantPast
   private var lastRenderEnd: ContinuousClock.Instant = .now
-  private static let renderCoalesceInterval: Duration = .milliseconds(17)
+  // Keep latest-value-wins scheduling bounded while allowing 120 Hz displays
+  // to consume the sub-4 ms Metal renderer without an artificial 60 Hz cap.
+  private static let renderCoalesceInterval: Duration = .milliseconds(8)
   nonisolated private static let previewMaxDimension = 640
   private static let previewCacheLimit = 2
   private static let predecodeLookaheadLimit = 1
@@ -311,6 +315,12 @@ final class AppModel: ObservableObject {
   }
 
   func setFilmType(_ value: FilmType) {
+    if selection?.standardizedFileURL == files.first?.standardizedFileURL,
+      value != .cropOnly
+    {
+      sameRollFilmTypeHint = value
+      reclassifyAutomaticBatchGuesses()
+    }
     updateParameters { $0.filmType = value }
   }
 
@@ -1126,7 +1136,14 @@ final class AppModel: ObservableObject {
   }
 
   private func applyAutomaticFilmClassification(from image: UInt16Image) {
-    parameters = Self.automaticallyClassifiedParameters(base: parameters, image: image)
+    parameters = Self.automaticallyClassifiedParameters(
+      base: parameters,
+      image: image,
+      weakPrior: sameRollFilmTypeHint
+    )
+    if let selection {
+      automaticallyClassifiedKeys.insert(settingsKey(selection))
+    }
     saveParameters()
   }
 
@@ -1144,9 +1161,11 @@ final class AppModel: ObservableObject {
       let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
       let automatic = Self.automaticallyClassifiedParameters(
         base: ProcessingParameters(),
-        image: proxy
+        image: proxy,
+        weakPrior: sameRollFilmTypeHint
       )
       settingsByPath[key] = automatic
+      automaticallyClassifiedKeys.insert(key)
       fileParams = automatic
     }
 
@@ -1228,9 +1247,13 @@ final class AppModel: ObservableObject {
 
   private static func automaticallyClassifiedParameters(
     base: ProcessingParameters,
-    image: UInt16Image
+    image: UInt16Image,
+    weakPrior: FilmType? = nil
   ) -> ProcessingParameters {
-    let classification = FilmNegativeProcessing.classifyFilmScan(image: image)
+    let classification = FilmNegativeProcessing.classifyFilmScan(
+      image: image,
+      weakPrior: weakPrior
+    )
     var next = base
     next.filmType = classification.filmType
     switch classification.filmNegativePreset {
@@ -1247,6 +1270,9 @@ final class AppModel: ObservableObject {
   }
 
   private func updateParameters(_ update: (inout ProcessingParameters) -> Void) {
+    if let selection {
+      automaticallyClassifiedKeys.remove(settingsKey(selection))
+    }
     update(&parameters)
     saveParameters()
     if showOriginal {
@@ -1325,8 +1351,10 @@ final class AppModel: ObservableObject {
         if self.settingsByPath[targetKey] == nil {
           self.settingsByPath[targetKey] = Self.automaticallyClassifiedParameters(
             base: ProcessingParameters(),
-            image: session.previewSource
+            image: session.previewSource,
+            weakPrior: self.sameRollFilmTypeHint
           )
+          self.automaticallyClassifiedKeys.insert(targetKey)
         }
         self.cacheSession(session, for: target)
       } catch is CancellationError {
@@ -1343,6 +1371,24 @@ final class AppModel: ObservableObject {
   private func cancelPredecode() {
     predecodeTask?.cancel()
     predecodeTask = nil
+  }
+
+  private func reclassifyAutomaticBatchGuesses() {
+    guard let sameRollFilmTypeHint else { return }
+    for url in files.dropFirst() {
+      let key = settingsKey(url)
+      guard automaticallyClassifiedKeys.contains(key),
+        let session = previewCache[key],
+        let existing = settingsByPath[key]
+      else {
+        continue
+      }
+      settingsByPath[key] = Self.automaticallyClassifiedParameters(
+        base: existing,
+        image: session.previewSource,
+        weakPrior: sameRollFilmTypeHint
+      )
+    }
   }
 
   private func cacheCurrentSession(for selection: URL) {

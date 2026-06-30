@@ -5,7 +5,7 @@ what works now, the current development step, and the order of upcoming work.
 The detailed [macOS native roadmap](../improvements/MacOS-Native-Roadmap.md) is
 the design reference, not a statement that every listed item is implemented.
 
-**Last updated:** 2026-06-22 (283 tests across 19 files; the AppModel integration suite is serialized for deterministic default runs; test-only diagnostics, histogram, and density-display GPU prototypes have been removed; per-file persistence, named presets, and system-clipboard copy/paste are complete; native dust-mask detection matches three frozen Python/OpenCV fixtures but further dust work is paused; RAW preview remains half-size while memory-bounded export re-decodes full-resolution)
+**Last updated:** 2026-06-30 (290 tests across 19 files; a user-confirmed first-file film identity now acts as a confidence-gated same-roll hint for later automatic guesses; PNG export uses verified 16-bit RGBA layout, atomic staging, actionable errors, and failure cleanup; protected-color gamut limiting is constant-time on CPU/GPU; adjustment-heavy 1080×720 Metal rendering is at least 24.2% faster at p95 across repeated post-change runs with unchanged dimensions; 8 ms latest-value-wins coalescing supports 120 Hz displays; per-file persistence, named presets, and system-clipboard copy/paste are complete; native dust-mask detection matches three frozen Python/OpenCV fixtures but further dust work is paused; RAW preview remains half-size while memory-bounded export re-decodes full-resolution)
 
 ## Goal
 
@@ -63,8 +63,8 @@ per-file settings or preset data do not prevent startup.**
 |---|---|---|
 | Phase 0: regression gate | In progress | Swift tests consume frozen Python-generated `.npy` fixtures and compact RAW hash manifests. Standard decode fixtures cover 8-bit PNG, grayscale PNG, BMP, JPEG, and 16-bit TIFF. Five half-size RAF decodes and one full-resolution RAF decode require exact SHA-256 equality with RawPy when the local `sample-raw` corpus is present; when it is absent, those corpus-specific tests are explicitly reported as disabled rather than silently passing. The full intermediate-stage and parameter-grid corpus is not complete. |
 | Phase 1: processing engine | In progress | The frozen RawPy profile remains exact for fixtures. The camera-scan profile disables auto-bright/exposure boost, enables LibRaw highlight reconstruction, records ISO and executed stages, and selects bounded low-ISO sharpening or medium/high-ISO denoising. Full-resolution Bayer decode uses the RCD callback; full-resolution X-Trans decode uses LibRaw's three-pass Markesteijn interpolation. Half-size preview decode bypasses demosaicing. Film-negative inversion and density processing feed one unclamped linear adjustment seam. Safe global tone controls (Exposure EV, Brightness, Contrast, Highlights, Shadows) and protected color controls use luminance-preserving opponent axes; frozen RGB-gain/HSV operators remain available. Robust statistics use at most 65,536 deterministic samples. Native dust-mask detection uses fixed-size percentile histograms, O(pixels) square morphology, and bounded connected-component scratch storage; three frozen Python/OpenCV fixtures match exactly. Density processing, contour detection, and perspective crop are connected to preview/export. Telea inpainting, direct camera-to-Rec.2020 conversion, and exact RawTherapee denoise/sharpen kernels remain limitations. |
-| Phase 2: accelerated rendering | In progress | Live camera preview uses a Metal-backed Core Image context. Still-file correction uploads one bounded 16-bit proxy per selection, applies the current correction controls in one custom GPU kernel, and keeps only one in-flight render plus the newest pending snapshot. The kernel includes the power-law film-negative inversion, curve LUT sampling, and three-way color wheels. The production renderer matches the authoritative CPU path across 2,655 comparisons with a maximum difference of 2/255. The latest opt-in 500-change 1080×720 benchmark measured 3.50 ms p95; the app uses a 640-pixel interactive proxy. The density pipeline is connected to preview and export through the authoritative CPU path; a product-integrated GPU density preview and idle authoritative rendering remain deferred. |
-| Phase 3: SwiftUI application | Interactive correction + export workflow | The app accepts supported files by drag and drop, decodes standard images and RAW files, and auto-initializes new files to color negative, B&W negative, or slide mode. Per-file corrections persist across launches; named presets persist separately; and the Edit inspector exposes copy/paste through a versioned system-clipboard payload. Transferred looks preserve target-specific geometry and film-base measurements. The Edit inspector also includes automatic and drag-selected film-base measurement, validated flat-field loading, and automatic film-frame detection. Detected crop geometry is stored per file and perspective-warped in preview/export. Export supports TIFF, JPEG, PNG, and DNG with memory-bounded lazy Export All. The two most recent preview sessions are cached and only the immediate next file is predecoded. Slider and wheel bindings remain live during continuous drags; end-to-end latency still requires real-file verification. |
+| Phase 2: accelerated rendering | In progress | Live camera preview uses a Metal-backed Core Image context. Still-file correction uploads one bounded 16-bit proxy per selection, applies the current correction controls in one custom GPU kernel, and keeps only one in-flight render plus the newest pending snapshot. The kernel includes the power-law film-negative inversion, protected color/tone adjustments, curve LUT sampling, and three-way color wheels. The production renderer matches the authoritative CPU path across 2,655 comparisons with a maximum difference of 2/255. On the M4 Pro, the reproducible adjustment-heavy release benchmark at 1080×720 improved from a 3.9959 ms p95 baseline to 2.9641–3.0286 ms across four post-change runs (at least 24.2%) without changing dimensions; the app uses a 640-pixel interactive proxy. The density pipeline is connected to preview and export through the authoritative CPU path; a product-integrated GPU density preview and idle authoritative rendering remain deferred. |
+| Phase 3: SwiftUI application | Interactive correction + export workflow | The app accepts supported files by drag and drop, decodes standard images and RAW files, and auto-initializes new files to color negative, B&W negative, or slide mode. An explicit film-identity choice on the first file becomes a session-only weak prior for ambiguous later guesses; confident per-image evidence and persisted settings remain authoritative. Per-file corrections persist across launches; named presets persist separately; and the Edit inspector exposes copy/paste through a versioned system-clipboard payload. Transferred looks preserve target-specific geometry and film-base measurements. The Edit inspector also includes automatic and drag-selected film-base measurement, validated flat-field loading, and automatic film-frame detection. Detected crop geometry is stored per file and perspective-warped in preview/export. Export supports TIFF, JPEG, PNG, and DNG with memory-bounded lazy Export All. PNG uses an explicit 16-bit RGBA layout and same-directory atomic staging with cleanup and contextual failures. The two most recent preview sessions are cached and only the immediate next file is predecoded. Slider and wheel bindings remain live during continuous drags; end-to-end latency still requires real-file verification. |
 | Phase 4: performance and polish | Early measurement | CI builds and tests the current native package. The representative RAW decode and quality benchmark is complete; packaging, UI snapshots, and release work remain. |
 
 ## Planned Native Capabilities
@@ -178,16 +178,19 @@ The detailed order and acceptance criteria are maintained in the
   16-bit proxy per selection, disables implicit working-space conversion, and
   fuses film negative power-law inversion, grayscale, white balance, tone, HSV
   saturation, curves, and color wheels into one GPU color kernel. The latest
-  opt-in 500-change 1080×720 runtime benchmark measured 2.43 ms median and 3.50 ms p95
-  kernel-plus-`CGImage` render latency on the development machine.
+  dedicated adjustment benchmark. Its 120-render, adjustment-heavy 1080×720
+  release workload measured 2.9641–3.0286 ms p95 across four post-change runs
+  on the M4 Pro, versus a 3.9959 ms p95 baseline before constant-time gamut
+  limiting. The latest run measured 2.7034 ms median and 3.0015 ms p95.
+  Dimensions and the 16-bit upload source are unchanged.
 - Bounded latest-value-wins still-preview scheduling with at most one render in
   flight and one newest pending parameter snapshot.
-- Display-rate coalescing with a 17 ms inter-frame delay, capping renders at
-  ~60 Hz and preventing render backlog during rapid slider interaction.
+- Display-rate coalescing with an 8 ms inter-frame delay, allowing up to 120 Hz
+  presentation while preventing render backlog during rapid slider interaction.
   The real `AppModel` rapid-update integration test verifies coalescing and the
-  latest displayed parameter state. The opt-in 500-update production-renderer
-  benchmark includes curves and color wheels (1080×720 proxy, 3.50 ms p95 in
-  the latest recorded run).
+  latest displayed parameter state. The release adjustment benchmark includes
+  protected color/tone controls, curves, and color wheels (1080×720,
+  3.0015 ms p95 in the latest recorded run).
 - Per-file, session-scoped SwiftUI correction controls for film mode,
   orientation, temperature, tint, gamma, shadows, highlights, and saturation,
   plus reset and original/corrected comparison.
@@ -351,11 +354,12 @@ The detailed order and acceptance criteria are maintained in the
    regression gate rather than preceding them.
 - Still-image slider bindings and the initial GPU correction renderer are
   implemented with bounded latest-value-wins scheduling and display-rate
-  coalescing (17 ms inter-frame delay). The actual Core Image renderer is
+  coalescing (8 ms inter-frame delay). The actual Core Image renderer is
   verified against the authoritative CPU path across 2,655 comparisons with a
-  maximum difference of 2/255. Its latest current-pipeline benchmark measured
-  3.50 ms p95 at
-  1080×720. A direct Metal-backed preview surface and idle authoritative
+  maximum difference of 2/255. Its adjustment-heavy release benchmark improved
+  from a 3.9959 ms p95 baseline to 2.9641–3.0286 ms across four post-change
+  runs (at least 24.2%) at unchanged 1080×720 dimensions.
+  A direct Metal-backed preview surface and idle authoritative
   rendering remain. See the
   [real-time still preview plan](realtime-preview-plan.md).
 - Several intermediate Python pipeline stages use float32 arithmetic
@@ -535,6 +539,89 @@ Work should proceed in this order:
     interactive correction workflow complete; finish real-file latency
     verification, then expand it as new engine stages land.
 
+### Deferred Workflow Backlog
+
+These user-reported workflow items are recorded for development after the
+current packaging/release work. They are not active implementation work yet.
+
+1. **Sidebar multi-selection and Export Selected.** Replace the sidebar's
+   single `URL?` selection contract with a `Set<URL>` plus a distinct primary
+   file used by the preview and inspector. SwiftUI's `List(selection:)` can then
+   provide native Shift-click range selection and Command-click toggling while
+   parameter editing remains scoped to the primary file. `Export Selected`
+   should snapshot the ordered selected URLs and feed them through the existing
+   lazy sequential export path, preserving import order, bounded memory,
+   cancellation, progress, and per-file errors. Add interaction-level coverage
+   for range/toggle selection and an app-model test proving only selected files
+   export.
+2. ~~**Confidence-gated same-roll hint for film-kind classification.**~~ Done.
+   An explicit non-crop film identity on the first imported file becomes a
+   session-only weak prior. It is applied only when classifier confidence is
+   below 0.65, does not copy corrections, and does not reclassify persisted or
+   user-edited settings. Confident slides and low-chroma B&W scans override it;
+   automatic results remain editable. Deterministic engine and app integration
+   tests cover prior/no-prior, mixed-roll strong evidence, and predecoded later
+   files.
+3. **PNG export regression (`UInt16Image.ExportError 2`).** Partially complete.
+   PNG now has a tested explicit 16-bit little-endian RGBA/no-alpha layout,
+   writes through a unique same-directory staging file, commits atomically, and
+   removes staging output on every failure path. Export errors now describe the
+   format, destination, failing stage, and underlying filesystem error when one
+   is available rather than displaying an opaque enum number. Existing engine
+   round-trip and real app-path PNG tests remain green. Reproduction with the
+   originally affected source/destination and macOS version is still required
+   before calling the reported regression fully resolved; ImageIO does not
+   expose a causal error object when `CGImageDestinationFinalize` only returns
+   `false`.
+4. **Contact-sheet export.** Add a Contact Sheet action operating on the current
+   multi-selection (or all imports when explicitly chosen). Default to the
+   primary/first selected file's correction settings, with an option to choose
+   a named preset before rendering. Decode, process, resize to a maximum
+   500-pixel thumbnail, and release each source sequentially; retain only the
+   small thumbnails needed for final composition. Compute a balanced grid from
+   item count and thumbnail aspect ratios, use consistent gutters/background,
+   preserve aspect ratio without cropping, and export one image through the
+   normal destination/error flow. Define output-dimension/pixel-budget limits
+   and test ordering, mixed orientations, preset application, cancellation,
+   and memory bounds.
+5. **Appendable export queue.** Replace the current one-shot app export task
+   with a persistent in-process queue owned by one actor. Starting another
+   individual, selected-files, all-files, or contact-sheet export while work is
+   active should append a frozen job snapshot instead of rejecting it or
+   replacing the active task. Show the active item and ordered pending jobs,
+   allow pending jobs to be removed or reordered, and distinguish cancelling
+   the active item from clearing the queue. Keep execution sequential by
+   default so full-resolution RAW decode remains memory-bounded; deduplicate
+   only exact accidental repeats, not intentional exports to different
+   destinations or with different settings. Persisting unfinished jobs across
+   app launches is out of scope until destination security-scoped bookmark
+   behavior is designed and tested.
+6. **Adaptive operation-duration estimates.** Record coarse completion timing
+   for named stages such as RAW decode, processing, resize, and format write.
+   Periodically fold those log events into a tiny versioned statistics file
+   stored with application support data using atomic replacement. Estimate
+   duration by operation plus a small set of meaningful predictors (megapixels,
+   RAW/standard source, demosaic path, output format, and compression), using a
+   bounded rolling sample or exponentially weighted average so old hardware or
+   software behavior decays. Never store source paths or image content. Use the
+   estimates to weight multi-stage and queued progress bars and show an ETA,
+   while falling back to honest indeterminate or equal-stage progress when the
+   sample count is too small. Clamp outliers and add deterministic tests for
+   migration, corrupt-file recovery, sparse samples, and estimate stability.
+7. **Profile and reduce full-resolution export latency.** Establish a release
+   benchmark using representative approximately 40 MP RAW files and emit
+   signposts around decode/demosaic, correction stages, geometry/frame work,
+   color conversion, and encoding/finalization. Report cold and warm timings,
+   peak resident memory, output hashes, and per-stage percentages before making
+   changes. Optimize only the dominant measured stages: likely candidates to
+   evaluate include avoiding full-image buffer copies and format conversions,
+   reusing scratch storage within one job, tiling suitable pixel operators,
+   Accelerate/Metal implementations for proven CPU hot loops, and encoder
+   settings. Preserve full-resolution output, correction parity, metadata,
+   cancellation cleanup, and the one-full-resolution-RAW-at-a-time memory
+   contract. Do not trade export fidelity for speed unless a separately named
+   fast-export option is explicitly designed.
+
 Do not expand the SwiftUI control surface ahead of the engine unless the work
 directly enables testing or validates an important workflow.
 
@@ -565,6 +652,14 @@ Run the opt-in 500-render latency benchmark:
 RUN_PERFORMANCE_TESTS=1 swift test \
   --package-path native/FilmScanEngine \
   --filter productionRendererBurstBenchmark
+```
+
+Run the deterministic release benchmark for protected photographic
+adjustments, curves, and color wheels:
+
+```sh
+swift run -c release --package-path native/FilmScanEngine \
+  FilmScanAdjustmentBenchmark
 ```
 
 Refresh frozen legacy compatibility fixtures only when intentionally changing

@@ -2,7 +2,7 @@
 
 **Status:** Completed through Stage 3; Stage 4 deferred
 
-**Last updated:** 2026-06-15
+**Last updated:** 2026-06-22
 
 ## Current Progress
 
@@ -18,9 +18,11 @@
   unbounded detached-task backlog.
 - The kernel is display-only. The existing 16-bit CPU correction path remains
   the authoritative reference and fallback.
-- The latest opt-in 500-change 1080×720 runtime benchmark measured 2.43 ms median and
-  3.50 ms p95 for the correction kernel plus `CGImage` render on the
-  development machine.
+- The deterministic adjustment-heavy 1080×720 release benchmark measured
+  2.9641–3.0286 ms p95 across four post-change runs for the correction kernel
+  plus `CGImage` render on the M4 Pro. The pre-optimization baseline was
+  3.9959 ms p95, so the worst observed post-change run is 24.2% faster with
+  unchanged dimensions. The latest run was 2.7034 ms median and 3.0015 ms p95.
 - **Stage 2 GPU-vs-CPU equivalence is verified.** The model and production
   renderer are compared against `FilmProcessing.correctedPreview` across the
   current correction parameter grid. The direct Core Image renderer is
@@ -28,12 +30,12 @@
 - **Render instrumentation is deployed.** `AppModel.renderStats` publishes
   submitted/dropped/displayed counters plus latency metrics. `os_signpost`
   events are emitted for profiling.
-- **The production-renderer Stage 3 performance gate is met.** Display-rate coalescing is implemented
-  with a 17 ms inter-frame delay, capping renders at ~60 Hz. A 500-update GPU
-  render burst benchmark across current-pipeline parameter combinations,
-  including curves and color wheels, measured 3.50 ms p95 at 1080×720 in the
-  latest local run. Scheduling contract tests verify coalescing, latest-value-wins,
-  cancellation, and bounded backlog.
+- **The production-renderer Stage 3 performance gate is met.** Display-rate
+  coalescing uses an 8 ms inter-frame delay so 120 Hz displays can consume the
+  sub-4 ms GPU result. The queue remains bounded to latest-value-wins, and the
+  adjustment-heavy benchmark includes protected tone/color controls, curves,
+  and color wheels. Scheduling contract tests verify coalescing,
+  latest-value-wins, cancellation, and bounded backlog.
 - A Metal-backed preview surface and the idle authoritative preview remain
   deferred (Stage 4).
 
@@ -168,13 +170,15 @@ does not by itself make the CPU renderer real-time.
 ### Stage 3: Performance Gate
 
 - ~~Coalesce updates to the display refresh rate and add bounded buffering.~~ Done.
-  17 ms inter-frame delay, latest-value-wins bounded to 1 in-flight + 1 pending.
+  8 ms inter-frame delay, latest-value-wins bounded to 1 in-flight + 1 pending.
 - ~~Benchmark the representative RAF corpus.~~ Done. The 500-update 1080×720
   production-renderer burst benchmark, including curves and color wheels,
-  measured 3.50 ms p95 in the latest local run.
+  measured 3.50 ms p95 in its recorded general-grid run. The newer
+  adjustment-heavy release benchmark measured 3.0015 ms p95 in the latest run.
 - ~~Require 95th-percentile update latency below 33 ms with no render backlog
-  after 500 rapid parameter changes.~~ Verified at 3.50 ms p95 in the latest
-  local run.
+  after 500 rapid parameter changes.~~ Verified; both the recorded 3.50 ms
+  general-grid run and the newer 3.0015 ms adjustment-heavy run are below the
+  gate.
   The bounded queue is implemented directly in `AppModel`; the rapid-update
   integration test confirms coalescing and the latest displayed parameter state.
 
@@ -198,8 +202,8 @@ does not by itself make the CPU renderer real-time.
   combinations.~~ Done (2,655 direct production-renderer comparisons,
   maximum difference 2/255).
 - ~~Benchmark drag latency on representative standard images and RAF files.~~ Done.
-  The latest 500-update production-renderer burst benchmark measured 3.50 ms
-  p95 at 1080×720.
+  The latest deterministic adjustment-heavy release benchmark measured
+  3.0015 ms p95 at 1080×720 in the latest run.
 - Add a UI smoke test that drags each slider and confirms visible preview
   changes once reliable app automation is available.
 

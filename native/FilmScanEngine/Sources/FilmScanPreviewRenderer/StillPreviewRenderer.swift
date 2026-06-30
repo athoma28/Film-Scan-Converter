@@ -10,13 +10,20 @@ public final class StillPreviewRenderer: @unchecked Sendable {
   nonisolated(unsafe) private static let sharedKernel: CIKernel? = {
     CIKernel(source: correctionKernelSource)
   }()
+  private static let outputColorSpace = CGColorSpace(
+    name: CGColorSpace.sRGB
+  )!
   nonisolated(unsafe) private static let sharedContext: CIContext = {
     let options: [CIContextOption: Any] = [
       .cacheIntermediates: false,
       .workingColorSpace: NSNull(),
       .outputColorSpace: NSNull(),
     ]
-    if let device = MTLCreateSystemDefaultDevice() {
+    let devices = MTLCopyAllDevices()
+    let device = devices.first(where: { !$0.isLowPower })
+      ?? devices.first
+      ?? MTLCreateSystemDefaultDevice()
+    if let device {
       return CIContext(mtlDevice: device, options: options)
     }
     return CIContext(options: [.useSoftwareRenderer: false] as [CIContextOption: Any])
@@ -118,7 +125,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       output,
       from: output.extent,
       format: .RGBA8,
-      colorSpace: CGColorSpace(name: CGColorSpace.sRGB)
+      colorSpace: Self.outputColorSpace
     )
   }
 
@@ -388,17 +395,15 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       float ceiling = max(1.0, luminance * 1.5);
       if (protectedColorInGamut(desired, ceiling)) return desired;
 
-      float lower = 0.0;
-      float upper = 1.0;
-      for (int iteration = 0; iteration < 24; iteration++) {
-        float amount = (lower + upper) * 0.5;
-        if (protectedColorInGamut(neutral + chroma * amount, ceiling)) {
-          lower = amount;
-        } else {
-          upper = amount;
-        }
-      }
-      return neutral + chroma * lower;
+      vec3 lowerBounds = vec3(1.0);
+      if (chroma.r < 0.0) lowerBounds.r = luminance / -chroma.r;
+      else if (chroma.r > 0.0) lowerBounds.r = (ceiling - luminance) / chroma.r;
+      if (chroma.g < 0.0) lowerBounds.g = luminance / -chroma.g;
+      else if (chroma.g > 0.0) lowerBounds.g = (ceiling - luminance) / chroma.g;
+      if (chroma.b < 0.0) lowerBounds.b = luminance / -chroma.b;
+      else if (chroma.b > 0.0) lowerBounds.b = (ceiling - luminance) / chroma.b;
+      float amount = clamp(min(lowerBounds.r, min(lowerBounds.g, lowerBounds.b)), 0.0, 1.0);
+      return neutral + chroma * amount;
     }
 
     float highlightMask(float lum) {

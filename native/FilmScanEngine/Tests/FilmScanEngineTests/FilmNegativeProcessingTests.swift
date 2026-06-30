@@ -503,6 +503,63 @@ struct FilmNegativeProcessingTests {
     #expect(classification.confidence >= 0.55)
   }
 
+  @Test("Weak same-roll prior only breaks an ambiguous classification")
+  func classifierUsesWeakSameRollPriorForAmbiguousScan() {
+    let ambiguous = repeatedImage(
+      width: 8,
+      height: 8,
+      bgr: [
+        (blue: 20_000, green: 23_600, red: 27_800),
+        (blue: 18_000, green: 21_200, red: 25_000),
+      ]
+    )
+
+    let withoutPrior = FilmNegativeProcessing.classifyFilmScan(image: ambiguous)
+    let withPrior = FilmNegativeProcessing.classifyFilmScan(
+      image: ambiguous,
+      weakPrior: .colourNegative
+    )
+
+    #expect(withoutPrior.filmType == .slide)
+    #expect(withoutPrior.confidence < 0.65)
+    #expect(withPrior.filmType == .colourNegative)
+    #expect(withPrior.filmNegativePreset == .colourNegative)
+    #expect(withPrior.confidence == withoutPrior.confidence)
+  }
+
+  @Test("Strong slide and black-and-white evidence override a same-roll prior")
+  func classifierKeepsStrongEvidenceOverSameRollPrior() {
+    let slide = repeatedImage(
+      width: 8,
+      height: 8,
+      bgr: [
+        (blue: 34_000, green: 18_000, red: 12_000),
+        (blue: 9_000, green: 29_000, red: 15_000),
+      ]
+    )
+    let blackAndWhite = repeatedImage(
+      width: 8,
+      height: 8,
+      bgr: [
+        (blue: 19_900, green: 20_000, red: 20_100),
+        (blue: 30_100, green: 30_000, red: 29_900),
+      ]
+    )
+
+    #expect(
+      FilmNegativeProcessing.classifyFilmScan(
+        image: slide,
+        weakPrior: .colourNegative
+      ).filmType == .slide
+    )
+    #expect(
+      FilmNegativeProcessing.classifyFilmScan(
+        image: blackAndWhite,
+        weakPrior: .colourNegative
+      ).filmType == .blackAndWhiteNegative
+    )
+  }
+
   @Test("Generic C-41 identity profile maps zero density to unity and unit density to 10")
   func genericC41IdentityProfile() {
     let density: [Double] = [0, 0, 0, 0.5, 0.5, 0.5, 1.0, 1.0, 1.0]

@@ -310,25 +310,31 @@ public enum ProtectedColorAdjustment {
     let ceiling = max(1, luminance * 1.5)
     guard !isInGamut(desired, ceiling: ceiling) else { return desired }
 
-    var lower = 0.0
-    var upper = 1.0
-    for _ in 0..<24 {
-      let amount = (lower + upper) * 0.5
-      let candidate = (
-        blue: neutralB + chromaB * amount,
-        green: neutralG + chromaG * amount,
-        red: neutralR + chromaR * amount
-      )
-      if isInGamut(candidate, ceiling: ceiling) {
-        lower = amount
-      } else {
-        upper = amount
-      }
+    // The neutral point is guaranteed to be in gamut. Each channel therefore
+    // contributes one linear upper bound on movement toward the desired
+    // chroma. Taking the minimum is equivalent to the former 24-step binary
+    // search, without serial per-pixel iteration on either CPU or GPU.
+    var amount = 1.0
+    if chromaB < 0 {
+      amount = min(amount, luminance / -chromaB)
+    } else if chromaB > 0 {
+      amount = min(amount, (ceiling - luminance) / chromaB)
     }
+    if chromaG < 0 {
+      amount = min(amount, luminance / -chromaG)
+    } else if chromaG > 0 {
+      amount = min(amount, (ceiling - luminance) / chromaG)
+    }
+    if chromaR < 0 {
+      amount = min(amount, luminance / -chromaR)
+    } else if chromaR > 0 {
+      amount = min(amount, (ceiling - luminance) / chromaR)
+    }
+    amount = min(max(amount, 0), 1)
     return (
-      neutralB + chromaB * lower,
-      neutralG + chromaG * lower,
-      neutralR + chromaR * lower
+      neutralB + chromaB * amount,
+      neutralG + chromaG * amount,
+      neutralR + chromaR * amount
     )
   }
 
