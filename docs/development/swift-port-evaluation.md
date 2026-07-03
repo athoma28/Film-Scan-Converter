@@ -46,6 +46,7 @@ shared preview/export entry point with workflow-level tests.
 ## Current Boundary
 
 Dust-mask detection exists, but Telea inpainting and dust controls remain
-paused. Packaging, release validation, broader fixture independence, and the
-deferred direct-display/idle-render preview work remain. The authoritative
-status page owns any changes to that boundary.
+paused. Self-contained app/ZIP packaging is complete; Developer ID
+notarization, Gatekeeper/clean-machine validation, broader fixture independence,
+and the deferred direct-display/idle-render preview work remain. The
+authoritative status page owns any changes to that boundary.

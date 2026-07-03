@@ -229,8 +229,8 @@ struct ProcessingTests {
     #expect(actual.pixels == [65535, 32767, 0])
   }
 
-  @Test("Film-negative processing preserves sensor-black pixels after adjustments")
-  func filmNegativePreservesSensorBlack() {
+  @Test("Film-negative processing renders zero-light pixels as neutral white")
+  func filmNegativeNeutralizesZeroLight() {
     let image = UInt16Image(
       width: 2,
       height: 1,
@@ -247,7 +247,7 @@ struct ProcessingTests {
 
     let actual = FilmProcessing.correctedPreview(image: image, parameters: parameters)
 
-    #expect(Array(actual.pixels[0..<3]) == [0, 0, 0])
+    #expect(Array(actual.pixels[0..<3]) == [65535, 65535, 65535])
     #expect(actual.pixels[3..<6].contains { $0 > 0 })
   }
 

@@ -64,13 +64,16 @@ features. Its implemented scope includes:
   saturation controls.
 - A still-image correction workflow with live slider bindings, a reusable 16-bit
   Core Image/Metal preview renderer, bounded latest-value-wins scheduling, and a
-  two-session decoded-preview cache with one-file lookahead predecode for the
-  next uncached import.
+  user-selectable 2/4/8/16/32-session decoded-preview cache with matching forward
+  predecode lookahead.
 - Automatic per-file correction persistence across launches using versioned,
   atomic settings storage with safe recovery from corrupt files.
 - Named correction presets with versioned atomic persistence, plus copy/paste
   through a versioned system-clipboard payload. Applying a look preserves the
   target scan's crop/orientation and measured film-base state.
+- User-edit markers independent of cache state, apply-current-settings-to-all,
+  immediate target-median refresh after paste, and append-selected during an
+  active sequential export.
 - A shared unclamped linear adjustment seam with bounded robust statistics,
   protected Temperature/Tint/Saturation/Vibrance controls, and safe semantic
   Exposure/Brightness/Contrast/Highlights/Shadows controls.
@@ -86,13 +89,16 @@ features. Its implemented scope includes:
   unloaded batch members.
 - macOS CI that runs the native engine tests and builds the app. The 500-render
   performance benchmark is opt-in.
+- Reproducible self-contained app and ZIP assembly with embedded non-system
+  dependencies, bundle-relative load paths, hardened-runtime signing support,
+  and validation of both the assembled app and the extracted archive copy.
 - Real production-renderer comparison against the authoritative CPU path and an
   actual `AppModel` rapid-update scheduling integration test.
 
 The primary remaining processing replacement is Telea dust inpainting and its
 preview/export/app integration.
-Fixture independence, packaging, release validation, and deferred
-preview-surface work also remain.
+Fixture independence, Developer ID notarization, Gatekeeper/clean-machine
+release validation, and deferred preview-surface work also remain.
 
 See [Native macOS Development](development/native-macos.md) for the
 authoritative current step, progress, limitations, and next work.

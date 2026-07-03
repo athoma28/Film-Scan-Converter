@@ -19,7 +19,7 @@ public struct UInt16Image: Equatable, Sendable {
     self.pixels = pixels
   }
 
-  mutating func preserveBlackMask(from source: UInt16Image, threshold: UInt16) {
+  mutating func neutralizeInvertedZeroLight(from source: UInt16Image, threshold: UInt16) {
     precondition(
       width == source.width && height == source.height && channels == source.channels,
       "Black-mask source must match the output image"
@@ -32,7 +32,7 @@ public struct UInt16Image: Equatable, Sendable {
       }
       if sourceMaximum <= threshold {
         for channel in 0..<channels {
-          pixels[base + channel] = 0
+          pixels[base + channel] = 65535
         }
       }
     }

@@ -307,7 +307,7 @@ public enum FilmProcessing {
       return
     }
 
-    output.preserveBlackMask(
+    output.neutralizeInvertedZeroLight(
       from: source,
       threshold: FilmNegativeProcessing.sensorBlackThreshold
     )

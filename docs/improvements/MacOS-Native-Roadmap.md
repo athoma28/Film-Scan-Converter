@@ -1005,7 +1005,7 @@ FilmScanConverter.app
 ### 3.5 Deferred Batch Workflow Follow-Ups
 
 The following are accepted roadmap items, but are deferred until after the
-active packaging/release-validation work:
+active release-validation work:
 
 - **Native sidebar multi-selection:** model the selected files as an ordered
   projection of a `Set<URL>` while retaining one primary file for preview and
@@ -1032,7 +1032,10 @@ active packaging/release-validation work:
   Decode/process sources sequentially and retain only bounded thumbnails; cap
   final canvas dimensions/pixel count and cover cancellation, mixed
   orientations, ordering, and preset behavior in workflow tests.
-- **Appendable export queue:** put one actor in charge of an active export job
+- **Appendable export queue:** the first workflow increment is implemented: the
+  selected file can be appended to an active sequential export, exact repeats
+  are rejected, and progress includes pending additions. Next, put one actor in
+  charge of an active export job
   and an ordered list of frozen pending jobs. New individual, selection, batch,
   and contact-sheet requests append while an export is running. Keep execution
   sequential for bounded RAW memory; expose active versus pending cancellation,
@@ -1180,9 +1183,14 @@ Git push
     corrupt-file recovery. Named presets use a separate versioned atomic store;
     system-clipboard copy/paste uses a versioned payload and preserves the
     destination frame's crop/orientation and measured film-base state.
-13. **Phase 3** — Packaging and release validation are active. Dust inpainting
-    remains paused; crop/perspective, export UI, batch export, and settings
-    management are already implemented.
+13. **Phase 3** — Packaging and release validation are active. Self-contained
+    app/ZIP assembly, non-system dependency embedding, bundle-relative load
+    paths, hardened-runtime signing support, automated bundle validation,
+    extracted-archive revalidation, and release documentation are complete.
+    Developer ID notarization, Gatekeeper, and clean-machine installation
+    remain. Dust inpainting remains paused;
+    crop/perspective, export UI, batch export, and settings management are
+    already implemented.
 14. **Phase 2** — Replace remaining measured hot paths with Metal or Accelerate
     implementations. Profile before and after each change.
 15. **Phase 4** — Performance gates, packaging, CI hardening, release

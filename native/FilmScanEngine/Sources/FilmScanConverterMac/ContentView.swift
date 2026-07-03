@@ -44,13 +44,11 @@ struct ContentView: View {
               .frame(width: 16, height: 16)
           }
           Spacer(minLength: 4)
-          if !(model.selection == url && (model.isLoading || model.isRendering)),
-            model.hasCachedPreview(for: url)
-          {
-            Circle()
-              .fill(Color.accentColor)
-              .frame(width: 5, height: 5)
-              .help("Ready to preview")
+          if model.hasEdits(for: url) {
+            Image(systemName: "slider.horizontal.3")
+              .foregroundStyle(Color.accentColor)
+              .font(.caption2)
+              .help("Edited")
           }
         }
         .tag(url)
@@ -194,22 +192,25 @@ struct ContentView: View {
 
       Divider()
 
-      ScrollView {
-        VStack(spacing: 12) {
-          switch inspectorPage {
-          case .edit:
-            editInspector
-          case .grade:
-            gradeInspector
-          case .export:
-            exportInspector
-          }
-        }
-        .padding(12)
+      ZStack {
+        inspectorPageView(.edit, content: editInspector)
+        inspectorPageView(.grade, content: gradeInspector)
+        inspectorPageView(.export, content: exportInspector)
       }
-      .scrollBounceBehavior(.basedOnSize)
     }
     .background(Color(nsColor: .controlBackgroundColor))
+  }
+
+  private func inspectorPageView<Content: View>(
+    _ page: InspectorPage, content: Content
+  ) -> some View {
+    ScrollView {
+      VStack(spacing: 12) { content }.padding(12)
+    }
+    .scrollBounceBehavior(.basedOnSize)
+    .opacity(inspectorPage == page ? 1 : 0)
+    .allowsHitTesting(inspectorPage == page)
+    .accessibilityHidden(inspectorPage != page)
   }
 
   private var editInspector: some View {
@@ -225,6 +226,22 @@ struct ContentView: View {
           .disabled(!model.canPasteCorrectionSettings)
         }
         .controlSize(.small)
+
+        Button("Apply Settings to All Open Files", action: model.applyCurrentSettingsToAllOpenFiles)
+          .controlSize(.small)
+
+        Picker(
+          "Files kept ready",
+          selection: Binding(
+            get: { model.previewCacheLimit },
+            set: { model.setPreviewCacheLimit($0) }
+          )
+        ) {
+          ForEach([2, 4, 8, 16, 32], id: \.self) { count in
+            Text("\(count)").tag(count)
+          }
+        }
+        .help("Higher values use substantially more memory but make file switching faster.")
 
         HStack {
           TextField("Preset name", text: $presetName)
@@ -822,6 +839,14 @@ struct ContentView: View {
             .buttonStyle(.bordered)
         }
         .disabled(model.exportParameters.destinationDirectory == nil || model.isExporting)
+
+        if model.isExporting {
+          Button("Add Selected to Export Queue", action: model.addSelectedToExportQueue)
+            .buttonStyle(.borderedProminent)
+          Text("\(model.exportQueueCount) waiting")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
 
         ForEach(model.exportErrors, id: \.self) { error in
           Text(error)

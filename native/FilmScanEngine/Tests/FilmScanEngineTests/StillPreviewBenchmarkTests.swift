@@ -214,8 +214,8 @@ struct StillPreviewBenchmarkTests {
     #expect(maxDifference <= 2, "Production renderer differs from CPU by \(maxDifference)/255")
   }
 
-  @Test("Production renderer preserves the sensor-black mask")
-  func productionRendererPreservesSensorBlack() {
+  @Test("Production renderer renders zero-light negative pixels as neutral white")
+  func productionRendererNeutralizesZeroLight() {
     let image = UInt16Image(
       width: 2, height: 1, channels: 3,
       pixels: [0, 128, 256, 512, 512, 512]
@@ -239,7 +239,7 @@ struct StillPreviewBenchmarkTests {
       return
     }
 
-    #expect(Array(pixels[0..<3]) == [0, 0, 0])
+    #expect(Array(pixels[0..<3]) == [255, 255, 255])
     #expect(pixels[4..<7].contains { $0 > 0 })
   }
 

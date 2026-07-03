@@ -17,6 +17,7 @@ nav:
   - Developer Guide:
       - Overview: development/index.md
       - Native macOS Status: development/native-macos.md
+      - Native macOS Release: development/native-release.md
       - Real-Time Still Preview Plan: development/realtime-preview-plan.md
       - Native RAW Benchmark: development/native-raw-benchmark.md
       - Native macOS Technical Roadmap: improvements/MacOS-Native-Roadmap.md

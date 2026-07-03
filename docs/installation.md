@@ -43,6 +43,12 @@ and [Legacy Python Application](legacy-python.md) for the retirement policy.
     ./run-swift.sh
     ```
 
+To assemble the self-contained local app and ZIP used for release validation,
+run `native/package-release.sh`. The default artifact is ad-hoc signed and is
+not a generally distributable release. See the
+[native release guide](development/native-release.md) for Developer ID,
+notarization, Gatekeeper, and clean-machine gates.
+
 ## Legacy Python Application (Maintenance Only)
 
 This section installs the maintenance-only legacy Python application.

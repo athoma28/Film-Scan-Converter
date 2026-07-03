@@ -28,10 +28,10 @@ This file contains only package-local build and implementation notes.
   needed. Interactive
   rendering uses a bounded 640-pixel, 16-bit proxy with a Core Image/Metal
   correction kernel and bounded latest-value-wins scheduling, while preserving
-  the full decoded source for later export work. The two most recent
-  decoded/proxy/renderer sessions are cached for immediate switching, and the
-  app uses a cancellable utility-priority worker to predecode only the immediate
-  next uncached file into that same bounded cache. The
+  the full decoded source for later export work. A user-selectable
+  2/4/8/16/32-session cache uses a cancellable utility-priority worker to
+  predecode the configured forward lookahead; the default remains two. Edit,
+  Grade, and Export pages remain mounted for immediate switching. The
   actual Core Image renderer is verified against the CPU path across 2,655
   comparisons with a maximum difference of 2/255. Constant-time gamut limiting
   replaced a serial 24-step per-pixel GPU loop, and the adjustment-heavy release
@@ -47,6 +47,9 @@ This file contains only package-local build and implementation notes.
   The Edit inspector can copy/paste a versioned correction payload through the
   system clipboard. Applying presets or pasted settings preserves the target
   frame's rotation, flip, crop geometry, and measured film-base state.
+  Pasted looks recompute target-image negative medians immediately, the current
+  look can be applied to all open files, and the browser marks user-edited files
+  independently of preview-cache state.
 - After an explicit film-kind choice on the first imported file, ambiguous
   later automatic classifications can use that identity as a session-only weak
   prior. Confident per-image evidence, persisted settings, and subsequent user
@@ -54,6 +57,8 @@ This file contains only package-local build and implementation notes.
 - PNG export uses a verified 16-bit little-endian RGBA/no-alpha CGImage layout
   and same-directory staging before atomic commit. Failure paths remove staging
   files and report the destination and failing ImageIO/filesystem stage.
+- Sequential export accepts the selected file as a pending queue item while a
+  run is active, with exact-repeat protection and dynamic progress.
 - Its optional live camera view uses AVFoundation and a GPU-backed Core Image
   context for negative inversion, exposure, and saturation preview corrections.
   Late frames are discarded and processing is throttled to 20 fps to keep the
@@ -117,8 +122,9 @@ This file contains only package-local build and implementation notes.
 
 The native application is the primary product and the only target for new
 features. It is not yet a complete replacement for the maintenance-only legacy
-Python application: dust inpainting and app integration, packaging/release
-validation, and fixture independence are the current
+Python application: dust inpainting and app integration, Developer ID
+notarization plus Gatekeeper/clean-machine release validation, and fixture
+independence are the current
 retirement gates. See
 [Legacy Python Status And Retirement](../docs/legacy-python.md).
 Threshold generation, white balance, saturation, exposure,
@@ -168,6 +174,18 @@ Build or run the native app:
 swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
 swift run --package-path native/FilmScanEngine FilmScanConverterMac
 ```
+
+Build a self-contained, locally signed release app and ZIP. The packager also
+extracts the ZIP and revalidates the archived app contract and signature:
+
+```sh
+native/package-release.sh
+```
+
+Set `SIGNING_IDENTITY` to an exact Developer ID Application identity for a
+distribution candidate. The default ad-hoc signature is only for local bundle
+validation. See the [native release guide](../docs/development/native-release.md)
+for versioning, notarization, and clean-machine gates.
 
 Build the native RAW benchmark:
 

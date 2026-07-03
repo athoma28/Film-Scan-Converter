@@ -23,6 +23,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var exportProgressCurrent = 0
   @Published private(set) var exportProgressTotal = 0
   @Published private(set) var exportErrors: [String] = []
+  @Published private(set) var exportQueueCount = 0
   @Published private(set) var rebateCandidates: [AutomaticRebateCandidate] = []
   @Published private(set) var selectedRebateMeasurement: FilmBaseMeasurement?
   @Published private(set) var selectedRebateRegion: ImageRegion?
@@ -37,21 +38,26 @@ final class AppModel: ObservableObject {
   @Published private(set) var cropStatus: String = ""
   @Published private(set) var namedCorrectionPresets: [NamedCorrectionPreset] = []
   @Published private(set) var settingsStatus: String = ""
+  @Published private(set) var previewCacheLimit: Int
 
   let profileStore: ProfileStore
   private let settingsStore: PerFileSettingsStore?
   private let presetStore: NamedCorrectionPresetStore?
   private let settingsClipboard: CorrectionSettingsClipboard
+  private let preferences: UserDefaults
 
   init(
     profileStore: ProfileStore? = nil,
     settingsStore: PerFileSettingsStore? = nil,
     presetStore: NamedCorrectionPresetStore? = nil,
-    settingsClipboard: CorrectionSettingsClipboard = CorrectionSettingsClipboard()
+    settingsClipboard: CorrectionSettingsClipboard = CorrectionSettingsClipboard(),
+    preferences: UserDefaults = .standard
   ) {
     self.settingsStore = settingsStore
     self.presetStore = presetStore
     self.settingsClipboard = settingsClipboard
+    self.preferences = preferences
+    previewCacheLimit = max(2, preferences.integer(forKey: "previewCacheLimit"))
     if let profileStore {
       self.profileStore = profileStore
     } else if let store = ProfileStore(appGroupIdentifier: "FilmScanConverter") {
@@ -63,7 +69,9 @@ final class AppModel: ObservableObject {
     }
     if let settingsStore {
       do {
-        settingsByPath = try settingsStore.load()
+        let state = try settingsStore.loadState()
+        settingsByPath = state.settingsByPath
+        editedKeys = state.editedPaths
       } catch {
         status = "Saved corrections could not be loaded; defaults are being used."
       }
@@ -88,6 +96,7 @@ final class AppModel: ObservableObject {
 
   private var settingsByPath: [String: ProcessingParameters] = [:]
   private var automaticallyClassifiedKeys: Set<String> = []
+  private var editedKeys: Set<String> = []
   private var sameRollFilmTypeHint: FilmType?
   private var previewCache: [String: CachedPreviewSession] = [:]
   private var previewCacheOrder: [String] = []
@@ -100,6 +109,9 @@ final class AppModel: ObservableObject {
   private var cropDetectionTask: Task<Void, Never>?
   private var renderTask: Task<Void, Never>?
   private var pendingRender: PreviewRenderRequest?
+  private var activeExportQueue: [URL] = []
+  private var activeExportDestinations: [URL] = []
+  private var activeExportSeen: Set<String> = []
   private var renderLoopGeneration = 0
   private var lastSubmitTime: Date = .distantPast
   private var lastRenderEnd: ContinuousClock.Instant = .now
@@ -107,8 +119,6 @@ final class AppModel: ObservableObject {
   // to consume the sub-4 ms Metal renderer without an artificial 60 Hz cap.
   private static let renderCoalesceInterval: Duration = .milliseconds(8)
   nonisolated private static let previewMaxDimension = 640
-  private static let previewCacheLimit = 2
-  private static let predecodeLookaheadLimit = 1
 
   var previewCacheSessionCount: Int {
     previewCache.count
@@ -116,6 +126,17 @@ final class AppModel: ObservableObject {
 
   func hasCachedPreview(for url: URL) -> Bool {
     previewCache[settingsKey(url)] != nil
+  }
+
+  func hasEdits(for url: URL) -> Bool {
+    editedKeys.contains(settingsKey(url))
+  }
+
+  func setPreviewCacheLimit(_ limit: Int) {
+    previewCacheLimit = max(2, limit)
+    preferences.set(previewCacheLimit, forKey: "previewCacheLimit")
+    trimPreviewCache()
+    if let selection { scheduleLookaheadPredecode(after: selection) }
   }
 
   private static let renderLog = OSLog(
@@ -449,11 +470,11 @@ final class AppModel: ObservableObject {
   }
 
   func rotateCounterclockwise() {
-    updateParameters { $0.rotation = ($0.rotation + 3) % 4 }
+    updateParameters { $0.rotation = ($0.rotation + ($0.flip ? 1 : 3)) % 4 }
   }
 
   func rotateClockwise() {
-    updateParameters { $0.rotation = ($0.rotation + 1) % 4 }
+    updateParameters { $0.rotation = ($0.rotation + ($0.flip ? 3 : 1)) % 4 }
   }
 
   func toggleFlip() {
@@ -529,6 +550,7 @@ final class AppModel: ObservableObject {
 
   func resetCorrections() {
     parameters = ProcessingParameters()
+    if let selection { editedKeys.insert(settingsKey(selection)) }
     resetCropState(cancelTask: true)
     saveParameters()
     if showOriginal {
@@ -604,7 +626,25 @@ final class AppModel: ObservableObject {
     updateParameters { current in
       current = settings.applying(to: current)
     }
+    populateFilmNegativeMedians()
+    saveParameters()
+    scheduleRender(immediate: true)
     cropRect = parameters.cropRect
+  }
+
+  func applyCurrentSettingsToAllOpenFiles() {
+    guard !files.isEmpty else { return }
+    let settings = CorrectionSettings(capturing: parameters)
+    for url in files {
+      let key = settingsKey(url)
+      let destination = settingsByPath[key] ?? ProcessingParameters()
+      var applied = settings.applying(to: destination)
+      applied.filmNegativeParams.measuredMedians = nil
+      settingsByPath[key] = applied
+      editedKeys.insert(key)
+    }
+    persistSettings()
+    settingsStatus = "Applied settings to all \(files.count) open files."
   }
 
   func showImportPanel() {
@@ -677,6 +717,38 @@ final class AppModel: ObservableObject {
       return
     }
     exportFiles(files)
+  }
+
+  func addSelectedToExportQueue() {
+    guard isExporting, let selection,
+      let destinationDirectory = exportParameters.destinationDirectory
+    else { return }
+    let key = settingsKey(selection)
+    guard !activeExportSeen.contains(key) else {
+      status = "\(selection.lastPathComponent) is already in this export run."
+      return
+    }
+    guard var destination = try? reserveDestinationURLs(
+      for: [selection], destinationDirectory: destinationDirectory,
+      format: exportParameters.format
+    ).first else {
+      status = "Could not reserve an export destination for \(selection.lastPathComponent)."
+      return
+    }
+    let reserved = Set(activeExportDestinations.map { $0.lastPathComponent.lowercased() })
+    let stem = selection.deletingPathExtension().lastPathComponent
+    var suffix = 1
+    while reserved.contains(destination.lastPathComponent.lowercased()) {
+      suffix += 1
+      destination = destinationDirectory.appendingPathComponent(
+        "\(stem)-\(suffix).\(exportParameters.format.fileExtension)")
+    }
+    activeExportSeen.insert(key)
+    activeExportQueue.append(selection)
+    activeExportDestinations.append(destination)
+    exportQueueCount = activeExportQueue.count - exportProgressCurrent
+    exportProgressTotal += 1
+    status = "Added \(selection.lastPathComponent) to the export queue."
   }
 
   func detectRebate() {
@@ -1024,6 +1096,7 @@ final class AppModel: ObservableObject {
   private func applyCrop(_ rect: RotatedRect, render: Bool) {
     cropRect = rect
     parameters.cropRect = rect
+    if let selection { editedKeys.insert(settingsKey(selection)) }
     saveParameters()
     if render {
       scheduleRender(immediate: true)
@@ -1048,18 +1121,19 @@ final class AppModel: ObservableObject {
     var params = exportParameters
     params.destinationDirectory = destDir
     let exportParams = params
-    let destinations: [URL]
+    activeExportQueue = urls
+    activeExportSeen = Set(urls.map(settingsKey))
+    exportQueueCount = urls.count
     do {
-      destinations = try reserveDestinationURLs(
-        for: urls,
-        destinationDirectory: destDir,
-        format: exportParams.format
-      )
+      activeExportDestinations = try reserveDestinationURLs(
+        for: urls, destinationDirectory: destDir, format: exportParams.format)
     } catch {
       status = "Unable to inspect export destination: \(error.localizedDescription)"
+      activeExportQueue = []
+      activeExportSeen = []
+      exportQueueCount = 0
       return
     }
-
     isExporting = true
     exportProgressCurrent = 0
     exportProgressTotal = urls.count
@@ -1073,8 +1147,10 @@ final class AppModel: ObservableObject {
       var results: [ExportManager.ExportResult] = []
       results.reserveCapacity(urls.count)
 
-      for (index, pair) in zip(urls, destinations).enumerated() {
-        let (url, destinationURL) = pair
+      var index = 0
+      while index < self.activeExportQueue.count {
+        let url = self.activeExportQueue[index]
+        let destinationURL = self.activeExportDestinations[index]
         if Task.isCancelled {
           results.append(
             ExportManager.ExportResult(
@@ -1082,6 +1158,7 @@ final class AppModel: ObservableObject {
               destinationURL: destinationURL,
               error: ExportManager.ExportManagerError.cancelled
             ))
+          index += 1
           continue
         }
 
@@ -1104,12 +1181,18 @@ final class AppModel: ObservableObject {
 
         await MainActor.run {
           self.exportProgressCurrent = index + 1
-          self.exportProgressTotal = urls.count
+          self.exportProgressTotal = self.activeExportQueue.count
+          self.exportQueueCount = self.activeExportQueue.count - index - 1
         }
+        index += 1
       }
 
       await MainActor.run {
         self.isExporting = false
+        self.activeExportQueue = []
+        self.activeExportDestinations = []
+        self.activeExportSeen = []
+        self.exportQueueCount = 0
         let failures = results.filter { !$0.isSuccess }
         if failures.isEmpty {
           self.status = "Exported \(results.count) image\(results.count == 1 ? "" : "s") to \(destDir.lastPathComponent)."
@@ -1130,9 +1213,7 @@ final class AppModel: ObservableObject {
 
   private func populateFilmNegativeMedians() {
     guard let medians = computeFilmNegativeMedians() else { return }
-    updateParameters {
-      $0.filmNegativeParams.measuredMedians = medians
-    }
+    parameters.filmNegativeParams.measuredMedians = medians
   }
 
   private func applyAutomaticFilmClassification(from image: UInt16Image) {
@@ -1272,6 +1353,7 @@ final class AppModel: ObservableObject {
   private func updateParameters(_ update: (inout ProcessingParameters) -> Void) {
     if let selection {
       automaticallyClassifiedKeys.remove(settingsKey(selection))
+      editedKeys.insert(settingsKey(selection))
     }
     update(&parameters)
     saveParameters()
@@ -1287,12 +1369,16 @@ final class AppModel: ObservableObject {
       return
     }
     settingsByPath[settingsKey(selection)] = parameters
+    persistSettings()
+    EditLog.parametersSaved(path: selection.lastPathComponent, parameters: parameters)
+  }
+
+  private func persistSettings() {
     do {
-      try settingsStore?.save(settingsByPath)
+      try settingsStore?.save(.init(settingsByPath: settingsByPath, editedPaths: editedKeys))
     } catch {
       status = "Corrections changed, but could not be saved for the next launch."
     }
-    EditLog.parametersSaved(path: selection.lastPathComponent, parameters: parameters)
   }
 
   private func applyCachedSession(_ session: CachedPreviewSession, selection: URL) {
@@ -1305,65 +1391,49 @@ final class AppModel: ObservableObject {
   }
 
   private func scheduleLookaheadPredecode(after selection: URL) {
-    guard Self.predecodeLookaheadLimit > 0, !isExporting else {
+    guard previewCacheLimit > 1, !isExporting else {
       return
     }
     guard let currentIndex = files.firstIndex(of: selection) else {
       return
     }
 
-    let candidates = files.dropFirst(currentIndex + 1).prefix(Self.predecodeLookaheadLimit)
-    guard let target = candidates.first else {
-      return
-    }
-    let targetKey = settingsKey(target)
-    guard previewCache[targetKey] == nil else {
+    let candidates = Array(files.dropFirst(currentIndex + 1).prefix(previewCacheLimit - 1))
+      .filter { previewCache[settingsKey($0)] == nil }
+    guard !candidates.isEmpty else {
       return
     }
 
     predecodeTask?.cancel()
-    ImportLog.loadSelectionDecodeStarted(path: "predecode \(target.lastPathComponent)")
     predecodeTask = Task { [weak self] in
       guard let self else { return }
-      do {
-        let session = try await Task.detached(priority: .utility) { () -> CachedPreviewSession? in
-          let decoded = try Self.decodeImage(target)
-          let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
-          guard let renderer = StillPreviewRenderer(image: proxy) else {
-            return nil
+      for target in candidates {
+        let targetKey = self.settingsKey(target)
+        do {
+          ImportLog.loadSelectionDecodeStarted(path: "predecode \(target.lastPathComponent)")
+          let session = try await Task.detached(priority: .utility) { () -> CachedPreviewSession? in
+            let decoded = try Self.decodeImage(target)
+            let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
+            guard let renderer = StillPreviewRenderer(image: proxy) else { return nil }
+            return CachedPreviewSession(
+              decodedImage: decoded, previewSource: proxy, previewRenderer: renderer)
+          }.value
+          try Task.checkCancellation()
+          guard let session else { continue }
+          guard self.selection == selection, self.previewCache[targetKey] == nil else { continue }
+          if self.settingsByPath[targetKey] == nil {
+            self.settingsByPath[targetKey] = Self.automaticallyClassifiedParameters(
+              base: ProcessingParameters(), image: session.previewSource,
+              weakPrior: self.sameRollFilmTypeHint)
+            self.automaticallyClassifiedKeys.insert(targetKey)
           }
-          return CachedPreviewSession(
-            decodedImage: decoded,
-            previewSource: proxy,
-            previewRenderer: renderer
-          )
-        }.value
-        try Task.checkCancellation()
-        guard let session else {
+          self.cacheSession(session, for: target)
+        } catch is CancellationError {
           return
+        } catch {
+          ImportLog.loadSelectionDecodeFailed(
+            path: "predecode \(target.lastPathComponent)", error: error.localizedDescription)
         }
-
-        guard !Task.isCancelled else { return }
-        guard self.selection == selection, self.previewCache[targetKey] == nil else {
-          return
-        }
-
-        if self.settingsByPath[targetKey] == nil {
-          self.settingsByPath[targetKey] = Self.automaticallyClassifiedParameters(
-            base: ProcessingParameters(),
-            image: session.previewSource,
-            weakPrior: self.sameRollFilmTypeHint
-          )
-          self.automaticallyClassifiedKeys.insert(targetKey)
-        }
-        self.cacheSession(session, for: target)
-      } catch is CancellationError {
-        return
-      } catch {
-        ImportLog.loadSelectionDecodeFailed(
-          path: "predecode \(target.lastPathComponent)",
-          error: error.localizedDescription
-        )
       }
     }
   }
@@ -1409,7 +1479,11 @@ final class AppModel: ObservableObject {
     let key = settingsKey(url)
     previewCache[key] = session
     touchPreviewCache(key)
-    while previewCacheOrder.count > Self.previewCacheLimit {
+    trimPreviewCache()
+  }
+
+  private func trimPreviewCache() {
+    while previewCacheOrder.count > previewCacheLimit {
       let evicted = previewCacheOrder.removeFirst()
       previewCache.removeValue(forKey: evicted)
     }

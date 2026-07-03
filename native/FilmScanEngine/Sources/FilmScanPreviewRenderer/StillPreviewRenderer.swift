@@ -625,7 +625,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         rgb = hsvToRgb(hsv);
       }
       if (filmNegativeEnabled == 1.0 && sensorBlack) {
-        rgb = vec3(0.0);
+        rgb = vec3(1.0);
       }
       return vec4(clamp(rgb, 0.0, 1.0), pixel.a);
     }

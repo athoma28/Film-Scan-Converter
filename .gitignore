@@ -11,3 +11,4 @@ source/export/
 sample-raw/
 hdr_white
 .build/
+dist/

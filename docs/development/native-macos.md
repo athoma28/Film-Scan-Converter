@@ -5,7 +5,7 @@ what works now, the current development step, and the order of upcoming work.
 The detailed [macOS native roadmap](../improvements/MacOS-Native-Roadmap.md) is
 the design reference, not a statement that every listed item is implemented.
 
-**Last updated:** 2026-06-30 (290 tests across 19 files; a user-confirmed first-file film identity now acts as a confidence-gated same-roll hint for later automatic guesses; PNG export uses verified 16-bit RGBA layout, atomic staging, actionable errors, and failure cleanup; protected-color gamut limiting is constant-time on CPU/GPU; adjustment-heavy 1080×720 Metal rendering is at least 24.2% faster at p95 across repeated post-change runs with unchanged dimensions; 8 ms latest-value-wins coalescing supports 120 Hz displays; per-file persistence, named presets, and system-clipboard copy/paste are complete; native dust-mask detection matches three frozen Python/OpenCV fixtures but further dust work is paused; RAW preview remains half-size while memory-bounded export re-decodes full-resolution)
+**Last updated:** 2026-07-02 (293 tests across 19 files; release bundle assembly, dependency embedding, hardened-runtime signing support, contract validation, ZIP creation, and extracted-archive validation are complete; Developer ID notarization and clean-machine installation remain; usability work now includes persistent edit markers, immediate pasted-look median refresh, apply-to-all-open-files, mirrored rotation semantics, instant inspector switching, adjustable 2–32 file preloading, append-selected export queuing, and neutral-white zero-light inversion on CPU/GPU; RAW preview remains half-size while memory-bounded export re-decodes full-resolution)
 
 ## Goal
 
@@ -49,8 +49,13 @@ Dust development is paused after Slice 1: deterministic native dust-mask
 detection matches the frozen Python/OpenCV reference, while Telea inpainting
 and app wiring remain deferred.
 
-**Active step: packaging and release validation. Post-dust workflow/settings
-work is complete: per-file corrections are keyed by standardized source path,
+**Active step: finish packaging and release validation. A reproducible release
+script now builds a self-contained app, embeds and rewrites non-system dynamic
+libraries, supports Developer ID hardened-runtime signing, validates the bundle
+and signature, emits a versioned ZIP, and revalidates the extracted archive.
+Developer ID notarization, Gatekeeper, and clean-machine install/launch checks
+remain. Post-dust workflow/settings work
+is complete: per-file corrections are keyed by standardized source path,
 loaded at launch, and atomically saved after edits; user-named presets use a
 separate versioned atomic store; and correction settings can be copied through
 the system clipboard. Applying a preset or pasted look preserves the target
@@ -64,8 +69,8 @@ per-file settings or preset data do not prevent startup.**
 | Phase 0: regression gate | In progress | Swift tests consume frozen Python-generated `.npy` fixtures and compact RAW hash manifests. Standard decode fixtures cover 8-bit PNG, grayscale PNG, BMP, JPEG, and 16-bit TIFF. Five half-size RAF decodes and one full-resolution RAF decode require exact SHA-256 equality with RawPy when the local `sample-raw` corpus is present; when it is absent, those corpus-specific tests are explicitly reported as disabled rather than silently passing. The full intermediate-stage and parameter-grid corpus is not complete. |
 | Phase 1: processing engine | In progress | The frozen RawPy profile remains exact for fixtures. The camera-scan profile disables auto-bright/exposure boost, enables LibRaw highlight reconstruction, records ISO and executed stages, and selects bounded low-ISO sharpening or medium/high-ISO denoising. Full-resolution Bayer decode uses the RCD callback; full-resolution X-Trans decode uses LibRaw's three-pass Markesteijn interpolation. Half-size preview decode bypasses demosaicing. Film-negative inversion and density processing feed one unclamped linear adjustment seam. Safe global tone controls (Exposure EV, Brightness, Contrast, Highlights, Shadows) and protected color controls use luminance-preserving opponent axes; frozen RGB-gain/HSV operators remain available. Robust statistics use at most 65,536 deterministic samples. Native dust-mask detection uses fixed-size percentile histograms, O(pixels) square morphology, and bounded connected-component scratch storage; three frozen Python/OpenCV fixtures match exactly. Density processing, contour detection, and perspective crop are connected to preview/export. Telea inpainting, direct camera-to-Rec.2020 conversion, and exact RawTherapee denoise/sharpen kernels remain limitations. |
 | Phase 2: accelerated rendering | In progress | Live camera preview uses a Metal-backed Core Image context. Still-file correction uploads one bounded 16-bit proxy per selection, applies the current correction controls in one custom GPU kernel, and keeps only one in-flight render plus the newest pending snapshot. The kernel includes the power-law film-negative inversion, protected color/tone adjustments, curve LUT sampling, and three-way color wheels. The production renderer matches the authoritative CPU path across 2,655 comparisons with a maximum difference of 2/255. On the M4 Pro, the reproducible adjustment-heavy release benchmark at 1080×720 improved from a 3.9959 ms p95 baseline to 2.9641–3.0286 ms across four post-change runs (at least 24.2%) without changing dimensions; the app uses a 640-pixel interactive proxy. The density pipeline is connected to preview and export through the authoritative CPU path; a product-integrated GPU density preview and idle authoritative rendering remain deferred. |
-| Phase 3: SwiftUI application | Interactive correction + export workflow | The app accepts supported files by drag and drop, decodes standard images and RAW files, and auto-initializes new files to color negative, B&W negative, or slide mode. An explicit film-identity choice on the first file becomes a session-only weak prior for ambiguous later guesses; confident per-image evidence and persisted settings remain authoritative. Per-file corrections persist across launches; named presets persist separately; and the Edit inspector exposes copy/paste through a versioned system-clipboard payload. Transferred looks preserve target-specific geometry and film-base measurements. The Edit inspector also includes automatic and drag-selected film-base measurement, validated flat-field loading, and automatic film-frame detection. Detected crop geometry is stored per file and perspective-warped in preview/export. Export supports TIFF, JPEG, PNG, and DNG with memory-bounded lazy Export All. PNG uses an explicit 16-bit RGBA layout and same-directory atomic staging with cleanup and contextual failures. The two most recent preview sessions are cached and only the immediate next file is predecoded. Slider and wheel bindings remain live during continuous drags; end-to-end latency still requires real-file verification. |
-| Phase 4: performance and polish | Early measurement | CI builds and tests the current native package. The representative RAW decode and quality benchmark is complete; packaging, UI snapshots, and release work remain. |
+| Phase 3: SwiftUI application | Interactive correction + export workflow | Per-file corrections persist and the browser marks actual user edits rather than cache residency. Copy/paste refreshes image-derived negative medians immediately; the current look can be applied to every open file while preserving each frame's geometry. Edit/Grade/Export pages remain mounted for immediate switching. Export supports TIFF, JPEG, PNG, and DNG with memory-bounded sequential execution, and the selected file can be appended while an export is active. A user-selectable 2/4/8/16/32-session cache predecodes the corresponding forward lookahead; larger values intentionally trade RAM for faster switching. Zero-light pixels in negative inversion are forced to neutral white on both CPU and GPU. End-to-end latency still requires real-file verification. |
+| Phase 4: performance and polish | Release validation in progress | CI builds and tests the current native package. The representative RAW decode and quality benchmark is complete. Self-contained app/ZIP assembly, Homebrew dependency embedding, bundle-relative load paths, hardened-runtime signing support, bundle validation, strict local signature verification, and extracted-archive revalidation are complete. Developer ID notarization, Gatekeeper, clean-machine install/launch checks, and UI snapshots remain. |
 
 ## Planned Native Capabilities
 
@@ -165,11 +170,10 @@ The detailed order and acceptance criteria are maintained in the
   corrections in the background without changing the full decoded source. This
   CPU path is currently suitable only as an idle correctness preview, not
   continuous real-time interaction.
-- A bounded two-session decoded/proxy/renderer cache that makes switching back
-  and forth between recently viewed files immediate without allowing memory use
-  to grow with the imported-file list. Selection also starts a cancellable,
-  utility-priority predecode for the immediate next uncached file only, so
-  forward navigation can be immediate without retaining the entire import batch.
+- A user-selectable 2/4/8/16/32-session decoded/proxy/renderer cache. Selection
+  starts cancellable sequential utility-priority predecode for the configured
+  forward lookahead. The default remains two; higher settings explicitly trade
+  substantially more RAM for faster switching through large batches.
 - Embedded RAW thumbnail and full-decode swap behavior is covered by both
   decoder-level and app-model tests when the local `sample-raw/` corpus is
   available. Corpus-specific tests are conditionally disabled with an explicit
@@ -531,8 +535,13 @@ Work should proceed in this order:
 14. ~~Complete post-dust settings management: atomic per-file persistence,
     named presets, and system-clipboard copy/paste that excludes target-specific
     crop/orientation and measured film-base state.~~ Done.
-15. Complete packaging and release validation, including an installable signed
-    app artifact, clean-machine launch/install checks, and release documentation.
+15. Complete packaging and release validation. Self-contained app/ZIP assembly,
+    non-system dependency embedding, load-path rewriting, hardened-runtime
+    signing support, automated bundle/signature checks, extracted-archive
+    revalidation, and the
+    [release runbook](native-release.md) are complete. Obtain a Developer ID
+    signature, notarize and staple a candidate, then complete Gatekeeper and
+    clean-machine launch/install checks.
 16. Expand the frozen corpus to cover intermediate stages and parameter-grid
     variants.
 17. ~~Connect completed engine stages to the SwiftUI preview panel.~~ Initial
@@ -542,7 +551,7 @@ Work should proceed in this order:
 ### Deferred Workflow Backlog
 
 These user-reported workflow items are recorded for development after the
-current packaging/release work. They are not active implementation work yet.
+current release-validation work. They are not active implementation work yet.
 
 1. **Sidebar multi-selection and Export Selected.** Replace the sidebar's
    single `URL?` selection contract with a `Set<URL>` plus a distinct primary
@@ -584,7 +593,10 @@ current packaging/release work. They are not active implementation work yet.
    normal destination/error flow. Define output-dimension/pixel-budget limits
    and test ordering, mixed orientations, preset application, cancellation,
    and memory bounds.
-5. **Appendable export queue.** Replace the current one-shot app export task
+5. **Appendable export queue.** First increment complete: while sequential export
+   is active, the selected file can be appended, exact repeats are rejected,
+   collision-safe destinations are reserved, and progress updates dynamically.
+   Remaining work: replace the app task
    with a persistent in-process queue owned by one actor. Starting another
    individual, selected-files, all-files, or contact-sheet export while work is
    active should append a frozen job snapshot instead of rejecting it or
