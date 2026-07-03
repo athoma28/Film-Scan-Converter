@@ -59,10 +59,6 @@ final class PerFileSettingsStore {
     self.init(baseDirectory: root.appendingPathComponent(applicationName, isDirectory: true))
   }
 
-  func load() throws -> [String: ProcessingParameters] {
-    try loadState().settingsByPath
-  }
-
   func loadState() throws -> State {
     guard FileManager.default.fileExists(atPath: fileURL.path) else {
       return State(settingsByPath: [:], editedPaths: [])
@@ -75,10 +71,6 @@ final class PerFileSettingsStore {
       settingsByPath: document.settingsByPath,
       editedPaths: document.schemaVersion == 1 ? Set(document.settingsByPath.keys) : document.editedPaths
     )
-  }
-
-  func save(_ settingsByPath: [String: ProcessingParameters]) throws {
-    try save(State(settingsByPath: settingsByPath, editedPaths: Set(settingsByPath.keys)))
   }
 
   func save(_ state: State) throws {

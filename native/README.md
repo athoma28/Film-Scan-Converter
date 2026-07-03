@@ -88,12 +88,14 @@ This file contains only package-local build and implementation notes.
 - `RenderReadyLinearImage` gives the power-law and density front-ends a shared
   unclamped linear BGR adjustment seam. Its deterministic robust statistics are
   hard-capped at 65,536 samples, keeping statistics scratch memory independent
-  of full-resolution RAW dimensions.
+  of full-resolution RAW dimensions. A bounded displayed-image proxy now feeds
+  those statistics to the Grade inspector's clipping readout.
 - `DustDetection` reproduces the legacy 16-bit-to-gray conversion, percentile
   threshold, morphological closing, contour-area filtering, filled mask, and
   final dilation across frozen Python/OpenCV fixtures. Percentiles use a fixed
   256-bin histogram and square morphology uses O(pixels) integral-image passes.
-  Telea inpainting and app wiring remain pending.
+  The app can display the resulting mask as an orientation/crop-aligned,
+  non-destructive overlay. Telea inpainting and applying removal to output remain pending.
 - Primary color-negative Temperature/Tint, Saturation, and Vibrance operate in
   that linear seam using luminance-preserving Rec.2020 opponent axes, selective
   chroma scaling, highlight/gamut attenuation, and hue-preserving chroma
@@ -115,14 +117,15 @@ This file contains only package-local build and implementation notes.
   denoises mildly at ISO 800–3199, and denoises more strongly at ISO 3200+; it is
   not an exact port of RawTherapee's noise kernels.
 - TIFF, JPEG, PNG, and processed-RGB DNG export are implemented with individual
-  and memory-bounded batch workflows, background processing, cancellation,
+  and memory-bounded batch workflows. Standard images use at most two-item
+  `exportBatch` chunks; full-resolution RAW files remain one-at-a-time. Background processing, cancellation,
   per-file errors, frame/aspect-ratio options, JPEG quality, and TIFF LZW
   compression. Existing and same-basename outputs receive deterministic numeric
   suffixes instead of being overwritten.
 
 The native application is the primary product and the only target for new
 features. It is not yet a complete replacement for the maintenance-only legacy
-Python application: dust inpainting and app integration, Developer ID
+Python application: dust inpainting and output integration, Developer ID
 notarization plus Gatekeeper/clean-machine release validation, and fixture
 independence are the current
 retirement gates. See

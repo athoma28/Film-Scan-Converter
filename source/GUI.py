@@ -310,7 +310,7 @@ class GUI:
             if widget.key in self.default_settings:
                 widget.set(self.default_settings[widget.key]) # initializes widgets with default settings
 
-        if output_directory != None:
+        if output_directory is not None:
             self.set_destination_folder(output_directory)
 
     def load_all_from_path(self, pathname):
@@ -435,7 +435,7 @@ class GUI:
         use_camera_wb = CheckLabel(import_settings, 'Use Camera White Balance:', 8, 'use_camera_wb', advanced_widgets, command=set_wb)
         try:
             wb_lbl = f'White Balance Multipliers ({self.current_photo.colour_desc}):'
-        except Exception as e:
+        except Exception:
             wb_lbl = 'White Balance Multipliers:'
         wb_mult = MultiEntryLabel(import_settings, wb_lbl, 9, 0, 4, 4, key='wb_mult', widget_dictionary=advanced_widgets, is_float=True, increment=0.1, width=25)
 
@@ -678,7 +678,7 @@ class GUI:
             if self.photo_process_Combo.current() == 4: # Only display when full preview is selected
                 try: 
                     self.master.after_cancel(self.start_full_res)
-                except: 
+                except Exception:
                     pass
                 finally: 
                     self.start_full_res = self.master.after(500, update_full_res) # waits for 0.5 s of inactivity before processing
@@ -694,7 +694,7 @@ class GUI:
         # Attempts to resize the images if the resize event has not been called for 100 ms
         try:
             self.master.after_cancel(self.resize)
-        except: 
+        except Exception:
             pass
         finally:
             self.resize = self.master.after(100, self.resize_UI)

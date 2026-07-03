@@ -13,6 +13,7 @@ struct ContentView: View {
   @State private var rebateDragEnd: CGPoint?
   @State private var rebateSelectionPreviousShowOriginal = false
   @State private var presetName = ""
+  @State private var profileName = ""
 
   private enum InspectorPage: String, CaseIterable, Identifiable {
     case edit = "Edit"
@@ -44,6 +45,12 @@ struct ContentView: View {
               .frame(width: 16, height: 16)
           }
           Spacer(minLength: 4)
+          if model.hasCachedPreview(for: url) {
+            Image(systemName: "bolt.fill")
+              .foregroundStyle(.secondary)
+              .font(.caption2)
+              .help("Ready to preview")
+          }
           if model.hasEdits(for: url) {
             Image(systemName: "slider.horizontal.3")
               .foregroundStyle(Color.accentColor)
@@ -444,6 +451,56 @@ struct ContentView: View {
       }
       .disabled(!model.parameters.filmType.supportsColorCorrections)
 
+      InspectorSection("Processing Profiles", systemImage: "square.stack.3d.up") {
+        Picker("Capture", selection: $model.selectedCaptureProfileID) {
+          ForEach(model.availableCaptureProfiles, id: \.id) { profile in
+            Text(profile.id.rawValue).tag(profile.id)
+          }
+        }
+        Picker("Film Stock", selection: $model.selectedFilmStockProfileID) {
+          ForEach(model.availableFilmStockProfiles, id: \.id) { profile in
+            Text(profile.displayName).tag(profile.id)
+          }
+        }
+        Picker(
+          "Roll",
+          selection: Binding(
+            get: { model.selectedRollProfileID ?? "" },
+            set: { model.selectedRollProfileID = $0.isEmpty ? nil : $0 }
+          )
+        ) {
+          Text("None").tag("")
+          ForEach(model.availableRollProfiles, id: \.rollID) { profile in
+            Text(profile.rollID).tag(profile.rollID)
+          }
+        }
+        Button("Apply Selected Profiles", action: model.applySelectedPipelineProfiles)
+          .controlSize(.small)
+
+        HStack {
+          TextField("New profile name", text: $profileName)
+            .textFieldStyle(.roundedBorder)
+          Menu("Save") {
+            Button("Capture Profile") {
+              model.saveCurrentCaptureProfile(named: profileName)
+              profileName = ""
+            }
+            Button("Film-Stock Profile") {
+              model.saveCurrentFilmStockProfile(named: profileName)
+              profileName = ""
+            }
+          }
+          .disabled(profileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .controlSize(.small)
+
+        if !model.profileStatus.isEmpty {
+          Text(model.profileStatus)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+      }
+
       InspectorSection("Film Base", systemImage: "viewfinder") {
         HStack {
           Button(action: model.loadFlatField) {
@@ -653,6 +710,32 @@ struct ContentView: View {
         }
       }
 
+      InspectorSection("Dust Mask", systemImage: "sparkles") {
+        HStack {
+          Button(action: model.detectDustMask) {
+            if model.isDustDetectionRunning {
+              ProgressView()
+                .controlSize(.small)
+            } else {
+              Label("Detect Dust", systemImage: "wand.and.stars")
+            }
+          }
+          .disabled(model.decodedImage == nil || model.isDustDetectionRunning)
+          if model.dustMaskImage != nil {
+            Button("Clear", action: model.clearDustMask)
+          }
+        }
+        .controlSize(.small)
+        Text(
+          model.dustStatus.isEmpty
+            ? "Detection overlays candidate dust pixels; removal remains non-destructive and is not applied automatically."
+            : model.dustStatus
+        )
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+      }
+
       if model.selectedRebateMeasurement != nil
         || model.rollProfile?.measuredBaseDensity != nil
       {
@@ -708,7 +791,25 @@ struct ContentView: View {
 
   private var gradeInspector: some View {
     Group {
+      InspectorSection("Clipping", systemImage: "waveform.path.ecg") {
+        let low = model.previewStatistics.lowClippingRatios
+        let high = model.previewStatistics.highClippingRatios
+        densityRow("Shadows", max(low.blue, low.green, low.red) * 100)
+        densityRow("Highlights", max(high.blue, high.green, high.red) * 100)
+        Text("Percent of sampled display pixels clipped in the most affected channel.")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+      }
+
       InspectorSection("Tone Curve", systemImage: "point.topleft.down.to.point.bottomright.curvepath") {
+        Toggle(
+          "Enable Overall Curve",
+          isOn: Binding(
+            get: { model.parameters.curveEnabled },
+            set: { model.setCurveEnabled($0) }
+          )
+        )
+        .font(.caption)
         IntegratedCurvesView(model: model)
       }
       .disabled(!model.parameters.filmType.supportsColorCorrections)
@@ -874,6 +975,14 @@ struct ContentView: View {
             .resizable()
             .scaledToFit()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+          if let dustMask = model.dustMaskImage {
+            Image(nsImage: dustMask)
+              .resizable()
+              .scaledToFit()
+              .blendMode(.screen)
+              .opacity(0.85)
+              .allowsHitTesting(false)
+          }
         } else {
           VStack(spacing: 16) {
             Text(model.selection?.lastPathComponent ?? "")

@@ -45,6 +45,7 @@ struct AppModelTests {
     try await waitUntil { !model.isRendering && model.parameters.temperature == 100 }
 
     #expect(model.previewImage != nil)
+    #expect(model.previewStatistics.sampleCount > 0)
     #expect(model.parameters.temperature == 100)
     #expect(model.renderStats.submittedSnapshots > model.renderStats.displayedRenders)
     #expect(model.renderStats.droppedSnapshots > 0)
@@ -563,9 +564,12 @@ struct AppModelTests {
     first.photoAdjustments.exposureEV = 2
     var second = ProcessingParameters()
     second.photoAdjustments.exposureEV = -1
-    try store.save([firstPath: first, secondPath: second])
+    try store.save(.init(
+      settingsByPath: [firstPath: first, secondPath: second],
+      editedPaths: [firstPath, secondPath]
+    ))
 
-    let loaded = try store.load()
+    let loaded = try store.loadState().settingsByPath
     #expect(loaded[firstPath]?.photoAdjustments.exposureEV == 2)
     #expect(loaded[secondPath]?.photoAdjustments.exposureEV == -1)
   }
@@ -661,12 +665,18 @@ struct AppModelTests {
   }
 
   @Test("App model saves, applies, and deletes named correction presets")
-  func appModelManagesNamedCorrectionPresets() throws {
+  func appModelManagesNamedCorrectionPresets() async throws {
     let workDir = FileManager.default.temporaryDirectory
       .appendingPathComponent("fsc-model-presets-\(UUID().uuidString)", isDirectory: true)
     defer { try? FileManager.default.removeItem(at: workDir) }
     let store = NamedCorrectionPresetStore(baseDirectory: workDir)
     let model = AppModel(presetStore: store)
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"))
+    model.importFiles([input])
+    try await waitUntil { model.previewImage != nil && !model.isRendering }
     model.setFilmType(.slide)
     model.setExposureEV(1.25)
     model.saveCorrectionPreset(named: "Projection")
@@ -674,15 +684,182 @@ struct AppModelTests {
 
     model.setExposureEV(-2)
     model.rotateClockwise()
+    let submissionsBeforeApply = model.renderStats.submittedSnapshots
     model.applyCorrectionPreset(preset)
 
     #expect(model.parameters.filmType == .slide)
     #expect(model.parameters.photoAdjustments.exposureEV == 1.25)
     #expect(model.parameters.rotation == 1)
+    #expect(model.renderStats.submittedSnapshots == submissionsBeforeApply + 1)
 
     model.deleteCorrectionPreset(preset)
     #expect(model.namedCorrectionPresets.isEmpty)
     #expect(AppModel(presetStore: store).namedCorrectionPresets.isEmpty)
+  }
+
+  @Test("Preview cache limit persists, expands lookahead, and trims immediately")
+  func previewCacheLimitPersistsAndTrims() async throws {
+    let suiteName = "fsc-preview-cache-\(UUID().uuidString)"
+    let preferences = try #require(UserDefaults(suiteName: suiteName))
+    defer { preferences.removePersistentDomain(forName: suiteName) }
+    let fixture = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"))
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-preview-cache-files-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let files = try (0..<3).map { index in
+      let url = workDir.appendingPathComponent("scan-\(index).png")
+      try FileManager.default.copyItem(at: fixture, to: url)
+      return url
+    }
+
+    let model = AppModel(preferences: preferences)
+    model.setPreviewCacheLimit(3)
+    model.importFiles(files)
+    try await waitUntil { model.previewCacheSessionCount == 3 }
+
+    model.setPreviewCacheLimit(2)
+    #expect(model.previewCacheSessionCount == 2)
+    #expect(preferences.integer(forKey: "previewCacheLimit") == 2)
+    #expect(AppModel(preferences: preferences).previewCacheLimit == 2)
+  }
+
+  @Test("Apply to all open files preserves per-frame geometry and marks every file edited")
+  func applySettingsToAllOpenFiles() async throws {
+    let fixture = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"))
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-apply-all-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let first = workDir.appendingPathComponent("first.png")
+    let second = workDir.appendingPathComponent("second.png")
+    try FileManager.default.copyItem(at: fixture, to: first)
+    try FileManager.default.copyItem(at: fixture, to: second)
+
+    let model = AppModel()
+    model.importFiles([first, second])
+    try await waitUntil { model.decodedImage != nil }
+    model.setExposureEV(1.5)
+    model.applyCurrentSettingsToAllOpenFiles()
+
+    #expect(model.hasEdits(for: first))
+    #expect(model.hasEdits(for: second))
+    model.selection = second
+    model.loadSelection()
+    #expect(model.parameters.photoAdjustments.exposureEV == 1.5)
+  }
+
+  @Test("Files added during export keep the active run's format and destination")
+  func queuedExportUsesActiveSnapshot() async throws {
+    let png = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"))
+    let bmp = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "bmp",
+        subdirectory: "Fixtures/decode_bmp8"))
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-queued-snapshot-\(UUID().uuidString)", isDirectory: true)
+    let sourceDir = workDir.appendingPathComponent("source", isDirectory: true)
+    let firstDestination = workDir.appendingPathComponent("first-destination", isDirectory: true)
+    let changedDestination = workDir.appendingPathComponent("changed-destination", isDirectory: true)
+    for directory in [sourceDir, firstDestination, changedDestination] {
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let first = sourceDir.appendingPathComponent("first.png")
+    let second = sourceDir.appendingPathComponent("second.bmp")
+    try FileManager.default.copyItem(at: png, to: first)
+    try FileManager.default.copyItem(at: bmp, to: second)
+
+    let model = AppModel()
+    model.importFiles([first, second])
+    try await waitUntil { model.decodedImage != nil }
+    model.setExportDestinationDirectory(firstDestination)
+    model.setExportFormat(.png)
+    model.exportSelected()
+    model.setExportDestinationDirectory(changedDestination)
+    model.setExportFormat(.jpeg)
+    model.selection = second
+    model.addSelectedToExportQueue()
+
+    try await waitUntil { !model.isExporting && model.exportProgressCurrent == 2 }
+    #expect(FileManager.default.fileExists(
+      atPath: firstDestination.appendingPathComponent("first.png").path))
+    #expect(FileManager.default.fileExists(
+      atPath: firstDestination.appendingPathComponent("second.png").path))
+    #expect((try FileManager.default.contentsOfDirectory(atPath: changedDestination.path)).isEmpty)
+  }
+
+  @Test("Version-one settings migrate existing paths to edited markers")
+  func editedPathMigration() throws {
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-edited-migration-\(UUID().uuidString)", isDirectory: true)
+    let store = PerFileSettingsStore(baseDirectory: workDir)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+    let path = workDir.appendingPathComponent("scan.png").standardizedFileURL.path
+    let document = PerFileSettingsStore.Document(
+      schemaVersion: 1,
+      settingsByPath: [path: ProcessingParameters()]
+    )
+    try JSONEncoder().encode(document).write(to: store.fileURL, options: .atomic)
+
+    let model = AppModel(settingsStore: store)
+    #expect(model.hasEdits(for: URL(fileURLWithPath: path)))
+  }
+
+  @Test("Rotation direction remains visual after a horizontal flip")
+  func rotationDirectionAccountsForFlip() {
+    let model = AppModel()
+    model.toggleFlip()
+    model.rotateClockwise()
+    #expect(model.parameters.rotation == 3)
+    model.rotateCounterclockwise()
+    #expect(model.parameters.rotation == 0)
+  }
+
+  @Test("Dust detection produces a display overlay through the app path")
+  func dustDetectionProducesOverlay() async throws {
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"))
+    let model = AppModel()
+    model.importFiles([input])
+    try await waitUntil { model.decodedImage != nil }
+    model.rotateClockwise()
+    try await waitUntil { model.previewImage != nil && !model.isRendering }
+    model.detectDustMask()
+    try await waitUntil { !model.isDustDetectionRunning && !model.dustStatus.isEmpty }
+    #expect(model.dustMaskImage != nil)
+    #expect(model.dustMaskImage?.size == model.previewImage?.size)
+    model.clearDustMask()
+    #expect(model.dustMaskImage == nil)
+  }
+
+  @Test("App profile management saves, lists, and applies stored profiles")
+  func appProfileManagement() {
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-app-profiles-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let model = AppModel(profileStore: ProfileStore(baseDirectory: workDir))
+    model.setFilmType(.colourNegative)
+    model.saveCurrentCaptureProfile(named: "My Copy Rig")
+    model.saveCurrentFilmStockProfile(named: "My Test Stock")
+
+    #expect(model.availableCaptureProfiles.contains { $0.id.rawValue == "my_copy_rig" })
+    #expect(model.availableFilmStockProfiles.contains { $0.id.rawValue == "my_test_stock" })
+    model.applySelectedPipelineProfiles()
+    #expect(model.parameters.densityPipelineEnabled)
+    #expect(model.profileStatus.contains("Density pipeline active"))
   }
 
   private func waitUntil(

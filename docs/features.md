@@ -18,7 +18,8 @@ features. Its implemented scope includes:
   erosion) matching Python output exactly.
 - Native dust-mask detection matching frozen Python/OpenCV output, including
   ignored-border percentile sampling, morphology, and contour-area filtering.
-  Telea inpainting and app integration remain pending.
+  The app displays an orientation/crop-aligned, non-destructive candidate mask;
+  Telea inpainting and applying removal to preview/export remain pending.
 - White balance coefficient adjustment matching Python float64 output exactly.
 - Saturation adjustment via RGB↔HSV conversion matching Python output within
   documented ≤1 LSB tolerance, including Python-equivalent clipping of
@@ -95,8 +96,8 @@ features. Its implemented scope includes:
 - Real production-renderer comparison against the authoritative CPU path and an
   actual `AppModel` rapid-update scheduling integration test.
 
-The primary remaining processing replacement is Telea dust inpainting and its
-preview/export/app integration.
+The primary remaining processing replacement is Telea dust inpainting and
+applying removal to preview/export.
 Fixture independence, Developer ID notarization, Gatekeeper/clean-machine
 release validation, and deferred preview-surface work also remain.
 

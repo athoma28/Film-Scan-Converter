@@ -44,13 +44,6 @@ void fsc_set_log_path(const char *path) {
     }
 }
 
-void fsc_close_log(void) {
-    if (fsc_log_file != NULL) {
-        fclose(fsc_log_file);
-        fsc_log_file = NULL;
-    }
-}
-
 #define FSC_LOG(fmt, ...) do { \
     char _buf[512]; \
     snprintf(_buf, sizeof(_buf), "[FSC-RAW] " fmt, ##__VA_ARGS__); \
@@ -59,7 +52,6 @@ void fsc_close_log(void) {
 #else
 #define FSC_LOG(fmt, ...) do { } while (0)
 void fsc_set_log_path(const char *path) { (void)path; }
-void fsc_close_log(void) { }
 #endif
 
 static int fail(
@@ -157,188 +149,9 @@ static int set_decode_params(
     }
 }
 
-int fsc_decode_raw(
-    const char *path,
-    int full_resolution,
-    fsc_raw_image *output,
-    char *error_message,
-    size_t error_message_capacity
-) {
-    FSC_LOG("decode_raw start: path=%s fullRes=%d", path ? path : "(null)", full_resolution);
-
-    if (path == NULL || output == NULL) {
-        FSC_LOG("decode_raw FAIL: null arguments");
-        return fail(-1, "Invalid RAW decoder arguments.", error_message, error_message_capacity);
-    }
-    memset(output, 0, sizeof(*output));
-
-    libraw_data_t *raw = libraw_init(LIBRAW_OPTIONS_NONE);
-    if (raw == NULL) {
-        FSC_LOG("decode_raw FAIL: libraw_init returned NULL");
-        return fail(-1, "LibRaw could not allocate a decoder.", error_message, error_message_capacity);
-    }
-    FSC_LOG("libraw_init OK");
-
-    int code = check_libraw(libraw_open_file(raw, path), error_message, error_message_capacity);
-    if (code != LIBRAW_SUCCESS) {
-        FSC_LOG("decode_raw FAIL: libraw_open_file error %d", code);
-        libraw_close(raw);
-        return code;
-    }
-    FSC_LOG("libraw_open_file OK: %s", raw->idata.make);
-
-    code = set_decode_params(
-        raw,
-        full_resolution,
-        FSC_RAW_DECODE_PROFILE_RAWPY_COMPATIBILITY,
-        error_message,
-        error_message_capacity
-    );
-    if (code != LIBRAW_SUCCESS) {
-        libraw_close(raw);
-        return code;
-    }
-    FSC_LOG("params set; unpacking...");
-
-    code = check_libraw(libraw_unpack(raw), error_message, error_message_capacity);
-    if (code == LIBRAW_SUCCESS) {
-        FSC_LOG("libraw_unpack OK; dcraw processing...");
-        code = check_libraw(libraw_dcraw_process(raw), error_message, error_message_capacity);
-    }
-    if (code != LIBRAW_SUCCESS) {
-        FSC_LOG("decode_raw FAIL: unpack/process error %d", code);
-        libraw_close(raw);
-        return code;
-    }
-    FSC_LOG("libraw_dcraw_process OK; building memory image...");
-
-    int image_error = LIBRAW_SUCCESS;
-    libraw_processed_image_t *processed = libraw_dcraw_make_mem_image(raw, &image_error);
-    if (processed == NULL || image_error != LIBRAW_SUCCESS) {
-        const char *message = image_error == LIBRAW_SUCCESS
-            ? "LibRaw did not return a processed image."
-            : libraw_strerror(image_error);
-        FSC_LOG("decode_raw FAIL: make_mem_image error %d — %s", image_error, message);
-        code = fail(
-            image_error == LIBRAW_SUCCESS ? -1 : image_error,
-            message,
-            error_message,
-            error_message_capacity
-        );
-        if (processed != NULL) {
-            libraw_dcraw_clear_mem(processed);
-        }
-        libraw_close(raw);
-        return code;
-    }
-    FSC_LOG("make_mem_image OK: %ux%u type=%d bits=%d colors=%d",
-            (unsigned)processed->width, (unsigned)processed->height,
-            processed->type, processed->bits, processed->colors);
-
-    if (processed->type != LIBRAW_IMAGE_BITMAP
-        || processed->bits != 16
-        || processed->colors != 3
-        || processed->width == 0
-        || processed->height == 0) {
-        FSC_LOG("decode_raw FAIL: unsupported processed image format");
-        libraw_dcraw_clear_mem(processed);
-        libraw_close(raw);
-        return fail(
-            -1,
-            "LibRaw returned an unsupported processed image format.",
-            error_message,
-            error_message_capacity
-        );
-    }
-
-    size_t width = processed->width;
-    size_t height = processed->height;
-    size_t colors = processed->colors;
-    if (height > SIZE_MAX / width || colors > SIZE_MAX / (width * height)) {
-        FSC_LOG("decode_raw FAIL: dimensions exceed buffer size limit");
-        libraw_dcraw_clear_mem(processed);
-        libraw_close(raw);
-        return fail(
-            -1,
-            "The decoded RAW dimensions exceed the supported buffer size.",
-            error_message,
-            error_message_capacity
-        );
-    }
-    size_t pixel_count = width * height * colors;
-    if (pixel_count > SIZE_MAX / sizeof(uint16_t)) {
-        FSC_LOG("decode_raw FAIL: pixel buffer exceeds allocation limit (%zu pixels)", pixel_count);
-        libraw_dcraw_clear_mem(processed);
-        libraw_close(raw);
-        return fail(
-            -1,
-            "The decoded RAW buffer exceeds the supported allocation size.",
-            error_message,
-            error_message_capacity
-        );
-    }
-    size_t alloc_bytes = pixel_count * sizeof(uint16_t);
-    FSC_LOG("allocating %zu bytes for %zu pixels", alloc_bytes, pixel_count);
-    uint16_t *pixels = malloc(alloc_bytes);
-    if (pixels == NULL) {
-        FSC_LOG("decode_raw FAIL: malloc returned NULL (%zu bytes)", alloc_bytes);
-        libraw_dcraw_clear_mem(processed);
-        libraw_close(raw);
-        return fail(-1, "Unable to allocate the decoded RAW buffer.", error_message, error_message_capacity);
-    }
-
-    const uint16_t *rgb = (const uint16_t *)processed->data;
-    for (size_t index = 0; index < pixel_count; index += 3) {
-        pixels[index] = rgb[index + 2];
-        pixels[index + 1] = rgb[index + 1];
-        pixels[index + 2] = rgb[index];
-    }
-
-    output->width = processed->width;
-    output->height = processed->height;
-    output->channels = processed->colors;
-    output->pixel_count = pixel_count;
-    output->pixels = pixels;
-    snprintf(output->color_description, sizeof(output->color_description), "%.4s", raw->idata.cdesc);
-
-    FSC_LOG("decode_raw SUCCESS: %ux%u %uch %zu pixels cdesc=%.4s",
-            output->width, output->height, output->channels,
-            output->pixel_count, raw->idata.cdesc);
-
-    libraw_dcraw_clear_mem(processed);
-    libraw_close(raw);
-    return LIBRAW_SUCCESS;
-}
-
-void fsc_free_raw_image(fsc_raw_image *image) {
-    if (image == NULL) {
-        return;
-    }
-    FSC_LOG("free_raw_image: %p (%zu pixels)", (void *)image->pixels, image->pixel_count);
-    free(image->pixels);
-    memset(image, 0, sizeof(*image));
-}
-
 typedef struct {
     libraw_processed_image_t *processed;
 } fsc_direct_cleanup;
-
-int fsc_decode_raw_direct(
-    const char *path,
-    int full_resolution,
-    fsc_raw_direct *output,
-    char *error_message,
-    size_t error_message_capacity
-) {
-    return fsc_decode_raw_direct_with_profile(
-        path,
-        full_resolution,
-        FSC_RAW_DECODE_PROFILE_RAWPY_COMPATIBILITY,
-        output,
-        error_message,
-        error_message_capacity
-    );
-}
 
 int fsc_decode_raw_direct_with_profile(
     const char *path,

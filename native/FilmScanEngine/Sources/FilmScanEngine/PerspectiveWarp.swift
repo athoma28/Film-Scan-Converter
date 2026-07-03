@@ -98,12 +98,12 @@ public enum PerspectiveTransform {
       b[r1] = yp
     }
 
-    var n_ = __CLPK_integer(dim)
-    var nrhs = __CLPK_integer(1)
+    var n_ = Int32(dim)
+    var nrhs = Int32(1)
     var lda = n_
     var ldb = n_
-    var ipiv = [__CLPK_integer](repeating: 0, count: dim)
-    var info: __CLPK_integer = 0
+    var ipiv = [Int32](repeating: 0, count: dim)
+    var info: Int32 = 0
 
     dgesv_(&n_, &nrhs, &a, &lda, &ipiv, &b, &ldb, &info)
     guard info == 0 else { return nil }

@@ -41,15 +41,17 @@ The native application is the primary product. It provides:
    apply a perspective-corrected crop. Preview and export use the same stored
    crop geometry.
 8. Use the original/corrected comparison toggle to evaluate your adjustments.
-9. Set export options (format, frame, aspect ratio) and choose a destination
+9. Use **Detect Dust** to inspect a non-destructive candidate overlay. Clear it
+   when finished; the overlay is diagnostic and is not exported.
+10. Set export options (format, frame, aspect ratio) and choose a destination
    folder.
-10. Click Export Selected or Export All to write processed images. Standard
+11. Click Export Selected or Export All to write processed images. Standard
    images retain source resolution; RAW files are re-decoded at full resolution
    one at a time so batch memory remains bounded.
 
-The native engine can now detect dust masks, but the app does not expose dust
+The native app can display dust-mask candidates, but it does not apply dust
 removal until Telea inpainting is connected. Use the legacy Python application
-when automatic dust removal is required. See
+when automatic removal is required. See
 [Native macOS Development](development/native-macos.md) for the current status.
 
 ## Legacy Python Application (Maintenance Only)

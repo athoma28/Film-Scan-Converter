@@ -4,7 +4,6 @@ import numpy as np
 from PIL import Image
 import os 
 
-import matplotlib.colors
 from matplotlib.colors import Normalize, rgb_to_hsv, hsv_to_rgb
 
 import logging
@@ -445,8 +444,15 @@ class RawProcessing:
         output = np.zeros_like(edges)
         if lines is not None:
             for i in range(0, len(lines)):
-                l = lines[i][0]
-                cv2.line(output, (l[0], l[1]), (l[2], l[3]), 255, 2, cv2.LINE_AA)
+                line = lines[i][0]
+                cv2.line(
+                    output,
+                    (line[0], line[1]),
+                    (line[2], line[3]),
+                    255,
+                    2,
+                    cv2.LINE_AA,
+                )
         
         output = cv2.dilate(output,kernel,iterations = 8)
         output = cv2.erode(output,kernel,iterations = 8)

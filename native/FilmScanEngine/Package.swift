@@ -29,7 +29,10 @@ let package = Package(
     ),
     .target(
       name: "FilmScanEngine",
-      dependencies: ["CLibRawShim"]
+      dependencies: ["CLibRawShim"],
+      swiftSettings: [
+        .unsafeFlags(["-Xcc", "-DACCELERATE_NEW_LAPACK"])
+      ]
     ),
     .target(
       name: "FilmScanPreviewRenderer",

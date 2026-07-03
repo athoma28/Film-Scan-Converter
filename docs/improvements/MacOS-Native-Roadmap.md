@@ -26,8 +26,9 @@ with continuous Double bindings, and the perceptual regression/visual acceptance
 gate verifying CPU/GPU parity across 2,725 comparisons with 0 failures (max
 2/255). This track improves what the primary controls mean without folding
 every feature from the design primer into the product.
-Dust handling is paused after native parity-tested mask detection. Telea FMM
-inpainting and app integration remain a deferred Python replacement gate. Work
+Dust handling is paused after native parity-tested mask detection and an
+orientation/crop-aligned diagnostic overlay in the app. Telea FMM inpainting
+and applying removal to preview/export remain a deferred Python replacement gate. Work
 has moved through the independent workflow/settings slices: per-file correction
 persistence, named presets, and system-clipboard copy/paste are complete.
 Transferred settings intentionally preserve each target frame's orientation,
@@ -35,11 +36,11 @@ crop geometry, and measured film-base state.
 
 The TIFF/JPEG/PNG/DNG export contract is implemented with individual and
 batch-all workflows, cancellation, partial-file cleanup, and 19 focused
-format/manager tests. The app-level Export All path intentionally uses lazy
-sequential decode/classify/process/write for unloaded batch files so large
-import lists do not require all decoded working buffers to remain resident.
-`ExportManager.exportBatch()` remains available for callers that already hold
-a bounded prebuilt request set.
+format/manager tests. The app-level Export All path lazily
+decodes/classifies/processes unloaded files so large import lists do not retain
+all decoded working buffers. Standard images are written through bounded
+two-request `ExportManager.exportBatch()` chunks; full-resolution RAW files
+remain single-request operations.
 The native app exports processed images with applied corrections, frame, and
 aspect ratio. Standard images retain source resolution; RAW exports re-decode
 one file at a time at full resolution while interactive previews remain
@@ -422,7 +423,8 @@ contract.
   modes, memory-bounded concurrency heuristic, `Task.isCancelled` checking at
   each request boundary, `ExportManagerError.cancelled` for remaining items,
   and per-file error cleanup via `FileManager.removeItem`. The app-level Export
-  All workflow uses sequential lazy requests to preserve bounded memory.
+  All workflow lazily prepares at most two standard-image requests for
+  `exportBatch`; full-resolution RAW requests remain sequential.
   19 focused tests in `ExportTests`.
 
 ### 1.14 Film-Specific Camera-Scan Processing Track
@@ -796,9 +798,9 @@ Deliverables (all implemented):
    unit suffixes (EV, %) are displayed alongside formatted values. No custom
    modifier-key behavior is claimed.
 4. ~~Show a restrained clipping indicator derived from rendered statistics, not
-   merely from the slider position.~~ Deferred. The statistics infrastructure
-   exists in `RenderReadyImageStatistics`; a clipping indicator view can be
-   added once the perceptual gate validates representative corpus coverage.
+   merely from the slider position.~~ Done. A bounded proxy of the displayed
+   frame feeds `RenderReadyImageStatistics`; the Grade inspector reports the
+   most affected channel's shadow and highlight clipping percentages.
 
 All legacy Int-based sliders (Temperature, Tint, Saturation, Dark, Light,
 Border) are wrapped with continuous Double bindings that round on commit.

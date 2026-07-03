@@ -1,4 +1,5 @@
 import CoreImage
+import CoreGraphics
 import FilmScanEngine
 import Metal
 
@@ -127,6 +128,47 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       format: .RGBA8,
       colorSpace: Self.outputColorSpace
     )
+  }
+
+  /// Computes bounded clipping and tone statistics from the displayed image.
+  /// The analysis proxy is capped so interactive rendering does not retain a
+  /// second full-size pixel buffer.
+  public static func statistics(
+    for image: CGImage,
+    maximumDimension: Int = 256
+  ) -> RenderReadyImageStatistics? {
+    guard maximumDimension > 0, image.width > 0, image.height > 0 else { return nil }
+    let scale = min(
+      1,
+      Double(maximumDimension) / Double(max(image.width, image.height))
+    )
+    let width = max(1, Int((Double(image.width) * scale).rounded()))
+    let height = max(1, Int((Double(image.height) * scale).rounded()))
+    var rgba = [UInt8](repeating: 0, count: width * height * 4)
+    guard let context = CGContext(
+      data: &rgba,
+      width: width,
+      height: height,
+      bitsPerComponent: 8,
+      bytesPerRow: width * 4,
+      space: CGColorSpaceCreateDeviceRGB(),
+      bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue
+        | CGImageAlphaInfo.noneSkipLast.rawValue
+    ) else {
+      return nil
+    }
+    context.interpolationQuality = .medium
+    context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+    var bgr = [Double](repeating: 0, count: width * height * 3)
+    for pixelIndex in 0..<(width * height) {
+      let source = pixelIndex * 4
+      let destination = pixelIndex * 3
+      bgr[destination] = Double(rgba[source + 2]) / 255
+      bgr[destination + 1] = Double(rgba[source + 1]) / 255
+      bgr[destination + 2] = Double(rgba[source]) / 255
+    }
+    return RenderReadyLinearImage(width: width, height: height, pixels: bgr).statistics()
   }
 
   private func curveLUTImage(parameters: ProcessingParameters) -> CIImage {

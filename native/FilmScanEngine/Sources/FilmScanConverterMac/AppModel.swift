@@ -13,10 +13,14 @@ final class AppModel: ObservableObject {
   @Published private(set) var isRendering = false
   @Published private(set) var isLoading = false
   @Published var showOriginal = false {
-    didSet { scheduleRender() }
+    didSet {
+      resetDustState(cancelTask: true)
+      scheduleRender()
+    }
   }
   @Published private(set) var status = "Drop film scans into the window to begin."
   @Published private(set) var renderStats = RenderStats()
+  @Published private(set) var previewStatistics = RenderReadyImageStatistics.empty
   @Published private(set) var isShowingEmbeddedRawPreview = false
   @Published private(set) var exportParameters = ExportParameters()
   @Published private(set) var isExporting = false
@@ -36,9 +40,19 @@ final class AppModel: ObservableObject {
   @Published private(set) var cropThresholdPreview: UInt16Image?
   @Published private(set) var isCropDetectionRunning = false
   @Published private(set) var cropStatus: String = ""
+  @Published private(set) var dustMaskImage: NSImage?
+  @Published private(set) var isDustDetectionRunning = false
+  @Published private(set) var dustStatus: String = ""
   @Published private(set) var namedCorrectionPresets: [NamedCorrectionPreset] = []
   @Published private(set) var settingsStatus: String = ""
   @Published private(set) var previewCacheLimit: Int
+  @Published private(set) var availableCaptureProfiles: [CaptureProfile] = []
+  @Published private(set) var availableFilmStockProfiles: [FilmStockProfile] = []
+  @Published private(set) var availableRollProfiles: [RollProfile] = []
+  @Published var selectedCaptureProfileID = CaptureProfile.default.id
+  @Published var selectedFilmStockProfileID = FilmStockProfile.genericColorNegative.id
+  @Published var selectedRollProfileID: String?
+  @Published private(set) var profileStatus: String = ""
 
   let profileStore: ProfileStore
   private let settingsStore: PerFileSettingsStore?
@@ -83,6 +97,7 @@ final class AppModel: ObservableObject {
         settingsStatus = "Saved presets could not be loaded."
       }
     }
+    reloadProfiles()
   }
 
   public struct RenderStats: Sendable {
@@ -107,11 +122,13 @@ final class AppModel: ObservableObject {
   private var predecodeTask: Task<Void, Never>?
   private var rebateTask: Task<Void, Never>?
   private var cropDetectionTask: Task<Void, Never>?
+  private var dustDetectionTask: Task<Void, Never>?
   private var renderTask: Task<Void, Never>?
   private var pendingRender: PreviewRenderRequest?
   private var activeExportQueue: [URL] = []
   private var activeExportDestinations: [URL] = []
   private var activeExportSeen: Set<String> = []
+  private var activeExportParameters: ExportParameters?
   private var renderLoopGeneration = 0
   private var lastSubmitTime: Date = .distantPast
   private var lastRenderEnd: ContinuousClock.Instant = .now
@@ -171,12 +188,14 @@ final class AppModel: ObservableObject {
     let gen = loadGeneration
     resetRebateState(cancelTask: true)
     resetCropState(cancelTask: true)
+    resetDustState(cancelTask: true)
 
     guard let selection else {
       previewImage = nil
       decodedImage = nil
       previewSource = nil
       previewRenderer = nil
+      previewStatistics = .empty
       isShowingEmbeddedRawPreview = false
       isLoading = false
       cancelPredecode()
@@ -548,7 +567,120 @@ final class AppModel: ObservableObject {
     }
   }
 
+  func applySelectedPipelineProfiles() {
+    if let selectedRollProfileID {
+      rollProfile = availableRollProfiles.first { $0.rollID == selectedRollProfileID }
+      if let rollProfile {
+        selectedCaptureProfileID = rollProfile.captureProfileID
+        selectedFilmStockProfileID = rollProfile.filmStockID
+      }
+    } else {
+      rollProfile = nil
+    }
+    resolveAndApplyDensityPipeline(
+      captureProfileID: selectedCaptureProfileID,
+      stockProfileID: selectedFilmStockProfileID
+    )
+    profileStatus = rebateStatus
+  }
+
+  func saveCurrentCaptureProfile(named rawName: String) {
+    let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !name.isEmpty else {
+      profileStatus = "Enter a profile name."
+      return
+    }
+    do {
+      let source = try profileStore.resolveCaptureProfile(id: selectedCaptureProfileID)
+      let profile = CaptureProfile(
+        id: CaptureProfileID(rawValue: Self.profileID(from: name)),
+        cameraModel: source.cameraModel,
+        lensModel: source.lensModel,
+        backlightDescription: source.backlightDescription,
+        estimatedColorTemperature: source.estimatedColorTemperature,
+        normalizationParams: source.normalizationParams,
+        preferredISO: source.preferredISO,
+        notes: source.notes
+      )
+      try profileStore.saveCaptureProfile(profile)
+      selectedCaptureProfileID = profile.id
+      reloadProfiles()
+      profileStatus = "Saved capture profile “\(name)”."
+    } catch {
+      profileStatus = "Capture profile could not be saved: \(error.localizedDescription)"
+    }
+  }
+
+  func saveCurrentFilmStockProfile(named rawName: String) {
+    let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !name.isEmpty else {
+      profileStatus = "Enter a profile name."
+      return
+    }
+    do {
+      let profile = FilmStockProfile(
+        id: FilmStockProfileID(rawValue: Self.profileID(from: name)),
+        displayName: name,
+        filmType: parameters.filmType,
+        c41Profile: parameters.densityC41Profile,
+        displayRendering: parameters.densityDisplayParams,
+        notes: "Saved from Film Scan Converter"
+      )
+      try profileStore.saveFilmStockProfile(profile)
+      selectedFilmStockProfileID = profile.id
+      reloadProfiles()
+      profileStatus = "Saved film-stock profile “\(name)”."
+    } catch {
+      profileStatus = "Film-stock profile could not be saved: \(error.localizedDescription)"
+    }
+  }
+
+  private func reloadProfiles() {
+    let builtInCapture = profileStore.builtInCaptureProfiles()
+    let storedCapture = profileStore.listCaptureProfiles().compactMap {
+      try? profileStore.loadCaptureProfile(id: $0)
+    }
+    availableCaptureProfiles = Self.uniqueCaptureProfiles(builtInCapture + storedCapture)
+
+    let builtInStock = profileStore.builtInFilmStockProfiles()
+    let storedStock = profileStore.listFilmStockProfiles().compactMap {
+      try? profileStore.loadFilmStockProfile(id: $0)
+    }
+    availableFilmStockProfiles = Self.uniqueFilmStockProfiles(builtInStock + storedStock)
+    do {
+      availableRollProfiles = try profileStore.loadRollProfiles().sorted {
+        $0.rollID.localizedCaseInsensitiveCompare($1.rollID) == .orderedAscending
+      }
+    } catch {
+      availableRollProfiles = []
+      profileStatus = "Saved roll profiles could not be loaded."
+    }
+  }
+
+  nonisolated private static func profileID(from name: String) -> String {
+    let normalized = name.lowercased().map { character -> Character in
+      character.isLetter || character.isNumber ? character : "_"
+    }
+    let collapsed = String(normalized).split(separator: "_").joined(separator: "_")
+    return collapsed.isEmpty ? "profile" : collapsed
+  }
+
+  nonisolated private static func uniqueCaptureProfiles(
+    _ profiles: [CaptureProfile]
+  ) -> [CaptureProfile] {
+    Dictionary(profiles.map { ($0.id, $0) }, uniquingKeysWith: { _, stored in stored })
+      .values.sorted { $0.id.rawValue < $1.id.rawValue }
+  }
+
+  nonisolated private static func uniqueFilmStockProfiles(
+    _ profiles: [FilmStockProfile]
+  ) -> [FilmStockProfile] {
+    Dictionary(profiles.map { ($0.id, $0) }, uniquingKeysWith: { _, stored in stored })
+      .values.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+  }
+
   func resetCorrections() {
+    resetDustState(cancelTask: true)
     parameters = ProcessingParameters()
     if let selection { editedKeys.insert(settingsKey(selection)) }
     resetCropState(cancelTask: true)
@@ -623,13 +755,20 @@ final class AppModel: ObservableObject {
   }
 
   private func applyCorrectionSettings(_ settings: CorrectionSettings) {
-    updateParameters { current in
-      current = settings.applying(to: current)
+    resetDustState(cancelTask: true)
+    if let selection {
+      automaticallyClassifiedKeys.remove(settingsKey(selection))
+      editedKeys.insert(settingsKey(selection))
     }
+    parameters = settings.applying(to: parameters)
     populateFilmNegativeMedians()
-    saveParameters()
-    scheduleRender(immediate: true)
     cropRect = parameters.cropRect
+    saveParameters()
+    if showOriginal {
+      showOriginal = false
+    } else {
+      scheduleRender(immediate: true)
+    }
   }
 
   func applyCurrentSettingsToAllOpenFiles() {
@@ -668,7 +807,7 @@ final class AppModel: ObservableObject {
     guard panel.runModal() == .OK, let url = panel.url else {
       return
     }
-    exportParameters.destinationDirectory = url
+    setExportDestinationDirectory(url)
   }
 
   func setExportDestinationDirectory(_ url: URL?) {
@@ -685,14 +824,6 @@ final class AppModel: ObservableObject {
 
   func setExportAspectRatio(_ ratio: AspectRatio?) {
     exportParameters.aspectRatio = ratio
-  }
-
-  func setExportAspectRatioCustom(width: Int, height: Int) {
-    if width > 0 && height > 0 {
-      exportParameters.aspectRatio = AspectRatio(width: width, height: height)
-    } else {
-      exportParameters.aspectRatio = nil
-    }
   }
 
   func setJpegQuality(_ quality: Double) {
@@ -721,7 +852,8 @@ final class AppModel: ObservableObject {
 
   func addSelectedToExportQueue() {
     guard isExporting, let selection,
-      let destinationDirectory = exportParameters.destinationDirectory
+      let activeExportParameters,
+      let destinationDirectory = activeExportParameters.destinationDirectory
     else { return }
     let key = settingsKey(selection)
     guard !activeExportSeen.contains(key) else {
@@ -730,7 +862,7 @@ final class AppModel: ObservableObject {
     }
     guard var destination = try? reserveDestinationURLs(
       for: [selection], destinationDirectory: destinationDirectory,
-      format: exportParameters.format
+      format: activeExportParameters.format
     ).first else {
       status = "Could not reserve an export destination for \(selection.lastPathComponent)."
       return
@@ -741,7 +873,7 @@ final class AppModel: ObservableObject {
     while reserved.contains(destination.lastPathComponent.lowercased()) {
       suffix += 1
       destination = destinationDirectory.appendingPathComponent(
-        "\(stem)-\(suffix).\(exportParameters.format.fileExtension)")
+        "\(stem)-\(suffix).\(activeExportParameters.format.fileExtension)")
     }
     activeExportSeen.insert(key)
     activeExportQueue.append(selection)
@@ -910,8 +1042,6 @@ final class AppModel: ObservableObject {
       $0.densityPipelineEnabled = true
       $0.densityBaseDensity = candidate.measurement.baseDensity
     }
-    saveParameters()
-    scheduleRender()
   }
 
   func createRollProfile(from candidate: AutomaticRebateCandidate) {
@@ -932,6 +1062,10 @@ final class AppModel: ObservableObject {
     do {
       try profileStore.saveRollProfile(profile)
       rollProfile = profile
+      selectedRollProfileID = profile.rollID
+      selectedCaptureProfileID = profile.captureProfileID
+      selectedFilmStockProfileID = profile.filmStockID
+      reloadProfiles()
       rebateStatus = "Roll profile saved as \(rollID)."
       resolveAndApplyDensityPipeline(
         captureProfileID: captureID,
@@ -1031,7 +1165,7 @@ final class AppModel: ObservableObject {
         cropStatus = "No crop frame detected."
         return
       }
-      applyCrop(result.rect, render: false)
+      setCropRect(result.rect)
       cropThresholdPreview = result.threshold
       cropStatus = String(
         format: "Crop: %.1f°  w:%.3f  h:%.3f  at (%.3f, %.3f)",
@@ -1041,8 +1175,60 @@ final class AppModel: ObservableObject {
         result.rect.centerX,
         result.rect.centerY
       )
-      scheduleRender(immediate: true)
     }
+  }
+
+  func detectDustMask() {
+    guard let source = previewSource, source.channels == 3 else {
+      dustStatus = "Load a three-channel scan first."
+      return
+    }
+    dustDetectionTask?.cancel()
+    isDustDetectionRunning = true
+    dustStatus = "Detecting dust…"
+    let selectedURL = selection
+    let displayParameters = parameters
+    dustDetectionTask = Task { [weak self] in
+      guard let self else { return }
+      let mask = await Task.detached(priority: .userInitiated) {
+        DustDetection.findMask(in: source)
+      }.value
+      guard !Task.isCancelled, self.selection == selectedURL else { return }
+      let croppedMask = displayParameters.cropRect.flatMap {
+        PerspectiveTransform.crop(
+          mask,
+          normalizedRect: $0,
+          borderPercent: displayParameters.borderCrop
+        )
+      } ?? mask
+      let orientedMask = croppedMask.rotated(
+        quarterTurns: displayParameters.rotation,
+        flipHorizontally: displayParameters.flip
+      )
+      let displayMask = UInt16Image(
+        width: orientedMask.width,
+        height: orientedMask.height,
+        channels: mask.channels,
+        pixels: orientedMask.pixels.map { $0 == 0 ? 0 : UInt16.max }
+      )
+      guard let cgImage = displayMask.makePreviewCGImage() else {
+        self.isDustDetectionRunning = false
+        self.dustStatus = "Dust mask could not be displayed."
+        return
+      }
+      self.dustMaskImage = NSImage(cgImage: cgImage, size: .zero)
+      self.isDustDetectionRunning = false
+      let detected = mask.pixels.reduce(into: 0) { count, value in
+        if value != 0 { count += 1 }
+      }
+      self.dustStatus = detected == 0
+        ? "No dust candidates found."
+        : "Showing \(detected) dust-mask pixels."
+    }
+  }
+
+  func clearDustMask() {
+    resetDustState(cancelTask: true)
   }
 
   func clearCrop() {
@@ -1093,7 +1279,18 @@ final class AppModel: ObservableObject {
     cropStatus = ""
   }
 
+  private func resetDustState(cancelTask: Bool) {
+    if cancelTask {
+      dustDetectionTask?.cancel()
+      dustDetectionTask = nil
+    }
+    dustMaskImage = nil
+    isDustDetectionRunning = false
+    dustStatus = ""
+  }
+
   private func applyCrop(_ rect: RotatedRect, render: Bool) {
+    resetDustState(cancelTask: true)
     cropRect = rect
     parameters.cropRect = rect
     if let selection { editedKeys.insert(settingsKey(selection)) }
@@ -1121,6 +1318,7 @@ final class AppModel: ObservableObject {
     var params = exportParameters
     params.destinationDirectory = destDir
     let exportParams = params
+    activeExportParameters = exportParams
     activeExportQueue = urls
     activeExportSeen = Set(urls.map(settingsKey))
     exportQueueCount = urls.count
@@ -1131,6 +1329,7 @@ final class AppModel: ObservableObject {
       status = "Unable to inspect export destination: \(error.localizedDescription)"
       activeExportQueue = []
       activeExportSeen = []
+      activeExportParameters = nil
       exportQueueCount = 0
       return
     }
@@ -1149,42 +1348,59 @@ final class AppModel: ObservableObject {
 
       var index = 0
       while index < self.activeExportQueue.count {
-        let url = self.activeExportQueue[index]
-        let destinationURL = self.activeExportDestinations[index]
         if Task.isCancelled {
-          results.append(
-            ExportManager.ExportResult(
-              sourceURL: url,
-              destinationURL: destinationURL,
-              error: ExportManager.ExportManagerError.cancelled
-            ))
-          index += 1
-          continue
+          for remainingIndex in index..<self.activeExportQueue.count {
+            results.append(
+              ExportManager.ExportResult(
+                sourceURL: self.activeExportQueue[remainingIndex],
+                destinationURL: self.activeExportDestinations[remainingIndex],
+                error: ExportManager.ExportManagerError.cancelled
+              ))
+          }
+          index = self.activeExportQueue.count
+          break
         }
 
-        do {
-          let request = try await self.makeExportRequest(
-            for: url,
-            exportParams: exportParams,
-            destinationURL: destinationURL
+        let firstURL = self.activeExportQueue[index]
+        let nextIsFullResolutionRAW = index + 1 < self.activeExportQueue.count
+          && Self.requiresFullResolutionExportDecode(self.activeExportQueue[index + 1])
+        let batchSize = Self.requiresFullResolutionExportDecode(firstURL) || nextIsFullResolutionRAW
+          ? 1 : 2
+        let endIndex = min(index + batchSize, self.activeExportQueue.count)
+        var requests: [ExportManager.ExportRequest] = []
+        for requestIndex in index..<endIndex {
+          let url = self.activeExportQueue[requestIndex]
+          let destinationURL = self.activeExportDestinations[requestIndex]
+          do {
+            requests.append(
+              try await self.makeExportRequest(
+                for: url,
+                exportParams: exportParams,
+                destinationURL: destinationURL
+              ))
+          } catch {
+            results.append(
+              ExportManager.ExportResult(
+                sourceURL: url,
+                destinationURL: destinationURL,
+                error: error
+              ))
+          }
+        }
+        if !requests.isEmpty {
+          let batchResults = await manager.exportBatch(
+            requests: requests,
+            maxConcurrent: min(2, requests.count)
           )
-          let fileResults = await manager.export(requests: [request])
-          results.append(contentsOf: fileResults)
-        } catch {
-          results.append(
-            ExportManager.ExportResult(
-              sourceURL: url,
-              destinationURL: destinationURL,
-              error: error
-            ))
+          results.append(contentsOf: batchResults)
         }
 
+        index = endIndex
         await MainActor.run {
-          self.exportProgressCurrent = index + 1
+          self.exportProgressCurrent = index
           self.exportProgressTotal = self.activeExportQueue.count
-          self.exportQueueCount = self.activeExportQueue.count - index - 1
+          self.exportQueueCount = self.activeExportQueue.count - index
         }
-        index += 1
       }
 
       await MainActor.run {
@@ -1192,6 +1408,7 @@ final class AppModel: ObservableObject {
         self.activeExportQueue = []
         self.activeExportDestinations = []
         self.activeExportSeen = []
+        self.activeExportParameters = nil
         self.exportQueueCount = 0
         let failures = results.filter { !$0.isSuccess }
         if failures.isEmpty {
@@ -1351,6 +1568,7 @@ final class AppModel: ObservableObject {
   }
 
   private func updateParameters(_ update: (inout ProcessingParameters) -> Void) {
+    resetDustState(cancelTask: true)
     if let selection {
       automaticallyClassifiedKeys.remove(settingsKey(selection))
       editedKeys.insert(settingsKey(selection))
@@ -1585,7 +1803,11 @@ final class AppModel: ObservableObject {
             showOriginal: request.showOriginal
           )
         {
-          return RenderedPreview(cgImage: rendered, rendererName: "GPU")
+          return RenderedPreview(
+            cgImage: rendered,
+            rendererName: "GPU",
+            statistics: StillPreviewRenderer.statistics(for: rendered) ?? .empty
+          )
         }
         let rendered =
           request.showOriginal
@@ -1601,7 +1823,16 @@ final class AppModel: ObservableObject {
         guard let preview = rendered.makePreviewCGImage() else {
           return nil
         }
-        return RenderedPreview(cgImage: preview, rendererName: "CPU")
+        let linear = RenderReadyLinearImage(
+          width: rendered.width,
+          height: rendered.height,
+          pixels: rendered.pixels.map { Double($0) / 65_535 }
+        )
+        return RenderedPreview(
+          cgImage: preview,
+          rendererName: "CPU",
+          statistics: linear.statistics()
+        )
       }.value
 
       let renderDuration = Date().timeIntervalSince(renderStart) * 1000
@@ -1645,6 +1876,7 @@ final class AppModel: ObservableObject {
         stats.submittedSnapshots, stats.displayedRenders, stats.droppedSnapshots)
 
       previewImage = NSImage(cgImage: preview, size: .zero)
+      previewStatistics = result.statistics
       status =
         "\(request.selection.lastPathComponent) • \(preview.width)×\(preview.height) \(result.rendererName) preview"
 
@@ -1707,4 +1939,5 @@ private struct CachedPreviewSession: Sendable {
 private struct RenderedPreview: Sendable {
   let cgImage: CGImage
   let rendererName: String
+  let statistics: RenderReadyImageStatistics
 }
