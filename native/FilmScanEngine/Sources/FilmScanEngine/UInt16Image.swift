@@ -164,7 +164,7 @@ public struct UInt16Image: Equatable, Sendable {
     return UInt16Image(width: outputWidth, height: outputHeight, channels: channels, pixels: output)
   }
 
-  func rgba16Data() -> Data? {
+  package func rgba16Data() -> Data? {
     guard channels == 1 || channels == 3 else {
       return nil
     }

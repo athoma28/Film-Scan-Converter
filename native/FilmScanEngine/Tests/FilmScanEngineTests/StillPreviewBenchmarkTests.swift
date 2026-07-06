@@ -25,6 +25,19 @@ struct StillPreviewBenchmarkTests {
     )
   }
 
+  private static func createDeterministicImage(width: Int, height: Int) -> UInt16Image {
+    let componentCount = width * height * 3
+    var pixels = [UInt16]()
+    pixels.reserveCapacity(componentCount)
+    // Stable seed from the commit that exposed the source-conversion drift.
+    var state: UInt64 = 0x67CD_9321_9D23_E551
+    for _ in 0..<componentCount {
+      state = state &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+      pixels.append(UInt16(truncatingIfNeeded: state >> 32))
+    }
+    return UInt16Image(width: width, height: height, channels: 3, pixels: pixels)
+  }
+
   private static func makeParameterGrid(count: Int) -> [ProcessingParameters] {
     var parameters = [ProcessingParameters]()
     parameters.reserveCapacity(count)
@@ -150,7 +163,7 @@ struct StillPreviewBenchmarkTests {
 
   @Test("Production renderer stays visually equivalent to authoritative CPU pipeline")
   func productionRendererMatchesAuthoritativePipeline() {
-    let image = Self.createRandomImage(width: 128, height: 96)
+    let image = Self.createDeterministicImage(width: 128, height: 96)
     guard let renderer = StillPreviewRenderer(image: image) else {
       #expect(Bool(false), "Could not create production still preview renderer")
       return
@@ -245,19 +258,7 @@ struct StillPreviewBenchmarkTests {
 
   @Test("Production renderer matches CPU across parameter grid")
   func productionRendererMatchesCPUParameterGrid() {
-    let width = 64
-    let height = 48
-    var deterministicPixels = [UInt16]()
-    deterministicPixels.reserveCapacity(width * height * 3)
-    for index in 0..<(width * height * 3) {
-      deterministicPixels.append(UInt16((index * 7_919 + (index / 3) * 10_471) % 65_536))
-    }
-    let image = UInt16Image(
-      width: width,
-      height: height,
-      channels: 3,
-      pixels: deterministicPixels
-    )
+    let image = Self.createDeterministicImage(width: 64, height: 48)
     guard let renderer = StillPreviewRenderer(image: image) else {
       #expect(Bool(false), "Could not create production still preview renderer")
       return
@@ -420,19 +421,7 @@ struct StillPreviewBenchmarkTests {
 
   @Test("Tone controls match CPU within 2/255 across representative parameter grid")
   func toneControlsMatchCPU() {
-    let width = 64
-    let height = 48
-    var deterministicPixels = [UInt16]()
-    deterministicPixels.reserveCapacity(width * height * 3)
-    for index in 0..<(width * height * 3) {
-      deterministicPixels.append(UInt16((index * 7_919 + (index / 3) * 10_471) % 65_536))
-    }
-    let image = UInt16Image(
-      width: width,
-      height: height,
-      channels: 3,
-      pixels: deterministicPixels
-    )
+    let image = Self.createDeterministicImage(width: 64, height: 48)
     guard let renderer = StillPreviewRenderer(image: image) else {
       #expect(Bool(false), "Could not create production still preview renderer")
       return

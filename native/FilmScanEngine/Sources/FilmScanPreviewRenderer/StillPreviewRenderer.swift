@@ -37,13 +37,19 @@ public final class StillPreviewRenderer: @unchecked Sendable {
 
   public init?(image: UInt16Image) {
     guard
-      let cgImage = image.makePreviewCGImage16(),
+      let rgba = image.rgba16Data(),
       let kernel = Self.sharedKernel
     else {
       return nil
     }
 
-    source = CIImage(cgImage: cgImage)
+    source = CIImage(
+      bitmapData: rgba,
+      bytesPerRow: image.width * 4 * MemoryLayout<UInt16>.stride,
+      size: CGSize(width: image.width, height: image.height),
+      format: .RGBA16,
+      colorSpace: nil
+    )
     correctionKernel = kernel
   }
 
