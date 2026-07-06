@@ -40,6 +40,31 @@ public enum AppBundleValidator {
       issues.append("LSMinimumSystemVersion must be 14.0")
     }
 
+    if let iconName = info["CFBundleIconFile"] as? String,
+       !iconName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    {
+      let iconFilename = iconName.hasSuffix(".icns") ? iconName : "\(iconName).icns"
+      let iconURL = contentsURL
+        .appendingPathComponent("Resources", isDirectory: true)
+        .appendingPathComponent(iconFilename)
+      if !fileManager.fileExists(atPath: iconURL.path) {
+        issues.append("Contents/Resources/\(iconFilename) is missing")
+      }
+    } else {
+      issues.append("CFBundleIconFile is missing")
+    }
+
+    let documentTypes = info["CFBundleDocumentTypes"] as? [[String: Any]]
+    let registeredContentTypes = documentTypes?.flatMap { documentType in
+      documentType["LSItemContentTypes"] as? [String] ?? []
+    } ?? []
+    if !registeredContentTypes.contains("public.image") {
+      issues.append("CFBundleDocumentTypes must register public.image")
+    }
+    if !registeredContentTypes.contains("public.camera-raw-image") {
+      issues.append("CFBundleDocumentTypes must register public.camera-raw-image")
+    }
+
     guard
       let executableName = info["CFBundleExecutable"] as? String,
       !executableName.isEmpty

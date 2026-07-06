@@ -204,13 +204,14 @@ known-value math, failure behavior, and workflow contracts matter more than a
 raw percentage. Still, every new engine slice should measure coverage so
 untested branches are understood rather than accidental.
 
-Current full-suite coverage snapshot from 2026-06-16:
+Current full-suite coverage snapshot from 2026-07-05:
 
 | Scope | Line coverage | Interpretation |
 |---|---:|---|
-| `FilmScanEngine` sources | 85.8% | Solid engine baseline after RAW direct decode, export, and thumbnail work; remaining gaps include logging, platform/error branches, optional-output fallbacks, and older processing paths. |
-| All included native targets | 55.6% | App/view code is intentionally much less covered than engine code; app workflow tests should be prioritized over broad view-line coverage. |
-| `FilmNegativeProcessing.swift` | 92.3% | Normal math paths are well covered; remaining gaps are mostly validation traps and rare fallback branches. |
+| `FilmScanEngine` sources | 91.0% | Engine behavior is well covered after RAW, export, orientation, and processing regressions; remaining gaps include logging, platform/error branches, and optional-output fallbacks. |
+| All production native targets | 52.5% | SwiftUI view/app-entry code remains largely uncovered; app workflow tests should be prioritized over broad view-line coverage. |
+| `FilmNegativeProcessing.swift` | 93.3% | Normal math paths and CPU/GPU parity are covered; remaining gaps are mostly validation traps and rare fallback branches. |
+| `AppModel.swift` | 74.4% | Loading, queued cancellation, cache, export, persistence, profiles, and render scheduling have integration coverage; panel/UI-only and failure branches remain the main gaps. |
 
 Use the full native suite to regenerate coverage:
 
@@ -1052,6 +1053,19 @@ active release-validation work:
   reject extreme outliers, and require a minimum sample count before presenting
   an ETA. Queue progress should be the sum of predicted remaining stage costs,
   with an indeterminate/equal-weight fallback when history is insufficient.
+- **40 MP loading performance track:** minimize work before first corrected
+  pixels without weakening the later authoritative decode. The first increment
+  includes embedded RAW JPEGs decoded by ImageIO directly to the
+  640-pixel preview bound rather than expanded at their full embedded dimensions
+  and resized afterward, plus bounded provisional ImageIO decoding for standard
+  images followed by the authoritative full-resolution decode with the same
+  metadata orientation. Selected-file and lookahead authoritative decodes share
+  a serial actor; canceled queued work exits before allocating another decoded
+  image, and an active synchronous decode completes before the next begins.
+  Next, add release signposts for thumbnail extraction,
+  ImageIO decode/conversion, first render, and background RAW replacement, then
+  benchmark representative 40 MP RAW and standard-image inputs. Preserve bounded
+  lookahead and do not retain an additional full-size thumbnail buffer.
 - **40 MP export performance track:** add a release-mode representative-RAW
   benchmark and signpost decode/demosaic, processing, geometry/frame, color
   conversion, and writer finalization separately. Capture cold/warm duration,
@@ -1059,7 +1073,8 @@ active release-validation work:
   hot paths by evaluating copy removal, scratch-buffer reuse, tiled operators,
   Accelerate/Metal kernels, and encoder configuration. Acceptance requires
   unchanged full-resolution pixels within the existing contract, metadata,
-  cleanup/cancellation behavior, and one-full-resolution-RAW-at-a-time memory
+  matching provisional/authoritative orientation, cleanup/cancellation behavior,
+  and one-full-resolution-RAW-at-a-time memory
   bounds; fidelity-reducing shortcuts belong behind a future explicit fast mode.
 
 ---
@@ -1187,8 +1202,10 @@ Git push
     destination frame's crop/orientation and measured film-base state.
 13. **Phase 3** — Packaging and release validation are active. Self-contained
     app/ZIP assembly, non-system dependency embedding, bundle-relative load
-    paths, hardened-runtime signing support, automated bundle validation,
-    extracted-archive revalidation, and release documentation are complete.
+    paths, a packaged app icon and macOS menu identity, image/camera-RAW
+    document registration, hardened-runtime signing support, automated bundle
+    and registration validation, extracted-archive revalidation, local packaged
+    launch, and release documentation are complete.
     Developer ID notarization, Gatekeeper, and clean-machine installation
     remain. Dust inpainting remains paused;
     crop/perspective, export UI, batch export, and settings management are

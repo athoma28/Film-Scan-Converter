@@ -181,6 +181,22 @@ struct RawImageDecoderTests {
     #expect(thumbnail.image.makePreviewCGImage() != nil)
   }
 
+  @Test(
+    "Representative RAF embedded thumbnail decodes directly to the requested preview bound",
+    .enabled(if: rawCorpusAvailable, "sample-raw corpus unavailable; bounded thumbnail test skipped")
+  )
+  func embeddedThumbnailDecodeRespectsPreviewBound() throws {
+    let rawURL = repositoryRoot.appending(path: "sample-raw/DSCF2422.RAF")
+
+    let thumbnail = try RawImageDecoder.extractThumbnail(rawURL, maxDimension: 640)
+
+    #expect(max(thumbnail.width, thumbnail.height) <= 640)
+    #expect(max(thumbnail.width, thumbnail.height) >= 600)
+    #expect(thumbnail.image.width == thumbnail.width)
+    #expect(thumbnail.image.height == thumbnail.height)
+    #expect(thumbnail.image.pixels.count == thumbnail.width * thumbnail.height * 3)
+  }
+
   @Test("Standard images do not enter the RAW decoder")
   func rejectsStandardImageExtension() {
     #expect(throws: RawImageDecoderError.self) {

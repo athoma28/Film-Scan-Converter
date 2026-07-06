@@ -22,6 +22,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var renderStats = RenderStats()
   @Published private(set) var previewStatistics = RenderReadyImageStatistics.empty
   @Published private(set) var isShowingEmbeddedRawPreview = false
+  @Published private(set) var isShowingProvisionalPreview = false
   @Published private(set) var exportParameters = ExportParameters()
   @Published private(set) var isExporting = false
   @Published private(set) var exportProgressCurrent = 0
@@ -59,6 +60,7 @@ final class AppModel: ObservableObject {
   private let presetStore: NamedCorrectionPresetStore?
   private let settingsClipboard: CorrectionSettingsClipboard
   private let preferences: UserDefaults
+  private let authoritativeDecoder = AuthoritativeImageDecoder()
 
   init(
     profileStore: ProfileStore? = nil,
@@ -98,6 +100,9 @@ final class AppModel: ObservableObject {
       }
     }
     reloadProfiles()
+    Task.detached(priority: .medium) {
+      StillPreviewRenderer.warmUp()
+    }
   }
 
   public struct RenderStats: Sendable {
@@ -118,7 +123,7 @@ final class AppModel: ObservableObject {
   private var previewSource: UInt16Image?
   private var previewRenderer: StillPreviewRenderer?
   private var loadTask: Task<Void, Never>?
-  private var rawSwapTask: Task<Void, Never>?
+  private var authoritativeDecodeTask: Task<Void, Never>?
   private var predecodeTask: Task<Void, Never>?
   private var rebateTask: Task<Void, Never>?
   private var cropDetectionTask: Task<Void, Never>?
@@ -139,6 +144,16 @@ final class AppModel: ObservableObject {
 
   var previewCacheSessionCount: Int {
     previewCache.count
+  }
+
+  var selectedImageDimensions: (width: Int, height: Int, provisional: Bool)? {
+    if let decodedImage {
+      return (decodedImage.width, decodedImage.height, false)
+    }
+    if let previewSource {
+      return (previewSource.width, previewSource.height, true)
+    }
+    return nil
   }
 
   func hasCachedPreview(for url: URL) -> Bool {
@@ -182,7 +197,7 @@ final class AppModel: ObservableObject {
 
   func loadSelection() {
     loadTask?.cancel()
-    rawSwapTask?.cancel()
+    authoritativeDecodeTask?.cancel()
     cancelRenderLoop()
     loadGeneration += 1
     let gen = loadGeneration
@@ -197,6 +212,7 @@ final class AppModel: ObservableObject {
       previewRenderer = nil
       previewStatistics = .empty
       isShowingEmbeddedRawPreview = false
+      isShowingProvisionalPreview = false
       isLoading = false
       cancelPredecode()
       status = "Drop film scans into the window to begin."
@@ -212,6 +228,7 @@ final class AppModel: ObservableObject {
     previewSource = nil
     previewRenderer = nil
     isShowingEmbeddedRawPreview = false
+    isShowingProvisionalPreview = false
     let key = settingsKey(selection)
     let hasStoredSettings = settingsByPath[key] != nil
     parameters = settingsByPath[key] ?? ProcessingParameters()
@@ -231,11 +248,15 @@ final class AppModel: ObservableObject {
 
     let isRaw = FileDropPolicy.rawExtensions.contains(selection.pathExtension.lowercased())
 
-    if isRaw, let thumbnail = try? RawImageDecoder.extractThumbnail(selection) {
-      let proxy = thumbnail.image.resizedToFit(maxDimension: Self.previewMaxDimension)
+    if isRaw,
+      let thumbnail = try? RawImageDecoder.extractThumbnail(
+        selection, maxDimension: Self.previewMaxDimension)
+    {
+      let proxy = thumbnail.image
       previewSource = proxy
       previewRenderer = StillPreviewRenderer(image: proxy)
       isShowingEmbeddedRawPreview = true
+      isShowingProvisionalPreview = true
       isLoading = false
       status = "Loading \(selection.lastPathComponent)..."
       if hasStoredSettings {
@@ -243,14 +264,11 @@ final class AppModel: ObservableObject {
       }
       cacheCurrentSession(for: selection)
       scheduleRender(immediate: true)
-      scheduleLookaheadPredecode(after: selection)
 
-      rawSwapTask = Task { [weak self] in
+      authoritativeDecodeTask = Task { [weak self] in
         guard let self else { return }
         do {
-          let decoded = try await Task.detached(priority: .userInitiated) {
-            return try RawImageDecoder.decode(selection, profile: .rawTherapeeCameraScan).image
-          }.value
+          let decoded = try await self.authoritativeDecoder.decode(selection)
           try Task.checkCancellation()
           guard gen == self.loadGeneration else { return }
           guard self.selection == selection else { return }
@@ -262,17 +280,19 @@ final class AppModel: ObservableObject {
           )
           decodedImage = decoded
           isShowingEmbeddedRawPreview = false
+          isShowingProvisionalPreview = false
           let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
           previewSource = proxy
           previewRenderer = StillPreviewRenderer(image: proxy)
           isLoading = false
-          if hasStoredSettings {
+          if self.settingsByPath[key] != nil {
             populateFilmNegativeMedians()
           } else {
             applyAutomaticFilmClassification(from: proxy)
           }
           cacheCurrentSession(for: selection)
           scheduleRender(immediate: true)
+          scheduleLookaheadPredecode(after: selection)
         } catch is CancellationError {
           return
         } catch {
@@ -283,6 +303,62 @@ final class AppModel: ObservableObject {
             error: error.localizedDescription
           )
           isLoading = false
+          isShowingEmbeddedRawPreview = false
+          isShowingProvisionalPreview = false
+          status = "Unable to decode \(selection.lastPathComponent): \(error.localizedDescription)"
+        }
+      }
+      return
+    }
+
+    if StandardImageDecoder.supportedExtensions.contains(selection.pathExtension.lowercased()),
+      let proxy = try? StandardImageDecoder.decodePreview(
+        selection, maxDimension: Self.previewMaxDimension)
+    {
+      previewSource = proxy
+      previewRenderer = StillPreviewRenderer(image: proxy)
+      isShowingProvisionalPreview = true
+      isLoading = false
+      status = "Loading \(selection.lastPathComponent)..."
+      if hasStoredSettings {
+        populateFilmNegativeMedians()
+      }
+      scheduleRender(immediate: true)
+
+      authoritativeDecodeTask = Task { [weak self] in
+        guard let self else { return }
+        do {
+          let decoded = try await self.authoritativeDecoder.decode(selection)
+          try Task.checkCancellation()
+          guard gen == self.loadGeneration, self.selection == selection else { return }
+          ImportLog.loadSelectionDecodeComplete(
+            path: selection.lastPathComponent,
+            width: decoded.width,
+            height: decoded.height,
+            channels: decoded.channels
+          )
+          decodedImage = decoded
+          isShowingProvisionalPreview = false
+          let authoritativeProxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
+          previewSource = authoritativeProxy
+          previewRenderer = StillPreviewRenderer(image: authoritativeProxy)
+          if self.settingsByPath[key] != nil {
+            populateFilmNegativeMedians()
+          } else {
+            applyAutomaticFilmClassification(from: authoritativeProxy)
+          }
+          cacheCurrentSession(for: selection)
+          scheduleRender(immediate: true)
+          scheduleLookaheadPredecode(after: selection)
+        } catch is CancellationError {
+          return
+        } catch {
+          guard gen == self.loadGeneration, self.selection == selection else { return }
+          ImportLog.loadSelectionDecodeFailed(
+            path: selection.lastPathComponent,
+            error: error.localizedDescription
+          )
+          isShowingProvisionalPreview = false
           status = "Unable to decode \(selection.lastPathComponent): \(error.localizedDescription)"
         }
       }
@@ -296,13 +372,7 @@ final class AppModel: ObservableObject {
         return
       }
       do {
-        let decoded = try await Task.detached(priority: .userInitiated) {
-          if StandardImageDecoder.supportedExtensions.contains(selection.pathExtension.lowercased())
-          {
-            return try StandardImageDecoder.decode(selection)
-          }
-          return try RawImageDecoder.decode(selection, profile: .rawTherapeeCameraScan).image
-        }.value
+        let decoded = try await self.authoritativeDecoder.decode(selection)
         try Task.checkCancellation()
         guard gen == self.loadGeneration else {
           ImportLog.loadSelectionCancelled(path: selection.lastPathComponent)
@@ -324,6 +394,7 @@ final class AppModel: ObservableObject {
         previewRenderer = StillPreviewRenderer(image: proxy)
         isLoading = false
         isShowingEmbeddedRawPreview = false
+        isShowingProvisionalPreview = false
         if hasStoredSettings {
           populateFilmNegativeMedians()
         } else {
@@ -860,21 +931,30 @@ final class AppModel: ObservableObject {
       status = "\(selection.lastPathComponent) is already in this export run."
       return
     }
-    guard var destination = try? reserveDestinationURLs(
-      for: [selection], destinationDirectory: destinationDirectory,
-      format: activeExportParameters.format
-    ).first else {
-      status = "Could not reserve an export destination for \(selection.lastPathComponent)."
-      return
-    }
-    let reserved = Set(activeExportDestinations.map { $0.lastPathComponent.lowercased() })
+
     let stem = selection.deletingPathExtension().lastPathComponent
-    var suffix = 1
-    while reserved.contains(destination.lastPathComponent.lowercased()) {
-      suffix += 1
-      destination = destinationDirectory.appendingPathComponent(
-        "\(stem)-\(suffix).\(activeExportParameters.format.fileExtension)")
+    let ext = activeExportParameters.format.fileExtension
+
+    var existingNames: Set<String>
+    if let dirContents = try? FileManager.default.contentsOfDirectory(
+      at: destinationDirectory, includingPropertiesForKeys: nil
+    ).map({ $0.lastPathComponent.lowercased() }) {
+      existingNames = Set(dirContents)
+    } else {
+      existingNames = []
     }
+    for dest in activeExportDestinations {
+      existingNames.insert(dest.lastPathComponent.lowercased())
+    }
+
+    var filename = "\(stem).\(ext)"
+    var suffix = 1
+    while existingNames.contains(filename.lowercased()) {
+      suffix += 1
+      filename = "\(stem)-\(suffix).\(ext)"
+    }
+    let destination = destinationDirectory.appendingPathComponent(filename)
+
     activeExportSeen.insert(key)
     activeExportQueue.append(selection)
     activeExportDestinations.append(destination)
@@ -1629,15 +1709,12 @@ final class AppModel: ObservableObject {
         let targetKey = self.settingsKey(target)
         do {
           ImportLog.loadSelectionDecodeStarted(path: "predecode \(target.lastPathComponent)")
-          let session = try await Task.detached(priority: .utility) { () -> CachedPreviewSession? in
-            let decoded = try Self.decodeImage(target)
-            let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
-            guard let renderer = StillPreviewRenderer(image: proxy) else { return nil }
-            return CachedPreviewSession(
-              decodedImage: decoded, previewSource: proxy, previewRenderer: renderer)
-          }.value
+          let decoded = try await self.authoritativeDecoder.decode(target)
+          let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
+          guard let renderer = StillPreviewRenderer(image: proxy) else { continue }
+          let session = CachedPreviewSession(
+            decodedImage: decoded, previewSource: proxy, previewRenderer: renderer)
           try Task.checkCancellation()
-          guard let session else { continue }
           guard self.selection == selection, self.previewCache[targetKey] == nil else { continue }
           if self.settingsByPath[targetKey] == nil {
             self.settingsByPath[targetKey] = Self.automaticallyClassifiedParameters(
@@ -1712,7 +1789,7 @@ final class AppModel: ObservableObject {
     previewCacheOrder.append(key)
   }
 
-  private func scheduleRender(immediate _: Bool = false) {
+  private func scheduleRender(immediate: Bool = false) {
     guard let selection, let previewSource else {
       return
     }
@@ -1759,12 +1836,15 @@ final class AppModel: ObservableObject {
 
     renderLoopGeneration += 1
     let generation = renderLoopGeneration
+    let skipCoalesce = immediate
     renderTask = Task { [weak self] in
       guard let self else { return }
-      let now = ContinuousClock.now
-      let elapsed = self.lastRenderEnd.duration(to: now)
-      if elapsed < Self.renderCoalesceInterval {
-        try? await Task.sleep(for: Self.renderCoalesceInterval - elapsed)
+      if !skipCoalesce {
+        let now = ContinuousClock.now
+        let elapsed = self.lastRenderEnd.duration(to: now)
+        if elapsed < Self.renderCoalesceInterval {
+          try? await Task.sleep(for: Self.renderCoalesceInterval - elapsed)
+        }
       }
       guard generation == self.renderLoopGeneration, !Task.isCancelled else { return }
       await self.processRenderQueue(generation: generation)
@@ -1792,7 +1872,6 @@ final class AppModel: ObservableObject {
       let signpostID = OSSignpostID(log: Self.signpostLog)
       let renderStart = Date()
       let submitTime = request.submitTime
-
       let result: RenderedPreview? = await Task.detached(priority: .userInitiated) { () -> RenderedPreview? in
         let useGPU = request.renderer != nil
           && !request.parameters.densityPipelineEnabled
@@ -1912,11 +1991,28 @@ final class AppModel: ObservableObject {
     url.standardizedFileURL.path
   }
 
-  nonisolated private static func decodeImage(_ url: URL) throws -> UInt16Image {
+  nonisolated fileprivate static func decodeImage(_ url: URL) throws -> UInt16Image {
     if StandardImageDecoder.supportedExtensions.contains(url.pathExtension.lowercased()) {
       return try StandardImageDecoder.decode(url)
     }
     return try RawImageDecoder.decode(url, profile: .rawTherapeeCameraScan).image
+  }
+}
+
+actor AuthoritativeImageDecoder {
+  typealias DecodeOperation = @Sendable (URL) throws -> UInt16Image
+
+  private let operation: DecodeOperation
+
+  init(operation: @escaping DecodeOperation = AppModel.decodeImage) {
+    self.operation = operation
+  }
+
+  func decode(_ url: URL) throws -> UInt16Image {
+    try Task.checkCancellation()
+    let decoded = try operation(url)
+    try Task.checkCancellation()
+    return decoded
   }
 }
 

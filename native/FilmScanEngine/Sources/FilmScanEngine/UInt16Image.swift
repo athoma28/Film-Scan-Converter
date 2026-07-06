@@ -164,55 +164,79 @@ public struct UInt16Image: Equatable, Sendable {
     return UInt16Image(width: outputWidth, height: outputHeight, channels: channels, pixels: output)
   }
 
-  func rgba16Components() -> [UInt16]? {
+  func rgba16Data() -> Data? {
     guard channels == 1 || channels == 3 else {
       return nil
     }
 
     let pixelCount = width * height
-    var components = [UInt16](repeating: 0, count: pixelCount * 4)
-    for i in 0..<pixelCount {
-      let dst = i * 4
-      if channels == 1 {
-        let value = pixels[i]
-        components[dst] = value
-        components[dst + 1] = value
-        components[dst + 2] = value
-        components[dst + 3] = .max
-      } else {
-        let src = i * 3
-        components[dst] = pixels[src + 2]
-        components[dst + 1] = pixels[src + 1]
-        components[dst + 2] = pixels[src]
-        components[dst + 3] = .max
+    var data = Data(count: pixelCount * 8)
+    let singleChannel = channels == 1
+    data.withUnsafeMutableBytes { (rbp: UnsafeMutableRawBufferPointer) in
+      let buf = rbp.bindMemory(to: UInt16.self)
+      pixels.withUnsafeBufferPointer { src in
+        if singleChannel {
+          var di = 0
+          for i in 0..<pixelCount {
+            let v = src[i]
+            buf[di] = v
+            buf[di + 1] = v
+            buf[di + 2] = v
+            buf[di + 3] = .max
+            di += 4
+          }
+        } else {
+          var si = 0
+          var di = 0
+          for _ in 0..<pixelCount {
+            buf[di] = src[si + 2]
+            buf[di + 1] = src[si + 1]
+            buf[di + 2] = src[si]
+            buf[di + 3] = .max
+            si += 3
+            di += 4
+          }
+        }
       }
     }
-    return components
+    return data
   }
 
-  func rgba8Components() -> [UInt8]? {
+  func rgba8Data() -> Data? {
     guard channels == 1 || channels == 3 else {
       return nil
     }
 
     let pixelCount = width * height
-    var bytes = [UInt8](repeating: 0, count: pixelCount * 4)
-    for i in 0..<pixelCount {
-      let dst = i * 4
-      if channels == 1 {
-        let value = UInt8(truncatingIfNeeded: pixels[i] >> 8)
-        bytes[dst] = value
-        bytes[dst + 1] = value
-        bytes[dst + 2] = value
-        bytes[dst + 3] = 255
-      } else {
-        let src = i * 3
-        bytes[dst] = UInt8(truncatingIfNeeded: pixels[src + 2] >> 8)
-        bytes[dst + 1] = UInt8(truncatingIfNeeded: pixels[src + 1] >> 8)
-        bytes[dst + 2] = UInt8(truncatingIfNeeded: pixels[src] >> 8)
-        bytes[dst + 3] = 255
+    var data = Data(count: pixelCount * 4)
+    let singleChannel = channels == 1
+    data.withUnsafeMutableBytes { (rbp: UnsafeMutableRawBufferPointer) in
+      let buf = rbp.bindMemory(to: UInt8.self)
+      pixels.withUnsafeBufferPointer { src in
+        if singleChannel {
+          var di = 0
+          for i in 0..<pixelCount {
+            let v = UInt8(truncatingIfNeeded: src[i] >> 8)
+            buf[di] = v
+            buf[di + 1] = v
+            buf[di + 2] = v
+            buf[di + 3] = 255
+            di += 4
+          }
+        } else {
+          var si = 0
+          var di = 0
+          for _ in 0..<pixelCount {
+            buf[di] = UInt8(truncatingIfNeeded: src[si + 2] >> 8)
+            buf[di + 1] = UInt8(truncatingIfNeeded: src[si + 1] >> 8)
+            buf[di + 2] = UInt8(truncatingIfNeeded: src[si] >> 8)
+            buf[di + 3] = 255
+            si += 3
+            di += 4
+          }
+        }
       }
     }
-    return bytes
+    return data
   }
 }

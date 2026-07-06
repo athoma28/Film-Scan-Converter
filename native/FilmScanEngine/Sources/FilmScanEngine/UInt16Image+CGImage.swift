@@ -3,11 +3,10 @@ import Foundation
 
 extension UInt16Image {
   public func makePreviewCGImage16() -> CGImage? {
-    guard let components = rgba16Components() else {
+    guard let data = rgba16Data() else {
       return nil
     }
 
-    let data = components.withUnsafeBytes { Data($0) }
     guard let provider = CGDataProvider(data: data as CFData) else {
       return nil
     }
@@ -29,11 +28,11 @@ extension UInt16Image {
   }
 
   public func makePreviewCGImage() -> CGImage? {
-    guard let bytes = rgba8Components() else {
+    guard let data = rgba8Data() else {
       return nil
     }
 
-    guard let provider = CGDataProvider(data: Data(bytes) as CFData) else {
+    guard let provider = CGDataProvider(data: data as CFData) else {
       return nil
     }
     return CGImage(

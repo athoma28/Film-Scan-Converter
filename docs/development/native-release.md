@@ -8,8 +8,9 @@ validation against the archived copy.
 
 ## Current Status
 
-Bundle assembly, local ad-hoc signing, ZIP creation, and extracted-archive
-validation are implemented and verified. A Developer ID certificate and Apple
+Bundle assembly, local ad-hoc signing, ZIP creation, extracted-archive
+validation, app-icon and document-registration validation, and local packaged
+launch are implemented and verified. A Developer ID certificate and Apple
 notary credentials are still required to complete notarization, Gatekeeper
 validation, and clean-machine installation. Do not describe the app as
 generally distributable until those gates pass.
@@ -28,6 +29,17 @@ creates:
 
 - `dist/Film Scan Converter.app`
 - `dist/Film-Scan-Converter-0.1.0.zip`
+
+Test the actual Launch Services path rather than the SwiftPM executable:
+
+```sh
+open "dist/Film Scan Converter.app"
+```
+
+The bundle includes the app icon, standard macOS application menus, and image
+and camera-RAW document registration. Confirm that the app becomes frontmost,
+uses its own Dock/menu-bar identity, and can receive a supported file through
+Finder's Open With command.
 
 Override release metadata through the environment:
 

@@ -8,6 +8,42 @@ public enum StandardImageDecoder {
   ]
 
   public static func decode(_ url: URL) throws -> UInt16Image {
+    try validate(url)
+    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+      let image = fullImageApplyingMetadataOrientation(source)
+    else {
+      DecodeLog.standardImageFailed(
+        path: url.lastPathComponent,
+        error: "unreadableImage"
+      )
+      throw StandardImageDecoderError.unreadableImage
+    }
+    return try decode(image, sourceURL: url)
+  }
+
+  public static func decodePreview(_ url: URL, maxDimension: Int) throws -> UInt16Image {
+    try validate(url)
+    guard maxDimension > 0 else {
+      throw StandardImageDecoderError.invalidPreviewDimension
+    }
+    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+      let image = CGImageSourceCreateThumbnailAtIndex(
+        source,
+        0,
+        [
+          kCGImageSourceCreateThumbnailFromImageAlways: true,
+          kCGImageSourceCreateThumbnailWithTransform: true,
+          kCGImageSourceThumbnailMaxPixelSize: maxDimension,
+          kCGImageSourceShouldCacheImmediately: true,
+        ] as CFDictionary
+      )
+    else {
+      throw StandardImageDecoderError.unreadableImage
+    }
+    return try decode(image, sourceURL: url)
+  }
+
+  private static func validate(_ url: URL) throws {
     guard url.isFileURL,
       supportedExtensions.contains(url.pathExtension.lowercased())
     else {
@@ -17,19 +53,32 @@ public enum StandardImageDecoder {
       )
       throw StandardImageDecoderError.unsupportedFileType
     }
-    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
-      let image = CGImageSourceCreateImageAtIndex(
-        source,
-        0,
-        [kCGImageSourceShouldCacheImmediately: true] as CFDictionary
-      )
-    else {
-      DecodeLog.standardImageFailed(
-        path: url.lastPathComponent,
-        error: "unreadableImage"
-      )
-      throw StandardImageDecoderError.unreadableImage
+  }
+
+  private static func fullImageApplyingMetadataOrientation(
+    _ source: CGImageSource
+  ) -> CGImage? {
+    guard let image = CGImageSourceCreateImageAtIndex(
+      source,
+      0,
+      [kCGImageSourceShouldCacheImmediately: true] as CFDictionary
+    ) else {
+      return nil
     }
+    let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
+    let orientation = (properties?[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+    guard orientation != 1 else { return image }
+
+    let options: [CFString: Any] = [
+      kCGImageSourceCreateThumbnailFromImageAlways: true,
+      kCGImageSourceCreateThumbnailWithTransform: true,
+      kCGImageSourceThumbnailMaxPixelSize: max(image.width, image.height),
+      kCGImageSourceShouldCacheImmediately: true,
+    ]
+    return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+  }
+
+  private static func decode(_ image: CGImage, sourceURL url: URL) throws -> UInt16Image {
     guard image.width > 0, image.height > 0 else {
       DecodeLog.standardImageFailed(
         path: url.lastPathComponent,
@@ -170,6 +219,7 @@ public enum StandardImageDecoderError: LocalizedError {
   case unsupportedColorModel
   case alphaChannelNotSupported
   case cannotCreateBitmapContext
+  case invalidPreviewDimension
 
   public var errorDescription: String? {
     switch self {
@@ -185,6 +235,8 @@ public enum StandardImageDecoderError: LocalizedError {
       "Images with alpha channels are not supported by the processing pipeline."
     case .cannotCreateBitmapContext:
       "Core Graphics could not create a 16-bit decoding buffer."
+    case .invalidPreviewDimension:
+      "The preview dimension must be positive."
     }
   }
 }

@@ -40,6 +40,17 @@ This file contains only package-local build and implementation notes.
   End-to-end real-file drag
   latency still requires verification. See the
   [real-time still preview plan](../docs/development/realtime-preview-plan.md).
+  For RAW first paint, ImageIO now decodes the embedded JPEG directly to this
+  640-pixel bound instead of allocating and converting the full embedded image.
+  Standard images use the same provisional-preview principle and swap to their
+  full-resolution authoritative decode in the background. Preview and full
+  standard-image decoding apply the same metadata orientation. Selected-file
+  and lookahead authoritative decodes are serialized; canceled queued work is
+  discarded before it starts, avoiding overlapping large decode buffers during
+  rapid selection changes.
+  Loading and full-resolution export of representative 40 MP files are both
+  explicit performance targets; export changes remain gated on a release-mode
+  staged benchmark and unchanged output fidelity.
 - Per-file correction settings are loaded from and atomically saved to a
   versioned JSON document in Application Support, keyed by standardized source
   path. Invalid persistence data falls back to defaults without blocking launch.
@@ -89,7 +100,9 @@ This file contains only package-local build and implementation notes.
   unclamped linear BGR adjustment seam. Its deterministic robust statistics are
   hard-capped at 65,536 samples, keeping statistics scratch memory independent
   of full-resolution RAW dimensions. A bounded displayed-image proxy now feeds
-  those statistics to the Grade inspector's clipping readout.
+  those statistics to the Grade inspector's clipping readout from the first
+  displayed render. The inspector labels provisional dimensions and reports
+  authoritative source dimensions after the full decode swaps in.
 - `DustDetection` reproduces the legacy 16-bit-to-gray conversion, percentile
   threshold, morphological closing, contour-area filtering, filled mask, and
   final dilation across frozen Python/OpenCV fixtures. Percentiles use a fixed
@@ -108,7 +121,11 @@ This file contains only package-local build and implementation notes.
   medians, RawTherapee's `1/24` linear output reference, sRGB transfer handling,
   and both tone curves from the bundled Film Negative preset before final clamp.
   Inversion is evaluated in linear Rec.2020 after sRGB decode on CPU and Metal
-  paths, then converted back to display sRGB. The camera-scan decoder
+  paths, then converted back to display sRGB. The optimized CPU path uses one
+  UInt16-to-linear-sRGB LUT and applies the Rec.2020 matrix once; scalar median
+  calibration remains shared with the Metal renderer. One-channel legacy
+  exposure remains supported outside the optimized BGR loop. The camera-scan
+  decoder
   installs RCD for full-resolution Bayer decode, installs three-pass
   Markesteijn interpolation for full-resolution X-Trans decode, and applies
   bounded ISO-tier sharpening or denoising while exposing ISO and executed
@@ -179,11 +196,20 @@ swift run --package-path native/FilmScanEngine FilmScanConverterMac
 ```
 
 Build a self-contained, locally signed release app and ZIP. The packager also
-extracts the ZIP and revalidates the archived app contract and signature:
+embeds the application icon, extracts the ZIP, and revalidates the archived app
+contract and signature:
 
 ```sh
 native/package-release.sh
+open "dist/Film Scan Converter.app"
 ```
+
+Use this packaged launch path when testing normal macOS behavior. It registers
+the app with Launch Services, gives it its own Dock icon and menu-bar identity,
+and enables Open With for supported image and camera-RAW documents. `swift run`
+remains useful for development, but it does not exercise the installed-app path.
+The release validator rejects bundles that omit the declared icon or either
+the standard-image or camera-RAW document registration.
 
 Set `SIGNING_IDENTITY` to an exact Developer ID Application identity for a
 distribution candidate. The default ad-hoc signature is only for local bundle

@@ -268,6 +268,31 @@ struct ProcessingTests {
     #expect(actual.pixels == [20, 10])
   }
 
+  @Test("Legacy exposure processing remains safe for one-channel images")
+  func correctedPreviewGrayscaleExposure() {
+    let image = UInt16Image(
+      width: 3,
+      height: 1,
+      channels: 1,
+      pixels: [4_000, 24_000, 56_000]
+    )
+    var parameters = ProcessingParameters(filmType: .slide)
+    parameters.gamma = 35
+    parameters.shadows = 20
+    parameters.highlights = -15
+
+    let actual = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+    let expected = FilmProcessing.exposure(
+      image: image.pixels.map(Double.init),
+      gamma: parameters.gamma,
+      shadows: parameters.shadows,
+      highlights: parameters.highlights
+    ).map { UInt16(min(max($0, 0), 65_535)) }
+
+    #expect(actual.channels == 1)
+    #expect(actual.pixels == expected)
+  }
+
   private func assertFloat64Equal(_ actual: [Double], _ expected: [Double], tolerance: Double = 0.5)
   {
     #expect(actual.count == expected.count)

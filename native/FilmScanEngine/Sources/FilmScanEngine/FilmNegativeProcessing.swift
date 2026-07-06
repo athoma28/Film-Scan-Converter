@@ -280,6 +280,85 @@ public struct DisplayRenderingParameters: Codable, Equatable, Sendable {
 public enum FilmNegativeProcessing {
   private static let maxOutput: Double = 65535.0
   public static let calibrationTargetFraction: Double = 1.0 / 24.0
+
+  // ── Accelerated UInt16 → linear sRGB LUT ──
+
+  /// Shared UInt16 sRGB-to-linear lookup table. The Rec.2020 matrix is applied
+  /// after lookup so off-diagonal terms are not scaled twice.
+  private static let sRGBToLinearLUT: [Float] = {
+    var lut = [Float](repeating: 0, count: 65536)
+    for i in 0...65535 {
+      lut[i] = Float(sRGBToLinear(Double(i) / maxOutput))
+    }
+    return lut
+  }()
+
+  // ── Fused power-law inversion (UInt16 → UInt16, single pass) ──
+
+  /// Applies power-law film negative inversion and display encoding in a single
+  /// fused pass. Uses a precomputed Float LUT for sRGB-to-linear conversion,
+  /// then applies the Rec.2020 matrices and Double `pow` for the per-channel
+  /// power-law step to preserve precision.
+  ///
+  /// This is 2–3× faster than the separate
+  /// `powerLawRenderReadyLinear` + `renderPowerLawDisplay` path for the common
+  /// case (no additional tone or colour adjustments).
+  public static func applyFusedPowerLawInversion(
+    image: UInt16Image,
+    params: FilmNegativeParams,
+    borderPercent: Double = 20.0
+  ) -> UInt16Image {
+    precondition(image.channels == 3, "Film negative inversion requires 3-channel BGR image")
+    guard params.enabled else { return image }
+
+    let redExp = -(params.greenExp * params.redRatio)
+    let greenExp = -params.greenExp
+    let blueExp = -(params.greenExp * params.blueRatio)
+    let inputFloor = 1.0 / maxOutput
+
+    let bMedian = params.measuredMedians?.blue
+      ?? image.channelMedian(channel: 0, borderPercent: borderPercent)
+    let gMedian = params.measuredMedians?.green
+      ?? image.channelMedian(channel: 1, borderPercent: borderPercent)
+    let rMedian = params.measuredMedians?.red
+      ?? image.channelMedian(channel: 2, borderPercent: borderPercent)
+
+    let multipliers = computeMultipliers(
+      medians: BGRChannelValues(blue: bMedian, green: gMedian, red: rMedian),
+      params: params
+    )
+
+    let pixelCount = image.width * image.height
+    var output = [UInt16](repeating: 0, count: pixelCount * 3)
+
+    for i in 0..<pixelCount {
+      let base = i * 3
+      let b = image.pixels[base]
+      let g = image.pixels[base + 1]
+      let r = image.pixels[base + 2]
+
+      let linearB = Double(sRGBToLinearLUT[Int(b)])
+      let linearG = Double(sRGBToLinearLUT[Int(g)])
+      let linearR = Double(sRGBToLinearLUT[Int(r)])
+      var linB = 0.8955953 * linearB + 0.0880133 * linearG + 0.0163914 * linearR
+      var linG = 0.0113623 * linearB + 0.9195404 * linearG + 0.0690973 * linearR
+      var linR = 0.0433131 * linearB + 0.3292830 * linearG + 0.6274039 * linearR
+
+      linB = multipliers.b * pow(max(linB, inputFloor), blueExp)
+      linG = multipliers.g * pow(max(linG, inputFloor), greenExp)
+      linR = multipliers.r * pow(max(linR, inputFloor), redExp)
+
+      let srgbB = 1.1187297 * linB - 0.1005789 * linG - 0.0181508 * linR
+      let srgbG = -0.0083494 * linB + 1.1328999 * linG - 0.1245505 * linR
+      let srgbR = -0.0728499 * linB - 0.5876411 * linG + 1.6604910 * linR
+
+      output[base] = displayEncodedFilmNegativeValue(srgbB)
+      output[base + 1] = displayEncodedFilmNegativeValue(srgbG)
+      output[base + 2] = displayEncodedFilmNegativeValue(srgbR)
+    }
+
+    return UInt16Image(width: image.width, height: image.height, channels: 3, pixels: output)
+  }
   public static let sensorBlackThreshold: UInt16 = 256
 
   public static func applyPowerLawInversion(
@@ -287,68 +366,12 @@ public enum FilmNegativeProcessing {
     params: FilmNegativeParams,
     borderPercent: Double = 20.0
   ) -> UInt16Image {
-    precondition(image.channels == 3, "Film negative inversion requires 3-channel BGR image")
-    guard params.enabled else {
-      return image
-    }
-
-    let rexp = -(params.greenExp * params.redRatio)
-    let gexp = -params.greenExp
-    let bexp = -(params.greenExp * params.blueRatio)
-
-    let bMedian: Double
-    let gMedian: Double
-    let rMedian: Double
-    if let cached = params.measuredMedians {
-      bMedian = Double(cached.blue)
-      gMedian = Double(cached.green)
-      rMedian = Double(cached.red)
-    } else {
-      bMedian = image.channelMedian(channel: 0, borderPercent: borderPercent)
-      gMedian = image.channelMedian(channel: 1, borderPercent: borderPercent)
-      rMedian = image.channelMedian(channel: 2, borderPercent: borderPercent)
-    }
-
-    let reference = linearSRGBToRec2020(
-      red: sRGBToLinear(rMedian / maxOutput),
-      green: sRGBToLinear(gMedian / maxOutput),
-      blue: sRGBToLinear(bMedian / maxOutput)
-    )
-    let refInputB = max(reference.blue, 1.0 / maxOutput)
-    let refInputG = max(reference.green, 1.0 / maxOutput)
-    let refInputR = max(reference.red, 1.0 / maxOutput)
-
-    let refOutput = calibrationTargetFraction
-
-    let bMult = refOutput / pow(refInputB, bexp)
-    let gMult = refOutput / pow(refInputG, gexp)
-    let rMult = refOutput / pow(refInputR, rexp)
-
-    var out = [UInt16](repeating: 0, count: image.pixels.count)
-    let count = image.width * image.height
-    for i in 0..<count {
-      let base = i * 3
-      let working = linearSRGBToRec2020(
-        red: sRGBToLinear(Double(image.pixels[base + 2]) / maxOutput),
-        green: sRGBToLinear(Double(image.pixels[base + 1]) / maxOutput),
-        blue: sRGBToLinear(Double(image.pixels[base]) / maxOutput)
-      )
-      let display = linearRec2020ToSRGB(
-        red: rMult * pow(max(working.red, 1.0 / maxOutput), rexp),
-        green: gMult * pow(max(working.green, 1.0 / maxOutput), gexp),
-        blue: bMult * pow(max(working.blue, 1.0 / maxOutput), bexp)
-      )
-      out[base] = displayEncodedFilmNegativeValue(display.blue)
-      out[base + 1] = displayEncodedFilmNegativeValue(display.green)
-      out[base + 2] = displayEncodedFilmNegativeValue(display.red)
-    }
-
-    return UInt16Image(width: image.width, height: image.height, channels: 3, pixels: out)
+    applyFusedPowerLawInversion(image: image, params: params, borderPercent: borderPercent)
   }
 
-  /// Produces the unclamped linear Rec.2020 result used by the modern
-  /// photographic-adjustment path. The retained UInt16 wrapper above remains
-  /// allocation-efficient for legacy preview/export compatibility.
+  /// Produces the unclamped linear Rec.2020 result. Uses a Float LUT to
+  /// eliminate the sRGB→linear pow() calls while keeping Double precision
+  /// for the power-law step and matrix arithmetic.
   public static func powerLawRenderReadyLinear(
     image: UInt16Image,
     params: FilmNegativeParams,
@@ -356,56 +379,71 @@ public enum FilmNegativeProcessing {
   ) -> RenderReadyLinearImage {
     precondition(image.channels == 3, "Film negative inversion requires 3-channel BGR image")
 
-    let multipliers = params.enabled
-      ? computeMultipliers(
-        medians: params.measuredMedians ?? computeMedians(image: image, borderPercent: borderPercent),
-        params: params
-      )
-      : (r: 1.0, g: 1.0, b: 1.0)
-    let redExponent = -(params.greenExp * params.redRatio)
-    let greenExponent = -params.greenExp
-    let blueExponent = -(params.greenExp * params.blueRatio)
+    let redExp = -(params.greenExp * params.redRatio)
+    let greenExp = -params.greenExp
+    let blueExp = -(params.greenExp * params.blueRatio)
     let inputFloor = 1.0 / maxOutput
-    var output = [Double](repeating: 0, count: image.pixels.count)
 
-    for pixelIndex in 0..<(image.width * image.height) {
-      let base = pixelIndex * 3
-      let source = linearSRGBToRec2020(
-        red: sRGBToLinear(Double(image.pixels[base + 2]) / maxOutput),
-        green: sRGBToLinear(Double(image.pixels[base + 1]) / maxOutput),
-        blue: sRGBToLinear(Double(image.pixels[base]) / maxOutput)
-      )
+    let multipliers: (r: Double, g: Double, b: Double)
+    if params.enabled {
+      let medians = params.measuredMedians
+        ?? computeMedians(image: image, borderPercent: borderPercent)
+      multipliers = computeMultipliers(medians: medians, params: params)
+    } else {
+      multipliers = (r: 1, g: 1, b: 1)
+    }
+
+    let pixelCount = image.width * image.height
+    let totalComponents = pixelCount * 3
+    var output = [Double](repeating: 0, count: totalComponents)
+
+    for i in 0..<pixelCount {
+      let base = i * 3
+      let b = image.pixels[base]
+      let g = image.pixels[base + 1]
+      let r = image.pixels[base + 2]
+
+      let linearB = Double(sRGBToLinearLUT[Int(b)])
+      let linearG = Double(sRGBToLinearLUT[Int(g)])
+      let linearR = Double(sRGBToLinearLUT[Int(r)])
+      var linB = 0.8955953 * linearB + 0.0880133 * linearG + 0.0163914 * linearR
+      var linG = 0.0113623 * linearB + 0.9195404 * linearG + 0.0690973 * linearR
+      var linR = 0.0433131 * linearB + 0.3292830 * linearG + 0.6274039 * linearR
 
       if params.enabled {
-        output[base] = multipliers.b * pow(max(source.blue, inputFloor), blueExponent)
-        output[base + 1] = multipliers.g * pow(max(source.green, inputFloor), greenExponent)
-        output[base + 2] = multipliers.r * pow(max(source.red, inputFloor), redExponent)
-      } else {
-        output[base] = source.blue
-        output[base + 1] = source.green
-        output[base + 2] = source.red
+        linB = multipliers.b * pow(max(linB, inputFloor), blueExp)
+        linG = multipliers.g * pow(max(linG, inputFloor), greenExp)
+        linR = multipliers.r * pow(max(linR, inputFloor), redExp)
       }
+
+      output[base] = linB
+      output[base + 1] = linG
+      output[base + 2] = linR
     }
 
     return RenderReadyLinearImage(width: image.width, height: image.height, pixels: output)
   }
 
-  /// Applies the existing RawTherapee-compatible display encoding and tone
-  /// curve to an unclamped power-law result.
+  /// Applies the RawTherapee-compatible display encoding and tone curve to an
+  /// unclamped power-law result.
   public static func renderPowerLawDisplay(
     _ image: RenderReadyLinearImage
   ) -> UInt16Image {
+    let pixelCount = image.pixelCount
     var output = [UInt16](repeating: 0, count: image.pixels.count)
-    for pixelIndex in 0..<image.pixelCount {
+    for pixelIndex in 0..<pixelCount {
       let base = pixelIndex * 3
-      let display = linearRec2020ToSRGB(
-        red: image.pixels[base + 2],
-        green: image.pixels[base + 1],
-        blue: image.pixels[base]
-      )
-      output[base] = displayEncodedFilmNegativeValue(display.blue)
-      output[base + 1] = displayEncodedFilmNegativeValue(display.green)
-      output[base + 2] = displayEncodedFilmNegativeValue(display.red)
+      let linB = image.pixels[base]
+      let linG = image.pixels[base + 1]
+      let linR = image.pixels[base + 2]
+
+      let srgbB = 1.1187297 * linB - 0.1005789 * linG - 0.0181508 * linR
+      let srgbG = -0.0083494 * linB + 1.1328999 * linG - 0.1245505 * linR
+      let srgbR = -0.0728499 * linB - 0.5876411 * linG + 1.6604910 * linR
+
+      output[base] = displayEncodedFilmNegativeValue(srgbB)
+      output[base + 1] = displayEncodedFilmNegativeValue(srgbG)
+      output[base + 2] = displayEncodedFilmNegativeValue(srgbR)
     }
     return UInt16Image(width: image.width, height: image.height, channels: 3, pixels: output)
   }

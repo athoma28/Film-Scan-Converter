@@ -1,4 +1,5 @@
 import Foundation
+import ImageIO
 import Testing
 
 @testable import FilmScanEngine
@@ -50,6 +51,65 @@ struct StandardImageDecoderTests {
 
     #expect(actual == expected)
     #expect(actual.channels == 3)
+  }
+
+  @Test("Preview decode asks ImageIO for a bounded image without changing the full decoder")
+  func decodeBoundedPreview() throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-standard-preview-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let url = directory.appendingPathComponent("large.tiff")
+    let source = UInt16Image(
+      width: 1_200,
+      height: 800,
+      channels: 3,
+      pixels: [UInt16](repeating: 32_768, count: 1_200 * 800 * 3)
+    )
+    try source.write(to: url, format: .tiff, parameters: ExportParameters(format: .tiff))
+
+    let preview = try StandardImageDecoder.decodePreview(url, maxDimension: 160)
+    let full = try StandardImageDecoder.decode(url)
+
+    #expect(max(preview.width, preview.height) <= 160)
+    #expect(max(preview.width, preview.height) >= 150)
+    #expect(preview.channels == 3)
+    #expect(full.width == 1_200)
+    #expect(full.height == 800)
+  }
+
+  @Test("Preview and full decode apply the same metadata orientation")
+  func decodeMetadataOrientationConsistently() throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-standard-orientation-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let url = directory.appendingPathComponent("oriented.tiff")
+    let source = UInt16Image(
+      width: 4,
+      height: 2,
+      channels: 3,
+      pixels: [UInt16](repeating: 24_000, count: 4 * 2 * 3)
+    )
+    let cgImage = try #require(source.makeExportCGImage16())
+    let destination = try #require(
+      CGImageDestinationCreateWithURL(url as CFURL, "public.tiff" as CFString, 1, nil)
+    )
+    CGImageDestinationAddImage(
+      destination,
+      cgImage,
+      [kCGImagePropertyOrientation: 6] as CFDictionary
+    )
+    #expect(CGImageDestinationFinalize(destination))
+
+    let preview = try StandardImageDecoder.decodePreview(url, maxDimension: 16)
+    let full = try StandardImageDecoder.decode(url)
+
+    #expect(preview.width == 2)
+    #expect(preview.height == 4)
+    #expect(full.width == preview.width)
+    #expect(full.height == preview.height)
+    #expect(full.pixels.allSatisfy { $0 == 24_000 })
   }
 
   @Test("8-bit grayscale PNG decode matches Python cv2 loading and scaling")

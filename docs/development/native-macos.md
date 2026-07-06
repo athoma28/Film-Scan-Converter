@@ -5,7 +5,7 @@ what works now, the current development step, and the order of upcoming work.
 The detailed [macOS native roadmap](../improvements/MacOS-Native-Roadmap.md) is
 the design reference, not a statement that every listed item is implemented.
 
-**Last updated:** 2026-07-02 (300 tests across 19 files; release bundle assembly, dependency embedding, hardened-runtime signing support, contract validation, ZIP creation, and extracted-archive validation are complete; Developer ID notarization and clean-machine installation remain; usability work now includes persistent edit/cache markers, immediate pasted-look median refresh, apply-to-all-open-files, mirrored rotation semantics, instant inspector switching, adjustable 2–32 file preloading, snapshot-consistent append-selected export queuing, bounded standard-image batch writing, displayed-image clipping statistics, selectable/savable processing profiles, a non-destructive dust-mask overlay, and neutral-white zero-light inversion on CPU/GPU; RAW preview remains half-size while memory-bounded export re-decodes full-resolution)
+**Last updated:** 2026-07-05 (312 tests across 19 files; release bundle assembly, dependency embedding, application icon and document registration, hardened-runtime signing support, contract validation, ZIP creation, extracted-archive validation, and local packaged launch are complete; Developer ID notarization and clean-machine installation remain; usability work now includes persistent edit/cache markers, immediate pasted-look median refresh, apply-to-all-open-files, mirrored rotation semantics, instant inspector switching, adjustable 2–32 file preloading, snapshot-consistent append-selected export queuing, bounded standard-image batch writing, first-render displayed-image clipping statistics, selectable/savable processing profiles, a non-destructive dust-mask overlay, neutral-white zero-light inversion on CPU/GPU, metadata-oriented provisional/full standard decoding, serialized cancellable authoritative decoding, and preview-sized provisional decoding for RAW and standard images; RAW preview remains half-size while memory-bounded export re-decodes full-resolution)
 
 ## Goal
 
@@ -52,7 +52,8 @@ removal to preview/export remain deferred.
 
 **Active step: finish packaging and release validation. A reproducible release
 script now builds a self-contained app, embeds and rewrites non-system dynamic
-libraries, supports Developer ID hardened-runtime signing, validates the bundle
+libraries, embeds and validates a native application icon and Launch Services
+document registration, supports Developer ID hardened-runtime signing, validates the bundle
 and signature, emits a versioned ZIP, and revalidates the extracted archive.
 Developer ID notarization, Gatekeeper, and clean-machine install/launch checks
 remain. Post-dust workflow/settings work
@@ -63,6 +64,26 @@ the system clipboard. Applying a preset or pasted look preserves the target
 frame's orientation, crop geometry, and measured film-base state. Corrupt
 per-file settings or preset data do not prevent startup.**
 
+**40 MP performance is an explicit parallel target for both loading and export.**
+Two loading increments are implemented. RAW import asks ImageIO to decode the
+embedded JPEG directly to the 640-pixel preview bound instead of expanding the
+camera's entire embedded image into a 16-bit buffer and shrinking it afterward.
+Standard-image import now also asks ImageIO for a bounded provisional decode,
+paints it immediately, and replaces it in the background with the full-resolution
+authoritative decode. Both paths apply the same EXIF/TIFF orientation transform,
+so the preview does not rotate or change geometry during the swap. On the
+representative RAF, the focused debug test measured about
+0.10 seconds for the bounded path versus 4.82 seconds for the legacy full
+embedded-thumbnail path in the same run. These are local diagnostic timings,
+not a release performance claim. Full RAW and standard-image replacement still
+run in the background. Selected-file and lookahead authoritative decodes pass
+through one actor. Queued work checks cancellation before entering the decoder,
+preventing rapid selection changes from starting overlapping large decode buffers;
+an active synchronous LibRaw/ImageIO call completes before the next decode begins.
+Export optimization remains targeted and must start with a
+release-mode 40 MP stage benchmark while preserving full-resolution fidelity
+and the one-full-resolution-RAW-at-a-time memory bound.
+
 ## Progress
 
 | Area | Status | Current result |
@@ -70,8 +91,8 @@ per-file settings or preset data do not prevent startup.**
 | Phase 0: regression gate | In progress | Swift tests consume frozen Python-generated `.npy` fixtures and compact RAW hash manifests. Standard decode fixtures cover 8-bit PNG, grayscale PNG, BMP, JPEG, and 16-bit TIFF. Five half-size RAF decodes and one full-resolution RAF decode require exact SHA-256 equality with RawPy when the local `sample-raw` corpus is present; when it is absent, those corpus-specific tests are explicitly reported as disabled rather than silently passing. The full intermediate-stage and parameter-grid corpus is not complete. |
 | Phase 1: processing engine | In progress | The frozen RawPy profile remains exact for fixtures. The camera-scan profile disables auto-bright/exposure boost, enables LibRaw highlight reconstruction, records ISO and executed stages, and selects bounded low-ISO sharpening or medium/high-ISO denoising. Full-resolution Bayer decode uses the RCD callback; full-resolution X-Trans decode uses LibRaw's three-pass Markesteijn interpolation. Half-size preview decode bypasses demosaicing. Film-negative inversion and density processing feed one unclamped linear adjustment seam. Safe global tone controls (Exposure EV, Brightness, Contrast, Highlights, Shadows) and protected color controls use luminance-preserving opponent axes; frozen RGB-gain/HSV operators remain available. Robust statistics use at most 65,536 deterministic samples. Native dust-mask detection uses fixed-size percentile histograms, O(pixels) square morphology, and bounded connected-component scratch storage; three frozen Python/OpenCV fixtures match exactly. Density processing, contour detection, and perspective crop are connected to preview/export. Telea inpainting, direct camera-to-Rec.2020 conversion, and exact RawTherapee denoise/sharpen kernels remain limitations. |
 | Phase 2: accelerated rendering | In progress | Live camera preview uses a Metal-backed Core Image context. Still-file correction uploads one bounded 16-bit proxy per selection, applies the current correction controls in one custom GPU kernel, and keeps only one in-flight render plus the newest pending snapshot. The kernel includes the power-law film-negative inversion, protected color/tone adjustments, curve LUT sampling, and three-way color wheels. The production renderer matches the authoritative CPU path across 2,655 comparisons with a maximum difference of 2/255. On the M4 Pro, the reproducible adjustment-heavy release benchmark at 1080×720 improved from a 3.9959 ms p95 baseline to 2.9641–3.0286 ms across four post-change runs (at least 24.2%) without changing dimensions; the app uses a 640-pixel interactive proxy. The density pipeline is connected to preview and export through the authoritative CPU path; a product-integrated GPU density preview and idle authoritative rendering remain deferred. |
-| Phase 3: SwiftUI application | Interactive correction + export workflow | Per-file corrections persist and the browser marks user edits plus cache-ready files. Copy/paste refreshes image-derived negative medians immediately; the current look can be applied to every open file while preserving each frame's geometry. Edit/Grade/Export pages remain mounted for immediate switching. Export supports TIFF, JPEG, PNG, and DNG; standard images are written through bounded two-request `exportBatch` chunks while RAW files remain single-file full-resolution requests. Files appended during an active run keep that run's format and destination snapshot. A user-selectable 2/4/8/16/32-session cache predecodes the corresponding forward lookahead. The Grade page reports sampled display clipping, the Edit page manages saved capture/stock/roll profiles, and dust detection can display a non-destructive aligned overlay. Zero-light negative pixels are neutral white on CPU and GPU. End-to-end latency still requires real-file verification. |
-| Phase 4: performance and polish | Release validation in progress | CI builds and tests the current native package. The representative RAW decode and quality benchmark is complete. Self-contained app/ZIP assembly, Homebrew dependency embedding, bundle-relative load paths, hardened-runtime signing support, bundle validation, strict local signature verification, and extracted-archive revalidation are complete. Developer ID notarization, Gatekeeper, clean-machine install/launch checks, and UI snapshots remain. |
+| Phase 3: SwiftUI application | Interactive correction + export workflow | The packaged app has its own Dock icon and menu-bar identity, activates on launch, registers image/camera-RAW documents with Launch Services, accepts Finder Open With events, and exposes import, export, and correction commands with shortcuts. Per-file corrections persist and the browser marks user edits plus cache-ready files. Copy/paste refreshes image-derived negative medians immediately; the current look can be applied to every open file while preserving each frame's geometry. Edit/Grade/Export pages remain mounted for immediate switching. Export supports TIFF, JPEG, PNG, and DNG; standard images are written through bounded two-request `exportBatch` chunks while RAW files remain single-file full-resolution requests. Files appended during an active run keep that run's format and destination snapshot. A user-selectable 2/4/8/16/32-session cache predecodes the corresponding forward lookahead. The Grade page reports sampled display clipping, the Edit page manages saved capture/stock/roll profiles, and dust detection can display a non-destructive aligned overlay. Zero-light negative pixels are neutral white on CPU and GPU. End-to-end latency still requires real-file verification. |
+| Phase 4: performance and polish | Release validation in progress | CI builds and tests the current native package. The representative RAW decode and quality benchmark is complete. Self-contained app/ZIP assembly, Homebrew dependency embedding, bundle-relative load paths, app-icon and image/RAW document-registration validation, hardened-runtime signing support, bundle validation, strict local signature verification, extracted-archive revalidation, and local packaged launch are complete. Developer ID notarization, Gatekeeper, clean-machine install/launch checks, and UI snapshots remain. |
 
 ## Planned Native Capabilities
 
@@ -125,7 +146,10 @@ The detailed order and acceptance criteria are maintained in the
   different lossy JPEG decoders.
 - Preview generation from decoded `UInt16Image` buffers.
 - Background standard-image decoding so full-resolution imports do not block
-  the SwiftUI main actor.
+  the SwiftUI main actor. ImageIO first produces a bounded 640-pixel provisional
+  image for immediate display; the metadata-oriented full-resolution decoder then
+  replaces it and becomes the cached/export-authoritative source. The inspector
+  labels provisional dimensions and switches to source dimensions after the swap.
 - A narrow C module boundary around thread-safe LibRaw (`CLibRawShim.c`), providing
   two decode paths: `fsc_decode_raw_direct` (mmap I/O, no C-side BGR→RGB malloc
   — Swift does single-pass swizzle during `[UInt16]` creation) and the legacy
@@ -155,10 +179,11 @@ The detailed order and acceptance criteria are maintained in the
 - Background RAW decoding and preview through the same engine-buffer path used
   by standard images.
 - Embedded JPEG thumbnail fast-path: `RawImageDecoder.extractThumbnail()` extracts
-  the camera-processed JPEG preview from RAW files via `libraw_unpack_thumb` at
-  65–110 ms (10–15× faster than half-res LibRaw decode). `AppModel.loadSelection()`
+  the camera-processed JPEG preview from RAW files via `libraw_unpack_thumb` and
+  asks ImageIO to decode directly to the 640-pixel interactive-preview bound.
+  `AppModel.loadSelection()`
   shows the JPEG instantly as the interactive preview while a background
-  `rawSwapTask` decodes the full RAW buffer and seamlessly swaps it in at the same
+  `authoritativeDecodeTask` decodes the full RAW buffer and seamlessly swaps it in at the same
   correction settings and proxy dimensions.
 - `StillPreviewRenderer` caches the compiled `CIKernel` and `CIContext` as shared
   static properties, eliminating per-selection kernel recompilation and Metal
@@ -325,8 +350,9 @@ The detailed order and acceptance criteria are maintained in the
   processing pipeline supports grayscale and three-channel BGR buffers.
 - Exact standard-decode equivalence is currently locked for the committed PNG,
   BMP, and TIFF fixtures. JPEG is locked to the documented tolerance above.
-  Broader real-file coverage, including embedded color profiles and orientation
-  metadata, remains to be added to the frozen corpus.
+  A generated non-square orientation-6 TIFF verifies matching provisional and
+  authoritative geometry. Broader real-file coverage, especially embedded color
+  profiles and additional orientation/container combinations, remains required.
 - The native engine has parity-tested dust-mask detection and the app exposes a
   non-destructive candidate overlay, but it still lacks Telea FMM inpainting.
   Automatic dust removal remains the main processing replacement gate.
@@ -392,9 +418,11 @@ The detailed order and acceptance criteria are maintained in the
   complete historical workflow with dust removal until the retirement gates are
   complete. Native crop/perspective processing is operational.
 
-The native test suite currently contains **300 tests** across 19 test files,
+The native test suite currently contains **312 tests** across 19 test files,
 all passing in the latest local run. The 500-render latency benchmark is skipped
-by default and runs when `RUN_PERFORMANCE_TESTS=1` is set.
+by default and runs when `RUN_PERFORMANCE_TESTS=1` is set. The same coverage run
+measured 91.0% line coverage for `FilmScanEngine` sources and 52.5% across all
+production native targets; SwiftUI view/app-entry code remains the largest gap.
 
 ## Verified Native Features
 
@@ -416,7 +444,7 @@ by default and runs when `RUN_PERFORMANCE_TESTS=1` is set.
   and Export All buttons, determinate progress bar, and expandable per-file
   error display. Export All decodes unloaded files on demand and does not retain
   an unbounded decoded-image dictionary.
-- 19 export tests covering all four format round-trips, 1-channel and 3-channel
+- 21 export tests covering all four format round-trips, 1-channel and 3-channel
   images, JPEG quality file-size ordering, TIFF LZW compression, DNG byte-order
   and minimum-size checks, framed output dimensions, batch parallelism (8 images
   at concurrency 4), sequential progress completion, cancellation behaviour,
@@ -433,15 +461,22 @@ by default and runs when `RUN_PERFORMANCE_TESTS=1` is set.
 - GPU preview kernel: curve LUT passed as a 256×256 8-bit CIImage sampler;
   color wheel masks and gain math mirrored in the Core Image Kernel Language.
 - Direct production Core Image renderer comparison covers 2,655 cases with zero
-  failures and a maximum difference of 2/255. An automated 20-configuration
-  parameter grid test verifies the production renderer against the authoritative
-  CPU path across film types, WB, exposure, saturation, curves, color wheels,
-  and per-channel curves on every test run.
+  failures and a maximum difference of 2/255. An automated 27-configuration
+  parameter grid plus a focused 12-configuration tone grid verify the production
+  renderer against the authoritative CPU path across film types, WB, exposure,
+  saturation, curves, color wheels, and per-channel curves on every test run.
    B&W negative correctly skips curves and color wheels in both CPU and production
    GPU paths. Focused tests cover LUT construction (identity, unsorted input, duplicate
    inputs, extrapolation, boundaries), mask ranges and overlap, hue wrapping,
    zero-strength identity, three simultaneous wheels, and direct production
    GPU-CPU equivalence.
+- Accelerated power-law inversion uses one UInt16-to-linear-sRGB Float LUT and
+  applies the Rec.2020 matrix exactly once. Median calibration continues through
+  the scalar `computeMultipliers` contract. The production CPU/GPU parameter-grid
+  and tone-control gates pass with their existing maximum tolerance of 2/255.
+- One-channel legacy exposure is routed through the existing component-generic
+  exposure helper before the optimized three-channel loop, preventing grayscale
+  buffers from being indexed as BGR.
 - Density pipeline connected to preview and export. The `correctedPreview()`
   entry point branches to the density pipeline path (`densityToSceneLinear` +
   `renderDisplay`) when `densityPipelineEnabled` is true and a base density is
@@ -501,7 +536,7 @@ Work should proceed in this order:
    and GPU-vs-CPU equivalence for curves, wheels, and combined.
 8. ~~Implement TIFF/JPEG/PNG export and the defined processed-RGB DNG contract,
    including metadata, round-trip, cancellation, and batch-export tests.~~ Done.
-   19 export tests covering all four formats, round-trip decode, batch
+   21 export tests covering all four formats, round-trip decode, batch
    parallelism, cancellation, frame/aspect ratio, and JSON coding.
 9. ~~Complete the color-accuracy and perceptual-slider modernization track.~~
    All six slices are done: semantic adjustment contract, shared unclamped
@@ -541,8 +576,9 @@ Work should proceed in this order:
     crop/orientation and measured film-base state.~~ Done.
 15. Complete packaging and release validation. Self-contained app/ZIP assembly,
     non-system dependency embedding, load-path rewriting, hardened-runtime
-    signing support, automated bundle/signature checks, extracted-archive
-    revalidation, and the
+    signing support, packaged app identity, image/camera-RAW document
+    registration, automated bundle/signature/registration checks,
+    extracted-archive revalidation, local packaged launch, and the
     [release runbook](native-release.md) are complete. Obtain a Developer ID
     signature, notarize and staple a candidate, then complete Gatekeeper and
     clean-machine launch/install checks.

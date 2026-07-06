@@ -496,6 +496,63 @@ struct AppModelTests {
     #expect(model.decodedImage?.channels == 3)
   }
 
+  @Test("Standard image import shows a bounded preview before authoritative decode swaps in")
+  func standardImportShowsBoundedPreviewBeforeFullDecodeSwap() async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-standard-swap-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let input = directory.appendingPathComponent("large.tiff")
+    try UInt16Image(
+      width: 1_200,
+      height: 800,
+      channels: 3,
+      pixels: [UInt16](repeating: 24_000, count: 1_200 * 800 * 3)
+    ).write(to: input, format: .tiff, parameters: ExportParameters(format: .tiff))
+
+    let model = AppModel()
+    model.importFiles([input])
+
+    #expect(model.isShowingProvisionalPreview)
+    #expect(model.previewImage == nil || model.decodedImage == nil)
+    let provisionalDimensions = try #require(model.selectedImageDimensions)
+    #expect(provisionalDimensions.provisional)
+    #expect(max(provisionalDimensions.width, provisionalDimensions.height) <= 640)
+    model.setFilmType(.cropOnly)
+    try await waitUntil {
+      !model.isShowingProvisionalPreview
+        && model.decodedImage != nil
+        && model.previewStatistics.sampleCount > 0
+    }
+    #expect(model.decodedImage?.width == 1_200)
+    #expect(model.decodedImage?.height == 800)
+    #expect(model.parameters.filmType == .cropOnly)
+    let fullDimensions = try #require(model.selectedImageDimensions)
+    #expect(!fullDimensions.provisional)
+    #expect(fullDimensions.width == 1_200)
+    #expect(fullDimensions.height == 800)
+  }
+
+  @Test("Canceled queued authoritative decode does not start")
+  func canceledQueuedAuthoritativeDecodeDoesNotStart() async throws {
+    let probe = AuthoritativeDecodeProbe()
+    let decoder = AuthoritativeImageDecoder(operation: probe.decode)
+    let first = Task {
+      try await decoder.decode(URL(fileURLWithPath: "/tmp/first.tiff"))
+    }
+    try await Task.sleep(for: .milliseconds(10))
+    let second = Task {
+      try await decoder.decode(URL(fileURLWithPath: "/tmp/second.tiff"))
+    }
+    second.cancel()
+
+    _ = try await first.value
+    await #expect(throws: CancellationError.self) {
+      try await second.value
+    }
+    #expect(probe.invocationCount == 1)
+  }
+
   @Test("Legacy color setters keep semantic protected-color intent synchronized")
   func legacyColorSettersSynchronizeSemanticIntent() {
     let model = AppModel()
@@ -879,5 +936,20 @@ struct AppModelTests {
 
   private var repositoryRoot: URL {
     appModelRepositoryRoot
+  }
+}
+
+private final class AuthoritativeDecodeProbe: @unchecked Sendable {
+  private let lock = NSLock()
+  private var invocations = 0
+
+  var invocationCount: Int {
+    lock.withLock { invocations }
+  }
+
+  func decode(_ url: URL) throws -> UInt16Image {
+    lock.withLock { invocations += 1 }
+    Thread.sleep(forTimeInterval: 0.1)
+    return UInt16Image(width: 1, height: 1, channels: 3, pixels: [1, 2, 3])
   }
 }

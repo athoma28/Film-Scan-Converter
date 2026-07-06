@@ -86,12 +86,10 @@ extension UInt16Image {
       throw ExportError.creationFailed
     }
 
-    var options: [CFString: Any] = [
-      kCGImagePropertyTIFFCompression: tiffCompressionValue(parameters.tiffCompression)
+    let options: [CFString: Any] = [
+      kCGImagePropertyTIFFCompression: tiffCompressionValue(parameters.tiffCompression),
+      kCGImagePropertyOrientation: 1,
     ]
-    if let orientation = tiffOrientationValue(parameters: parameters) {
-      options[kCGImagePropertyOrientation] = orientation
-    }
 
     CGImageDestinationAddImage(destination, cgImage, options as CFDictionary)
 
@@ -137,11 +135,10 @@ extension UInt16Image {
   }
 
   public func makeExportCGImage16() -> CGImage? {
-    guard let components = rgba16Components() else {
+    guard let data = rgba16Data() else {
       return nil
     }
 
-    let data = components.withUnsafeBytes { Data($0) }
     guard let provider = CGDataProvider(data: data as CFData) else {
       return nil
     }
@@ -163,11 +160,11 @@ extension UInt16Image {
   }
 
   public func makeExportCGImage8() -> CGImage? {
-    guard let bytes = rgba8Components() else {
+    guard let data = rgba8Data() else {
       return nil
     }
 
-    guard let provider = CGDataProvider(data: Data(bytes) as CFData) else {
+    guard let provider = CGDataProvider(data: data as CFData) else {
       return nil
     }
     return CGImage(
@@ -190,9 +187,5 @@ extension UInt16Image {
     case .none: return 1
     case .lzw: return 5
     }
-  }
-
-  private func tiffOrientationValue(parameters: ExportParameters) -> Int? {
-    1
   }
 }

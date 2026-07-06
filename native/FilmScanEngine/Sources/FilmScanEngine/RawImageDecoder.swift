@@ -139,7 +139,10 @@ public enum RawImageDecoder {
     public let height: Int
   }
 
-  public static func extractThumbnail(_ url: URL) throws -> ThumbnailResult {
+  public static func extractThumbnail(
+    _ url: URL,
+    maxDimension: Int? = nil
+  ) throws -> ThumbnailResult {
     guard url.isFileURL,
       FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased())
     else {
@@ -172,9 +175,25 @@ public enum RawImageDecoder {
     }
 
     let data = Data(bytes: jpegData, count: Int(output.data_size))
-    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-      let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
-    else {
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+      throw RawImageDecoderError.decodeFailed("Could not decode embedded JPEG.")
+    }
+    let cgImage: CGImage?
+    if let maxDimension {
+      guard maxDimension > 0 else {
+        throw RawImageDecoderError.decodeFailed("Thumbnail bound must be positive.")
+      }
+      let options: [CFString: Any] = [
+        kCGImageSourceCreateThumbnailFromImageAlways: true,
+        kCGImageSourceCreateThumbnailWithTransform: true,
+        kCGImageSourceThumbnailMaxPixelSize: maxDimension,
+        kCGImageSourceShouldCacheImmediately: true,
+      ]
+      cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary)
+    } else {
+      cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil)
+    }
+    guard let cgImage else {
       throw RawImageDecoderError.decodeFailed("Could not decode embedded JPEG.")
     }
 
@@ -197,12 +216,19 @@ public enum RawImageDecoder {
 
     let pixelCount = width * height
     var pixels = [UInt16](repeating: 0, count: pixelCount * 3)
-    for i in 0..<pixelCount {
-      let src = i * 4
-      let dst = i * 3
-      pixels[dst] = components[src + 2]
-      pixels[dst + 1] = components[src + 1]
-      pixels[dst + 2] = components[src]
+    components.withUnsafeBytes { (rbp: UnsafeRawBufferPointer) in
+      let src16 = rbp.bindMemory(to: UInt16.self)
+      pixels.withUnsafeMutableBufferPointer { dst in
+        var si = 0
+        var di = 0
+        for _ in 0..<pixelCount {
+          dst[di] = src16[si + 2]
+          dst[di + 1] = src16[si + 1]
+          dst[di + 2] = src16[si]
+          si += 4
+          di += 3
+        }
+      }
     }
     return ThumbnailResult(
       image: UInt16Image(width: width, height: height, channels: 3, pixels: pixels),

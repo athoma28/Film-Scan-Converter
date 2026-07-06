@@ -47,14 +47,45 @@ struct AppBundleValidatorTests {
     #expect(AppBundleValidator.validate(bundleAt: root) == ["Contents/Info.plist is not a readable property list"])
   }
 
+  @Test("Requires the declared application icon resource")
+  func requiresIconResource() throws {
+    let bundle = try makeBundle(
+      info: validInfo,
+      executableData: Data("binary".utf8),
+      includeIcon: false
+    )
+
+    #expect(AppBundleValidator.validate(bundleAt: bundle).contains("Contents/Resources/AppIcon.icns is missing"))
+  }
+
+  @Test("Requires standard image and camera RAW document registration")
+  func requiresDocumentRegistration() throws {
+    var info = validInfo
+    info["CFBundleDocumentTypes"] = [
+      ["LSItemContentTypes": ["public.image"]],
+    ]
+    let bundle = try makeBundle(
+      info: info,
+      executableData: Data("binary".utf8)
+    )
+
+    #expect(AppBundleValidator.validate(bundleAt: bundle).contains(
+      "CFBundleDocumentTypes must register public.camera-raw-image"
+    ))
+  }
+
   private var validInfo: [String: Any] {
     [
       "CFBundleDisplayName": "Film Scan Converter",
       "CFBundleExecutable": "FilmScanConverterMac",
+      "CFBundleIconFile": "AppIcon",
       "CFBundleIdentifier": "com.alexthomas.filmscanconverter",
       "CFBundlePackageType": "APPL",
       "CFBundleShortVersionString": "0.1.0",
       "CFBundleVersion": "1",
+      "CFBundleDocumentTypes": [
+        ["LSItemContentTypes": ["public.image", "public.camera-raw-image"]],
+      ],
       "LSMinimumSystemVersion": "14.0",
       "NSCameraUsageDescription": "Camera access is used for live preview.",
     ]
@@ -62,20 +93,27 @@ struct AppBundleValidatorTests {
 
   private func makeBundle(
     info: [String: Any],
-    executableData: Data?
+    executableData: Data?,
+    includeIcon: Bool = true
   ) throws -> URL {
     let root = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)
       .appendingPathComponent("Film Scan Converter.app")
     let contents = root.appendingPathComponent("Contents")
     let macOS = contents.appendingPathComponent("MacOS")
+    let resources = contents.appendingPathComponent("Resources")
     try FileManager.default.createDirectory(at: macOS, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
     let plist = try PropertyListSerialization.data(
       fromPropertyList: info,
       format: .xml,
       options: 0
     )
     try plist.write(to: contents.appendingPathComponent("Info.plist"))
+    if includeIcon, let icon = info["CFBundleIconFile"] as? String {
+      let iconFilename = icon.hasSuffix(".icns") ? icon : "\(icon).icns"
+      try Data("icon".utf8).write(to: resources.appendingPathComponent(iconFilename))
+    }
     if let executableData, let name = info["CFBundleExecutable"] as? String {
       let executable = macOS.appendingPathComponent(name)
       try executableData.write(to: executable)

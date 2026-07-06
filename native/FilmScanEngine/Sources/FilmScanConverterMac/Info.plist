@@ -8,6 +8,8 @@
     <string>FilmScanConverterMac</string>
     <key>CFBundleIdentifier</key>
     <string>com.alexthomas.filmscanconverter</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundleName</key>
     <string>Film Scan Converter</string>
     <key>CFBundlePackageType</key>
@@ -22,5 +24,21 @@
     <string>Film Scan Converter uses a connected camera feed for corrected negative live preview.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Photographic Image</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.image</string>
+                <string>public.camera-raw-image</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>

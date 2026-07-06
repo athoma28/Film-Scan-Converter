@@ -48,7 +48,8 @@ preview without a full RAW decode:
 
 The JPEG is at the camera's native embedded resolution (4416 × 2944 for X-T5),
 which is higher than the half-res LibRaw decode (2592 × 3876). `AppModel` shows
-the JPEG instantly while a background `rawSwapTask` decodes the LibRaw buffer
+the JPEG instantly while a background `authoritativeDecodeTask` uses the serial
+decode coordinator to decode the LibRaw buffer
 and swaps it in at the same correction settings and proxy dimensions.
 
 ## Method

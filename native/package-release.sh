@@ -16,24 +16,27 @@ ZIP_PATH="$DIST_DIR/Film-Scan-Converter-$APP_VERSION.zip"
 CONTENTS_DIR="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS_DIR/MacOS"
 FRAMEWORKS_DIR="$CONTENTS_DIR/Frameworks"
+RESOURCES_DIR="$CONTENTS_DIR/Resources"
 INFO_PLIST="$PACKAGE_DIR/Sources/FilmScanConverterMac/Info.plist"
 ENTITLEMENTS="$PACKAGE_DIR/Sources/FilmScanConverterMac/FilmScanConverter.entitlements"
+APP_ICON="$PACKAGE_DIR/Sources/FilmScanConverterMac/Resources/AppIcon.icns"
 
 export CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-/private/tmp/fsc-clang-cache}"
 export SWIFTPM_MODULECACHE_OVERRIDE="${SWIFTPM_MODULECACHE_OVERRIDE:-/private/tmp/fsc-swiftpm-cache}"
 
 if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
-  swift build -c release --package-path "$PACKAGE_DIR" --product "$EXECUTABLE_NAME"
-  swift build -c release --package-path "$PACKAGE_DIR" --product FilmScanReleaseValidator
-  BIN_DIR="$(swift build -c release --package-path "$PACKAGE_DIR" --show-bin-path)"
+  swift build --disable-sandbox -c release --package-path "$PACKAGE_DIR" --product "$EXECUTABLE_NAME"
+  swift build --disable-sandbox -c release --package-path "$PACKAGE_DIR" --product FilmScanReleaseValidator
+  BIN_DIR="$(swift build --disable-sandbox -c release --package-path "$PACKAGE_DIR" --show-bin-path)"
 else
   BIN_DIR="${BIN_DIR:-$PACKAGE_DIR/.build/release}"
 fi
 
 rm -rf "$APP_BUNDLE" "$ZIP_PATH"
-mkdir -p "$MACOS_DIR" "$FRAMEWORKS_DIR"
+mkdir -p "$MACOS_DIR" "$FRAMEWORKS_DIR" "$RESOURCES_DIR"
 cp "$BIN_DIR/$EXECUTABLE_NAME" "$MACOS_DIR/$EXECUTABLE_NAME"
 cp "$INFO_PLIST" "$CONTENTS_DIR/Info.plist"
+cp "$APP_ICON" "$RESOURCES_DIR/AppIcon.icns"
 chmod 755 "$MACOS_DIR/$EXECUTABLE_NAME"
 plutil -replace CFBundleShortVersionString -string "$APP_VERSION" "$CONTENTS_DIR/Info.plist"
 plutil -replace CFBundleVersion -string "$BUILD_NUMBER" "$CONTENTS_DIR/Info.plist"
@@ -101,14 +104,16 @@ for library in "$FRAMEWORKS_DIR"/*.dylib; do
 done
 
 sign_args=(--force --sign "$SIGNING_IDENTITY")
+app_sign_args=("${sign_args[@]}")
 if [[ "$SIGNING_IDENTITY" != "-" ]]; then
   sign_args+=(--timestamp)
+  app_sign_args+=(--timestamp --options runtime)
 fi
 for library in "$FRAMEWORKS_DIR"/*.dylib; do
   [[ -e "$library" ]] || continue
   codesign "${sign_args[@]}" "$library"
 done
-codesign "${sign_args[@]}" --options runtime --entitlements "$ENTITLEMENTS" "$APP_BUNDLE"
+codesign "${app_sign_args[@]}" --entitlements "$ENTITLEMENTS" "$APP_BUNDLE"
 
 "$BIN_DIR/FilmScanReleaseValidator" "$APP_BUNDLE"
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"

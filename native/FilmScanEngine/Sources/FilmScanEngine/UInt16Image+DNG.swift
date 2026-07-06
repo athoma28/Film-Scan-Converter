@@ -147,18 +147,21 @@ private final class DNGWriter {
   }
 
   private func buildImageData() -> Data {
-    var strip = Data(capacity: width * height * outputChannels * 2)
-
-    if channels == 3 {
-      for pixelIndex in 0..<(width * height) {
-        let ci = pixelIndex * 3
-        strip.append(u16LE(pixels[ci + 2]))
-        strip.append(u16LE(pixels[ci + 1]))
-        strip.append(u16LE(pixels[ci]))
-      }
-    } else {
-      for pixelIndex in 0..<(width * height) {
-        strip.append(u16LE(pixels[pixelIndex]))
+    let count = width * height * outputChannels
+    var strip = Data(count: count * 2)
+    strip.withUnsafeMutableBytes { ptr in
+      let buf = ptr.bindMemory(to: UInt16.self)
+      if channels == 3 {
+        for pixelIndex in 0..<(width * height) {
+          let ci = pixelIndex * 3
+          buf[pixelIndex * 3] = pixels[ci + 2].littleEndian
+          buf[pixelIndex * 3 + 1] = pixels[ci + 1].littleEndian
+          buf[pixelIndex * 3 + 2] = pixels[ci].littleEndian
+        }
+      } else {
+        for pixelIndex in 0..<(width * height) {
+          buf[pixelIndex] = pixels[pixelIndex].littleEndian
+        }
       }
     }
     return strip

@@ -72,7 +72,7 @@ struct ContentView: View {
         Divider()
         HStack(spacing: 0) {
           preview
-          if !showLivePreview, model.decodedImage != nil {
+          if !showLivePreview, model.previewImage != nil {
             Divider()
             inspector
               .frame(width: 390)
@@ -144,7 +144,7 @@ struct ContentView: View {
       }
       Spacer()
 
-      if !showLivePreview, model.decodedImage != nil {
+      if !showLivePreview, model.previewImage != nil {
         Toggle(isOn: $model.showOriginal) {
           Label("Original", systemImage: "rectangle.on.rectangle")
         }
@@ -177,8 +177,10 @@ struct ContentView: View {
             Text(model.selection?.deletingPathExtension().lastPathComponent ?? "Adjustments")
               .font(.headline)
               .lineLimit(1)
-            if let image = model.decodedImage {
-              Text("\(image.width) × \(image.height)")
+            if let dimensions = model.selectedImageDimensions {
+              Text(
+                "\(dimensions.provisional ? "Preview " : "")\(dimensions.width) × \(dimensions.height)"
+              )
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
@@ -778,7 +780,7 @@ struct ContentView: View {
           .frame(maxWidth: .infinity)
       }
       .buttonStyle(.bordered)
-      .disabled(model.decodedImage == nil)
+      .disabled(model.previewImage == nil)
     }
   }
 

@@ -23,12 +23,17 @@ The native application is the primary product. It provides:
 1. Launch the app with `swift run --package-path native/FilmScanEngine FilmScanConverterMac`
    or `./run-swift.sh`.
 2. Drag and drop supported RAW or image files onto the app window.
+   A bounded preview appears first for large files. While it is provisional, the
+   inspector prefixes its dimensions with **Preview**; source dimensions replace
+   them after authoritative decoding. Standard-image orientation remains stable
+   across that swap.
 3. New files are automatically classified as color negative, B&W negative, or
    slide. Review and adjust the film mode and film negative preset as needed.
 4. Adjust corrections in the inspector panel: orientation, white balance,
    semantic exposure/brightness/contrast/highlights/shadows, temperature/tint,
    saturation, vibrance, curves, and color wheels.
    The preview updates in real time as you drag sliders.
+   Grade-page clipping statistics are available from the first displayed render.
    Corrections are saved automatically for that source file and restored the
    next time the same path is imported.
 5. Use the Settings section to copy or paste a look, or save, apply, and delete
@@ -45,9 +50,11 @@ The native application is the primary product. It provides:
    when finished; the overlay is diagnostic and is not exported.
 10. Set export options (format, frame, aspect ratio) and choose a destination
    folder.
-11. Click Export Selected or Export All to write processed images. Standard
-   images retain source resolution; RAW files are re-decoded at full resolution
-   one at a time so batch memory remains bounded.
+11. Click Export Selected or Export All to write processed images. While an
+    export is running, additional files can be appended with the "Add Selected
+    to Export Queue" button. Duplicates are rejected and progress updates
+    dynamically. Standard images retain source resolution; RAW files are
+    re-decoded at full resolution one at a time so batch memory remains bounded.
 
 The native app can display dust-mask candidates, but it does not apply dust
 removal until Telea inpainting is connected. Use the legacy Python application

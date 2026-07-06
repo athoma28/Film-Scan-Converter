@@ -30,6 +30,11 @@ public final class StillPreviewRenderer: @unchecked Sendable {
     return CIContext(options: [.useSoftwareRenderer: false] as [CIContextOption: Any])
   }()
 
+  public static func warmUp() {
+    _ = sharedKernel
+    _ = sharedContext
+  }
+
   public init?(image: UInt16Image) {
     guard
       let cgImage = image.makePreviewCGImage16(),

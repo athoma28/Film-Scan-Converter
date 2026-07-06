@@ -15,6 +15,7 @@ let package = Package(
     .executable(name: "FilmScanAdjustmentBenchmark", targets: ["FilmScanAdjustmentBenchmark"]),
     .executable(name: "FilmScanPreviewComparator", targets: ["FilmScanPreviewComparator"]),
     .executable(name: "FilmScanReleaseValidator", targets: ["FilmScanReleaseValidator"]),
+    .executable(name: "FilmScanProcessingBenchmark", targets: ["FilmScanProcessingBenchmark"]),
   ],
   targets: [
     .systemLibrary(
@@ -58,9 +59,13 @@ let package = Package(
       dependencies: ["FilmScanEngine"]
     ),
     .executableTarget(
+      name: "FilmScanProcessingBenchmark",
+      dependencies: ["FilmScanEngine"]
+    ),
+    .executableTarget(
       name: "FilmScanConverterMac",
       dependencies: ["FilmScanEngine", "FilmScanPreviewRenderer"],
-      exclude: ["Info.plist", "FilmScanConverter.entitlements"],
+      exclude: ["Info.plist", "FilmScanConverter.entitlements", "Resources"],
       linkerSettings: [
         .unsafeFlags([
           "-Xlinker", "-sectcreate",
