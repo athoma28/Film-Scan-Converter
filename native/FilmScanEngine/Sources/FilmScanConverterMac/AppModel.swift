@@ -683,6 +683,16 @@ final class AppModel: ObservableObject {
     }
   }
 
+  func applyKodachromeLikeLook() {
+    guard let source = previewSource, source.channels == 3 else {
+      settingsStatus = "The Kodachrome-like look needs a loaded color scan."
+      return
+    }
+    let look = KodachromeLikeLook.parameters(for: source, preserving: parameters)
+    updateParameters { $0 = look }
+    settingsStatus = "Applied Kodachrome-like Auto."
+  }
+
   func setDensityPipelineEnabled(_ value: Bool) {
     updateParameters {
       $0.densityPipelineEnabled = value

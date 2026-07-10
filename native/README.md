@@ -129,6 +129,9 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
 ## Implementation Contracts
 
 - Keep interactive previews bounded and latest-value-wins.
+- Keep adaptive-look analysis bounded independently of imported image size;
+  Kodachrome-like Auto currently analyzes at most a 1024-pixel long edge and
+  stores a concrete five-point curve for deterministic preview/export parity.
 - Treat manual film-frame geometry as a persisted, validated clockwise
   four-corner quadrilateral. Preview, dust-overlay alignment, density flat
   field, and export must use the same CPU perspective warp; this corrects one

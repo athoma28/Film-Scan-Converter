@@ -251,6 +251,13 @@ struct ContentView: View {
 
         Button("Apply Settings to All Open Files", action: model.applyCurrentSettingsToAllOpenFiles)
 
+        Button(action: model.applyKodachromeLikeLook) {
+          Label("Kodachrome-like Auto", systemImage: "wand.and.stars")
+        }
+        .help(
+          "Apply the color-negative profile, then adapt tone and color to the successful reference look."
+        )
+
         Picker(
           "Files kept ready",
           selection: Binding(

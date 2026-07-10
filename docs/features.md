@@ -57,6 +57,10 @@ features.
 
 - Per-file correction settings persisted across launches.
 - Named presets and versioned system-clipboard copy/paste.
+- A built-in **Kodachrome-like Auto** look keeps the standard color-negative
+  inversion, then derives a per-frame tone curve from a bounded center-frame
+  analysis and adds modest protected saturation/vibrance. It preserves the
+  current rotation, flip, straighten, and crop geometry.
 - Apply the current look to all open files while preserving each target's crop,
   orientation, and measured film-base state.
 - Edited and preview-ready indicators in the browser.

@@ -857,6 +857,29 @@ struct AppModelTests {
     #expect(AppModel(presetStore: store).namedCorrectionPresets.isEmpty)
   }
 
+  @Test("App model applies the built-in Kodachrome-like look immediately")
+  func appModelAppliesKodachromeLikeLook() async throws {
+    let model = AppModel()
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"))
+    model.importFiles([input])
+    try await waitUntil { model.previewImage != nil && !model.isRendering }
+    model.rotateClockwise()
+    try await waitUntil { !model.isRendering }
+    let submissionsBeforeApply = model.renderStats.submittedSnapshots
+
+    model.applyKodachromeLikeLook()
+
+    #expect(model.parameters.filmType == .colourNegative)
+    #expect(model.parameters.filmNegativeParams.enabled)
+    #expect(model.parameters.rotation == 1)
+    #expect(model.parameters.photoAdjustments.vibrance == 0.25)
+    #expect(model.renderStats.submittedSnapshots == submissionsBeforeApply + 1)
+    #expect(model.settingsStatus == "Applied Kodachrome-like Auto.")
+  }
+
   @Test("Preview cache limit persists, expands lookahead, and trims immediately")
   func previewCacheLimitPersistsAndTrims() async throws {
     let suiteName = "fsc-preview-cache-\(UUID().uuidString)"

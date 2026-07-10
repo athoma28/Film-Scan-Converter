@@ -194,7 +194,8 @@ replanned:
   perspective correction, rotation, flip, frame, and aspect ratio;
 - RawTherapee-compatible power-law film-negative inversion and an optional
   capture-aware density path;
-- protected semantic color/tone controls, curves, and three-way color wheels;
+- protected semantic color/tone controls, curves, three-way color wheels, and a
+  reference-derived Kodachrome-like adaptive look;
 - bounded Core Image/Metal still preview with CPU/GPU regression coverage;
 - per-file settings, presets, clipboard transfer, apply-to-all, edit markers,
   and adjustable lookahead caching;
