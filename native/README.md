@@ -109,9 +109,11 @@ RUN_PERFORMANCE_TESTS=1 swift test \
 ## Fixtures
 
 Swift tests consume committed `.npy` and standard-image fixtures. When the
-untracked `sample-raw/` corpus exists, RAW tests also verify five half-size RAF
-decodes and one full-resolution decode against recorded hashes. Those tests are
-explicitly disabled when the corpus is absent.
+required files in the untracked `sample-raw/` corpus exist, RAW tests also
+verify five RawPy-compatible half-size RAF decodes and one full-resolution
+decode against recorded hashes. The X-T5 regression trio additionally guards
+camera-scan previews against leaked X-Trans mosaic pixels. Each corpus-dependent
+test is explicitly disabled unless all files it needs are present.
 
 Refresh compatibility fixtures only when intentionally changing a shared
 legacy contract:
@@ -131,6 +133,11 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   four-corner quadrilateral. Preview, dust-overlay alignment, density flat
   field, and export must use the same CPU perspective warp; this corrects one
   planar frame and is not a lens-distortion model.
+- Resolve each two-point straighten guide against its nearest horizontal or
+  vertical axis, then apply the persisted angle after quarter-turn rotation and
+  flip. Apply the simple normalized canvas crop after that expanded rotation.
+  Preview, full-resolution dimension prediction, flat field, dust overlay, and
+  export must preserve this geometry order.
 - Treat the Core Image/Metal renderer as the primary interactive development
   path on supported MacBook Pro hardware. Keep CPU rendering correct for
   deterministic tests, CI/headless runs, export/reference behavior, and fallback

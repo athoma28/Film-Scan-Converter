@@ -21,6 +21,24 @@ public enum StandardImageDecoder {
     return try decode(image, sourceURL: url)
   }
 
+  public static func fullResolutionDimensions(_ url: URL) throws -> PixelDimensions {
+    try validate(url)
+    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+      let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil)
+        as? [CFString: Any],
+      let width = (properties[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue,
+      let height = (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue,
+      width > 0, height > 0
+    else {
+      throw StandardImageDecoderError.unreadableImage
+    }
+    let orientation = (properties[kCGImagePropertyOrientation] as? NSNumber)?.intValue ?? 1
+    if [5, 6, 7, 8].contains(orientation) {
+      return PixelDimensions(width: height, height: width)
+    }
+    return PixelDimensions(width: width, height: height)
+  }
+
   public static func decodePreview(_ url: URL, maxDimension: Int) throws -> UInt16Image {
     try validate(url)
     guard maxDimension > 0 else {

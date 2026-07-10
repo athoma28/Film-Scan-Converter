@@ -40,6 +40,9 @@ final class AppModel: ObservableObject {
   @Published private(set) var flatFieldURL: URL?
   @Published private(set) var cropRect: RotatedRect?
   @Published private(set) var perspectiveCrop: PerspectiveCrop?
+  @Published private(set) var manualCrop: NormalizedCropRect?
+  @Published private(set) var straightenAngle: Double = 0
+  @Published private(set) var sourcePixelDimensions: PixelDimensions?
   @Published private(set) var cropThresholdPreview: UInt16Image?
   @Published private(set) var isCropDetectionRunning = false
   @Published private(set) var cropStatus: String = ""
@@ -163,6 +166,19 @@ final class AppModel: ObservableObject {
     return nil
   }
 
+  var selectedCanvasDimensions: PixelDimensions? {
+    guard let source = sourcePixelDimensions else { return nil }
+    return ImageGeometry.outputDimensions(source: source, parameters: parameters)
+  }
+
+  var selectedOutputDimensions: PixelDimensions? {
+    guard let canvas = selectedCanvasDimensions else { return nil }
+    return ImageGeometry.framedDimensions(
+      canvas,
+      framePercent: exportParameters.framePercent,
+      aspectRatio: exportParameters.aspectRatio)
+  }
+
   func hasCachedPreview(for url: URL) -> Bool {
     previewCache[settingsKey(url)] != nil
   }
@@ -225,6 +241,7 @@ final class AppModel: ObservableObject {
       isShowingEmbeddedRawPreview = false
       isShowingProvisionalPreview = false
       isLoading = false
+      sourcePixelDimensions = nil
       cancelPredecode()
       status = "Drop film scans into the window to begin."
       return
@@ -239,6 +256,8 @@ final class AppModel: ObservableObject {
 
     isLoading = true
 
+    sourcePixelDimensions = Self.fullResolutionDimensions(of: selection)
+
     cancelPredecode()
     ImportLog.loadSelectionStarted(path: selection.lastPathComponent)
 
@@ -252,6 +271,8 @@ final class AppModel: ObservableObject {
     parameters = settingsByPath[key] ?? ProcessingParameters()
     cropRect = parameters.cropRect
     perspectiveCrop = parameters.perspectiveCrop
+    manualCrop = parameters.manualCrop
+    straightenAngle = parameters.straightenAngle
     showOriginal = false
 
     if let cached = previewCache[key] {
@@ -613,15 +634,27 @@ final class AppModel: ObservableObject {
   }
 
   func rotateCounterclockwise() {
-    updateParameters { $0.rotation = ($0.rotation + ($0.flip ? 1 : 3)) % 4 }
+    manualCrop = nil
+    updateParameters {
+      $0.manualCrop = nil
+      $0.rotation = ($0.rotation + ($0.flip ? 1 : 3)) % 4
+    }
   }
 
   func rotateClockwise() {
-    updateParameters { $0.rotation = ($0.rotation + ($0.flip ? 3 : 1)) % 4 }
+    manualCrop = nil
+    updateParameters {
+      $0.manualCrop = nil
+      $0.rotation = ($0.rotation + ($0.flip ? 3 : 1)) % 4
+    }
   }
 
   func toggleFlip() {
-    updateParameters { $0.flip.toggle() }
+    manualCrop = nil
+    updateParameters {
+      $0.manualCrop = nil
+      $0.flip.toggle()
+    }
   }
 
   func setFilmNegativeRedRatio(_ value: Double) {
@@ -806,6 +839,7 @@ final class AppModel: ObservableObject {
   func resetCorrections() {
     resetDustState(cancelTask: true)
     parameters = ProcessingParameters()
+    straightenAngle = 0
     if let selection { editedKeys.insert(settingsKey(selection)) }
     resetCropState(cancelTask: true)
     saveParameters()
@@ -888,6 +922,8 @@ final class AppModel: ObservableObject {
     populateFilmNegativeMedians()
     cropRect = parameters.cropRect
     perspectiveCrop = parameters.perspectiveCrop
+    manualCrop = parameters.manualCrop
+    straightenAngle = parameters.straightenAngle
     saveParameters()
     if showOriginal {
       showOriginal = false
@@ -1359,11 +1395,16 @@ final class AppModel: ObservableObject {
         quarterTurns: displayParameters.rotation,
         flipHorizontally: displayParameters.flip
       )
+      let straightenedMask = PerspectiveTransform.rotate(
+        orientedMask, clockwiseDegrees: -displayParameters.straightenAngle)
+      let finalMask = displayParameters.manualCrop.flatMap {
+        PerspectiveTransform.crop(straightenedMask, canvasRect: $0)
+      } ?? straightenedMask
       let displayMask = UInt16Image(
-        width: orientedMask.width,
-        height: orientedMask.height,
+        width: finalMask.width,
+        height: finalMask.height,
         channels: mask.channels,
-        pixels: orientedMask.pixels.map { $0 == 0 ? 0 : UInt16.max }
+        pixels: finalMask.pixels.map { $0 == 0 ? 0 : UInt16.max }
       )
       guard let cgImage = displayMask.makePreviewCGImage() else {
         self.isDustDetectionRunning = false
@@ -1389,6 +1430,7 @@ final class AppModel: ObservableObject {
     resetCropState(cancelTask: true)
     parameters.cropRect = nil
     parameters.perspectiveCrop = nil
+    parameters.manualCrop = nil
     saveParameters()
     scheduleRender(immediate: true)
   }
@@ -1423,12 +1465,78 @@ final class AppModel: ObservableObject {
     resetDustState(cancelTask: true)
     cropRect = nil
     perspectiveCrop = crop
+    manualCrop = nil
     parameters.cropRect = nil
     parameters.perspectiveCrop = crop
+    parameters.manualCrop = nil
     cropStatus = "Perspective crop is active. Drag corners to align the grid."
     if let selection { editedKeys.insert(settingsKey(selection)) }
     saveParameters()
     scheduleRender(immediate: true)
+  }
+
+  func setManualCrop(_ crop: NormalizedCropRect?) {
+    guard let crop else {
+      clearManualCrop()
+      return
+    }
+    guard crop.isValid else {
+      cropStatus = "Drag a crop box inside the image."
+      return
+    }
+    resetDustState(cancelTask: true)
+    manualCrop = crop
+    parameters.manualCrop = crop
+    cropStatus = "Manual canvas crop is active."
+    if let selection { editedKeys.insert(settingsKey(selection)) }
+    saveParameters()
+    scheduleRender(immediate: true)
+  }
+
+  func cropCurrentCanvas(to crop: NormalizedCropRect) {
+    guard let existing = manualCrop else {
+      setManualCrop(crop)
+      return
+    }
+    setManualCrop(NormalizedCropRect(
+      x: existing.x + crop.x * existing.width,
+      y: existing.y + crop.y * existing.height,
+      width: crop.width * existing.width,
+      height: crop.height * existing.height))
+  }
+
+  func clearManualCrop() {
+    guard manualCrop != nil || parameters.manualCrop != nil else { return }
+    resetDustState(cancelTask: true)
+    manualCrop = nil
+    parameters.manualCrop = nil
+    cropStatus = ""
+    if let selection { editedKeys.insert(settingsKey(selection)) }
+    saveParameters()
+    scheduleRender(immediate: true)
+  }
+
+  func setStraightenAngle(_ angle: Double) {
+    guard angle.isFinite else { return }
+    let clamped = min(max(angle, -45), 45)
+    guard abs(parameters.straightenAngle - clamped) > 0.000_001 else { return }
+    resetDustState(cancelTask: true)
+    manualCrop = nil
+    parameters.manualCrop = nil
+    parameters.straightenAngle = clamped
+    straightenAngle = clamped
+    if let selection { editedKeys.insert(settingsKey(selection)) }
+    saveParameters()
+    scheduleRender(immediate: true)
+  }
+
+  func clearStraightening() {
+    setStraightenAngle(0)
+  }
+
+  func straighten(usingGuideDeviation deviation: Double) {
+    guard deviation.isFinite else { return }
+    setStraightenAngle(straightenAngle + deviation)
   }
 
   func setDarkThreshold(_ value: Int) {
@@ -1460,6 +1568,7 @@ final class AppModel: ObservableObject {
     }
     cropRect = nil
     perspectiveCrop = nil
+    manualCrop = nil
     cropThresholdPreview = nil
     isCropDetectionRunning = false
     cropStatus = ""
@@ -1479,8 +1588,10 @@ final class AppModel: ObservableObject {
     resetDustState(cancelTask: true)
     cropRect = rect
     perspectiveCrop = nil
+    manualCrop = nil
     parameters.cropRect = rect
     parameters.perspectiveCrop = nil
+    parameters.manualCrop = nil
     if let selection { editedKeys.insert(settingsKey(selection)) }
     saveParameters()
     if render {
@@ -2090,6 +2201,7 @@ final class AppModel: ObservableObject {
           && !request.parameters.densityPipelineEnabled
           && request.parameters.cropRect == nil
           && request.parameters.perspectiveCrop == nil
+          && abs(request.parameters.straightenAngle) < 0.000_001
         if useGPU,
           let rendered = request.renderer?.render(
             parameters: request.parameters,
@@ -2214,6 +2326,16 @@ final class AppModel: ObservableObject {
       return try StandardImageDecoder.decode(url)
     }
     return try RawImageDecoder.decode(url, profile: .rawTherapeeCameraScan).image
+  }
+
+  nonisolated private static func fullResolutionDimensions(of url: URL) -> PixelDimensions? {
+    if StandardImageDecoder.supportedExtensions.contains(url.pathExtension.lowercased()) {
+      return try? StandardImageDecoder.fullResolutionDimensions(url)
+    }
+    if FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased()) {
+      return try? RawImageDecoder.fullResolutionDimensions(url)
+    }
+    return nil
   }
 }
 

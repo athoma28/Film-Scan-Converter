@@ -72,6 +72,81 @@ public struct PerspectiveCrop: Codable, Equatable, Sendable {
 
 public enum PerspectiveTransform {
 
+  /// Applies a simple axis-aligned crop in the current canvas coordinate
+  /// system. Unlike film-frame and perspective crops, this is intended to run
+  /// after orientation and straightening.
+  public static func crop(
+    _ image: UInt16Image,
+    canvasRect: NormalizedCropRect
+  ) -> UInt16Image? {
+    guard let bounds = ImageGeometry.pixelBounds(
+      for: canvasRect, imageWidth: image.width, imageHeight: image.height)
+    else { return nil }
+    var pixels = [UInt16]()
+    pixels.reserveCapacity(bounds.width * bounds.height * image.channels)
+    let componentsPerRow = bounds.width * image.channels
+    for y in bounds.y..<(bounds.y + bounds.height) {
+      let start = (y * image.width + bounds.x) * image.channels
+      pixels.append(contentsOf: image.pixels[start..<(start + componentsPerRow)])
+    }
+    return UInt16Image(
+      width: bounds.width,
+      height: bounds.height,
+      channels: image.channels,
+      pixels: pixels)
+  }
+
+  /// Rotates the image clockwise in display coordinates and expands the canvas
+  /// just enough to retain every source corner. This is the CPU authority for
+  /// the simple straighten-line tool.
+  public static func rotate(
+    _ image: UInt16Image,
+    clockwiseDegrees: Double
+  ) -> UInt16Image {
+    guard clockwiseDegrees.isFinite else { return image }
+    let normalized = clockwiseDegrees.truncatingRemainder(dividingBy: 360)
+    guard abs(normalized) > 0.000_001 else { return image }
+    let quarterTurns = (normalized / 90).rounded()
+    if abs(normalized - quarterTurns * 90) < 0.000_001 {
+      return image.rotated(quarterTurns: Int(quarterTurns))
+    }
+
+    let dimensions = ImageGeometry.rotatedCanvasDimensions(
+      PixelDimensions(width: image.width, height: image.height),
+      clockwiseDegrees: normalized)
+    let radians = normalized * .pi / 180
+    let cosAngle = cos(radians)
+    let sinAngle = sin(radians)
+    let centerX = Double(image.width - 1) / 2
+    let centerY = Double(image.height - 1) / 2
+    func rotatedPoint(x: Double, y: Double) -> (x: Double, y: Double) {
+      let dx = x - centerX
+      let dy = y - centerY
+      return (
+        x: cosAngle * dx - sinAngle * dy,
+        y: sinAngle * dx + cosAngle * dy
+      )
+    }
+
+    let corners = [
+      rotatedPoint(x: 0, y: 0),
+      rotatedPoint(x: Double(image.width - 1), y: 0),
+      rotatedPoint(x: Double(image.width - 1), y: Double(image.height - 1)),
+      rotatedPoint(x: 0, y: Double(image.height - 1)),
+    ]
+    let minX = corners.map(\.x).min() ?? 0
+    let minY = corners.map(\.y).min() ?? 0
+    let outputWidth = dimensions.width
+    let outputHeight = dimensions.height
+    let homography: [Float] = [
+      Float(cosAngle), Float(-sinAngle), Float(centerX - minX - cosAngle * centerX + sinAngle * centerY),
+      Float(sinAngle), Float(cosAngle), Float(centerY - minY - sinAngle * centerX - cosAngle * centerY),
+      0, 0, 1,
+    ]
+    return warpPerspective(
+      image, homography: homography, outputWidth: outputWidth, outputHeight: outputHeight)
+  }
+
   /// Straightens a selected source quadrilateral into a rectangular canvas.
   /// The result dimensions follow the mean opposing edge lengths, preserving
   /// the source detail density instead of stretching to an arbitrary size.

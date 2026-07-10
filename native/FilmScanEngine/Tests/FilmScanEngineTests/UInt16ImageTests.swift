@@ -36,11 +36,13 @@ struct UInt16ImageTests {
       borderCrop: 2.5,
       flip: true,
       rotation: 3,
+      straightenAngle: -4.25,
       filmType: .colourNegative,
       gamma: 25,
       temperature: -10,
       saturation: 120,
-      cropRect: RotatedRect(centerX: 0.5, centerY: 0.5, width: 0.8, height: 0.7, angle: 2)
+      cropRect: RotatedRect(centerX: 0.5, centerY: 0.5, width: 0.8, height: 0.7, angle: 2),
+      manualCrop: NormalizedCropRect(x: 0.1, y: 0.2, width: 0.7, height: 0.6)
     )
 
     let encoded = try JSONEncoder().encode(parameters)

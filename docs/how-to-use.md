@@ -11,8 +11,10 @@ The native application is the primary product. It provides:
   orientation, white balance, exposure, shadows, highlights, saturation,
   RGB tone curves, highlight/midtone/shadow color wheels.
 - Camera-scan RAW processing with ISO-tier noise/detail filtering. Preview uses
-  a bounded half-size decode. Export re-decodes RAW files at full resolution,
-  using RCD for Bayer data or three-pass Markesteijn interpolation for X-Trans.
+  bounded half-size output; X-Trans previews are fully interpolated with one
+  pass before downsampling so the 6×6 sensor mosaic cannot leak into bright
+  frames. Export re-decodes RAW files at full resolution, using RCD for Bayer
+  data or three-pass Markesteijn interpolation for X-Trans.
 - Interactive GPU-accelerated preview that updates during slider drags.
 - Export to TIFF (16-bit, optional LZW), JPEG (8-bit, configurable quality),
   PNG (16-bit lossless), and DNG (processed 16-bit RGB).
@@ -23,10 +25,11 @@ The native application is the primary product. It provides:
 1. Launch the app with `swift run --package-path native/FilmScanEngine FilmScanConverterMac`
    or `./run-swift.sh`.
 2. Drag and drop supported RAW or image files onto the app window.
-   A bounded preview appears first for large files. While it is provisional, the
-   inspector prefixes its dimensions with **Preview**; source dimensions replace
-   them after authoritative decoding. Standard-image orientation remains stable
-   across that swap.
+   A bounded preview appears first for large files, while the inspector header
+   reports full-resolution output dimensions from file metadata. That readout
+   updates after crop, rotation, and straightening; it does not report the
+   preview proxy size. Standard-image orientation remains stable across the
+   provisional-to-authoritative swap.
 3. New files are automatically classified as color negative, B&W negative, or
    slide. Review and adjust the film mode and film negative preset as needed.
 4. Adjust corrections in the inspector panel: orientation, white balance,
@@ -42,9 +45,13 @@ The native application is the primary product. It provides:
 6. In Film Base, optionally load a matching flat field and measure a clear,
    unexposed film edge automatically or by dragging over it. This enables the
    measured density pipeline for negative conversion.
-7. In Film Frame, tune the dark/light thresholds and choose **Detect Frame** to
-   apply a perspective-corrected crop. Preview and export use the same stored
-   crop geometry.
+7. In Film Frame, choose **Straighten**, click two points along a horizon or
+   vertical edge, and the app rotates the canvas to make that guide horizontal
+   or vertical. Choose **Crop** and drag a box over the area to keep. Tune the
+   dark/light thresholds and choose **Detect Frame** for automatic frame
+   detection, or use **Adjust Perspective** for a four-corner correction.
+   Preview, the full-resolution dimension readout, and export use the same
+   stored geometry.
 8. Use the original/corrected comparison toggle to evaluate your adjustments.
 9. Use **Detect Dust** to inspect a non-destructive candidate overlay. Clear it
    when finished; the overlay is diagnostic and is not exported.

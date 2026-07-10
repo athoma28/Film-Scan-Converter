@@ -54,6 +54,20 @@ int fsc_decode_raw_direct_with_profile(
 void fsc_free_raw_direct(fsc_raw_direct *output);
 
 typedef struct {
+    uint32_t width;
+    uint32_t height;
+} fsc_raw_dimensions;
+
+// Reads the full-resolution processed-image dimensions without unpacking or
+// demosaicing the RAW. The result follows LibRaw's metadata orientation.
+int fsc_raw_full_dimensions(
+    const char *path,
+    fsc_raw_dimensions *output,
+    char *error_message,
+    size_t error_message_capacity
+);
+
+typedef struct {
     size_t blocks_in_use;
     size_t size_in_use;
     size_t max_size_in_use;

@@ -31,6 +31,16 @@ public struct RawDecodeResult: Sendable {
   }
 }
 
+public struct PixelDimensions: Codable, Equatable, Sendable {
+  public let width: Int
+  public let height: Int
+
+  public init(width: Int, height: Int) {
+    self.width = width
+    self.height = height
+  }
+}
+
 public struct RawDecodeTimings: Codable, Equatable, Sendable {
   public let openSeconds: Double
   public let unpackSeconds: Double
@@ -118,6 +128,25 @@ public enum RawDecodeProfile: UInt32, Sendable, Codable, Equatable {
 }
 
 public enum RawImageDecoder {
+  public static func fullResolutionDimensions(_ url: URL) throws -> PixelDimensions {
+    guard url.isFileURL,
+      FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased())
+    else {
+      throw RawImageDecoderError.unsupportedFileType
+    }
+    var output = fsc_raw_dimensions()
+    var errorBytes = [CChar](repeating: 0, count: 512)
+    let code = url.withUnsafeFileSystemRepresentation { path in
+      fsc_raw_full_dimensions(path, &output, &errorBytes, errorBytes.count)
+    }
+    guard code == 0, output.width > 0, output.height > 0 else {
+      let message = decodedCString(errorBytes)
+      throw RawImageDecoderError.decodeFailed(
+        message.isEmpty ? "Could not read full-resolution dimensions." : message)
+    }
+    return PixelDimensions(width: Int(output.width), height: Int(output.height))
+  }
+
   /// Reports default-allocator state for sequential export diagnostics. The
   /// values distinguish still-live heap allocations from reserved allocator
   /// pages; they are not a replacement for an Instruments allocation trace.

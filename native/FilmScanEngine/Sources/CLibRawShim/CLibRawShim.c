@@ -313,6 +313,49 @@ void fsc_free_raw_direct(fsc_raw_direct *output) {
     memset(output, 0, sizeof(*output));
 }
 
+int fsc_raw_full_dimensions(
+    const char *path,
+    fsc_raw_dimensions *output,
+    char *error_message,
+    size_t error_message_capacity
+) {
+    if (path == NULL || output == NULL) {
+        return fail(-1, "Invalid RAW dimension arguments.", error_message, error_message_capacity);
+    }
+    memset(output, 0, sizeof(*output));
+
+    libraw_data_t *raw = libraw_init(LIBRAW_OPTIONS_NONE);
+    if (raw == NULL) {
+        return fail(-1, "LibRaw could not allocate a metadata reader.", error_message, error_message_capacity);
+    }
+    int code = check_libraw(
+        libraw_open_file(raw, path), error_message, error_message_capacity
+    );
+    if (code == LIBRAW_SUCCESS) {
+        raw->params.half_size = 0;
+        code = check_libraw(
+            libraw_adjust_sizes_info_only(raw), error_message, error_message_capacity
+        );
+    }
+    if (code == LIBRAW_SUCCESS) {
+        uint32_t width = raw->sizes.iwidth;
+        uint32_t height = raw->sizes.iheight;
+        if (raw->sizes.flip == 5 || raw->sizes.flip == 6) {
+            uint32_t temporary = width;
+            width = height;
+            height = temporary;
+        }
+        if (width == 0 || height == 0) {
+            code = fail(-1, "LibRaw returned empty RAW dimensions.", error_message, error_message_capacity);
+        } else {
+            output->width = width;
+            output->height = height;
+        }
+    }
+    libraw_close(raw);
+    return code;
+}
+
 int fsc_default_heap_statistics(fsc_heap_statistics *output) {
     if (output == NULL) {
         return -1;

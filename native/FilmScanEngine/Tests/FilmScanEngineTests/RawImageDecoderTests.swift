@@ -12,9 +12,18 @@ private let rawDecoderRepositoryRoot = URL(fileURLWithPath: #filePath)
   .deletingLastPathComponent()
 
 private var rawCorpusAvailable: Bool {
-  FileManager.default.fileExists(
-    atPath: rawDecoderRepositoryRoot.appending(path: "sample-raw").path
-  )
+  ["DSCF0669.RAF", "DSCF0718.RAF", "DSCF0729.RAF", "DSCF2417.RAF", "DSCF2422.RAF"]
+    .allSatisfy { filename in
+      FileManager.default.fileExists(
+        atPath: rawDecoderRepositoryRoot.appending(path: "sample-raw/\(filename)").path)
+    }
+}
+
+private var xT5RegressionSamplesAvailable: Bool {
+  ["DSCF2819.RAF", "DSCF2820.RAF", "DSCF2823.RAF"].allSatisfy { filename in
+    FileManager.default.fileExists(
+      atPath: rawDecoderRepositoryRoot.appending(path: "sample-raw/\(filename)").path)
+  }
 }
 
 private struct RawDecodeReference: Decodable {
@@ -31,6 +40,35 @@ private struct RawDecodeReference: Decodable {
 
 @Suite("LibRaw decoding")
 struct RawImageDecoderTests {
+  @Test(
+    "Half-resolution X-T5 decode fully interpolates bright X-Trans frames",
+    .enabled(
+      if: xT5RegressionSamplesAvailable,
+      "X-T5 regression samples unavailable; X-Trans artifact guard skipped")
+  )
+  func halfResolutionXT5DecodeHasNoMosaicGrid() throws {
+    for filename in ["DSCF2819.RAF", "DSCF2820.RAF", "DSCF2823.RAF"] {
+      let rawURL = repositoryRoot.appending(path: "sample-raw/\(filename)")
+      let image = try RawImageDecoder.decode(
+        rawURL, profile: .rawTherapeeCameraScan).image
+      let proxy = image.resizedToFit(maxDimension: 640)
+      var extremeGreenPixels = 0
+      for pixelIndex in 0..<(proxy.width * proxy.height) {
+        let base = pixelIndex * 3
+        let red = proxy.pixels[base]
+        let green = proxy.pixels[base + 1]
+        let blue = proxy.pixels[base + 2]
+        if green > 60_000, red < 10_000, blue < 10_000 {
+          extremeGreenPixels += 1
+        }
+      }
+      let fraction = Double(extremeGreenPixels) / Double(proxy.width * proxy.height)
+      #expect(
+        fraction < 0.0005,
+        "\(filename) retained the X-Trans mosaic grid (extreme-green fraction \(fraction))")
+    }
+  }
+
   @Test("Default heap statistics distinguish live from reserved memory")
   func defaultHeapStatisticsAreAvailable() throws {
     let statistics = try #require(RawImageDecoder.defaultHeapStatistics())
@@ -90,11 +128,15 @@ struct RawImageDecoderTests {
     let rawDirectory = repositoryRoot.appending(path: "sample-raw")
 
     let entry = reference.fullResolution
+    let rawURL = rawDirectory.appending(path: entry.file)
+    let dimensions = try RawImageDecoder.fullResolutionDimensions(rawURL)
     let result = try RawImageDecoder.decode(
-      rawDirectory.appending(path: entry.file),
+      rawURL,
       fullResolution: true
     )
 
+    #expect(dimensions.width == entry.shape[1])
+    #expect(dimensions.height == entry.shape[0])
     #expect([result.image.height, result.image.width, result.image.channels] == entry.shape)
     #expect(sha256(result.image.pixels) == entry.sha256)
     #expect(result.colorDescription == entry.colorDescription)
@@ -181,8 +223,11 @@ struct RawImageDecoderTests {
       fullResolution: true,
       profile: .rawTherapeeCameraScan
     )
+    let dimensions = try RawImageDecoder.fullResolutionDimensions(rawURL)
 
     #expect(result.processing.contains(.xTransThreePass))
+    #expect(dimensions.width == result.image.width)
+    #expect(dimensions.height == result.image.height)
     #expect(result.image.width > 3_876)
     #expect(result.image.height > 2_592)
     #expect(result.timings.openSeconds > 0)

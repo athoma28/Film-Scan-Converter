@@ -14,7 +14,7 @@ private let appModelRepositoryRoot = URL(fileURLWithPath: #filePath)
 
 private var appModelRawCorpusAvailable: Bool {
   FileManager.default.fileExists(
-    atPath: appModelRepositoryRoot.appending(path: "sample-raw").path
+    atPath: appModelRepositoryRoot.appending(path: "sample-raw/DSCF2422.RAF").path
   )
 }
 
@@ -405,13 +405,19 @@ struct AppModelTests {
       bottomRight: .init(x: 0.9, y: 0.9),
       bottomLeft: .init(x: 0.1, y: 0.9)
     ))
+    model.setStraightenAngle(12.5)
+    model.setManualCrop(NormalizedCropRect(x: 0.1, y: 0.1, width: 0.8, height: 0.8))
 
     model.resetCorrections()
 
     #expect(model.parameters.cropRect == nil)
     #expect(model.parameters.perspectiveCrop == nil)
+    #expect(model.parameters.manualCrop == nil)
     #expect(model.cropRect == nil)
     #expect(model.perspectiveCrop == nil)
+    #expect(model.manualCrop == nil)
+    #expect(model.parameters.straightenAngle == 0)
+    #expect(model.straightenAngle == 0)
     #expect(model.cropThresholdPreview == nil)
     #expect(model.cropStatus.isEmpty)
   }
@@ -586,6 +592,16 @@ struct AppModelTests {
     #expect(!fullDimensions.provisional)
     #expect(fullDimensions.width == 1_200)
     #expect(fullDimensions.height == 800)
+    #expect(model.selectedOutputDimensions == PixelDimensions(width: 1_200, height: 800))
+    model.setManualCrop(NormalizedCropRect(x: 0.25, y: 0.25, width: 0.5, height: 0.5))
+    #expect(model.selectedCanvasDimensions == PixelDimensions(width: 600, height: 400))
+    #expect(model.selectedOutputDimensions == PixelDimensions(width: 600, height: 400))
+    model.cropCurrentCanvas(to: NormalizedCropRect(x: 0.1, y: 0.2, width: 0.8, height: 0.5))
+    #expect(model.manualCrop == NormalizedCropRect(x: 0.3, y: 0.35, width: 0.4, height: 0.25))
+    #expect(model.selectedCanvasDimensions == PixelDimensions(width: 480, height: 200))
+    model.setExportFramePercent(5)
+    model.setExportAspectRatio(AspectRatio(width: 1, height: 1))
+    #expect(model.selectedOutputDimensions == PixelDimensions(width: 500, height: 500))
   }
 
   @Test("Canceled queued authoritative decode does not start")
@@ -718,6 +734,8 @@ struct AppModelTests {
       bottomRight: .init(x: 0.8, y: 0.9),
       bottomLeft: .init(x: 0.2, y: 0.8)
     )
+    source.straightenAngle = 7
+    source.manualCrop = NormalizedCropRect(x: 0.1, y: 0.1, width: 0.8, height: 0.8)
     source.densityPipelineEnabled = true
     source.densityBaseDensity = BGRChannelValues(blue: 0.2, green: 0.3, red: 0.4)
 
@@ -733,6 +751,8 @@ struct AppModelTests {
       bottomRight: .init(x: 0.8, y: 0.8),
       bottomLeft: .init(x: 0.2, y: 0.8)
     )
+    destination.straightenAngle = -4
+    destination.manualCrop = NormalizedCropRect(x: 0.2, y: 0.3, width: 0.6, height: 0.5)
     destination.densityPipelineEnabled = true
     destination.densityBaseDensity = BGRChannelValues(blue: 0.8, green: 0.7, red: 0.6)
 
@@ -745,6 +765,8 @@ struct AppModelTests {
     #expect(applied.flip == destination.flip)
     #expect(applied.cropRect == destination.cropRect)
     #expect(applied.perspectiveCrop == destination.perspectiveCrop)
+    #expect(applied.straightenAngle == destination.straightenAngle)
+    #expect(applied.manualCrop == destination.manualCrop)
     #expect(applied.densityPipelineEnabled == destination.densityPipelineEnabled)
     #expect(applied.densityBaseDensity == destination.densityBaseDensity)
   }

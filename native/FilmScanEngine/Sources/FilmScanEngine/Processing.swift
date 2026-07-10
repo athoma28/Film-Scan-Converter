@@ -36,6 +36,11 @@ public enum FilmProcessing {
       quarterTurns: parameters.rotation,
       flipHorizontally: parameters.flip
     )
+    working = PerspectiveTransform.rotate(
+      working, clockwiseDegrees: -parameters.straightenAngle)
+    working = parameters.manualCrop.flatMap {
+      PerspectiveTransform.crop(working, canvasRect: $0)
+    } ?? working
     let sensorSource = working
     guard parameters.filmType != .cropOnly else {
       return working
@@ -310,14 +315,25 @@ public enum FilmProcessing {
         PerspectiveTransform.crop(field, normalizedRect: $0, borderPercent: parameters.borderCrop)
       } ?? field
     }
-    let working = croppedImage.rotated(
+    var working = croppedImage.rotated(
       quarterTurns: parameters.rotation,
       flipHorizontally: parameters.flip
     )
-    let orientedFlatField = croppedFlatField?.rotated(
+    var orientedFlatField = croppedFlatField?.rotated(
       quarterTurns: parameters.rotation,
       flipHorizontally: parameters.flip
     )
+    working = PerspectiveTransform.rotate(
+      working, clockwiseDegrees: -parameters.straightenAngle)
+    orientedFlatField = orientedFlatField.map {
+      PerspectiveTransform.rotate($0, clockwiseDegrees: -parameters.straightenAngle)
+    }
+    if let manualCrop = parameters.manualCrop {
+      working = PerspectiveTransform.crop(working, canvasRect: manualCrop) ?? working
+      orientedFlatField = orientedFlatField.flatMap {
+        PerspectiveTransform.crop($0, canvasRect: manualCrop)
+      }
+    }
     guard parameters.filmType != .cropOnly else {
       return working
     }

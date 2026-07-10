@@ -14,6 +14,8 @@ struct ContentView: View {
   @State private var rebateSelectionPreviousShowOriginal = false
   @State private var isPerspectiveEditing = false
   @State private var perspectiveEditingPreviousShowOriginal = false
+  @State private var isStraightening = false
+  @State private var isCropping = false
   @State private var presetName = ""
   @State private var profileName = ""
 
@@ -67,6 +69,8 @@ struct ContentView: View {
       .onChange(of: model.selection) {
         endRebateSelection()
         endPerspectiveEditing()
+        endStraightening()
+        endCropping()
         model.loadSelection()
       }
     } detail: {
@@ -180,10 +184,8 @@ struct ContentView: View {
             Text(model.selection?.deletingPathExtension().lastPathComponent ?? "Adjustments")
               .font(.headline)
               .lineLimit(1)
-            if let dimensions = model.selectedImageDimensions {
-              Text(
-                "\(dimensions.provisional ? "Preview " : "")\(dimensions.width) × \(dimensions.height)"
-              )
+            if let dimensions = model.selectedOutputDimensions {
+              Text("Full output \(dimensions.width) × \(dimensions.height) px")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
@@ -692,6 +694,44 @@ struct ContentView: View {
         }
         .disabled(model.decodedImage == nil || model.isCropDetectionRunning || isPerspectiveEditing)
 
+        HStack {
+          Button(action: toggleStraightening) {
+            Label(
+              isStraightening ? "Cancel" : "Straighten",
+              systemImage: isStraightening ? "xmark" : "line.diagonal"
+            )
+          }
+          Button(action: toggleCropping) {
+            Label(
+              isCropping ? "Cancel" : "Crop",
+              systemImage: isCropping ? "xmark" : "crop"
+            )
+          }
+        }
+        .disabled(model.decodedImage == nil || isPerspectiveEditing)
+
+        if isStraightening {
+          Text("Click one point, then a second point along an edge that should be horizontal or vertical.")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        } else if isCropping {
+          Text("Drag a box over the canvas to keep that area.")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+
+        if abs(model.straightenAngle) > 0.000_001 {
+          HStack {
+            Text("Straighten: \(String(format: "%.1f", model.straightenAngle))°")
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+            Spacer()
+            Button("Clear", action: model.clearStraightening)
+              .controlSize(.small)
+          }
+        }
+
         Button(action: togglePerspectiveEditing) {
           Label(
             isPerspectiveEditing ? "Done Aligning" : "Adjust Perspective",
@@ -744,7 +784,41 @@ struct ContentView: View {
             .font(.caption2)
         }
 
-        if !model.cropStatus.isEmpty && model.cropRect == nil && !model.isCropDetectionRunning {
+        if let manualCrop = model.manualCrop {
+          Divider()
+          HStack {
+            VStack(alignment: .leading, spacing: 2) {
+              Text("Manual canvas crop")
+                .font(.caption2)
+              Text(String(
+                format: "x %.3f  y %.3f  w %.3f  h %.3f",
+                manualCrop.x, manualCrop.y, manualCrop.width, manualCrop.height))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Clear", action: model.clearManualCrop)
+              .controlSize(.small)
+          }
+        }
+
+        if let output = model.selectedCanvasDimensions {
+          Divider()
+          HStack {
+            Text("Full-resolution canvas")
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+            Spacer()
+            Text("\(output.width) × \(output.height) px")
+              .font(.caption2)
+              .monospacedDigit()
+          }
+        }
+
+        if !model.cropStatus.isEmpty && model.cropRect == nil
+          && model.perspectiveCrop == nil && model.manualCrop == nil
+          && !model.isCropDetectionRunning
+        {
           Text(model.cropStatus)
             .font(.caption2)
             .foregroundStyle(.secondary)
@@ -1072,6 +1146,24 @@ struct ContentView: View {
           flipHorizontally: model.parameters.flip,
           onCropChanged: model.setPerspectiveCrop
         )
+
+        StraightenLineOverlay(
+          isActive: isStraightening,
+          imageSize: model.previewImage?.size ?? .zero,
+          onGuideCompleted: { deviation in
+            model.straighten(usingGuideDeviation: deviation)
+            endStraightening()
+          }
+        )
+
+        ManualCropOverlay(
+          isActive: isCropping,
+          imageSize: model.previewImage?.size ?? .zero,
+          onCropCompleted: { crop in
+            model.cropCurrentCanvas(to: crop)
+            endCropping()
+          }
+        )
       }
     } else {
       ContentUnavailableView {
@@ -1157,6 +1249,8 @@ struct ContentView: View {
       endPerspectiveEditing()
       return
     }
+    endStraightening()
+    endCropping()
     perspectiveEditingPreviousShowOriginal = model.showOriginal
     model.beginPerspectiveCrop()
     isPerspectiveEditing = true
@@ -1169,8 +1263,237 @@ struct ContentView: View {
     model.showOriginal = perspectiveEditingPreviousShowOriginal
   }
 
+  private func toggleStraightening() {
+    if isStraightening {
+      endStraightening()
+      return
+    }
+    endPerspectiveEditing()
+    endCropping()
+    isStraightening = true
+  }
+
+  private func endStraightening() {
+    guard isStraightening else { return }
+    isStraightening = false
+  }
+
+  private func toggleCropping() {
+    if isCropping {
+      endCropping()
+      return
+    }
+    endPerspectiveEditing()
+    endStraightening()
+    isCropping = true
+  }
+
+  private func endCropping() {
+    isCropping = false
+  }
+
   private func pointText(_ point: PerspectiveCrop.Point) -> String {
     String(format: "%.2f, %.2f", point.x, point.y)
+  }
+}
+
+private struct StraightenLineOverlay: View {
+  let isActive: Bool
+  let imageSize: CGSize
+  let onGuideCompleted: (Double) -> Void
+
+  @State private var startPoint: CGPoint?
+  @State private var hoverPoint: CGPoint?
+
+  var body: some View {
+    GeometryReader { geometry in
+      let imageRect = aspectFitRect(imageSize: imageSize, containerSize: geometry.size)
+      if isActive, imageRect.width > 0, imageRect.height > 0 {
+        ZStack {
+          Color.clear
+          if let startPoint {
+            Circle()
+              .fill(Color.yellow)
+              .overlay(Circle().stroke(.black.opacity(0.7), lineWidth: 2))
+              .frame(width: 12, height: 12)
+              .position(startPoint)
+            if let endPoint = hoverPoint {
+              Path { path in
+                path.move(to: startPoint)
+                path.addLine(to: endPoint)
+              }
+              .stroke(Color.yellow, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+              Circle()
+                .fill(Color.yellow)
+                .overlay(Circle().stroke(.black.opacity(0.7), lineWidth: 2))
+                .frame(width: 12, height: 12)
+                .position(endPoint)
+              if let guide = guideResult(from: startPoint, to: endPoint) {
+                Text(guide.axis == .horizontal ? "Horizontal" : "Vertical")
+                  .font(.caption2.weight(.semibold))
+                  .padding(.horizontal, 6)
+                  .padding(.vertical, 3)
+                  .background(.black.opacity(0.7), in: Capsule())
+                  .foregroundStyle(.yellow)
+                  .position(
+                    x: (startPoint.x + endPoint.x) / 2,
+                    y: (startPoint.y + endPoint.y) / 2 - 18)
+              }
+            }
+          }
+        }
+        .contentShape(Rectangle())
+        .onContinuousHover(coordinateSpace: .local) { phase in
+          switch phase {
+          case .active(let location):
+            if startPoint != nil {
+              hoverPoint = clamped(location, to: imageRect)
+            }
+          case .ended:
+            hoverPoint = nil
+          }
+        }
+        .gesture(
+          DragGesture(minimumDistance: 0)
+            .onEnded { value in
+              guard imageRect.contains(value.location) else { return }
+              let point = clamped(value.location, to: imageRect)
+              guard let startPoint else {
+                self.startPoint = point
+                hoverPoint = point
+                return
+              }
+              guard hypot(point.x - startPoint.x, point.y - startPoint.y) >= 8 else { return }
+              guard let result = guideResult(from: startPoint, to: point) else { return }
+              self.startPoint = nil
+              hoverPoint = nil
+              onGuideCompleted(result.deviation)
+            }
+        )
+      }
+    }
+    .allowsHitTesting(isActive)
+    .onChange(of: isActive) {
+      if !isActive {
+        startPoint = nil
+        hoverPoint = nil
+      }
+    }
+  }
+
+  private func guideResult(
+    from start: CGPoint,
+    to end: CGPoint
+  ) -> (deviation: Double, axis: ImageGeometry.StraightenAxis)? {
+    ImageGeometry.straightenGuide(
+      deltaX: end.x - start.x,
+      deltaY: end.y - start.y)
+  }
+
+  private func aspectFitRect(imageSize: CGSize, containerSize: CGSize) -> CGRect {
+    guard imageSize.width > 0, imageSize.height > 0 else { return .zero }
+    let scale = min(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
+    let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+    return CGRect(
+      x: (containerSize.width - size.width) / 2,
+      y: (containerSize.height - size.height) / 2,
+      width: size.width,
+      height: size.height
+    )
+  }
+
+  private func clamped(_ point: CGPoint, to rect: CGRect) -> CGPoint {
+    CGPoint(
+      x: min(max(point.x, rect.minX), rect.maxX),
+      y: min(max(point.y, rect.minY), rect.maxY)
+    )
+  }
+}
+
+private struct ManualCropOverlay: View {
+  let isActive: Bool
+  let imageSize: CGSize
+  let onCropCompleted: (NormalizedCropRect) -> Void
+
+  @State private var startPoint: CGPoint?
+  @State private var endPoint: CGPoint?
+
+  var body: some View {
+    GeometryReader { geometry in
+      let imageRect = aspectFitRect(imageSize: imageSize, containerSize: geometry.size)
+      if isActive, imageRect.width > 0, imageRect.height > 0 {
+        ZStack {
+          Color.clear
+          if let startPoint, let endPoint {
+            let cropRect = CGRect(
+              x: min(startPoint.x, endPoint.x),
+              y: min(startPoint.y, endPoint.y),
+              width: abs(endPoint.x - startPoint.x),
+              height: abs(endPoint.y - startPoint.y))
+            Path { path in
+              path.addRect(imageRect)
+              path.addRect(cropRect)
+            }
+            .fill(Color.black.opacity(0.55), style: FillStyle(eoFill: true))
+            Rectangle()
+              .stroke(Color.white, lineWidth: 2)
+              .frame(width: cropRect.width, height: cropRect.height)
+              .position(x: cropRect.midX, y: cropRect.midY)
+          }
+        }
+        .contentShape(Rectangle())
+        .gesture(
+          DragGesture(minimumDistance: 0)
+            .onChanged { value in
+              guard imageRect.contains(value.startLocation) else { return }
+              if startPoint == nil {
+                startPoint = clamped(value.startLocation, to: imageRect)
+              }
+              endPoint = clamped(value.location, to: imageRect)
+            }
+            .onEnded { value in
+              defer {
+                startPoint = nil
+                endPoint = nil
+              }
+              guard let startPoint else { return }
+              let endPoint = clamped(value.location, to: imageRect)
+              let width = abs(endPoint.x - startPoint.x)
+              let height = abs(endPoint.y - startPoint.y)
+              guard width >= 4, height >= 4 else { return }
+              onCropCompleted(NormalizedCropRect(
+                x: (min(startPoint.x, endPoint.x) - imageRect.minX) / imageRect.width,
+                y: (min(startPoint.y, endPoint.y) - imageRect.minY) / imageRect.height,
+                width: width / imageRect.width,
+                height: height / imageRect.height))
+            }
+        )
+      }
+    }
+    .allowsHitTesting(isActive)
+    .onChange(of: isActive) {
+      if !isActive {
+        startPoint = nil
+        endPoint = nil
+      }
+    }
+  }
+
+  private func aspectFitRect(imageSize: CGSize, containerSize: CGSize) -> CGRect {
+    guard imageSize.width > 0, imageSize.height > 0 else { return .zero }
+    let scale = min(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
+    let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+    return CGRect(
+      x: (containerSize.width - size.width) / 2,
+      y: (containerSize.height - size.height) / 2,
+      width: size.width,
+      height: size.height)
+  }
+
+  private func clamped(_ point: CGPoint, to rect: CGRect) -> CGPoint {
+    CGPoint(
+      x: min(max(point.x, rect.minX), rect.maxX),
+      y: min(max(point.y, rect.minY), rect.maxY))
   }
 }
 

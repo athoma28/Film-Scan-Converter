@@ -108,6 +108,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
   public var borderCrop: Double
   public var flip: Bool
   public var rotation: Int
+  public var straightenAngle: Double
   public var filmType: FilmType
   public var gamma: Int
   public var shadows: Int
@@ -136,11 +137,13 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
   public var lightThreshold: Int
   public var cropRect: RotatedRect?
   public var perspectiveCrop: PerspectiveCrop?
+  public var manualCrop: NormalizedCropRect?
 
   public init(
     borderCrop: Double = 0,
     flip: Bool = false,
     rotation: Int = 0,
+    straightenAngle: Double = 0,
     filmType: FilmType = .cropOnly,
     gamma: Int = 0,
     shadows: Int = 0,
@@ -168,11 +171,13 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     darkThreshold: Int = 25,
     lightThreshold: Int = 100,
     cropRect: RotatedRect? = nil,
-    perspectiveCrop: PerspectiveCrop? = nil
+    perspectiveCrop: PerspectiveCrop? = nil,
+    manualCrop: NormalizedCropRect? = nil
   ) {
     self.borderCrop = borderCrop
     self.flip = flip
     self.rotation = rotation
+    self.straightenAngle = straightenAngle
     self.filmType = filmType
     self.gamma = gamma
     self.shadows = shadows
@@ -208,10 +213,11 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     self.lightThreshold = lightThreshold
     self.cropRect = cropRect
     self.perspectiveCrop = perspectiveCrop
+    self.manualCrop = manualCrop
   }
 
   private enum CodingKeys: String, CodingKey {
-    case borderCrop, flip, rotation, filmType
+    case borderCrop, flip, rotation, straightenAngle, filmType
     case gamma, shadows, highlights
     case temperature, tint, saturation
     case curveEnabled, curveControlPoints
@@ -223,7 +229,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     case photoAdjustments
     case densityPipelineEnabled, densityBaseDensity
     case densityC41Profile, densityDisplayParams
-    case darkThreshold, lightThreshold, cropRect, perspectiveCrop
+    case darkThreshold, lightThreshold, cropRect, perspectiveCrop, manualCrop
   }
 
   public init(from decoder: Decoder) throws {
@@ -231,6 +237,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     borderCrop = try container.decodeIfPresent(Double.self, forKey: .borderCrop) ?? 0
     flip = try container.decodeIfPresent(Bool.self, forKey: .flip) ?? false
     rotation = try container.decodeIfPresent(Int.self, forKey: .rotation) ?? 0
+    straightenAngle = try container.decodeIfPresent(Double.self, forKey: .straightenAngle) ?? 0
     filmType = try container.decodeIfPresent(FilmType.self, forKey: .filmType) ?? .cropOnly
     gamma = try container.decodeIfPresent(Int.self, forKey: .gamma) ?? 0
     shadows = try container.decodeIfPresent(Int.self, forKey: .shadows) ?? 0
@@ -268,6 +275,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     lightThreshold = try container.decodeIfPresent(Int.self, forKey: .lightThreshold) ?? 100
     cropRect = try container.decodeIfPresent(RotatedRect.self, forKey: .cropRect)
     perspectiveCrop = try container.decodeIfPresent(PerspectiveCrop.self, forKey: .perspectiveCrop)
+    manualCrop = try container.decodeIfPresent(NormalizedCropRect.self, forKey: .manualCrop)
   }
 }
 

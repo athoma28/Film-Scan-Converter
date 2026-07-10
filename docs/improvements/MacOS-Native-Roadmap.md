@@ -188,9 +188,10 @@ replanned:
 
 - native standard-image and LibRaw-backed RAW decoding;
 - frozen compatibility fixtures plus deterministic native CPU contracts;
-- automatic frame detection plus direct four-corner crop/straighten handles,
-  a visible alignment grid, persisted planar perspective correction, rotation,
-  flip, frame, and aspect ratio;
+- automatic frame detection, a two-click horizontal/vertical straighten guide,
+  a post-straighten drag-box crop with full-resolution output dimensions,
+  direct four-corner crop handles, a visible alignment grid, persisted planar
+  perspective correction, rotation, flip, frame, and aspect ratio;
 - RawTherapee-compatible power-law film-negative inversion and an optional
   capture-aware density path;
 - protected semantic color/tone controls, curves, and three-way color wheels;

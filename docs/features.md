@@ -38,8 +38,12 @@ features.
 - Automatic frame detection plus a built-in four-corner perspective tool:
   drag the canvas handles onto the film edges, use the drawn 4×4 grid to align
   the frame, and non-destructively straighten that quadrilateral in preview
-  and export. Rotation, horizontal flip, white frame, and aspect-ratio padding
-  remain available.
+  and export. A separate Photoshop-style straighten tool takes two points along
+  an edge and automatically makes the guide horizontal or vertical. A simple
+  drag-box crop then trims the current straightened canvas. The inspector shows
+  the resulting full-resolution pixel dimensions even though the canvas uses a
+  bounded preview. Rotation, horizontal flip, white frame, and aspect-ratio
+  padding remain available.
 - Original/corrected toggle.
 - Grade diagnostics for sampled display clipping.
 - Non-destructive, orientation/crop-aligned dust-candidate overlay. Detection

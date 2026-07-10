@@ -942,6 +942,21 @@ struct ProcessingTests {
     #expect(result.height == 48)
   }
 
+  @Test("Straighten angle rotates the corrected crop-only canvas")
+  func correctedPreviewAppliesStraightenAngle() {
+    let image = UInt16Image(
+      width: 6, height: 4, channels: 1,
+      pixels: (0..<24).map(UInt16.init)
+    )
+    let parameters = ProcessingParameters(straightenAngle: -90, filmType: .cropOnly)
+
+    let result = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+
+    #expect(result.width == 4)
+    #expect(result.height == 6)
+    #expect(result.pixels == [18, 12, 6, 0, 19, 13, 7, 1, 20, 14, 8, 2, 21, 15, 9, 3, 22, 16, 10, 4, 23, 17, 11, 5])
+  }
+
   @Test("Power-law processing applies protected color before the display transform")
   func powerLawProcessingUsesProtectedColorSeam() {
     let image = UInt16Image(

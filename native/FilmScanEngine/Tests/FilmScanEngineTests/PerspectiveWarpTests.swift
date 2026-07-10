@@ -56,6 +56,94 @@ struct PerspectiveWarpTests {
     #expect(cropped.pixels.allSatisfy { $0 == 30_000 })
   }
 
+  @Test("Straighten rotation preserves a quarter-turn canvas exactly")
+  func straightenRotationQuarterTurn() {
+    let image = UInt16Image(
+      width: 3, height: 2, channels: 1,
+      pixels: [1, 2, 3, 4, 5, 6]
+    )
+
+    let rotated = PerspectiveTransform.rotate(image, clockwiseDegrees: 90)
+
+    #expect(rotated.width == 2)
+    #expect(rotated.height == 3)
+    #expect(rotated.pixels == [4, 1, 5, 2, 6, 3])
+  }
+
+  @Test("Manual canvas crop copies the selected pixel rectangle exactly")
+  func manualCanvasCrop() throws {
+    let image = UInt16Image(
+      width: 8, height: 6, channels: 1,
+      pixels: (0..<48).map(UInt16.init))
+    let crop = NormalizedCropRect(x: 0.25, y: 1.0 / 6.0, width: 0.5, height: 0.5)
+
+    let result = try #require(PerspectiveTransform.crop(image, canvasRect: crop))
+
+    #expect(result.width == 4)
+    #expect(result.height == 3)
+    #expect(result.pixels == [10, 11, 12, 13, 18, 19, 20, 21, 26, 27, 28, 29])
+  }
+
+  @Test("Straighten guide chooses the nearest horizontal or vertical axis")
+  func straightenGuideAxisSelection() throws {
+    let horizon = try #require(ImageGeometry.straightenGuide(deltaX: 100, deltaY: 17.6327))
+    #expect(horizon.axis == .horizontal)
+    #expect(abs(horizon.deviation - 10) < 0.001)
+
+    let wall = try #require(ImageGeometry.straightenGuide(deltaX: 17.6327, deltaY: 100))
+    #expect(wall.axis == .vertical)
+    #expect(abs(wall.deviation + 10) < 0.001)
+  }
+
+  @Test("Full-resolution dimension prediction matches geometry processing")
+  func outputDimensionPrediction() {
+    let image = UInt16Image(
+      width: 100, height: 80, channels: 1,
+      pixels: [UInt16](repeating: 1, count: 8_000))
+    let cases = [
+      ProcessingParameters(
+        rotation: 1,
+        straightenAngle: 7.5,
+        filmType: .cropOnly,
+        manualCrop: NormalizedCropRect(x: 0.1, y: 0.2, width: 0.7, height: 0.6)),
+      ProcessingParameters(
+        borderCrop: 2,
+        rotation: 3,
+        straightenAngle: -4,
+        filmType: .cropOnly,
+        perspectiveCrop: PerspectiveCrop(
+          topLeft: .init(x: 0.1, y: 0.15),
+          topRight: .init(x: 0.9, y: 0.1),
+          bottomRight: .init(x: 0.85, y: 0.9),
+          bottomLeft: .init(x: 0.15, y: 0.85))),
+      ProcessingParameters(
+        borderCrop: 1.5,
+        rotation: 2,
+        straightenAngle: 3,
+        filmType: .cropOnly,
+        cropRect: RotatedRect(
+          centerX: 0.5, centerY: 0.5, width: 0.7, height: 0.8, angle: 8)),
+    ]
+
+    for parameters in cases {
+      let predicted = ImageGeometry.outputDimensions(
+        source: PixelDimensions(width: image.width, height: image.height),
+        parameters: parameters)
+      let actual = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+      #expect(predicted.width == actual.width)
+      #expect(predicted.height == actual.height)
+    }
+
+    let canvas = PixelDimensions(width: 1_200, height: 800)
+    let predictedFrame = ImageGeometry.framedDimensions(
+      canvas, framePercent: 5, aspectRatio: AspectRatio(width: 1, height: 1))
+    let actualFrame = UInt16Image(
+      width: canvas.width, height: canvas.height, channels: 1,
+      pixels: [UInt16](repeating: 1, count: canvas.width * canvas.height)
+    ).addingFrame(percent: 5, aspectRatio: AspectRatio(width: 1, height: 1))
+    #expect(predictedFrame == PixelDimensions(width: actualFrame.width, height: actualFrame.height))
+  }
+
   // MARK: - Homography computation
 
   @Test("computeHomography returns identity for identical point sets")

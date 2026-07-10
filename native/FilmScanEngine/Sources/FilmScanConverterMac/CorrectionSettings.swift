@@ -23,8 +23,10 @@ struct CorrectionSettings: Codable, Equatable {
     result.borderCrop = destination.borderCrop
     result.rotation = destination.rotation
     result.flip = destination.flip
+    result.straightenAngle = destination.straightenAngle
     result.cropRect = destination.cropRect
     result.perspectiveCrop = destination.perspectiveCrop
+    result.manualCrop = destination.manualCrop
     result.densityPipelineEnabled = destination.densityPipelineEnabled
     result.densityBaseDensity = destination.densityBaseDensity
     return result
