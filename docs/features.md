@@ -32,9 +32,13 @@ features.
 - An optional capture-aware density pipeline with film-base measurement,
   flat-field calibration, and capture/stock/roll profiles.
 - Semantic Exposure, Brightness, Contrast, Highlights, Shadows, Temperature,
-  Tint, Saturation, and Vibrance controls.
-- Overall and per-channel curves plus shadow, midtone, and highlight color
-  wheels.
+  Tint, Saturation, and Vibrance controls. Tone response is calibrated to the
+  active inversion pipeline, with finer slider control around neutral.
+- Smooth shape-preserving overall and per-channel curves plus shadow, midtone,
+  and highlight color wheels. Enabling a new curve starts from identity, and
+  curve points remain ordered while editing.
+- Near-zero holder-mask pixels that invert into clipped highlights are rendered
+  as neutral white after adjustments in both preview and export.
 - Automatic frame detection plus a built-in four-corner perspective tool:
   drag the canvas handles onto the film edges, use the drawn 4×4 grid to align
   the frame, and non-destructively straighten that quadrilateral in preview

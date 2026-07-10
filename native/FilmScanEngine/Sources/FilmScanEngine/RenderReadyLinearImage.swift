@@ -24,12 +24,13 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
   public var pixelCount: Int { width * height }
 
   /// Slice 4: safe luminance-preserving global tone controls on the shared
-  /// unclamped linear seam. All operations multiply every channel equally so
-  /// hue is preserved. The legacy integer gamma/shadows/highlights path is
-  /// retained for compatibility fixtures; these semantic controls are the
-  /// intended public API.
+  /// unclamped linear seam. Exposure, contrast, highlights, and shadows scale
+  /// channels together; brightness adds a neutral working-space offset. The
+  /// legacy integer gamma/shadows/highlights path is retained for compatibility
+  /// fixtures; these semantic controls are the intended public API.
   public func applyingLinearToneAdjustments(
-    _ parameters: PhotoAdjustmentParameters
+    _ parameters: PhotoAdjustmentParameters,
+    referenceLuminance: Double = 0.18
   ) -> RenderReadyLinearImage {
     let hasToneAdjustment = parameters.exposureEV != 0
       || parameters.brightness != 0
@@ -38,8 +39,9 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
       || parameters.shadows != 0
     guard hasToneAdjustment else { return self }
 
+    let pivot = min(max(referenceLuminance, 1e-6), 16)
     let exposureGain = exp2(parameters.exposureEV)
-    let brightnessOffset = parameters.brightness * 0.18
+    let brightnessOffset = parameters.brightness * pivot
     let contrastGamma = exp2(parameters.contrast)
     let contrastActive = parameters.contrast != 0
     let highlightsActive = parameters.highlights != 0
@@ -47,7 +49,9 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
     let highlightsScale = parameters.highlights * 0.8
     let shadowsScale = parameters.shadows * 0.8
 
-    let pivot = 0.18
+    let highlightStart = pivot * 2
+    let highlightEnd = pivot * 6
+    let shadowEnd = pivot * 2
     let minGain = 0.0005
 
     var adjusted = [Double](repeating: 0, count: pixels.count)
@@ -80,14 +84,14 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
       if highlightsActive || shadowsActive {
         let luminance = 0.2626983 * r + 0.6780 * g + 0.0593017 * b
         if highlightsActive {
-          let highlightWeight = Self.smoothstep(0.5, 2.0, luminance)
+          let highlightWeight = Self.smoothstep(highlightStart, highlightEnd, luminance)
           let highlightGain = max(1 - highlightsScale * highlightWeight, minGain)
           b *= highlightGain
           g *= highlightGain
           r *= highlightGain
         }
         if shadowsActive {
-          let shadowWeight = 1 - Self.smoothstep(0, 0.5, luminance)
+          let shadowWeight = 1 - Self.smoothstep(0, shadowEnd, luminance)
           let shadowGain = max(1 + shadowsScale * shadowWeight, minGain)
           b *= shadowGain
           g *= shadowGain

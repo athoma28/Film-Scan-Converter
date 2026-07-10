@@ -6,8 +6,8 @@ blocks a high-quality public release, and what is being worked on now. Use the
 [feature inventory](../features.md) for user-visible behavior, and the
 [40 MP benchmark](../performance/40mp-export.md) for detailed measurements.
 
-**Last verified:** 2026-07-09 against the current working tree. The native test
-suite contains 321 tests across 19 files. Some representative-RAW tests require
+**Last verified:** 2026-07-10 against the current working tree. The native test
+suite contains 340 tests across 20 files. Some representative-RAW tests require
 the untracked local `sample-raw/` corpus and are explicitly disabled when it is
 absent.
 
@@ -91,7 +91,7 @@ the one-full-resolution-RAW-at-a-time bound.
 |---|---|
 | Import | Drag/drop, file picker, Finder Open With, standard PNG/JPEG/BMP/TIFF decode, and LibRaw-backed camera RAW decode. |
 | First paint | RAW embedded thumbnails and standard images use bounded provisional previews before authoritative background replacement. Orientation remains stable across the swap. |
-| Processing | Color/B&W negative and slide startup classification, RawTherapee-compatible power-law inversion, an optional density pipeline, film-base measurement, flat field, protected color and tone controls, curves, color wheels, automatic frame detection, a two-click horizontal/vertical straighten guide, a post-straighten drag-box crop, a direct four-corner perspective crop grid, live full-resolution output dimensions, frame, and aspect ratio. |
+| Processing | Color/B&W negative and slide startup classification, RawTherapee-compatible power-law inversion, an optional density pipeline, film-base measurement, flat field, protected color and tone controls with center-weighted UI response and pipeline-calibrated tone references, shape-preserving overall/per-channel curves, color wheels, neutral-white handling for clipped near-zero holder pixels, automatic frame detection, a two-click horizontal/vertical straighten guide, a post-straighten drag-box crop, a direct four-corner perspective crop grid, live full-resolution output dimensions, frame, and aspect ratio. |
 | Preview | A bounded 16-bit Core Image/Metal still renderer uses latest-value-wins scheduling and is the primary interactive development target on supported MacBook Pro hardware. X-Trans RAW previews use one-pass full-mosaic interpolation followed by immediate 2× downsampling; this preserves the bounded cached shape without exposing LibRaw's incomplete half-size X-Trans output on bright frames. CPU rendering remains the deterministic reference, CI/headless path, and fallback for preview features that have not moved to GPU yet. |
 | Editing state | Per-file settings, named presets, system-clipboard copy/paste, reset, edited markers, apply-to-all-open-files, and configurable 2/4/8/16/32-session lookahead cache. Transferred looks preserve target crop/orientation and measured film-base state. |
 | Export | TIFF, JPEG, PNG, and processed-RGB DNG; individual and lazy memory-bounded batch-all workflows; collision-safe names; partial-file cleanup; progress, per-file errors, queued cancellation, and append-selected during an active sequential run. |

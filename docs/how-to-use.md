@@ -36,6 +36,10 @@ The native application is the primary product. It provides:
    semantic exposure/brightness/contrast/highlights/shadows, temperature/tint,
    saturation, vibrance, curves, and color wheels.
    The preview updates in real time as you drag sliders.
+   Tone and film-profile sliders provide finer movement around their neutral
+   values while retaining their full range. Curves start from an identity line,
+   render as a smooth shape-preserving curve, and keep adjacent points ordered
+   while dragging.
    Grade-page clipping statistics are available from the first displayed render.
    Corrections are saved automatically for that source file and restored the
    next time the same path is imported.

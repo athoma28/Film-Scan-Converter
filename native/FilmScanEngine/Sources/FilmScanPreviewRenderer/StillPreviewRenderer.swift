@@ -108,6 +108,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
             Float(parameters.photoAdjustments.contrast),
             Float(parameters.photoAdjustments.highlights),
             Float(parameters.photoAdjustments.shadows),
+            Float(fnEnabled ? FilmNegativeProcessing.calibrationTargetFraction : 0.18),
             Float(parameters.photoAdjustments.temperatureShiftMired),
             Float(parameters.photoAdjustments.tint),
             Float(parameters.photoAdjustments.saturation),
@@ -262,25 +263,15 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       }
     }
 
-    let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
-    let bitmapInfo = CGBitmapInfo(
-      rawValue: CGImageAlphaInfo.premultipliedLast.rawValue
-        | CGBitmapInfo.byteOrder32Big.rawValue
+    // This is numeric lookup data, not an sRGB picture. Going through a
+    // color-managed CGImage can silently reshape the curve before sampling.
+    return CIImage(
+      bitmapData: Data(pixels),
+      bytesPerRow: width * 4,
+      size: CGSize(width: width, height: height),
+      format: .RGBA8,
+      colorSpace: nil
     )
-
-    guard
-      let data = CFDataCreate(nil, pixels, pixels.count),
-      let provider = CGDataProvider(data: data),
-      let cgImage = CGImage(
-        width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
-        bytesPerRow: width * 4, space: colorSpace, bitmapInfo: bitmapInfo,
-        provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent
-      )
-    else {
-      return CIImage(color: CIColor(red: 0, green: 0, blue: 0))
-    }
-
-    return CIImage(cgImage: cgImage)
   }
 
   private static let correctionKernelSource = """
@@ -494,7 +485,6 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       return full * strength * 0.3;
     }
 
-    const float linearTonePivot = 0.18;
     const float linearToneMinGain = 0.0005;
 
     vec3 linearToneAdjustments(
@@ -503,10 +493,12 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       float brightness,
       float contrast,
       float highlights,
-      float shadows
+      float shadows,
+      float referenceLuminance
     ) {
+      float linearTonePivot = clamp(referenceLuminance, 1e-6, 16.0);
       float exposureGain = pow(2.0, exposureEV);
-      float brightnessOffset = brightness * 0.18;
+      float brightnessOffset = brightness * linearTonePivot;
       float contrastGamma = pow(2.0, contrast);
 
       rgb *= exposureGain;
@@ -527,14 +519,16 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         float luminance = dot(rgb, vec3(0.2626983, 0.6780, 0.0593017));
 
         if (abs(highlights) > 0.0) {
-          float highlightWeight = smoothstep(0.5, 2.0, luminance);
+          float highlightWeight = smoothstep(
+            linearTonePivot * 2.0, linearTonePivot * 6.0, luminance);
           float highlightGain = max(
             1.0 - highlights * 0.8 * highlightWeight, linearToneMinGain);
           rgb *= highlightGain;
         }
 
         if (abs(shadows) > 0.0) {
-          float shadowWeight = 1.0 - smoothstep(0.0, 0.5, luminance);
+          float shadowWeight = 1.0 - smoothstep(
+            0.0, linearTonePivot * 2.0, luminance);
           float shadowGain = max(
             1.0 + shadows * 0.8 * shadowWeight, linearToneMinGain);
           rgb *= shadowGain;
@@ -559,6 +553,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       float photoContrast,
       float photoHighlights,
       float photoShadows,
+      float photoToneReference,
       float photoTemperatureMired,
       float photoTint,
       float photoSaturation,
@@ -580,8 +575,9 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       vec4 pixel = sample(image, samplerCoord(image));
       vec3 rgb = pixel.rgb;
       bool sensorBlack = max(rgb.r, max(rgb.g, rgb.b))
-        <= 256.0 / 65535.0;
+        <= 1024.0 / 65535.0;
       bool isBW = (filmType == 0.0);
+      bool isNegative = isBW || filmType == 1.0;
       bool useProtectedColor = filmNegativeEnabled == 1.0 && !isBW
         && (photoTemperatureMired != 0.0 || photoTint != 0.0
           || photoSaturation != 0.0 || photoVibrance != 0.0);
@@ -595,7 +591,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         if (useLinearTone) {
           filmLinear = linearToneAdjustments(
             filmLinear, photoExposureEV, photoBrightness, photoContrast,
-            photoHighlights, photoShadows);
+            photoHighlights, photoShadows, photoToneReference);
         }
         if (useProtectedColor) {
           filmLinear = protectedColor(
@@ -617,7 +613,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
           vec3 linear = displayLinearValue(rgb);
           linear = linearToneAdjustments(
             linear, photoExposureEV, photoBrightness, photoContrast,
-            photoHighlights, photoShadows);
+            photoHighlights, photoShadows, photoToneReference);
           rgb = displayFromLinear(linear);
         }
       }
@@ -677,7 +673,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         hsv.y = clamp(hsv.y * saturation / 100.0, 0.0, 1.0);
         rgb = hsvToRgb(hsv);
       }
-      if (filmNegativeEnabled == 1.0 && sensorBlack) {
+      if (isNegative && sensorBlack) {
         rgb = vec3(1.0);
       }
       return vec4(clamp(rgb, 0.0, 1.0), pixel.a);

@@ -231,7 +231,7 @@ struct StillPreviewBenchmarkTests {
   func productionRendererNeutralizesZeroLight() {
     let image = UInt16Image(
       width: 2, height: 1, channels: 3,
-      pixels: [0, 128, 256, 512, 512, 512]
+      pixels: [0, 512, 1024, 1025, 1025, 1025]
     )
     guard let renderer = StillPreviewRenderer(image: image) else {
       #expect(Bool(false), "Could not create production still preview renderer")
@@ -254,6 +254,34 @@ struct StillPreviewBenchmarkTests {
 
     #expect(Array(pixels[0..<3]) == [255, 255, 255])
     #expect(pixels[4..<7].contains { $0 > 0 })
+    #expect(Array(pixels[4..<7]) != [255, 255, 255])
+  }
+
+  @Test("Production renderer neutralizes basic-inversion holder pixels")
+  func productionRendererNeutralizesBasicInversionZeroLight() {
+    let image = UInt16Image(
+      width: 1, height: 1, channels: 3,
+      pixels: [256, 512, 1024]
+    )
+    guard let renderer = StillPreviewRenderer(image: image) else {
+      #expect(Bool(false), "Could not create production still preview renderer")
+      return
+    }
+    let parameters = ProcessingParameters(
+      filmType: .colourNegative,
+      temperature: 100,
+      tint: -50,
+      filmNegativeParams: FilmNegativeParams()
+    )
+
+    guard let rendered = renderer.render(parameters: parameters, showOriginal: false),
+      let pixels = rgbaPixels(rendered)
+    else {
+      #expect(Bool(false), "Could not render or extract basic-inversion holder pixel")
+      return
+    }
+
+    #expect(Array(pixels[0..<3]) == [255, 255, 255])
   }
 
   @Test("Production renderer matches CPU across parameter grid")

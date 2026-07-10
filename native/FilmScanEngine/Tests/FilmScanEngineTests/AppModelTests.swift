@@ -647,6 +647,19 @@ struct AppModelTests {
     #expect(model.parameters.photoAdjustments.vibrance == 0.6)
   }
 
+  @Test("Enabling the overall curve starts from an identity curve")
+  func enablingCurveStartsFromIdentity() {
+    let model = AppModel()
+
+    model.setCurveEnabled(true)
+
+    #expect(model.parameters.curveEnabled)
+    #expect(model.parameters.curveControlPoints == [
+      CurvePoint(input: 0, output: 0),
+      CurvePoint(input: 1, output: 1),
+    ])
+  }
+
   @Test("Per-file corrections persist across app model instances")
   func perFileCorrectionsPersistAcrossLaunches() async throws {
     let fixture = try #require(

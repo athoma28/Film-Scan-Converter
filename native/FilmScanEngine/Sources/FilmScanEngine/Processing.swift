@@ -53,7 +53,10 @@ public enum FilmProcessing {
         if parameters.photoAdjustments.hasToneAdjustment {
           let renderReady = FilmNegativeProcessing.powerLawRenderReadyLinear(
             image: working, params: parameters.filmNegativeParams
-          ).applyingLinearToneAdjustments(parameters.photoAdjustments)
+          ).applyingLinearToneAdjustments(
+            parameters.photoAdjustments,
+            referenceLuminance: FilmNegativeProcessing.calibrationTargetFraction
+          )
           working = FilmNegativeProcessing.renderPowerLawDisplay(renderReady)
           usedLinearToneSeam = true
         } else {
@@ -76,7 +79,9 @@ public enum FilmProcessing {
           )
           if parameters.photoAdjustments.hasToneAdjustment {
             renderReady = renderReady.applyingLinearToneAdjustments(
-              parameters.photoAdjustments)
+              parameters.photoAdjustments,
+              referenceLuminance: FilmNegativeProcessing.calibrationTargetFraction
+            )
             usedLinearToneSeam = true
           }
           if parameters.photoAdjustments.hasColorAdjustment {
@@ -353,7 +358,10 @@ public enum FilmProcessing {
       c41Profile: parameters.densityC41Profile
     )
     if parameters.photoAdjustments.hasToneAdjustment {
-      renderReady = renderReady.applyingLinearToneAdjustments(parameters.photoAdjustments)
+      renderReady = renderReady.applyingLinearToneAdjustments(
+        parameters.photoAdjustments,
+        referenceLuminance: 1
+      )
     }
     let usedLinearSeam = parameters.filmType == .colourNegative
       && parameters.photoAdjustments.hasColorAdjustment
@@ -483,8 +491,7 @@ public enum FilmProcessing {
     output: inout UInt16Image,
     parameters: ProcessingParameters
   ) {
-    guard parameters.filmNegativeParams.enabled,
-      parameters.filmType == .colourNegative
+    guard parameters.filmType == .colourNegative
         || parameters.filmType == .blackAndWhiteNegative,
       source.channels == 3,
       output.channels == 3,
@@ -799,23 +806,46 @@ public enum FilmProcessing {
   }
 
   public static func buildCurveLUT(controlPoints: [CurvePoint]) -> [UInt16]? {
-    guard controlPoints.count >= 2 else { return nil }
-    let sorted = controlPoints.sorted { $0.input < $1.input }
+    guard let curve = CurveInterpolator(controlPoints: controlPoints) else { return nil }
     var lut = [UInt16](repeating: 0, count: 65536)
-    var cpIndex = 0
+    var segmentIndex = 0
     for i in 0..<65536 {
       let x = Double(i) / 65535.0
-      while cpIndex + 1 < sorted.count && sorted[cpIndex + 1].input < x {
-        cpIndex += 1
-      }
-      let lo = sorted[cpIndex]
-      let hi = cpIndex + 1 < sorted.count ? sorted[cpIndex + 1] : lo
-      let range = hi.input - lo.input
-      let t = range > 0 ? min(max((x - lo.input) / range, 0), 1) : 1.0
-      let y = lo.output + t * (hi.output - lo.output)
+      let y = curve.value(at: x, segmentIndex: &segmentIndex)
       lut[i] = UInt16(min(max(y * 65535.0, 0), 65535))
     }
     return lut
+  }
+
+  /// Evaluates the same shape-preserving cubic used by the render LUT. The
+  /// curve editor uses this so its drawn line is the curve that is rendered.
+  public static func curveOutput(
+    at input: Double,
+    controlPoints: [CurvePoint]
+  ) -> Double? {
+    CurveInterpolator(controlPoints: controlPoints)?.value(at: input)
+  }
+
+  public static func curveSamples(
+    controlPoints: [CurvePoint],
+    sampleCount: Int
+  ) -> [CurvePoint]? {
+    guard sampleCount > 0,
+      let curve = CurveInterpolator(controlPoints: controlPoints)
+    else {
+      return nil
+    }
+    var segmentIndex = 0
+    var samples: [CurvePoint] = []
+    samples.reserveCapacity(sampleCount + 1)
+    for sample in 0...sampleCount {
+      let input = Double(sample) / Double(sampleCount)
+      samples.append(CurvePoint(
+        input: input,
+        output: curve.value(at: input, segmentIndex: &segmentIndex)
+      ))
+    }
+    return samples
   }
 
   public static func highlightMask(_ luminance: Double) -> Double {
@@ -869,6 +899,132 @@ public enum FilmProcessing {
     return channel * gain
   }
 
+}
+
+private struct CurveInterpolator {
+  private let points: [CurvePoint]
+  private let tangents: [Double]
+
+  init?(controlPoints: [CurvePoint]) {
+    let sorted = controlPoints
+      .filter { $0.input.isFinite && $0.output.isFinite }
+      .sorted { $0.input < $1.input }
+    guard sorted.count >= 2 else { return nil }
+
+    var unique: [CurvePoint] = []
+    unique.reserveCapacity(sorted.count)
+    for point in sorted {
+      if let last = unique.last, abs(last.input - point.input) < 1e-12 {
+        unique[unique.count - 1] = point
+      } else {
+        unique.append(point)
+      }
+    }
+    guard unique.count >= 2 else { return nil }
+
+    points = unique
+    let count = unique.count
+    var slopes = [Double](repeating: 0, count: count - 1)
+    var widths = [Double](repeating: 0, count: count - 1)
+    for index in 0..<(count - 1) {
+      let width = unique[index + 1].input - unique[index].input
+      widths[index] = width
+      slopes[index] = (unique[index + 1].output - unique[index].output) / width
+    }
+
+    if count == 2 {
+      tangents = [slopes[0], slopes[0]]
+      return
+    }
+
+    var calculated = [Double](repeating: 0, count: count)
+    calculated[0] = Self.endpointTangent(
+      firstWidth: widths[0], secondWidth: widths[1],
+      firstSlope: slopes[0], secondSlope: slopes[1]
+    )
+    for index in 1..<(count - 1) {
+      let previousSlope = slopes[index - 1]
+      let nextSlope = slopes[index]
+      guard previousSlope != 0, nextSlope != 0,
+        previousSlope.sign == nextSlope.sign
+      else {
+        calculated[index] = 0
+        continue
+      }
+      let firstWeight = 2 * widths[index] + widths[index - 1]
+      let secondWeight = widths[index] + 2 * widths[index - 1]
+      calculated[index] = (firstWeight + secondWeight)
+        / (firstWeight / previousSlope + secondWeight / nextSlope)
+    }
+    calculated[count - 1] = Self.endpointTangent(
+      firstWidth: widths[count - 2], secondWidth: widths[count - 3],
+      firstSlope: slopes[count - 2], secondSlope: slopes[count - 3]
+    )
+    tangents = calculated
+  }
+
+  func value(at input: Double) -> Double {
+    guard input > points[0].input else { return points[0].output }
+    guard input < points[points.count - 1].input else { return points[points.count - 1].output }
+
+    var lower = 0
+    var upper = points.count - 1
+    while lower + 1 < upper {
+      let middle = (lower + upper) / 2
+      if points[middle].input <= input {
+        lower = middle
+      } else {
+        upper = middle
+      }
+    }
+
+    return interpolatedValue(at: input, segmentIndex: lower)
+  }
+
+  func value(at input: Double, segmentIndex: inout Int) -> Double {
+    guard input > points[0].input else { return points[0].output }
+    guard input < points[points.count - 1].input else { return points[points.count - 1].output }
+    segmentIndex = min(max(segmentIndex, 0), points.count - 2)
+    while segmentIndex + 1 < points.count - 1,
+      points[segmentIndex + 1].input <= input
+    {
+      segmentIndex += 1
+    }
+    return interpolatedValue(at: input, segmentIndex: segmentIndex)
+  }
+
+  private func interpolatedValue(at input: Double, segmentIndex: Int) -> Double {
+    let start = points[segmentIndex]
+    let end = points[segmentIndex + 1]
+    let width = end.input - start.input
+    let t = (input - start.input) / width
+    let t2 = t * t
+    let t3 = t2 * t
+    let h00 = 2 * t3 - 3 * t2 + 1
+    let h10 = t3 - 2 * t2 + t
+    let h01 = -2 * t3 + 3 * t2
+    let h11 = t3 - t2
+    return h00 * start.output + h10 * width * tangents[segmentIndex]
+      + h01 * end.output + h11 * width * tangents[segmentIndex + 1]
+  }
+
+  private static func endpointTangent(
+    firstWidth: Double,
+    secondWidth: Double,
+    firstSlope: Double,
+    secondSlope: Double
+  ) -> Double {
+    var tangent = ((2 * firstWidth + secondWidth) * firstSlope
+      - firstWidth * secondSlope) / (firstWidth + secondWidth)
+    if tangent.sign != firstSlope.sign {
+      tangent = 0
+    } else if firstSlope.sign != secondSlope.sign,
+      abs(tangent) > abs(3 * firstSlope)
+    {
+      tangent = 3 * firstSlope
+    }
+    return tangent
+  }
 }
 
 private func rgbToHsvFloat32(r: Float, g: Float, b: Float) -> (h: Float, s: Float, v: Float) {

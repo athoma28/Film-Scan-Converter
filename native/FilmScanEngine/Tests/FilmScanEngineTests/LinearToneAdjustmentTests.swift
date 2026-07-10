@@ -94,6 +94,22 @@ struct LinearToneAdjustmentTests {
     }
   }
 
+  @Test("Brightness follows the pipeline tone reference")
+  func brightnessUsesToneReference() {
+    let pixels = [0.04, 0.04, 0.04]
+    let image = makeImage(pixels: pixels)
+    let params = PhotoAdjustmentParameters(brightness: 0.5)
+
+    let result = image.applyingLinearToneAdjustments(
+      params,
+      referenceLuminance: 0.04
+    )
+
+    for value in result.pixels {
+      #expect(abs(value - 0.06) < 1e-12)
+    }
+  }
+
   @Test("Positive contrast increases the gap between dark and bright")
   func positiveContrast() {
     let dark: Double = 0.09
@@ -187,6 +203,22 @@ struct LinearToneAdjustmentTests {
     #expect(brightRatio > darkRatio)
     #expect(brightRatio > 1)
     #expect(brightResult > brightPixel)
+  }
+
+  @Test("Highlight range follows the pipeline tone reference")
+  func highlightsUseToneReference() {
+    let pixels = [0.2, 0.2, 0.2]
+    let image = makeImage(pixels: pixels)
+    let params = PhotoAdjustmentParameters(highlights: 0.5)
+
+    let defaultResult = image.applyingLinearToneAdjustments(params)
+    let negativeResult = image.applyingLinearToneAdjustments(
+      params,
+      referenceLuminance: FilmNegativeProcessing.calibrationTargetFraction
+    )
+
+    #expect(defaultResult.pixels[0] == pixels[0])
+    #expect(negativeResult.pixels[0] < pixels[0])
   }
 
   @Test("Positive shadows lift dark pixels more than bright ones")

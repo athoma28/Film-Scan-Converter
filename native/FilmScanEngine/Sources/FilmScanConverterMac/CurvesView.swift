@@ -29,7 +29,7 @@ struct IntegratedCurvesView: View {
   private let selectedPointRadius: CGFloat = 7
 
   var body: some View {
-    VStack(spacing: 6) {
+    VStack(spacing: 8) {
       channelPicker
 
       GeometryReader { geometry in
@@ -78,7 +78,7 @@ struct IntegratedCurvesView: View {
           .stroke(.white.opacity(0.1), lineWidth: 1)
       )
 
-      HStack(spacing: 4) {
+      HStack(spacing: 6) {
         pointInfoRow
 
         Spacer()
@@ -105,10 +105,10 @@ struct IntegratedCurvesView: View {
           Image(systemName: "ellipsis.circle")
             .font(.system(size: 13))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.borderless)
         .foregroundStyle(.secondary)
         .menuIndicator(.hidden)
-        .frame(width: 24, height: 24)
+        .frame(width: 26, height: 24)
       }
 
       presetButtonsRow
@@ -137,9 +137,9 @@ struct IntegratedCurvesView: View {
         .buttonStyle(.plain)
       }
     }
-    .background(RoundedRectangle(cornerRadius: 5).fill(Color(white: 0.13)))
+    .background(RoundedRectangle(cornerRadius: 6).fill(Color(white: 0.13)))
     .overlay(
-      RoundedRectangle(cornerRadius: 5)
+      RoundedRectangle(cornerRadius: 6)
         .stroke(.white.opacity(0.06), lineWidth: 1)
     )
   }
@@ -174,10 +174,21 @@ struct IntegratedCurvesView: View {
     return Path { path in
       guard sorted.count >= 2 else { return }
       let toView = makeViewTransform(drawRect: drawRect)
-      let pts = sorted.map { toView(CGPoint(x: $0.input, y: $0.output)) }
-      path.move(to: pts[0])
-      for point in pts.dropFirst() {
-        path.addLine(to: point)
+      let sampleCount = max(64, Int(drawRect.width.rounded()))
+      let samples = FilmProcessing.curveSamples(
+        controlPoints: sorted,
+        sampleCount: sampleCount
+      ) ?? sorted
+      for (index, sample) in samples.enumerated() {
+        let point = toView(CGPoint(
+          x: sample.input,
+          y: min(max(sample.output, 0), 1)
+        ))
+        if index == 0 {
+          path.move(to: point)
+        } else {
+          path.addLine(to: point)
+        }
       }
     }
     .stroke(selectedChannel.color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
@@ -271,7 +282,7 @@ struct IntegratedCurvesView: View {
   }
 
   private var presetButtonsRow: some View {
-    HStack(spacing: 4) {
+    HStack(spacing: 6) {
       compactPresetButton("Linear", systemImage: "line.diagonal") { applyPresetToCurrent(.linear) }
       compactPresetButton("S-Curve", systemImage: "function") { applyPresetToCurrent(.mediumContrast) }
       compactPresetButton("Strong S", systemImage: "chart.line.uptrend.xyaxis") { applyPresetToCurrent(.strongContrast) }
@@ -280,17 +291,14 @@ struct IntegratedCurvesView: View {
 
   private func compactPresetButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
     Button(action: action) {
-      HStack(spacing: 2) {
+      HStack(spacing: 4) {
         Image(systemName: systemImage).font(.system(size: 9))
         Text(title).font(.caption2)
       }
-      .padding(.horizontal, 6)
-      .padding(.vertical, 3)
-      .background(RoundedRectangle(cornerRadius: 4).fill(Color(white: 0.20)))
-      .overlay(RoundedRectangle(cornerRadius: 4).stroke(.white.opacity(0.08), lineWidth: 1))
+      .frame(maxWidth: .infinity)
     }
-    .buttonStyle(.plain)
-    .foregroundStyle(.primary)
+    .buttonStyle(.bordered)
+    .controlSize(.small)
   }
 
   private enum CurvePreset { case linear, mediumContrast, strongContrast }
@@ -340,15 +348,24 @@ struct IntegratedCurvesView: View {
     case .green: pts = model.parameters.greenCurveControlPoints
     case .blue: pts = model.parameters.blueCurveControlPoints
     }
-    return pts.isEmpty ? [CurvePoint(input: 0, output: 0), CurvePoint(input: 1, output: 1)] : pts
+    let resolved = pts.isEmpty
+      ? [CurvePoint(input: 0, output: 0), CurvePoint(input: 1, output: 1)]
+      : pts
+    return resolved.sorted { $0.input < $1.input }
   }
 
   private func setControlPoints(_ points: [CurvePoint]) {
+    let normalized = points.map {
+      CurvePoint(
+        input: min(max($0.input, 0), 1),
+        output: min(max($0.output, 0), 1)
+      )
+    }.sorted { $0.input < $1.input }
     switch selectedChannel {
-    case .rgb: model.setCurveControlPoints(points)
-    case .red: model.setRedCurveControlPoints(points)
-    case .green: model.setGreenCurveControlPoints(points)
-    case .blue: model.setBlueCurveControlPoints(points)
+    case .rgb: model.setCurveControlPoints(normalized)
+    case .red: model.setRedCurveControlPoints(normalized)
+    case .green: model.setGreenCurveControlPoints(normalized)
+    case .blue: model.setBlueCurveControlPoints(normalized)
     }
   }
 
@@ -379,9 +396,11 @@ struct IntegratedCurvesView: View {
     guard !nearExisting else { return }
 
     var newPoints = points
-    newPoints.append(CurvePoint(input: norm.x, output: norm.y))
+    let newPoint = CurvePoint(input: norm.x, output: norm.y)
+    newPoints.append(newPoint)
+    newPoints.sort { $0.input < $1.input }
     setControlPoints(newPoints)
-    selectedPointIndex = newPoints.count - 1
+    selectedPointIndex = newPoints.firstIndex(of: newPoint)
   }
 
   private func handlePointDrag(value: DragGesture.Value, pointIndex: Int, drawRect: CGRect) {
@@ -390,12 +409,18 @@ struct IntegratedCurvesView: View {
     var points = currentControlPoints
     guard pointIndex < points.count else { return }
 
-    if abs(points[pointIndex].input) < 0.001 {
+    if pointIndex == 0 {
       points[pointIndex] = CurvePoint(input: 0, output: min(max(norm.y, 0), 1))
-    } else if abs(points[pointIndex].input - 1.0) < 0.001 {
+    } else if pointIndex == points.count - 1 {
       points[pointIndex] = CurvePoint(input: 1, output: min(max(norm.y, 0), 1))
     } else {
-      points[pointIndex] = CurvePoint(input: min(max(norm.x, 0), 1), output: min(max(norm.y, 0), 1))
+      let spacing = 1.0 / 255.0
+      let lower = points[pointIndex - 1].input + spacing
+      let upper = points[pointIndex + 1].input - spacing
+      points[pointIndex] = CurvePoint(
+        input: min(max(norm.x, lower), upper),
+        output: min(max(norm.y, 0), 1)
+      )
     }
     setControlPoints(points)
   }
@@ -413,14 +438,24 @@ struct IntegratedCurvesView: View {
   private func updatePointInput(at index: Int, value: Double) {
     var points = currentControlPoints
     guard index < points.count else { return }
-    points[index] = CurvePoint(input: value, output: points[index].output)
+    guard index > 0, index < points.count - 1 else { return }
+    let spacing = 1.0 / 255.0
+    let lower = points[index - 1].input + spacing
+    let upper = points[index + 1].input - spacing
+    points[index] = CurvePoint(
+      input: min(max(value, lower), upper),
+      output: points[index].output
+    )
     setControlPoints(points)
   }
 
   private func updatePointOutput(at index: Int, value: Double) {
     var points = currentControlPoints
     guard index < points.count else { return }
-    points[index] = CurvePoint(input: points[index].input, output: value)
+    points[index] = CurvePoint(
+      input: points[index].input,
+      output: min(max(value, 0), 1)
+    )
     setControlPoints(points)
   }
 }

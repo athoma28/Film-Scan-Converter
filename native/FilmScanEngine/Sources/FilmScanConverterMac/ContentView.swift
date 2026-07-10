@@ -106,7 +106,7 @@ struct ContentView: View {
   }
 
   private var toolbar: some View {
-    HStack(spacing: 12) {
+    HStack(spacing: 10) {
       Button(action: model.showImportPanel) {
         Label("Import", systemImage: "plus")
       }
@@ -130,24 +130,24 @@ struct ContentView: View {
             set: camera.setInvertNegative
           )
         )
-        Text("Exposure")
-        Slider(
+        .toggleStyle(.switch)
+
+        ToolbarSlider(
+          "Exposure",
           value: Binding(
-            get: { camera.exposure },
-            set: camera.setExposure
+            get: { Double(camera.exposure) },
+            set: { camera.setExposure(Float($0)) }
           ),
-          in: -3...3
+          range: -3...3
         )
-        .frame(width: 120)
-        Text("Saturation")
-        Slider(
+        ToolbarSlider(
+          "Saturation",
           value: Binding(
-            get: { camera.saturation },
-            set: camera.setSaturation
+            get: { Double(camera.saturation) },
+            set: { camera.setSaturation(Float($0)) }
           ),
-          in: 0...2
+          range: 0...2
         )
-        .frame(width: 120)
       }
       Spacer()
 
@@ -159,21 +159,29 @@ struct ContentView: View {
         .disabled(isPickingRebateRegion)
         .help("Press and hold the comparison visually by toggling the original")
 
-        Button(action: model.rotateCounterclockwise) {
-          Image(systemName: "rotate.left")
+        HStack(spacing: 4) {
+          Button(action: model.rotateCounterclockwise) {
+            Image(systemName: "rotate.left")
+              .frame(width: 18)
+          }
+          .help("Rotate left")
+          Button(action: model.rotateClockwise) {
+            Image(systemName: "rotate.right")
+              .frame(width: 18)
+          }
+          .help("Rotate right")
+          Button(action: model.toggleFlip) {
+            Image(systemName: "arrow.left.and.right.righttriangle.left.righttriangle.right")
+              .frame(width: 18)
+          }
+          .help("Flip horizontally")
         }
-        .help("Rotate left")
-        Button(action: model.rotateClockwise) {
-          Image(systemName: "rotate.right")
-        }
-        .help("Rotate right")
-        Button(action: model.toggleFlip) {
-          Image(systemName: "arrow.left.and.right.righttriangle.left.righttriangle.right")
-        }
-        .help("Flip horizontally")
       }
     }
-    .padding(10)
+    .controlSize(.small)
+    .buttonStyle(.bordered)
+    .padding(.horizontal, 12)
+    .padding(.vertical, 9)
   }
 
   private var inspector: some View {
@@ -219,7 +227,8 @@ struct ContentView: View {
     _ page: InspectorPage, content: Content
   ) -> some View {
     ScrollView {
-      VStack(spacing: 12) { content }.padding(12)
+      VStack(spacing: 10) { content }
+        .padding(12)
     }
     .scrollBounceBehavior(.basedOnSize)
     .opacity(inspectorPage == page ? 1 : 0)
@@ -230,7 +239,7 @@ struct ContentView: View {
   private var editInspector: some View {
     Group {
       InspectorSection("Settings", systemImage: "slider.horizontal.2.square") {
-        HStack {
+        HStack(spacing: 8) {
           Button(action: model.copyCorrectionSettings) {
             Label("Copy", systemImage: "doc.on.doc")
           }
@@ -239,10 +248,8 @@ struct ContentView: View {
           }
           .disabled(!model.canPasteCorrectionSettings)
         }
-        .controlSize(.small)
 
         Button("Apply Settings to All Open Files", action: model.applyCurrentSettingsToAllOpenFiles)
-          .controlSize(.small)
 
         Picker(
           "Files kept ready",
@@ -338,7 +345,7 @@ struct ContentView: View {
                   set: { model.setFilmNegativeRedRatio($0) }
                 ),
                 range: 0.8...1.8, neutral: FilmNegativeParams.colourNegative.redRatio,
-                valueFormat: "%.3f"
+                valueFormat: "%.3f", responseExponent: 1.5
               )
               AdjustmentSlider(
                 "Green Exponent",
@@ -346,7 +353,8 @@ struct ContentView: View {
                   get: { fn.greenExp },
                   set: { model.setFilmNegativeGreenExp($0) }
                 ),
-                range: 1.0...2.0, neutral: 1.5, valueFormat: "%.3f"
+                range: 1.0...2.0, neutral: 1.5, valueFormat: "%.3f",
+                responseExponent: 1.5
               )
               AdjustmentSlider(
                 "Blue Ratio",
@@ -355,7 +363,7 @@ struct ContentView: View {
                   set: { model.setFilmNegativeBlueRatio($0) }
                 ),
                 range: 0.6...1.4, neutral: FilmNegativeParams.colourNegative.blueRatio,
-                valueFormat: "%.3f"
+                valueFormat: "%.3f", responseExponent: 1.5
               )
             }
             .padding(.top, 8)
@@ -393,7 +401,7 @@ struct ContentView: View {
             get: { model.parameters.photoAdjustments.brightness },
             set: { model.setBrightness($0) }
           ),
-          range: -1...1, neutral: 0, valueFormat: "%.3f"
+          range: -1...1, neutral: 0, valueFormat: "%.3f", responseExponent: 1.6
         )
         AdjustmentSlider(
           "Contrast",
@@ -401,7 +409,7 @@ struct ContentView: View {
             get: { model.parameters.photoAdjustments.contrast },
             set: { model.setContrast($0) }
           ),
-          range: -1...1, neutral: 0, valueFormat: "%.3f"
+          range: -1...1, neutral: 0, valueFormat: "%.3f", responseExponent: 1.6
         )
         AdjustmentSlider(
           "Highlights",
@@ -409,7 +417,7 @@ struct ContentView: View {
             get: { model.parameters.photoAdjustments.highlights },
             set: { model.setSemanticHighlights($0) }
           ),
-          range: -1...1, neutral: 0, valueFormat: "%.3f"
+          range: -1...1, neutral: 0, valueFormat: "%.3f", responseExponent: 1.6
         )
         AdjustmentSlider(
           "Shadows",
@@ -417,7 +425,7 @@ struct ContentView: View {
             get: { model.parameters.photoAdjustments.shadows },
             set: { model.setSemanticShadows($0) }
           ),
-          range: -1...1, neutral: 0, valueFormat: "%.3f"
+          range: -1...1, neutral: 0, valueFormat: "%.3f", responseExponent: 1.6
         )
       }
       .disabled(!model.parameters.filmType.supportsToneCorrections)
@@ -453,7 +461,7 @@ struct ContentView: View {
             get: { model.parameters.photoAdjustments.vibrance },
             set: { model.setVibrance($0) }
           ),
-          range: -1...1, neutral: 0, valueFormat: "%.3f"
+          range: -1...1, neutral: 0, valueFormat: "%.3f", responseExponent: 1.6
         )
       }
       .disabled(!model.parameters.filmType.supportsColorCorrections)
@@ -482,7 +490,6 @@ struct ContentView: View {
           }
         }
         Button("Apply Selected Profiles", action: model.applySelectedPipelineProfiles)
-          .controlSize(.small)
 
         HStack {
           TextField("New profile name", text: $profileName)
@@ -568,7 +575,6 @@ struct ContentView: View {
             systemImage: isPickingRebateRegion ? "xmark" : "rectangle.dashed"
           )
         }
-        .controlSize(.small)
         .disabled(model.decodedImage == nil)
 
         if isPickingRebateRegion {
@@ -694,7 +700,7 @@ struct ContentView: View {
         }
         .disabled(model.decodedImage == nil || model.isCropDetectionRunning || isPerspectiveEditing)
 
-        HStack {
+        HStack(spacing: 8) {
           Button(action: toggleStraightening) {
             Label(
               isStraightening ? "Cancel" : "Straighten",
@@ -1055,20 +1061,24 @@ struct ContentView: View {
           .foregroundStyle(.secondary)
         }
 
-        HStack {
+        HStack(spacing: 8) {
           Button("Export Selected", action: model.exportSelected)
             .buttonStyle(.borderedProminent)
+            .frame(maxWidth: .infinity)
           Button("Export All", action: model.exportAll)
             .buttonStyle(.bordered)
+            .frame(maxWidth: .infinity)
         }
         .disabled(model.exportParameters.destinationDirectory == nil || model.isExporting)
 
         if model.isExporting {
-          HStack {
+          HStack(spacing: 8) {
             Button("Add Selected", action: model.addSelectedToExportQueue)
               .buttonStyle(.borderedProminent)
+              .frame(maxWidth: .infinity)
             Button("Cancel", role: .cancel, action: model.cancelExport)
               .buttonStyle(.bordered)
+              .frame(maxWidth: .infinity)
           }
           Text(
             model.exportQueueCount == 1
@@ -1714,22 +1724,50 @@ private struct InspectorSection<Content: View>: View {
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 11) {
-      Label(title, systemImage: systemImage)
-        .font(.subheadline.weight(.semibold))
-        .foregroundStyle(.primary)
+    VStack(alignment: .leading, spacing: 10) {
+      HStack(spacing: 7) {
+        Image(systemName: systemImage)
+          .foregroundStyle(.secondary)
+          .frame(width: 16)
+        Text(title)
+          .foregroundStyle(.primary)
+      }
+      .font(.subheadline.weight(.semibold))
       content
     }
-    .padding(12)
+    .controlSize(.small)
+    .buttonStyle(.bordered)
+    .padding(11)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(
-      RoundedRectangle(cornerRadius: 10, style: .continuous)
+      RoundedRectangle(cornerRadius: 8, style: .continuous)
         .fill(Color(nsColor: .windowBackgroundColor))
     )
     .overlay(
-      RoundedRectangle(cornerRadius: 10, style: .continuous)
+      RoundedRectangle(cornerRadius: 8, style: .continuous)
         .stroke(Color.primary.opacity(0.08), lineWidth: 1)
     )
+  }
+}
+
+private struct ToolbarSlider: View {
+  let title: String
+  @Binding var value: Double
+  let range: ClosedRange<Double>
+
+  init(_ title: String, value: Binding<Double>, range: ClosedRange<Double>) {
+    self.title = title
+    self._value = value
+    self.range = range
+  }
+
+  var body: some View {
+    HStack(spacing: 6) {
+      Text(title)
+        .font(.caption)
+      Slider(value: $value, in: range)
+        .frame(width: 104)
+    }
   }
 }
 

@@ -235,7 +235,7 @@ struct ProcessingTests {
       width: 2,
       height: 1,
       channels: 3,
-      pixels: [0, 128, 256, 512, 512, 512]
+      pixels: [0, 512, 1024, 1025, 1025, 1025]
     )
     var filmNegative = FilmNegativeParams.colourNegative
     filmNegative.measuredMedians = BGRChannelValues(blue: 20_000, green: 20_000, red: 20_000)
@@ -249,6 +249,27 @@ struct ProcessingTests {
 
     #expect(Array(actual.pixels[0..<3]) == [65535, 65535, 65535])
     #expect(actual.pixels[3..<6].contains { $0 > 0 })
+    #expect(Array(actual.pixels[3..<6]) != [65535, 65535, 65535])
+  }
+
+  @Test("Basic negative inversion also keeps near-zero holder pixels neutral")
+  func basicNegativeNeutralizesZeroLight() {
+    let image = UInt16Image(
+      width: 1,
+      height: 1,
+      channels: 3,
+      pixels: [256, 512, 1024]
+    )
+    let parameters = ProcessingParameters(
+      filmType: .colourNegative,
+      temperature: 100,
+      tint: -50,
+      filmNegativeParams: FilmNegativeParams()
+    )
+
+    let actual = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+
+    #expect(actual.pixels == [65535, 65535, 65535])
   }
 
   @Test("Crop-only corrected preview applies orientation without tonal corrections")
@@ -332,6 +353,40 @@ struct ProcessingTests {
     let expected = UInt16(0.7 * 65535)
     let diff = midOutput > expected ? midOutput - expected : expected - midOutput
     #expect(diff <= 1, "Midpoint expected ~\(expected), got \(midOutput)")
+  }
+
+  @Test("Curve interpolation is smooth and shape-preserving")
+  func curveInterpolationIsSmoothAndShapePreserving() throws {
+    let points = [
+      CurvePoint(input: 0, output: 0),
+      CurvePoint(input: 0.25, output: 0.15),
+      CurvePoint(input: 0.5, output: 0.5),
+      CurvePoint(input: 0.75, output: 0.85),
+      CurvePoint(input: 1, output: 1),
+    ]
+    let samples = try (0...100).map { sample -> Double in
+      try #require(FilmProcessing.curveOutput(
+        at: Double(sample) / 100,
+        controlPoints: points
+      ))
+    }
+
+    #expect(samples == samples.sorted())
+    #expect(samples.allSatisfy { $0 >= 0 && $0 <= 1 })
+
+    let epsilon = 0.0001
+    let left = try #require(FilmProcessing.curveOutput(
+      at: 0.5 - epsilon,
+      controlPoints: points
+    ))
+    let center = try #require(FilmProcessing.curveOutput(at: 0.5, controlPoints: points))
+    let right = try #require(FilmProcessing.curveOutput(
+      at: 0.5 + epsilon,
+      controlPoints: points
+    ))
+    let leftSlope = (center - left) / epsilon
+    let rightSlope = (right - center) / epsilon
+    #expect(abs(leftSlope - rightSlope) < 0.01)
   }
 
   @Test("Curve LUT with single control point returns nil")

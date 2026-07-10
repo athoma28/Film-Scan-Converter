@@ -390,7 +390,11 @@ public enum FilmNegativeProcessing {
 
     return UInt16Image(width: image.width, height: image.height, channels: 3, pixels: output)
   }
-  public static let sensorBlackThreshold: UInt16 = 256
+  /// Near-zero source values become clipped highlights after negative
+  /// inversion. Demosaic and black-level subtraction leave real holder masks
+  /// slightly above code zero, so neutralize the whole clipped range instead
+  /// of preserving a channel-biased fringe.
+  public static let sensorBlackThreshold: UInt16 = 1024
 
   public static func applyPowerLawInversion(
     image: UInt16Image,

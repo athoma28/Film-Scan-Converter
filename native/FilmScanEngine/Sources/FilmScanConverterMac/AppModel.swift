@@ -572,9 +572,6 @@ final class AppModel: ObservableObject {
       if value && $0.curveControlPoints.isEmpty {
         $0.curveControlPoints = [
           CurvePoint(input: 0, output: 0),
-          CurvePoint(input: 0.25, output: 0.2),
-          CurvePoint(input: 0.5, output: 0.5),
-          CurvePoint(input: 0.75, output: 0.8),
           CurvePoint(input: 1, output: 1),
         ]
       }
