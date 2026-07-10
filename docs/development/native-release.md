@@ -1,5 +1,9 @@
 # Native macOS Release
 
+This is the operational release runbook. Release scope and priority belong in
+the [product roadmap](../improvements/MacOS-Native-Roadmap.md); current evidence
+and blockers belong in [Native macOS Development Status](native-macos.md).
+
 The native release path produces a self-contained macOS app bundle and ZIP.
 It embeds LibRaw and its non-system Homebrew dependencies, rewrites their load
 paths to the app bundle, applies hardened-runtime signing, validates the bundle
@@ -14,6 +18,12 @@ launch are implemented and verified. A Developer ID certificate and Apple
 notary credentials are still required to complete notarization, Gatekeeper
 validation, and clean-machine installation. Do not describe the app as
 generally distributable until those gates pass.
+
+Run Developer ID/notarization and the final clean-machine gate against a
+release candidate that has already passed the representative packaged-app
+correctness and essential editing-workflow gates. Local packaging checks should
+continue throughout development; the final distribution proof should not be
+spent on a knowingly incomplete intermediate build.
 
 ## Build a Local Validation Artifact
 
@@ -110,10 +120,16 @@ the source checkout:
 1. Download or copy the ZIP as a user would and expand it.
 2. Move the app to `/Applications`.
 3. Confirm the first launch passes Gatekeeper without a bypass.
-4. Import and preview one standard image and one supported RAW file.
-5. Export TIFF, JPEG, PNG, and DNG outputs and reopen them.
-6. Confirm camera permission text appears when live preview is opened.
-7. Relaunch the app and verify per-file settings and named presets persist.
+4. Import and preview one standard image and representative supported RAWs;
+   verify provisional-to-authoritative replacement does not change orientation.
+5. Exercise the default power-law path, density/flat-field path, crop,
+   perspective, frame, preset, and copy/paste behavior.
+6. Export TIFF, JPEG, PNG, and DNG outputs and reopen them. Verify dimensions,
+   orientation, pixels, profile, and metadata as applicable.
+7. Exercise cancellation, destination collisions, and an unwritable
+   destination; confirm no misleading partial file remains.
+8. Confirm camera permission text appears when live preview is opened.
+9. Relaunch the app and verify per-file settings and named presets persist.
 
 Record the macOS version, hardware architecture, app version/build, signing
 identity, notarization submission ID, and results in the release notes.

@@ -1,179 +1,104 @@
-# Native macOS Rewrite
+# Native macOS Package
 
-For the authoritative current development step, progress, limitations, and next
-work, read [Native macOS Development](../docs/development/native-macos.md).
+This directory contains the Swift package, native application, benchmarks, and
+release packager. Product status and priorities are intentionally maintained
+elsewhere:
 
-This file contains only package-local build and implementation notes.
+- [Native development status](../docs/development/native-macos.md)
+- [Product roadmap](../docs/improvements/MacOS-Native-Roadmap.md)
+- [Feature inventory](../docs/features.md)
+- [Release runbook](../docs/development/native-release.md)
 
-## Current Scope
+## Package Structure
 
-- A macOS GitHub Actions job runs the native regression gate for every relevant
-  push and pull request.
-- `FilmScanEngine` models per-photo and render parameters.
-- `UInt16Image` provides deterministic rotation, flip, frame, and aspect-ratio
-  padding helpers.
-- `StandardImageDecoder` uses ImageIO and Core Graphics to load PNG, JPEG, BMP,
-  and TIFF files into 16-bit BGR or grayscale `UInt16Image` buffers.
-- `RawImageDecoder` uses a narrow C shim over thread-safe LibRaw and reproduces
-  the production RawPy settings in owned 16-bit BGR buffers.
-- `FilmScanConverterMac` is the primary SwiftUI application. Dropping supported
-  standard or RAW images into its main window decodes and previews them through
-  the engine without blocking the main actor.
-- Imported files use a fixed Edit/Grade/Export inspector: film setup, light,
-  and basic color adjustments stay in the primary workflow; curves and
-  shadow/midtone/highlight wheels form a separate grading surface; and the
-  existing TIFF/JPEG/PNG/DNG options and batch actions are exposed in a dedicated
-  output page. Centered sliders show signed values and provide neutral reset
-  actions, while advanced film-negative coefficients remain collapsed until
-  needed. Interactive
-  rendering uses a bounded 640-pixel, 16-bit proxy with a Core Image/Metal
-  correction kernel and bounded latest-value-wins scheduling, while preserving
-  the full decoded source for later export work. A user-selectable
-  2/4/8/16/32-session cache uses a cancellable utility-priority worker to
-  predecode the configured forward lookahead; the default remains two. Edit,
-  Grade, and Export pages remain mounted for immediate switching. The
-  actual Core Image renderer is verified against the CPU path across 2,655
-  comparisons with a maximum difference of 2/255. Constant-time gamut limiting
-  replaced a serial 24-step per-pixel GPU loop, and the adjustment-heavy release
-  benchmark improved from a 3.9959 ms p95 baseline to 2.9641–3.0286 ms across
-  four post-change runs (at least 24.2%) at unchanged 1080×720 dimensions.
-  End-to-end real-file drag
-  latency still requires verification. See the
-  [real-time still preview plan](../docs/development/realtime-preview-plan.md).
-  For RAW first paint, ImageIO now decodes the embedded JPEG directly to this
-  640-pixel bound instead of allocating and converting the full embedded image.
-  Standard images use the same provisional-preview principle and swap to their
-  full-resolution authoritative decode in the background. Preview and full
-  standard-image decoding apply the same metadata orientation. Selected-file
-  and lookahead authoritative decodes are serialized; canceled queued work is
-  discarded before it starts, avoiding overlapping large decode buffers during
-  rapid selection changes.
-  Loading and full-resolution export of representative 40 MP files are both
-  explicit performance targets; export changes remain gated on a release-mode
-  staged benchmark and unchanged output fidelity.
-- Per-file correction settings are loaded from and atomically saved to a
-  versioned JSON document in Application Support, keyed by standardized source
-  path. Invalid persistence data falls back to defaults without blocking launch.
-- User-named correction presets are saved in a separate versioned atomic store.
-  The Edit inspector can copy/paste a versioned correction payload through the
-  system clipboard. Applying presets or pasted settings preserves the target
-  frame's rotation, flip, crop geometry, and measured film-base state.
-  Pasted looks recompute target-image negative medians immediately, the current
-  look can be applied to all open files, and the browser marks user-edited files
-  independently of preview-cache state.
-- After an explicit film-kind choice on the first imported file, ambiguous
-  later automatic classifications can use that identity as a session-only weak
-  prior. Confident per-image evidence, persisted settings, and subsequent user
-  edits remain authoritative.
-- PNG export uses a verified 16-bit little-endian RGBA/no-alpha CGImage layout
-  and same-directory staging before atomic commit. Failure paths remove staging
-  files and report the destination and failing ImageIO/filesystem stage.
-- Sequential export accepts the selected file as a pending queue item while a
-  run is active, with exact-repeat protection and dynamic progress.
-- Its optional live camera view uses AVFoundation and a GPU-backed Core Image
-  context for negative inversion, exposure, and saturation preview corrections.
-  Late frames are discarded and processing is throttled to 20 fps to keep the
-  UI responsive.
-- Swift tests consume frozen `.npy` outputs generated by the current Python
-  implementation. Standard-decode fixtures currently cover 8-bit color PNG,
-  8-bit grayscale PNG, BMP, JPEG, and 16-bit TIFF. PNG, BMP, and TIFF require
-  exact pixels; JPEG uses the documented tolerance in the authoritative status
-  page because ImageIO and OpenCV use different lossy decoders.
-- When `sample-raw/` is present, Swift tests require exact RawPy SHA-256 hashes
-  for all five half-size RAF decodes and one full-resolution RAF decode. When
-  it is absent, the corpus-specific tests are explicitly reported as disabled
-  rather than silently passing.
-- `FilmScanRawBenchmark` compares release-mode native decode speed and decoded
-  quality against the RawPy corpus runner. See the
-  [benchmark report](../docs/development/native-raw-benchmark.md).
-- `FilmScanAdjustmentBenchmark` measures deterministic release-mode Metal
-  rendering for protected tone/color adjustments, curves, and color wheels at
-  1080×720 without changing the render dimensions.
-- `FilmNegativeProcessing` provides standalone film-specific engine APIs for
-  BGR black-level correction, matched flat-field normalization, optical-density
-  conversion, manual base-density subtraction, manual rebate base measurement,
-  roll-profile storage, base-density precedence resolution, generic C-41
-  density-to-scene conversion, and bounded CPU scene-to-display rendering. The
-  density pipeline and roll profiles are connected to preview and export, including
-  flat-field geometry validation and alignment through crop/orientation.
-- `RenderReadyLinearImage` gives the power-law and density front-ends a shared
-  unclamped linear BGR adjustment seam. Its deterministic robust statistics are
-  hard-capped at 65,536 samples, keeping statistics scratch memory independent
-  of full-resolution RAW dimensions. A bounded displayed-image proxy now feeds
-  those statistics to the Grade inspector's clipping readout from the first
-  displayed render. The inspector labels provisional dimensions and reports
-  authoritative source dimensions after the full decode swaps in.
-- `DustDetection` reproduces the legacy 16-bit-to-gray conversion, percentile
-  threshold, morphological closing, contour-area filtering, filled mask, and
-  final dilation across frozen Python/OpenCV fixtures. Percentiles use a fixed
-  256-bin histogram and square morphology uses O(pixels) integral-image passes.
-  The app can display the resulting mask as an orientation/crop-aligned,
-  non-destructive overlay. Telea inpainting and applying removal to output remain pending.
-- Primary color-negative Temperature/Tint, Saturation, and Vibrance operate in
-  that linear seam using luminance-preserving Rec.2020 opponent axes, selective
-  chroma scaling, highlight/gamut attenuation, and hue-preserving chroma
-  reduction. CPU preview/export and the production Core Image kernel share the
-  contract and remain within the 2/255 preview tolerance; legacy RGB/HSV helpers
-  remain available for fixture parity.
-- Film-negative inversion using RawTherapee's exponent model is connected to the
-  correction preview and export path through the CPU engine and Core Image/Metal
-  preview renderer. It uses 20%-border-cut channel
-  medians, RawTherapee's `1/24` linear output reference, sRGB transfer handling,
-  and both tone curves from the bundled Film Negative preset before final clamp.
-  Inversion is evaluated in linear Rec.2020 after sRGB decode on CPU and Metal
-  paths, then converted back to display sRGB. The optimized CPU path uses one
-  UInt16-to-linear-sRGB LUT and applies the Rec.2020 matrix once; scalar median
-  calibration remains shared with the Metal renderer. One-channel legacy
-  exposure remains supported outside the optimized BGR loop. The camera-scan
-  decoder
-  installs RCD for full-resolution Bayer decode, installs three-pass
-  Markesteijn interpolation for full-resolution X-Trans decode, and applies
-  bounded ISO-tier sharpening or denoising while exposing ISO and executed
-  stages in `RawDecodeResult`. The app uses half-size RAW preview decode and
-  memory-bounded full-resolution RAW export. Native ISO policy sharpens below ISO 800,
-  denoises mildly at ISO 800–3199, and denoises more strongly at ISO 3200+; it is
-  not an exact port of RawTherapee's noise kernels.
-- TIFF, JPEG, PNG, and processed-RGB DNG export are implemented with individual
-  and memory-bounded batch workflows. Standard images use at most two-item
-  `exportBatch` chunks; full-resolution RAW files remain one-at-a-time. Background processing, cancellation,
-  per-file errors, frame/aspect-ratio options, JPEG quality, and TIFF LZW
-  compression. Existing and same-basename outputs receive deterministic numeric
-  suffixes instead of being overwritten.
+`native/FilmScanEngine` provides:
 
-The native application is the primary product and the only target for new
-features. It is not yet a complete replacement for the maintenance-only legacy
-Python application: dust inpainting and output integration, Developer ID
-notarization plus Gatekeeper/clean-machine release validation, and fixture
-independence are the current
-retirement gates. See
-[Legacy Python Status And Retirement](../docs/legacy-python.md).
-Threshold generation, white balance, saturation, exposure,
-highlight/midtone/shadow color wheels, and overall and per-channel
-RGB curves are implemented.
-Standard images with alpha channels are intentionally rejected until the
-processing pipeline defines four-channel behavior.
+- `FilmScanEngine`: deterministic image, processing, crop, dust-mask, RAW,
+  standard-image, and export primitives;
+- `FilmScanPreviewRenderer`: the bounded Core Image/Metal still renderer;
+- `FilmScanConverterMac`: the primary SwiftUI application;
+- `FilmScanRawBenchmark`: compatibility-profile RAW decode benchmark;
+- `FilmScanExportBenchmark`: staged production export benchmark with per-run
+  output hashing and deletion;
+- `FilmScanAdjustmentBenchmark`: release-mode preview adjustment benchmark;
+- `FilmScanPreviewComparator`: CPU/GPU visual and numerical comparison tool;
+- `FilmScanReleaseValidator`: packaged-app contract validator;
+- `FilmScanProcessingBenchmark`: focused processing benchmark.
 
-Install the native dependency:
+The package requires macOS 14 or later and Homebrew LibRaw. `CLibRawShim`
+provides the narrow C/C++ boundary used by Swift. No LibRaw-owned buffer or
+lifetime is exposed to the application.
+
+## Build And Test
 
 ```sh
 brew install libraw
+
+swift test --package-path native/FilmScanEngine --no-parallel
+swift build --package-path native/FilmScanEngine \
+  --product FilmScanConverterMac
+swift run --package-path native/FilmScanEngine FilmScanConverterMac
 ```
 
-Refresh frozen legacy compatibility fixtures only when intentionally changing
-shared behavior:
+Use `swift run` for development. It does not exercise the normal installed-app
+Launch Services path, embedded dependencies, icon, document registration, or
+release signature.
+
+## Packaged-App Validation
+
+Build a self-contained, locally ad-hoc-signed app and ZIP:
 
 ```sh
-.venv/bin/python tests/generate_native_snapshots.py
-.venv/bin/python tests/generate_raw_decode_reference.py
+native/package-release.sh
+open "dist/Film Scan Converter.app"
 ```
 
-Run the native regression gate:
+The packager embeds non-system dynamic libraries, rewrites bundle load paths,
+signs in dependency order, validates the app, creates the ZIP, extracts it, and
+validates the archived copy. Set `SIGNING_IDENTITY` to an exact Developer ID
+Application identity only for a distribution candidate. Follow the
+[release runbook](../docs/development/native-release.md) for notarization,
+stapling, Gatekeeper, and clean-machine validation.
+
+## Benchmarks And Diagnostics
+
+Run the staged 40 MP export benchmark:
 
 ```sh
-swift test --package-path native/FilmScanEngine
+swift build -c release --package-path native/FilmScanEngine \
+  --product FilmScanExportBenchmark
+
+native/FilmScanEngine/.build/release/FilmScanExportBenchmark \
+  sample-raw /tmp/film-scan-export.json 3 --file=DSCF0669.RAF
 ```
 
-Run the opt-in 500-render latency benchmark:
+The default format set is TIFF, JPEG, PNG, and DNG. Use
+`--formats=tiff,png`, `--all --limit=10`, or `--frame-percent=2` to vary the
+run. Each generated image is hashed and removed immediately; only the JSON
+report remains. The report retains the individual samples plus median and
+nearest-rank p95 totals, stages, decode substages, packed-pixel bytes, current
+and peak physical footprint, reusable bytes, legacy resident-memory checkpoints,
+and default-zone live/reserved heap checkpoints after per-sample release.
+Physical footprint is the live-memory gate; resident size can include clean
+reusable pages. The executable covers engine
+decode/process/write. Use the app's correlated signposts in Instruments for
+settings, classification, flat-field,
+queue, destination, cancellation, and UI timing. See the
+[40 MP benchmark notes](../docs/performance/40mp-export.md).
+
+Run the RAW and preview tools:
+
+```sh
+swift build -c release --package-path native/FilmScanEngine \
+  --product FilmScanRawBenchmark
+
+swift run -c release --package-path native/FilmScanEngine \
+  FilmScanAdjustmentBenchmark
+
+swift run --package-path native/FilmScanEngine FilmScanPreviewComparator
+```
+
+Run the opt-in burst benchmark:
 
 ```sh
 RUN_PERFORMANCE_TESTS=1 swift test \
@@ -181,65 +106,49 @@ RUN_PERFORMANCE_TESTS=1 swift test \
   --filter productionRendererBurstBenchmark
 ```
 
-Run the deterministic adjustment-heavy release benchmark:
+## Fixtures
+
+Swift tests consume committed `.npy` and standard-image fixtures. When the
+untracked `sample-raw/` corpus exists, RAW tests also verify five half-size RAF
+decodes and one full-resolution decode against recorded hashes. Those tests are
+explicitly disabled when the corpus is absent.
+
+Refresh compatibility fixtures only when intentionally changing a shared
+legacy contract:
 
 ```sh
-swift run -c release --package-path native/FilmScanEngine \
-  FilmScanAdjustmentBenchmark
+.venv/bin/python tests/generate_native_snapshots.py
+.venv/bin/python tests/generate_raw_decode_reference.py
 ```
 
-Build or run the native app:
+New native-only processing behavior must define a deterministic authoritative
+Swift CPU contract. Do not backport it to Python merely to create a fixture.
 
-```sh
-swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
-swift run --package-path native/FilmScanEngine FilmScanConverterMac
-```
+## Implementation Contracts
 
-Build a self-contained, locally signed release app and ZIP. The packager also
-embeds the application icon, extracts the ZIP, and revalidates the archived app
-contract and signature:
-
-```sh
-native/package-release.sh
-open "dist/Film Scan Converter.app"
-```
-
-Use this packaged launch path when testing normal macOS behavior. It registers
-the app with Launch Services, gives it its own Dock icon and menu-bar identity,
-and enables Open With for supported image and camera-RAW documents. `swift run`
-remains useful for development, but it does not exercise the installed-app path.
-The release validator rejects bundles that omit the declared icon or either
-the standard-image or camera-RAW document registration.
-
-Set `SIGNING_IDENTITY` to an exact Developer ID Application identity for a
-distribution candidate. The default ad-hoc signature is only for local bundle
-validation. See the [native release guide](../docs/development/native-release.md)
-for versioning, notarization, and clean-machine gates.
-
-Build the native RAW benchmark:
-
-```sh
-swift build -c release \
-  --package-path native/FilmScanEngine \
-  --product FilmScanRawBenchmark
-```
-
-Run the GPU-vs-CPU preview comparator:
-
-```sh
-swift run --package-path native/FilmScanEngine FilmScanPreviewComparator
-```
+- Keep interactive previews bounded and latest-value-wins.
+- Treat manual film-frame geometry as a persisted, validated clockwise
+  four-corner quadrilateral. Preview, dust-overlay alignment, density flat
+  field, and export must use the same CPU perspective warp; this corrects one
+  planar frame and is not a lens-distortion model.
+- Treat the Core Image/Metal renderer as the primary interactive development
+  path on supported MacBook Pro hardware. Keep CPU rendering correct for
+  deterministic tests, CI/headless runs, export/reference behavior, and fallback
+  paths that are not GPU-integrated yet.
+- Serialize authoritative large-image decode work and check cancellation before
+  entering synchronous LibRaw/ImageIO calls.
+- Keep full-resolution RAW export one-file-at-a-time.
+- Give export priority over speculative lookahead work and check cancellation
+  between decode, correction, geometry, and write stages.
+- Preserve atomic staging, collision-safe naming, and cleanup on export failure.
+- Compare performance only across identical profiles, stage sets, hardware, and
+  quality contracts.
+- Keep product claims in `docs/features.md`, current evidence in
+  `docs/development/native-macos.md`, and priority in the roadmap.
 
 ## Live Camera Scope
 
-The live preview works when macOS exposes the DSLR or capture adapter as an
-AVFoundation video device. Many DSLRs expose still-image tethering but not a
-standard video feed; those cameras need a future vendor SDK or tethering
-adapter. Live view is intentionally a fast 8-bit preview path. Final captures
-still go through the pixel-equivalent 16-bit RAW pipeline as that port lands.
-
-Fixture changes must be reviewed alongside the legacy behavior change that
-caused them. Shared legacy behavior should use frozen compatibility output and
-require exact equality or a narrowly scoped documented tolerance. Native-only
-features must define and test their authoritative Swift CPU behavior directly;
-they must not be backported to Python solely to create a reference.
+Live preview works only when macOS exposes the camera or capture adapter as an
+AVFoundation video device. It is a fast preview path; final stills use the
+16-bit import and export pipeline. Vendor-specific tethering is not active
+roadmap work.

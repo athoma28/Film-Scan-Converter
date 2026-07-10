@@ -3,8 +3,9 @@
 > **Historical snapshot:** Evaluated on 2026-06-14 before native macOS
 > implementation began. This file records the decisions from that audit and is
 > not the current development plan. See
-> [Native macOS Development](../development/native-macos.md) for authoritative
-> status and next work. The Python application is now maintenance-only legacy;
+> [Native macOS Development Status](../development/native-macos.md) for current
+> evidence and the [Product Roadmap](MacOS-Native-Roadmap.md) for ordered work.
+> The Python application is now maintenance-only legacy;
 > see [Legacy Python Status And Retirement](../legacy-python.md).
 
 Evaluated on 2026-06-14 with the requirement that processing output and

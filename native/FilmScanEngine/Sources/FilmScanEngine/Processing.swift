@@ -27,7 +27,9 @@ public enum FilmProcessing {
     image: UInt16Image,
     parameters: ProcessingParameters
   ) -> UInt16Image {
-    let cropped = parameters.cropRect.flatMap {
+    let cropped = parameters.perspectiveCrop.flatMap {
+      PerspectiveTransform.crop(image, perspectiveCrop: $0, borderPercent: parameters.borderCrop)
+    } ?? parameters.cropRect.flatMap {
       PerspectiveTransform.crop(image, normalizedRect: $0, borderPercent: parameters.borderCrop)
     } ?? image
     var working = cropped.rotated(
@@ -291,7 +293,9 @@ public enum FilmProcessing {
     parameters: ProcessingParameters,
     flatField: UInt16Image? = nil
   ) -> UInt16Image {
-    let croppedImage = parameters.cropRect.flatMap {
+    let croppedImage = parameters.perspectiveCrop.flatMap {
+      PerspectiveTransform.crop(image, perspectiveCrop: $0, borderPercent: parameters.borderCrop)
+    } ?? parameters.cropRect.flatMap {
       PerspectiveTransform.crop(image, normalizedRect: $0, borderPercent: parameters.borderCrop)
     } ?? image
     let sourceFlatField = flatField.flatMap { field in
@@ -300,7 +304,9 @@ public enum FilmProcessing {
         : nil
     }
     let croppedFlatField = sourceFlatField.flatMap { field in
-      parameters.cropRect.flatMap {
+      parameters.perspectiveCrop.flatMap {
+        PerspectiveTransform.crop(field, perspectiveCrop: $0, borderPercent: parameters.borderCrop)
+      } ?? parameters.cropRect.flatMap {
         PerspectiveTransform.crop(field, normalizedRect: $0, borderPercent: parameters.borderCrop)
       } ?? field
     }

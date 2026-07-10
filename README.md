@@ -7,12 +7,15 @@ A standalone application used for processing RAW film scans from a digital camer
 
 The native Swift/macOS application is the primary product and the only target
 for new features and new processing functionality. Its current capabilities,
-remaining replacement work, and ordered next steps are tracked in the
+evidence, limitations, and release position are tracked in the
 [native macOS development status](docs/development/native-macos.md).
+The [native product roadmap](docs/improvements/MacOS-Native-Roadmap.md)
+separates first-release requirements from optional later work.
 
 The Python/Tkinter application remains available as a maintenance-only legacy
-workflow because native dust removal, notarized clean-machine release
-validation, and fixture-tooling retirement are not complete. Native
+workflow because dust removal remains Python-only and fixture tools still use
+legacy modules. Python retirement is not itself a blocker for the first native
+release. Native
 crop/perspective correction, self-contained app/ZIP assembly, and
 TIFF/JPEG/PNG/processed-RGB-DNG export are implemented. See
 [Legacy Python Application](docs/legacy-python.md) for the legacy app's limited
@@ -27,6 +30,7 @@ Quick Links:
 - [Installation](docs/installation.md)
 - [How to Use](docs/how-to-use.md)
 - [Native macOS development status](docs/development/native-macos.md)
+- [Native macOS product roadmap](docs/improvements/MacOS-Native-Roadmap.md)
 - [Legacy Python application](docs/legacy-python.md)
 
 Developer documentation and contribution guidelines are available in the

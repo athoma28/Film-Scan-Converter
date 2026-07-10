@@ -29,6 +29,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var exportProgressTotal = 0
   @Published private(set) var exportErrors: [String] = []
   @Published private(set) var exportQueueCount = 0
+  @Published private(set) var activeExportFilename: String?
   @Published private(set) var rebateCandidates: [AutomaticRebateCandidate] = []
   @Published private(set) var selectedRebateMeasurement: FilmBaseMeasurement?
   @Published private(set) var selectedRebateRegion: ImageRegion?
@@ -38,6 +39,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var flatFieldImage: UInt16Image?
   @Published private(set) var flatFieldURL: URL?
   @Published private(set) var cropRect: RotatedRect?
+  @Published private(set) var perspectiveCrop: PerspectiveCrop?
   @Published private(set) var cropThresholdPreview: UInt16Image?
   @Published private(set) var isCropDetectionRunning = false
   @Published private(set) var cropStatus: String = ""
@@ -132,11 +134,16 @@ final class AppModel: ObservableObject {
   private var pendingRender: PreviewRenderRequest?
   private var activeExportQueue: [URL] = []
   private var activeExportDestinations: [URL] = []
+  private var activeExportCorrelationIDs: [String] = []
+  private var activeExportQueueWaitIntervals: [AppPerformanceInterval] = []
   private var activeExportSeen: Set<String> = []
   private var activeExportParameters: ExportParameters?
+  private var exportTask: Task<Void, Never>?
+  private var exportWasCancelled = false
   private var renderLoopGeneration = 0
   private var lastSubmitTime: Date = .distantPast
   private var lastRenderEnd: ContinuousClock.Instant = .now
+  private var pendingFirstPreviewInterval: AppPerformanceInterval?
   // Keep latest-value-wins scheduling bounded while allowing 120 Hz displays
   // to consume the sub-4 ms Metal renderer without an artificial 60 Hz cap.
   private static let renderCoalesceInterval: Duration = .milliseconds(8)
@@ -196,6 +203,10 @@ final class AppModel: ObservableObject {
   private var rebateGeneration = 0
 
   func loadSelection() {
+    if let interval = pendingFirstPreviewInterval {
+      AppPerformanceSignposts.end(interval)
+      pendingFirstPreviewInterval = nil
+    }
     loadTask?.cancel()
     authoritativeDecodeTask?.cancel()
     cancelRenderLoop()
@@ -219,6 +230,13 @@ final class AppModel: ObservableObject {
       return
     }
 
+    let loadCorrelationID = UUID().uuidString
+    pendingFirstPreviewInterval = AppPerformanceSignposts.begin(
+      .firstCorrectedPreview,
+      correlationID: loadCorrelationID,
+      filename: selection.lastPathComponent
+    )
+
     isLoading = true
 
     cancelPredecode()
@@ -233,6 +251,7 @@ final class AppModel: ObservableObject {
     let hasStoredSettings = settingsByPath[key] != nil
     parameters = settingsByPath[key] ?? ProcessingParameters()
     cropRect = parameters.cropRect
+    perspectiveCrop = parameters.perspectiveCrop
     showOriginal = false
 
     if let cached = previewCache[key] {
@@ -248,10 +267,18 @@ final class AppModel: ObservableObject {
 
     let isRaw = FileDropPolicy.rawExtensions.contains(selection.pathExtension.lowercased())
 
-    if isRaw,
-      let thumbnail = try? RawImageDecoder.extractThumbnail(
-        selection, maxDimension: Self.previewMaxDimension)
-    {
+    let thumbnailInterval = isRaw
+      ? AppPerformanceSignposts.begin(
+        .thumbnailExtraction,
+        correlationID: loadCorrelationID,
+        filename: selection.lastPathComponent)
+      : nil
+    let rawThumbnail = isRaw
+      ? try? RawImageDecoder.extractThumbnail(selection, maxDimension: Self.previewMaxDimension)
+      : nil
+    if let thumbnailInterval { AppPerformanceSignposts.end(thumbnailInterval) }
+
+    if let thumbnail = rawThumbnail {
       let proxy = thumbnail.image
       previewSource = proxy
       previewRenderer = StillPreviewRenderer(image: proxy)
@@ -265,7 +292,12 @@ final class AppModel: ObservableObject {
       cacheCurrentSession(for: selection)
       scheduleRender(immediate: true)
 
+      let replacementInterval = AppPerformanceSignposts.begin(
+        .authoritativeReplacement,
+        correlationID: loadCorrelationID,
+        filename: selection.lastPathComponent)
       authoritativeDecodeTask = Task { [weak self] in
+        defer { AppPerformanceSignposts.end(replacementInterval) }
         guard let self else { return }
         do {
           let decoded = try await self.authoritativeDecoder.decode(selection)
@@ -311,10 +343,21 @@ final class AppModel: ObservableObject {
       return
     }
 
-    if StandardImageDecoder.supportedExtensions.contains(selection.pathExtension.lowercased()),
-      let proxy = try? StandardImageDecoder.decodePreview(
+    let supportsStandardPreview = StandardImageDecoder.supportedExtensions.contains(
+      selection.pathExtension.lowercased())
+    let standardPreviewInterval = supportsStandardPreview
+      ? AppPerformanceSignposts.begin(
+        .standardPreviewDecode,
+        correlationID: loadCorrelationID,
+        filename: selection.lastPathComponent)
+      : nil
+    let standardProxy = supportsStandardPreview
+      ? try? StandardImageDecoder.decodePreview(
         selection, maxDimension: Self.previewMaxDimension)
-    {
+      : nil
+    if let standardPreviewInterval { AppPerformanceSignposts.end(standardPreviewInterval) }
+
+    if let proxy = standardProxy {
       previewSource = proxy
       previewRenderer = StillPreviewRenderer(image: proxy)
       isShowingProvisionalPreview = true
@@ -325,7 +368,12 @@ final class AppModel: ObservableObject {
       }
       scheduleRender(immediate: true)
 
+      let replacementInterval = AppPerformanceSignposts.begin(
+        .authoritativeReplacement,
+        correlationID: loadCorrelationID,
+        filename: selection.lastPathComponent)
       authoritativeDecodeTask = Task { [weak self] in
+        defer { AppPerformanceSignposts.end(replacementInterval) }
         guard let self else { return }
         do {
           let decoded = try await self.authoritativeDecoder.decode(selection)
@@ -367,7 +415,12 @@ final class AppModel: ObservableObject {
 
     status = "Decoding \(selection.lastPathComponent)..."
 
+    let decodeInterval = AppPerformanceSignposts.begin(
+      .decode,
+      correlationID: loadCorrelationID,
+      filename: selection.lastPathComponent)
     loadTask = Task { [weak self] in
+      defer { AppPerformanceSignposts.end(decodeInterval) }
       guard let self else {
         return
       }
@@ -834,6 +887,7 @@ final class AppModel: ObservableObject {
     parameters = settings.applying(to: parameters)
     populateFilmNegativeMedians()
     cropRect = parameters.cropRect
+    perspectiveCrop = parameters.perspectiveCrop
     saveParameters()
     if showOriginal {
       showOriginal = false
@@ -958,9 +1012,23 @@ final class AppModel: ObservableObject {
     activeExportSeen.insert(key)
     activeExportQueue.append(selection)
     activeExportDestinations.append(destination)
-    exportQueueCount = activeExportQueue.count - exportProgressCurrent
+    let correlationID = UUID().uuidString
+    activeExportCorrelationIDs.append(correlationID)
+    activeExportQueueWaitIntervals.append(
+      AppPerformanceSignposts.begin(
+        .queueWait,
+        correlationID: correlationID,
+        filename: selection.lastPathComponent))
+    exportQueueCount = max(0, activeExportQueue.count - exportProgressCurrent - 1)
     exportProgressTotal += 1
     status = "Added \(selection.lastPathComponent) to the export queue."
+  }
+
+  func cancelExport() {
+    guard isExporting else { return }
+    exportWasCancelled = true
+    status = "Cancelling export after the active stage finishes..."
+    exportTask?.cancel()
   }
 
   func detectRebate() {
@@ -1274,7 +1342,13 @@ final class AppModel: ObservableObject {
         DustDetection.findMask(in: source)
       }.value
       guard !Task.isCancelled, self.selection == selectedURL else { return }
-      let croppedMask = displayParameters.cropRect.flatMap {
+      let croppedMask = displayParameters.perspectiveCrop.flatMap {
+        PerspectiveTransform.crop(
+          mask,
+          perspectiveCrop: $0,
+          borderPercent: displayParameters.borderCrop
+        )
+      } ?? displayParameters.cropRect.flatMap {
         PerspectiveTransform.crop(
           mask,
           normalizedRect: $0,
@@ -1314,6 +1388,7 @@ final class AppModel: ObservableObject {
   func clearCrop() {
     resetCropState(cancelTask: true)
     parameters.cropRect = nil
+    parameters.perspectiveCrop = nil
     saveParameters()
     scheduleRender(immediate: true)
   }
@@ -1324,6 +1399,36 @@ final class AppModel: ObservableObject {
     } else {
       clearCrop()
     }
+  }
+
+  func beginPerspectiveCrop() {
+    guard perspectiveCrop == nil else { return }
+    setPerspectiveCrop(PerspectiveCrop(
+      topLeft: .init(x: 0.06, y: 0.06),
+      topRight: .init(x: 0.94, y: 0.06),
+      bottomRight: .init(x: 0.94, y: 0.94),
+      bottomLeft: .init(x: 0.06, y: 0.94)
+    ))
+  }
+
+  func setPerspectiveCrop(_ crop: PerspectiveCrop?) {
+    guard let crop else {
+      clearCrop()
+      return
+    }
+    guard crop.isValid else {
+      cropStatus = "Keep the four corners in clockwise order."
+      return
+    }
+    resetDustState(cancelTask: true)
+    cropRect = nil
+    perspectiveCrop = crop
+    parameters.cropRect = nil
+    parameters.perspectiveCrop = crop
+    cropStatus = "Perspective crop is active. Drag corners to align the grid."
+    if let selection { editedKeys.insert(settingsKey(selection)) }
+    saveParameters()
+    scheduleRender(immediate: true)
   }
 
   func setDarkThreshold(_ value: Int) {
@@ -1354,6 +1459,7 @@ final class AppModel: ObservableObject {
       cropDetectionTask = nil
     }
     cropRect = nil
+    perspectiveCrop = nil
     cropThresholdPreview = nil
     isCropDetectionRunning = false
     cropStatus = ""
@@ -1372,7 +1478,9 @@ final class AppModel: ObservableObject {
   private func applyCrop(_ rect: RotatedRect, render: Bool) {
     resetDustState(cancelTask: true)
     cropRect = rect
+    perspectiveCrop = nil
     parameters.cropRect = rect
+    parameters.perspectiveCrop = nil
     if let selection { editedKeys.insert(settingsKey(selection)) }
     saveParameters()
     if render {
@@ -1395,31 +1503,47 @@ final class AppModel: ObservableObject {
       return
     }
 
+    // Export has priority over speculative lookahead work. The decoder may
+    // finish its current synchronous call, but cancellation prevents it from
+    // advancing through the rest of the lookahead queue.
+    cancelPredecode()
+
     var params = exportParameters
     params.destinationDirectory = destDir
     let exportParams = params
     activeExportParameters = exportParams
     activeExportQueue = urls
     activeExportSeen = Set(urls.map(settingsKey))
-    exportQueueCount = urls.count
+    exportQueueCount = max(0, urls.count - 1)
     do {
       activeExportDestinations = try reserveDestinationURLs(
         for: urls, destinationDirectory: destDir, format: exportParams.format)
     } catch {
       status = "Unable to inspect export destination: \(error.localizedDescription)"
       activeExportQueue = []
+      activeExportCorrelationIDs = []
+      activeExportQueueWaitIntervals = []
       activeExportSeen = []
       activeExportParameters = nil
       exportQueueCount = 0
       return
     }
+    activeExportCorrelationIDs = urls.map { _ in UUID().uuidString }
+    activeExportQueueWaitIntervals = zip(urls, activeExportCorrelationIDs).map { url, correlationID in
+      AppPerformanceSignposts.begin(
+        .queueWait,
+        correlationID: correlationID,
+        filename: url.lastPathComponent)
+    }
     isExporting = true
+    exportWasCancelled = false
+    activeExportFilename = urls.first?.lastPathComponent
     exportProgressCurrent = 0
     exportProgressTotal = urls.count
     exportErrors = []
     status = "Exporting..."
 
-    Task { [weak self] in
+    exportTask = Task { [weak self] in
       guard let self else { return }
 
       let manager = ExportManager()
@@ -1442,6 +1566,10 @@ final class AppModel: ObservableObject {
         }
 
         let firstURL = self.activeExportQueue[index]
+        await MainActor.run {
+          self.activeExportFilename = firstURL.lastPathComponent
+          self.exportQueueCount = max(0, self.activeExportQueue.count - index - 1)
+        }
         let nextIsFullResolutionRAW = index + 1 < self.activeExportQueue.count
           && Self.requiresFullResolutionExportDecode(self.activeExportQueue[index + 1])
         let batchSize = Self.requiresFullResolutionExportDecode(firstURL) || nextIsFullResolutionRAW
@@ -1451,12 +1579,15 @@ final class AppModel: ObservableObject {
         for requestIndex in index..<endIndex {
           let url = self.activeExportQueue[requestIndex]
           let destinationURL = self.activeExportDestinations[requestIndex]
+          let correlationID = self.activeExportCorrelationIDs[requestIndex]
+          AppPerformanceSignposts.end(self.activeExportQueueWaitIntervals[requestIndex])
           do {
             requests.append(
               try await self.makeExportRequest(
                 for: url,
                 exportParams: exportParams,
-                destinationURL: destinationURL
+                destinationURL: destinationURL,
+                correlationID: correlationID
               ))
           } catch {
             results.append(
@@ -1473,25 +1604,46 @@ final class AppModel: ObservableObject {
             maxConcurrent: min(2, requests.count)
           )
           results.append(contentsOf: batchResults)
+          let cleanupIntervals = requests.map {
+            AppPerformanceSignposts.begin(
+              .cleanup,
+              correlationID: $0.correlationID,
+              filename: $0.sourceURL.lastPathComponent)
+          }
+          requests.removeAll(keepingCapacity: false)
+          cleanupIntervals.forEach(AppPerformanceSignposts.end)
         }
 
         index = endIndex
         await MainActor.run {
           self.exportProgressCurrent = index
           self.exportProgressTotal = self.activeExportQueue.count
-          self.exportQueueCount = self.activeExportQueue.count - index
+          self.exportQueueCount = max(0, self.activeExportQueue.count - index - 1)
         }
       }
 
       await MainActor.run {
+        let wasCancelled = self.exportWasCancelled || Task.isCancelled
+        for interval in self.activeExportQueueWaitIntervals.dropFirst(
+          self.exportProgressCurrent)
+        {
+          AppPerformanceSignposts.end(interval)
+        }
         self.isExporting = false
+        self.activeExportFilename = nil
         self.activeExportQueue = []
         self.activeExportDestinations = []
+        self.activeExportCorrelationIDs = []
+        self.activeExportQueueWaitIntervals = []
         self.activeExportSeen = []
         self.activeExportParameters = nil
+        self.exportTask = nil
         self.exportQueueCount = 0
         let failures = results.filter { !$0.isSuccess }
-        if failures.isEmpty {
+        if wasCancelled {
+          self.exportErrors = []
+          self.status = "Export cancelled after \(self.exportProgressCurrent) of \(self.exportProgressTotal) images."
+        } else if failures.isEmpty {
           self.status = "Exported \(results.count) image\(results.count == 1 ? "" : "s") to \(destDir.lastPathComponent)."
         } else {
           self.exportErrors = failures.compactMap { result in
@@ -1528,10 +1680,25 @@ final class AppModel: ObservableObject {
   private func makeExportRequest(
     for url: URL,
     exportParams: ExportParameters,
-    destinationURL: URL
+    destinationURL: URL,
+    correlationID: String
   ) async throws -> ExportManager.ExportRequest {
     let key = settingsKey(url)
-    let decoded = try await decodedImageForExport(url)
+    let decodeInterval = AppPerformanceSignposts.begin(
+      .decode, correlationID: correlationID, filename: url.lastPathComponent)
+    let decoded: UInt16Image
+    do {
+      decoded = try await decodedImageForExport(url)
+      AppPerformanceSignposts.end(decodeInterval)
+    } catch {
+      AppPerformanceSignposts.end(decodeInterval)
+      throw error
+    }
+    try Task.checkCancellation()
+    let settingsInterval = AppPerformanceSignposts.begin(
+      .settingsAndClassification,
+      correlationID: correlationID,
+      filename: url.lastPathComponent)
     let fileParams: ProcessingParameters
     if let stored = settingsByPath[key] {
       fileParams = stored
@@ -1546,15 +1713,28 @@ final class AppModel: ObservableObject {
       automaticallyClassifiedKeys.insert(key)
       fileParams = automatic
     }
+    AppPerformanceSignposts.end(settingsInterval)
 
+    let flatFieldInterval = AppPerformanceSignposts.begin(
+      .flatFieldLookup, correlationID: correlationID, filename: url.lastPathComponent)
     let ff = compatibleFlatField(for: decoded)
-    let processed = await Task.detached(priority: .userInitiated) {
-      var output = FilmProcessing.correctedPreview(
+    AppPerformanceSignposts.end(flatFieldInterval)
+    let correctionInterval = AppPerformanceSignposts.begin(
+      .correction, correlationID: correlationID, filename: url.lastPathComponent)
+    var processed = await Task.detached(priority: .userInitiated) {
+      FilmProcessing.correctedPreview(
         image: decoded,
         parameters: fileParams,
         flatField: ff
       )
+    }.value
+    AppPerformanceSignposts.end(correctionInterval)
+    try Task.checkCancellation()
 
+    let geometryInterval = AppPerformanceSignposts.begin(
+      .geometryAndFrame, correlationID: correlationID, filename: url.lastPathComponent)
+    processed = await Task.detached(priority: .userInitiated) {
+      var output = processed
       if exportParams.framePercent > 0 || exportParams.aspectRatio != nil {
         output = output.addingFrame(
           percent: exportParams.framePercent,
@@ -1563,12 +1743,15 @@ final class AppModel: ObservableObject {
       }
       return output
     }.value
+    AppPerformanceSignposts.end(geometryInterval)
+    try Task.checkCancellation()
 
     return ExportManager.ExportRequest(
       sourceURL: url,
       destinationURL: destinationURL,
       image: processed,
-      parameters: exportParams
+      parameters: exportParams,
+      correlationID: correlationID
     )
   }
 
@@ -1858,6 +2041,36 @@ final class AppModel: ObservableObject {
     return flatField.resized(width: image.width, height: image.height)
   }
 
+  nonisolated private static func previewStatistics(
+    for image: UInt16Image
+  ) -> RenderReadyImageStatistics? {
+    let pixelCount = image.width * image.height
+    switch image.channels {
+    case 1:
+      var pixels = [Double](repeating: 0, count: pixelCount * 3)
+      for pixelIndex in 0..<pixelCount {
+        let value = Double(image.pixels[pixelIndex]) / 65_535
+        let destination = pixelIndex * 3
+        pixels[destination] = value
+        pixels[destination + 1] = value
+        pixels[destination + 2] = value
+      }
+      return RenderReadyLinearImage(
+        width: image.width,
+        height: image.height,
+        pixels: pixels
+      ).statistics()
+    case 3:
+      return RenderReadyLinearImage(
+        width: image.width,
+        height: image.height,
+        pixels: image.pixels.map { Double($0) / 65_535 }
+      ).statistics()
+    default:
+      return nil
+    }
+  }
+
   private func compatibleFlatField(for image: UInt16Image) -> UInt16Image? {
     guard let flatFieldImage, flatFieldImage.channels == image.channels else { return nil }
     let imageAspect = Double(image.width) / Double(image.height)
@@ -1876,6 +2089,7 @@ final class AppModel: ObservableObject {
         let useGPU = request.renderer != nil
           && !request.parameters.densityPipelineEnabled
           && request.parameters.cropRect == nil
+          && request.parameters.perspectiveCrop == nil
         if useGPU,
           let rendered = request.renderer?.render(
             parameters: request.parameters,
@@ -1902,15 +2116,13 @@ final class AppModel: ObservableObject {
         guard let preview = rendered.makePreviewCGImage() else {
           return nil
         }
-        let linear = RenderReadyLinearImage(
-          width: rendered.width,
-          height: rendered.height,
-          pixels: rendered.pixels.map { Double($0) / 65_535 }
-        )
+        guard let statistics = Self.previewStatistics(for: rendered) else {
+          return nil
+        }
         return RenderedPreview(
           cgImage: preview,
           rendererName: "CPU",
-          statistics: linear.statistics()
+          statistics: statistics
         )
       }.value
 
@@ -1956,6 +2168,12 @@ final class AppModel: ObservableObject {
 
       previewImage = NSImage(cgImage: preview, size: .zero)
       previewStatistics = result.statistics
+      if let interval = pendingFirstPreviewInterval,
+        interval.filename == request.selection.lastPathComponent
+      {
+        AppPerformanceSignposts.end(interval)
+        pendingFirstPreviewInterval = nil
+      }
       status =
         "\(request.selection.lastPathComponent) • \(preview.width)×\(preview.height) \(result.rendererName) preview"
 

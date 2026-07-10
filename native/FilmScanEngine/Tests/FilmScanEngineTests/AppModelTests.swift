@@ -25,6 +25,25 @@ struct AppModelTests {
     case timedOut
   }
 
+  @Test("App performance stages keep stable Instruments labels")
+  func appPerformanceStagesKeepStableLabels() {
+    #expect(
+      AppPerformanceStage.allCases.map(\.rawValue) == [
+        "Queue Wait",
+        "Settings and Classification",
+        "Decode",
+        "Flat Field Lookup",
+        "Correction",
+        "Geometry and Frame",
+        "Write and Finalize",
+        "Cleanup",
+        "Thumbnail Extraction",
+        "Standard Preview Decode",
+        "Authoritative Replacement",
+        "First Corrected Preview",
+      ])
+  }
+
   @Test("Actual render queue displays the latest rapid parameter update")
   func actualRenderQueueDisplaysLatestUpdate() async throws {
     let model = AppModel()
@@ -312,7 +331,7 @@ struct AppModelTests {
       URL(fileURLWithPath: "/tmp/scan.tiff")))
   }
 
-  @Test("Crop-only export applies the selected perspective crop")
+  @Test("Crop-only export applies the interactive perspective crop")
   func cropOnlyExportAppliesCrop() async throws {
     let workDirectory = FileManager.default.temporaryDirectory
       .appendingPathComponent("fsc-crop-export-\(UUID().uuidString)", isDirectory: true)
@@ -329,8 +348,13 @@ struct AppModelTests {
     model.importFiles([input])
     try await waitUntil { model.decodedImage != nil }
     model.setFilmType(.cropOnly)
-    model.setCropRect(
-      RotatedRect(centerX: 0.5, centerY: 0.5, width: 0.5, height: 0.5, angle: 0))
+    let crop = PerspectiveCrop(
+      topLeft: .init(x: 0.25, y: 0.25),
+      topRight: .init(x: 0.75, y: 0.25),
+      bottomRight: .init(x: 0.75, y: 0.75),
+      bottomLeft: .init(x: 0.25, y: 0.75)
+    )
+    model.setPerspectiveCrop(crop)
     model.setExportDestinationDirectory(destination)
     model.setExportFormat(.png)
 
@@ -339,24 +363,55 @@ struct AppModelTests {
 
     let exported = try StandardImageDecoder.decode(
       destination.appendingPathComponent("crop-source.png"))
-    let expected = try #require(PerspectiveTransform.crop(
-      source,
-      normalizedRect: RotatedRect(
-        centerX: 0.5, centerY: 0.5, width: 0.5, height: 0.5, angle: 0)))
+    let expected = try #require(PerspectiveTransform.crop(source, perspectiveCrop: crop))
     #expect(exported.width == expected.width)
     #expect(exported.height == expected.height)
+  }
+
+  @Test("Crop-only render statistics handle grayscale crops")
+  func cropOnlyRenderStatisticsHandleGrayscaleCrops() async throws {
+    let model = AppModel()
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input",
+        withExtension: "png",
+        subdirectory: "Fixtures/decode_grayscale_png8"
+      )
+    )
+
+    model.importFiles([input])
+    try await waitUntil {
+      model.decodedImage?.channels == 1 && model.previewImage != nil && !model.isRendering
+    }
+    model.setFilmType(.cropOnly)
+    let displayedBeforeCrop = model.renderStats.displayedRenders
+    model.setCropRect(
+      RotatedRect(centerX: 0.5, centerY: 0.5, width: 0.5, height: 0.5, angle: 0))
+
+    try await waitUntil {
+      model.renderStats.displayedRenders > displayedBeforeCrop && !model.isRendering
+    }
+
+    #expect(model.previewImage != nil)
+    #expect(model.previewStatistics.sampleCount > 0)
   }
 
   @Test("Reset corrections clears crop processing and inspector state")
   func resetCorrectionsClearsCropState() {
     let model = AppModel()
-    model.setCropRect(
-      RotatedRect(centerX: 0.5, centerY: 0.5, width: 0.8, height: 0.7, angle: 2))
+    model.setPerspectiveCrop(PerspectiveCrop(
+      topLeft: .init(x: 0.1, y: 0.1),
+      topRight: .init(x: 0.9, y: 0.1),
+      bottomRight: .init(x: 0.9, y: 0.9),
+      bottomLeft: .init(x: 0.1, y: 0.9)
+    ))
 
     model.resetCorrections()
 
     #expect(model.parameters.cropRect == nil)
+    #expect(model.parameters.perspectiveCrop == nil)
     #expect(model.cropRect == nil)
+    #expect(model.perspectiveCrop == nil)
     #expect(model.cropThresholdPreview == nil)
     #expect(model.cropStatus.isEmpty)
   }
@@ -657,6 +712,12 @@ struct AppModelTests {
     source.cropRect = RotatedRect(
       centerX: 0.4, centerY: 0.5, width: 0.7, height: 0.8, angle: 2
     )
+    source.perspectiveCrop = PerspectiveCrop(
+      topLeft: .init(x: 0.1, y: 0.1),
+      topRight: .init(x: 0.9, y: 0.2),
+      bottomRight: .init(x: 0.8, y: 0.9),
+      bottomLeft: .init(x: 0.2, y: 0.8)
+    )
     source.densityPipelineEnabled = true
     source.densityBaseDensity = BGRChannelValues(blue: 0.2, green: 0.3, red: 0.4)
 
@@ -665,6 +726,12 @@ struct AppModelTests {
     destination.flip = false
     destination.cropRect = RotatedRect(
       centerX: 0.5, centerY: 0.5, width: 0.9, height: 0.6, angle: -1
+    )
+    destination.perspectiveCrop = PerspectiveCrop(
+      topLeft: .init(x: 0.2, y: 0.2),
+      topRight: .init(x: 0.8, y: 0.2),
+      bottomRight: .init(x: 0.8, y: 0.8),
+      bottomLeft: .init(x: 0.2, y: 0.8)
     )
     destination.densityPipelineEnabled = true
     destination.densityBaseDensity = BGRChannelValues(blue: 0.8, green: 0.7, red: 0.6)
@@ -677,6 +744,7 @@ struct AppModelTests {
     #expect(applied.rotation == destination.rotation)
     #expect(applied.flip == destination.flip)
     #expect(applied.cropRect == destination.cropRect)
+    #expect(applied.perspectiveCrop == destination.perspectiveCrop)
     #expect(applied.densityPipelineEnabled == destination.densityPipelineEnabled)
     #expect(applied.densityBaseDensity == destination.densityBaseDensity)
   }
@@ -853,6 +921,39 @@ struct AppModelTests {
     #expect(FileManager.default.fileExists(
       atPath: firstDestination.appendingPathComponent("second.png").path))
     #expect((try FileManager.default.contentsOfDirectory(atPath: changedDestination.path)).isEmpty)
+  }
+
+  @Test("Export cancellation clears active and pending queue state")
+  func exportCancellationClearsQueueState() async throws {
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"))
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-export-cancel-\(UUID().uuidString)", isDirectory: true)
+    let sourceDir = workDir.appendingPathComponent("source", isDirectory: true)
+    let destination = workDir.appendingPathComponent("destination", isDirectory: true)
+    try FileManager.default.createDirectory(at: sourceDir, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+
+    let files = (0..<8).map { sourceDir.appendingPathComponent("scan-\($0).png") }
+    for file in files { try FileManager.default.copyItem(at: input, to: file) }
+
+    let model = AppModel()
+    model.importFiles(files)
+    try await waitUntil { model.decodedImage != nil }
+    model.setExportDestinationDirectory(destination)
+    model.exportAll()
+
+    #expect(model.isExporting)
+    #expect(model.exportQueueCount == files.count - 1)
+    model.cancelExport()
+
+    try await waitUntil { !model.isExporting }
+    #expect(model.activeExportFilename == nil)
+    #expect(model.exportQueueCount == 0)
+    #expect(model.status.localizedCaseInsensitiveContains("cancel"))
   }
 
   @Test("Version-one settings migrate existing paths to edited markers")

@@ -14,20 +14,19 @@ The primary product is the native Swift/macOS application. All new features and
 new processing functionality must be implemented there. Before
 starting native work, read
 [Native macOS Development](development/native-macos.md). It is the authoritative
-source for the active step, verified progress, limitations, and ordered next
-tasks.
+source for verified progress, limitations, and release position. Use the
+[product roadmap](improvements/MacOS-Native-Roadmap.md) for ordered work.
 
-The current native priority is packaging and release validation. The processing,
-crop, export, persistence, preset, and correction-transfer workflows described
-on the status page are already integrated. Dust inpainting remains paused.
-Additional processing or SwiftUI controls must use a shared preview/export
-definition and add workflow-level coverage; standalone prototypes are not
-counted as product progress.
+The current native priority is the bounded 40 MP measurement cycle, followed by
+packaged-app correctness, essential editing workflow, and final distribution
+proof. Additional processing or SwiftUI controls must close a roadmap gate or
+be supported by concrete user evidence. Standalone prototypes are not product
+progress.
 
 Useful contribution areas:
 
-- Complete a task from the current native status page.
-- Expand frozen compatibility fixtures and native regression coverage.
+- Complete a task from the current roadmap.
+- Add representative packaged-app or workflow-level regression coverage.
 - Fix critical correctness, data-loss, or compatibility bugs in the legacy
   Python application without expanding its product surface.
 - Improve processing performance only with before/after benchmarks and

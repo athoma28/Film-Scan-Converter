@@ -10,14 +10,15 @@ for new features. The Python application is maintenance-only legacy code; see
 [Legacy Python Status And Retirement](../legacy-python.md). Use
 [Native macOS Development](../development/native-macos.md) for:
 
-- the current development step;
+- current release position;
 - verified progress;
 - known limitations;
-- the ordered next tasks;
+- current evidence and blockers;
 - build and test commands.
 
-The [macOS Native App Roadmap](MacOS-Native-Roadmap.md) is the detailed
-long-term technical design behind that work.
+The [Native macOS Product Roadmap](MacOS-Native-Roadmap.md) is the single
+ordered plan. Completed port history and speculative technical ideas do not
+remain numbered as pending work.
 
 ## Historical Material
 
@@ -25,5 +26,6 @@ long-term technical design behind that work.
 2026-06-14 before native implementation began. Its deferred proposals and
 suggested handoff are retained for context, but they are not the current plan.
 
-Do not add competing status lists to this directory. Update the authoritative
-native status page when goals, progress, or the active development step change.
+Do not add competing status lists to this directory. Update the roadmap only
+for priority or scope, and update the authoritative native status page for
+current facts and evidence.

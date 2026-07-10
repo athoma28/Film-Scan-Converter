@@ -135,6 +135,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
   public var darkThreshold: Int
   public var lightThreshold: Int
   public var cropRect: RotatedRect?
+  public var perspectiveCrop: PerspectiveCrop?
 
   public init(
     borderCrop: Double = 0,
@@ -166,7 +167,8 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     densityDisplayParams: DisplayRenderingParameters = DisplayRenderingParameters(),
     darkThreshold: Int = 25,
     lightThreshold: Int = 100,
-    cropRect: RotatedRect? = nil
+    cropRect: RotatedRect? = nil,
+    perspectiveCrop: PerspectiveCrop? = nil
   ) {
     self.borderCrop = borderCrop
     self.flip = flip
@@ -205,6 +207,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     self.darkThreshold = darkThreshold
     self.lightThreshold = lightThreshold
     self.cropRect = cropRect
+    self.perspectiveCrop = perspectiveCrop
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -220,7 +223,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     case photoAdjustments
     case densityPipelineEnabled, densityBaseDensity
     case densityC41Profile, densityDisplayParams
-    case darkThreshold, lightThreshold, cropRect
+    case darkThreshold, lightThreshold, cropRect, perspectiveCrop
   }
 
   public init(from decoder: Decoder) throws {
@@ -264,6 +267,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     darkThreshold = try container.decodeIfPresent(Int.self, forKey: .darkThreshold) ?? 25
     lightThreshold = try container.decodeIfPresent(Int.self, forKey: .lightThreshold) ?? 100
     cropRect = try container.decodeIfPresent(RotatedRect.self, forKey: .cropRect)
+    perspectiveCrop = try container.decodeIfPresent(PerspectiveCrop.self, forKey: .perspectiveCrop)
   }
 }
 

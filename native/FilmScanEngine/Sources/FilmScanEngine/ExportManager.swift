@@ -7,17 +7,20 @@ public actor ExportManager {
     public let destinationURL: URL
     public let image: UInt16Image
     public let parameters: ExportParameters
+    public let correlationID: String
 
     public init(
       sourceURL: URL,
       destinationURL: URL,
       image: UInt16Image,
-      parameters: ExportParameters
+      parameters: ExportParameters,
+      correlationID: String = UUID().uuidString
     ) {
       self.sourceURL = sourceURL
       self.destinationURL = destinationURL
       self.image = image
       self.parameters = parameters
+      self.correlationID = correlationID
     }
   }
 
@@ -132,29 +135,67 @@ public actor ExportManager {
       }
     }
 
+    if results.count < total {
+      let completedIndices = Set(results.map(\.0))
+      for (index, request) in requests.enumerated() where !completedIndices.contains(index) {
+        results.append(
+          (
+            index,
+            ExportResult(
+              sourceURL: request.sourceURL,
+              destinationURL: request.destinationURL,
+              error: ExportManagerError.cancelled
+            )
+          ))
+        completed += 1
+        progress?(completed, total, false)
+      }
+    }
+
     return results.sorted { $0.0 < $1.0 }.map { $0.1 }
   }
 
   private func exportOne(request: ExportRequest) async -> ExportResult {
+    guard !Task.isCancelled else {
+      return ExportResult(
+        sourceURL: request.sourceURL,
+        destinationURL: request.destinationURL,
+        error: ExportManagerError.cancelled
+      )
+    }
+
     let signpostID = OSSignpostID(log: signpostLog)
     os_signpost(
       .begin, log: signpostLog, name: "Export File",
       signpostID: signpostID,
-      "%{public}s", request.sourceURL.lastPathComponent)
+      "file=%{public}s correlation=%{public}s",
+      request.sourceURL.lastPathComponent, request.correlationID)
 
     defer {
       os_signpost(
         .end, log: signpostLog, name: "Export File",
         signpostID: signpostID,
-        "%{public}s", request.sourceURL.lastPathComponent)
+        "file=%{public}s correlation=%{public}s",
+        request.sourceURL.lastPathComponent, request.correlationID)
     }
 
+    let writeID = OSSignpostID(log: signpostLog)
+    os_signpost(
+      .begin, log: signpostLog, name: "Write and Finalize",
+      signpostID: writeID,
+      "file=%{public}s correlation=%{public}s",
+      request.sourceURL.lastPathComponent, request.correlationID)
     do {
       try request.image.write(
         to: request.destinationURL,
         format: request.parameters.format,
         parameters: request.parameters
       )
+      os_signpost(
+        .end, log: signpostLog, name: "Write and Finalize",
+        signpostID: writeID,
+        "file=%{public}s correlation=%{public}s",
+        request.sourceURL.lastPathComponent, request.correlationID)
 
       return ExportResult(
         sourceURL: request.sourceURL,
@@ -162,7 +203,23 @@ public actor ExportManager {
         error: nil
       )
     } catch {
+      os_signpost(
+        .end, log: signpostLog, name: "Write and Finalize",
+        signpostID: writeID,
+        "file=%{public}s correlation=%{public}s",
+        request.sourceURL.lastPathComponent, request.correlationID)
+      let cleanupID = OSSignpostID(log: signpostLog)
+      os_signpost(
+        .begin, log: signpostLog, name: "Cleanup",
+        signpostID: cleanupID,
+        "file=%{public}s correlation=%{public}s",
+        request.sourceURL.lastPathComponent, request.correlationID)
       try? FileManager.default.removeItem(at: request.destinationURL)
+      os_signpost(
+        .end, log: signpostLog, name: "Cleanup",
+        signpostID: cleanupID,
+        "file=%{public}s correlation=%{public}s",
+        request.sourceURL.lastPathComponent, request.correlationID)
       return ExportResult(
         sourceURL: request.sourceURL,
         destinationURL: request.destinationURL,

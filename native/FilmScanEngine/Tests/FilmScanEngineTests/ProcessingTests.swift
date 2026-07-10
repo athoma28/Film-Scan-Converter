@@ -919,6 +919,29 @@ struct ProcessingTests {
     #expect(result.height == 40)
   }
 
+  @Test("Manual perspective crop takes precedence over detected rectangle geometry")
+  func correctedPreviewAppliesManualPerspectiveCrop() {
+    let image = UInt16Image(
+      width: 100, height: 80, channels: 3,
+      pixels: [UInt16](repeating: 20_000, count: 100 * 80 * 3)
+    )
+    let parameters = ProcessingParameters(
+      filmType: .cropOnly,
+      cropRect: RotatedRect(centerX: 0.5, centerY: 0.5, width: 0.9, height: 0.9, angle: 0),
+      perspectiveCrop: PerspectiveCrop(
+        topLeft: .init(x: 0.2, y: 0.2),
+        topRight: .init(x: 0.8, y: 0.2),
+        bottomRight: .init(x: 0.8, y: 0.8),
+        bottomLeft: .init(x: 0.2, y: 0.8)
+      )
+    )
+
+    let result = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+
+    #expect(result.width == 60)
+    #expect(result.height == 48)
+  }
+
   @Test("Power-law processing applies protected color before the display transform")
   func powerLawProcessingUsesProtectedColorSeam() {
     let image = UInt16Image(
@@ -948,6 +971,33 @@ struct ProcessingTests {
     )
 
     #expect(actual == expected)
+  }
+
+  @Test("Large fused power-law inversion remains pixel-identical to the authoritative seam")
+  func largeFusedPowerLawInversionParity() {
+    let width = 1_024
+    let height = 1_024
+    #expect(width * height >= FilmNegativeProcessing.fusedPowerLawParallelPixelThreshold)
+    let pixels = (0..<(width * height * 3)).map { index in
+      UInt16(truncatingIfNeeded: index &* 7_919 &+ 12_347)
+    }
+    let image = UInt16Image(width: width, height: height, channels: 3, pixels: pixels)
+    var parameters = FilmNegativeParams.colourNegative
+    parameters.measuredMedians = BGRChannelValues(
+      blue: 21_000,
+      green: 28_000,
+      red: 36_000
+    )
+
+    let actual = FilmNegativeProcessing.applyFusedPowerLawInversion(
+      image: image,
+      params: parameters
+    )
+    let authoritative = FilmNegativeProcessing.renderPowerLawDisplay(
+      FilmNegativeProcessing.powerLawRenderReadyLinear(image: image, params: parameters)
+    )
+
+    #expect(actual == authoritative)
   }
 
   @Test("Density processing applies protected color on the shared linear seam")

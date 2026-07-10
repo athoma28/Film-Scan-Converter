@@ -1,121 +1,104 @@
 # Features
 
+This page describes current user-visible behavior. It does not list planned
+features or internal implementation milestones. See the
+[native development status](development/native-macos.md) for verified gaps and
+the [roadmap](improvements/MacOS-Native-Roadmap.md) for delivery order.
+
 ## Native Swift/macOS Application
 
 The native application is the primary product and the only target for new
-features. Its implemented scope includes:
+features.
 
-- A buildable SwiftUI application with drag-and-drop file import.
-- Native 16-bit standard-image decoding and preview (PNG, JPEG, BMP, TIFF).
-- Pixel-equivalent LibRaw RAW decoding and preview for all five representative
-  Fujifilm X-T5 RAF files at both half and full resolution.
-- Deterministic helper operations: rotation (90° steps), horizontal flip,
-  white frame, and aspect-ratio padding.
-- Automatic threshold-based film-frame detection, normalized rotated crop
-  geometry, and perspective-corrected preview/export through the shared
-  processing entry point.
-- Threshold generation (grayscale conversion, binary thresholding, morphological
-  erosion) matching Python output exactly.
-- Native dust-mask detection matching frozen Python/OpenCV output, including
-  ignored-border percentile sampling, morphology, and contour-area filtering.
-  The app displays an orientation/crop-aligned, non-destructive candidate mask;
-  Telea inpainting and applying removal to preview/export remain pending.
-- White balance coefficient adjustment matching Python float64 output exactly.
-- Saturation adjustment via RGB↔HSV conversion matching Python output within
-  documented ≤1 LSB tolerance, including Python-equivalent clipping of
-  white-balanced highlights before HSV conversion.
-- Primary color-negative processing now uses protected linear Rec.2020
-  Temperature/Tint, Saturation, and separate Vibrance controls with luminance,
-  highlight, gamut, and hue safeguards. The legacy RGB/HSV operators remain for
-  compatibility fixtures.
-- Exposure adjustment matching Python float32 rounding exactly.
-- `shrink_box` coordinate math for crop-box adjustment.
-- Float64 NPY fixture infrastructure for intermediate pipeline stages.
-- Film-negative inversion using RawTherapee's power-law exponent model, with reference
-  resolution from 20%-border-cut channel medians to RawTherapee's `1/24`
-  linear output reference. Per-channel
-  exponent model:
-  `output = multiplier × pixel^-(greenExp × ratio)`. Color Negative preset
-  (RedRatio=1.36, GreenExp=1.5, BlueRatio=0.86) and Black & White preset (all
-  ratios=1.0) matching RawTherapee's `Film Negative.pp3` and `Film Negative -
-  Black and White.pp3`. CPU (Double) and production Metal CIKernel processing
-  parity. SwiftUI controls with preset picker and per-channel
-  ratio/exponent sliders.
-- Film-negative reference resolution and inversion in linear Rec.2020 after
-  decoding to sRGB, followed by conversion back to display sRGB. This is not a
-  direct camera-to-Rec.2020 transform.
-- Camera-scan RAW metadata and bounded ISO-tier processing: low-ISO sharpening
-  or medium/high-ISO denoising. These filters are native approximations, not
-  ports of RawTherapee's full denoise and capture-sharpening kernels.
-- Engine support for RCD on full-resolution Bayer decode and three-pass
-  Markesteijn interpolation on full-resolution X-Trans decode. Interactive RAW
-  previews stay half-size; RAW export re-decodes one file at a time at full
-  resolution. The available RAF corpus is X-Trans, so it does not exercise RCD.
-- Automatic startup classification for new files: low-chroma scans start as
-  B&W negative, orange-mask scans start as color negative, and other
-  positive-looking scans start as slide. Existing per-file settings are not
-  overwritten.
-- Overall RGB tone curve with piecewise-linear interpolation (65536-entry 16-bit
-  CPU LUTs, 256×256 8-bit GPU LUT texture). Per-channel red, green, and blue
-  curves fall back to the overall curve.
-- Highlight, midtone, and shadow color wheels backed by smoothstep tonal masks
-  with luminance preservation. Draggable SwiftUI color wheel controls with
-  double-click reset.
-- Optional GPU-accelerated live camera preview with inversion, exposure, and
-  saturation controls.
-- A still-image correction workflow with live slider bindings, a reusable 16-bit
-  Core Image/Metal preview renderer, bounded latest-value-wins scheduling, and a
-  user-selectable 2/4/8/16/32-session decoded-preview cache with matching forward
-  predecode lookahead.
-- Automatic per-file correction persistence across launches using versioned,
-  atomic settings storage with safe recovery from corrupt files.
-- Named correction presets with versioned atomic persistence, plus copy/paste
-  through a versioned system-clipboard payload. Applying a look preserves the
-  target scan's crop/orientation and measured film-base state.
-- User-edit markers independent of cache state, apply-current-settings-to-all,
-  immediate target-median refresh after paste, and append-selected during an
-  active sequential export.
-- A shared unclamped linear adjustment seam with bounded robust statistics,
-  protected Temperature/Tint/Saturation/Vibrance controls, and safe semantic
-  Exposure/Brightness/Contrast/Highlights/Shadows controls.
-- Manual or automatic unexposed-film-edge measurement, optional flat-field
-  calibration, roll-profile storage, and density-pipeline preview/export.
-- Render instrumentation with `os_signpost` profiling markers and published
-  snapshot/display/drop counters.
-- TIFF (16-bit, optional LZW compression), JPEG (8-bit, configurable quality),
-  PNG (16-bit lossless), and DNG (processed 16-bit RGB in a valid TIFF container)
-  export with individual and batch-all workflows, background processing,
-  cancellation, per-file error reporting, partial-file cleanup, collision-safe
-  destination naming, and lazy per-file decode/classify/process/write for
-  unloaded batch members.
-- macOS CI that runs the native engine tests and builds the app. The 500-render
-  performance benchmark is opt-in.
-- Reproducible self-contained app and ZIP assembly with embedded non-system
-  dependencies, bundle-relative load paths, hardened-runtime signing support,
-  and validation of both the assembled app and the extracted archive copy.
-- Real production-renderer comparison against the authoritative CPU path and an
-  actual `AppModel` rapid-update scheduling integration test.
+### Import And Preview
 
-The primary remaining processing replacement is Telea dust inpainting and
-applying removal to preview/export.
-Fixture independence, Developer ID notarization, Gatekeeper/clean-machine
-release validation, and deferred preview-surface work also remain.
+- Drag/drop, file picker, and Finder Open With import.
+- Standard PNG, JPEG, BMP, and TIFF decoding.
+- LibRaw-backed camera RAW decoding.
+- Fast bounded provisional previews for large standard images and embedded RAW
+  thumbnails, followed by an authoritative background replacement with stable
+  orientation.
+- A bounded 16-bit Core Image/Metal correction preview with latest-value-wins
+  scheduling. This GPU path is the primary interactive target on supported
+  MacBook Pro hardware; CPU rendering remains the correctness/fallback path.
+- Optional AVFoundation live camera preview when macOS exposes the camera or
+  capture adapter as a video device.
 
-See [Native macOS Development](development/native-macos.md) for the
-authoritative current step, progress, limitations, and next work.
+### Film Processing And Editing
+
+- Automatic initial classification as color negative, B&W negative, or slide,
+  without overwriting saved per-file choices.
+- RawTherapee-compatible power-law film-negative inversion.
+- An optional capture-aware density pipeline with film-base measurement,
+  flat-field calibration, and capture/stock/roll profiles.
+- Semantic Exposure, Brightness, Contrast, Highlights, Shadows, Temperature,
+  Tint, Saturation, and Vibrance controls.
+- Overall and per-channel curves plus shadow, midtone, and highlight color
+  wheels.
+- Automatic frame detection plus a built-in four-corner perspective tool:
+  drag the canvas handles onto the film edges, use the drawn 4×4 grid to align
+  the frame, and non-destructively straighten that quadrilateral in preview
+  and export. Rotation, horizontal flip, white frame, and aspect-ratio padding
+  remain available.
+- Original/corrected toggle.
+- Grade diagnostics for sampled display clipping.
+- Non-destructive, orientation/crop-aligned dust-candidate overlay. Detection
+  does not remove dust from preview or export.
+
+### Batch And Settings Workflow
+
+- Per-file correction settings persisted across launches.
+- Named presets and versioned system-clipboard copy/paste.
+- Apply the current look to all open files while preserving each target's crop,
+  orientation, and measured film-base state.
+- Edited and preview-ready indicators in the browser.
+- Configurable 2/4/8/16/32-session preview cache and forward lookahead.
+- Immediate Edit/Grade/Export inspector switching.
+
+### Export
+
+- 16-bit TIFF with optional LZW compression.
+- 8-bit JPEG with configurable quality.
+- 16-bit lossless PNG.
+- Processed 16-bit RGB DNG in a valid TIFF/DNG container. This is not untouched
+  sensor RAW.
+- Individual and lazy memory-bounded Export All workflows.
+- Full-resolution RAW re-decode one file at a time during export.
+- Collision-safe destination names, per-file errors, cancellation between
+  synchronous file operations, atomic staging/cleanup, and protection against
+  misleading partial outputs.
+- Append the selected file to an active sequential export with duplicate
+  rejection and active/pending status.
+
+### Packaging And Verification
+
+- Self-contained app and ZIP assembly with embedded non-system libraries.
+- App icon, normal menu/Dock identity, and image/camera-RAW document
+  registration.
+- Hardened-runtime Developer ID signing support.
+- Local validation of both the assembled app and extracted archive.
+- Automated native tests and app build on macOS CI.
+
+## Native Limitations
+
+- No applied dust removal or Telea inpainting.
+- No undo/redo, zoom/pan, ordered multi-selection, Export Selected, or sidebar
+  reordering yet.
+- No lens-distortion model or calibrated correction for film-plane/sensor-plane
+  non-alignment beyond the current perspective crop.
+- The real RAW test corpus is Fujifilm X-Trans-focused and partly local-only;
+  the Bayer RCD path lacks a committed real-file gate.
+- Camera-scan ISO denoise/sharpen behavior is a bounded native policy, not an
+  exact RawTherapee kernel port.
+- Standard images with alpha are rejected because four-channel processing has
+  not been defined.
+- The app has not completed Developer ID notarization, Gatekeeper assessment,
+  or clean-machine installation validation and is not yet claimed as a
+  generally distributable release.
 
 ## Legacy Python Application
 
-The maintenance-only Python application still provides the complete historical
-workflow:
-
-- RAW and standard image import;
-- automatic threshold-based crop detection and perspective correction;
-- film-base, white-balance, exposure, saturation, and framing controls;
-- intermediate RAW, threshold, contour, histogram, and full-preview views;
-- individual and batch export;
-- dust detection and inpainting.
-
-It remains available for dust handling and compatibility while the remaining
-retirement gates are completed, but it is not a target for new features. See
-[Legacy Python Application](legacy-python.md).
+The maintenance-only Python application retains the historical cross-platform
+workflow, including automatic dust detection and inpainting. It remains
+available for compatibility and legacy users but receives no new product
+features. See [Legacy Python Application](legacy-python.md).

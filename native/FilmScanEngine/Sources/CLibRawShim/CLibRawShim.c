@@ -1,6 +1,7 @@
 #include "CLibRawShim.h"
 
 #include <libraw/libraw.h>
+#include <malloc/malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -310,6 +311,26 @@ void fsc_free_raw_direct(fsc_raw_direct *output) {
         free(cleanup);
     }
     memset(output, 0, sizeof(*output));
+}
+
+int fsc_default_heap_statistics(fsc_heap_statistics *output) {
+    if (output == NULL) {
+        return -1;
+    }
+
+    malloc_zone_t *zone = malloc_default_zone();
+    if (zone == NULL || zone->introspect == NULL || zone->introspect->statistics == NULL) {
+        memset(output, 0, sizeof(*output));
+        return -1;
+    }
+
+    malloc_statistics_t statistics = {0};
+    zone->introspect->statistics(zone, &statistics);
+    output->blocks_in_use = statistics.blocks_in_use;
+    output->size_in_use = statistics.size_in_use;
+    output->max_size_in_use = statistics.max_size_in_use;
+    output->size_allocated = statistics.size_allocated;
+    return 0;
 }
 
 typedef struct {

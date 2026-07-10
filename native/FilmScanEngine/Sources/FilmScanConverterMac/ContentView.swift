@@ -12,6 +12,8 @@ struct ContentView: View {
   @State private var rebateDragStart: CGPoint?
   @State private var rebateDragEnd: CGPoint?
   @State private var rebateSelectionPreviousShowOriginal = false
+  @State private var isPerspectiveEditing = false
+  @State private var perspectiveEditingPreviousShowOriginal = false
   @State private var presetName = ""
   @State private var profileName = ""
 
@@ -64,6 +66,7 @@ struct ContentView: View {
       .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
       .onChange(of: model.selection) {
         endRebateSelection()
+        endPerspectiveEditing()
         model.loadSelection()
       }
     } detail: {
@@ -687,9 +690,45 @@ struct ContentView: View {
             Label("Detect Frame", systemImage: "crop.rotate")
           }
         }
-        .disabled(model.decodedImage == nil || model.isCropDetectionRunning)
+        .disabled(model.decodedImage == nil || model.isCropDetectionRunning || isPerspectiveEditing)
 
-        if let cropRect = model.cropRect {
+        Button(action: togglePerspectiveEditing) {
+          Label(
+            isPerspectiveEditing ? "Done Aligning" : "Adjust Perspective",
+            systemImage: isPerspectiveEditing ? "checkmark" : "square.on.square.dashed"
+          )
+        }
+        .disabled(model.decodedImage == nil)
+
+        if isPerspectiveEditing {
+          Text("Drag the four corners onto the film edges. The grid shows the rectangular canvas that will be straightened on preview and export.")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          Button("Reset Perspective") {
+            model.clearCrop()
+            model.beginPerspectiveCrop()
+          }
+          .controlSize(.small)
+        }
+
+        if let perspectiveCrop = model.perspectiveCrop {
+          Divider()
+          Text("Four-corner perspective crop")
+            .font(.caption2)
+          Text("TL \(pointText(perspectiveCrop.topLeft))  TR \(pointText(perspectiveCrop.topRight))")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+          Text("BL \(pointText(perspectiveCrop.bottomLeft))  BR \(pointText(perspectiveCrop.bottomRight))")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+          Button("Clear") {
+            endPerspectiveEditing()
+            model.clearCrop()
+          }
+          .controlSize(.small)
+          .font(.caption2)
+        } else if let cropRect = model.cropRect {
           Divider()
           VStack(alignment: .leading, spacing: 2) {
             Text("Angle: \(String(format: "%.1f", cropRect.angle))°")
@@ -930,9 +969,16 @@ struct ContentView: View {
             value: Double(model.exportProgressCurrent),
             total: Double(max(model.exportProgressTotal, 1))
           )
-          Text("Exporting \(model.exportProgressCurrent) of \(model.exportProgressTotal)")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+          if let filename = model.activeExportFilename {
+            Text(filename)
+              .font(.caption)
+              .lineLimit(1)
+          }
+          Text(
+            "Processing \(min(model.exportProgressCurrent + 1, model.exportProgressTotal)) of \(model.exportProgressTotal)"
+          )
+          .font(.caption)
+          .foregroundStyle(.secondary)
         }
 
         HStack {
@@ -944,11 +990,18 @@ struct ContentView: View {
         .disabled(model.exportParameters.destinationDirectory == nil || model.isExporting)
 
         if model.isExporting {
-          Button("Add Selected to Export Queue", action: model.addSelectedToExportQueue)
-            .buttonStyle(.borderedProminent)
-          Text("\(model.exportQueueCount) waiting")
-            .font(.caption)
-            .foregroundStyle(.secondary)
+          HStack {
+            Button("Add Selected", action: model.addSelectedToExportQueue)
+              .buttonStyle(.borderedProminent)
+            Button("Cancel", role: .cancel, action: model.cancelExport)
+              .buttonStyle(.bordered)
+          }
+          Text(
+            model.exportQueueCount == 1
+              ? "1 file waiting" : "\(model.exportQueueCount) files waiting"
+          )
+          .font(.caption)
+          .foregroundStyle(.secondary)
         }
 
         ForEach(model.exportErrors, id: \.self) { error in
@@ -1010,6 +1063,15 @@ struct ContentView: View {
           )
           endRebateSelection()
         }
+
+        PerspectiveCropOverlay(
+          isActive: isPerspectiveEditing,
+          crop: model.perspectiveCrop,
+          imageSize: model.previewImage?.size ?? .zero,
+          rotation: model.parameters.rotation,
+          flipHorizontally: model.parameters.flip,
+          onCropChanged: model.setPerspectiveCrop
+        )
       }
     } else {
       ContentUnavailableView {
@@ -1088,6 +1150,147 @@ struct ContentView: View {
     rebateDragStart = nil
     rebateDragEnd = nil
     model.showOriginal = rebateSelectionPreviousShowOriginal
+  }
+
+  private func togglePerspectiveEditing() {
+    if isPerspectiveEditing {
+      endPerspectiveEditing()
+      return
+    }
+    perspectiveEditingPreviousShowOriginal = model.showOriginal
+    model.beginPerspectiveCrop()
+    isPerspectiveEditing = true
+    model.showOriginal = true
+  }
+
+  private func endPerspectiveEditing() {
+    guard isPerspectiveEditing else { return }
+    isPerspectiveEditing = false
+    model.showOriginal = perspectiveEditingPreviousShowOriginal
+  }
+
+  private func pointText(_ point: PerspectiveCrop.Point) -> String {
+    String(format: "%.2f, %.2f", point.x, point.y)
+  }
+}
+
+private struct PerspectiveCropOverlay: View {
+  let isActive: Bool
+  let crop: PerspectiveCrop?
+  let imageSize: CGSize
+  let rotation: Int
+  let flipHorizontally: Bool
+  let onCropChanged: (PerspectiveCrop) -> Void
+
+  var body: some View {
+    GeometryReader { geometry in
+      let imageRect = aspectFitRect(imageSize: imageSize, containerSize: geometry.size)
+      if isActive, let crop, imageRect.width > 0, imageRect.height > 0 {
+        let displayedPoints = crop.points.map(displayedPoint)
+        let points = displayedPoints.map { point in
+          CGPoint(
+            x: imageRect.minX + point.x * imageRect.width,
+            y: imageRect.minY + point.y * imageRect.height
+          )
+        }
+        ZStack {
+          Path { path in
+            path.move(to: points[0])
+            path.addLine(to: points[1])
+            path.addLine(to: points[2])
+            path.addLine(to: points[3])
+            path.closeSubpath()
+          }
+          .stroke(Color.accentColor, lineWidth: 2)
+
+          Path { path in
+            for fraction in [0.25, 0.5, 0.75] {
+              let top = interpolate(points[0], points[1], fraction: fraction)
+              let bottom = interpolate(points[3], points[2], fraction: fraction)
+              path.move(to: top)
+              path.addLine(to: bottom)
+              let left = interpolate(points[0], points[3], fraction: fraction)
+              let right = interpolate(points[1], points[2], fraction: fraction)
+              path.move(to: left)
+              path.addLine(to: right)
+            }
+          }
+          .stroke(Color.accentColor.opacity(0.85), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+
+          ForEach(Array(points.enumerated()), id: \.offset) { index, point in
+            Circle()
+              .fill(Color.accentColor)
+              .overlay(Circle().stroke(.white, lineWidth: 2))
+              .frame(width: 16, height: 16)
+              .contentShape(Circle().inset(by: -8))
+              .position(point)
+              .gesture(
+                DragGesture(minimumDistance: 0)
+                  .onChanged { value in
+                    let clamped = clamped(value.location, to: imageRect)
+                    let displayed = PerspectiveCrop.Point(
+                      x: (clamped.x - imageRect.minX) / imageRect.width,
+                      y: (clamped.y - imageRect.minY) / imageRect.height
+                    )
+                    onCropChanged(crop.replacing(index, with: sourcePoint(fromDisplayed: displayed)))
+                  }
+              )
+              .help(["Top left", "Top right", "Bottom right", "Bottom left"][index])
+          }
+        }
+      }
+    }
+    .allowsHitTesting(isActive)
+  }
+
+  private func displayedPoint(_ point: PerspectiveCrop.Point) -> CGPoint {
+    let turns = ((rotation % 4) + 4) % 4
+    var result: CGPoint
+    switch turns {
+    case 1: result = CGPoint(x: 1 - point.y, y: point.x)
+    case 2: result = CGPoint(x: 1 - point.x, y: 1 - point.y)
+    case 3: result = CGPoint(x: point.y, y: 1 - point.x)
+    default: result = CGPoint(x: point.x, y: point.y)
+    }
+    if flipHorizontally { result.x = 1 - result.x }
+    return result
+  }
+
+  private func sourcePoint(fromDisplayed point: PerspectiveCrop.Point) -> PerspectiveCrop.Point {
+    let displayX = flipHorizontally ? 1 - point.x : point.x
+    let turns = ((rotation % 4) + 4) % 4
+    switch turns {
+    case 1: return .init(x: point.y, y: 1 - displayX)
+    case 2: return .init(x: 1 - displayX, y: 1 - point.y)
+    case 3: return .init(x: 1 - point.y, y: displayX)
+    default: return .init(x: displayX, y: point.y)
+    }
+  }
+
+  private func interpolate(_ start: CGPoint, _ end: CGPoint, fraction: CGFloat) -> CGPoint {
+    CGPoint(
+      x: start.x + (end.x - start.x) * fraction,
+      y: start.y + (end.y - start.y) * fraction
+    )
+  }
+
+  private func aspectFitRect(imageSize: CGSize, containerSize: CGSize) -> CGRect {
+    guard imageSize.width > 0, imageSize.height > 0 else { return .zero }
+    let scale = min(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
+    let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+    return CGRect(
+      x: (containerSize.width - size.width) / 2,
+      y: (containerSize.height - size.height) / 2,
+      width: size.width,
+      height: size.height
+    )
+  }
+
+  private func clamped(_ point: CGPoint, to rect: CGRect) -> CGPoint {
+    CGPoint(
+      x: min(max(point.x, rect.minX), rect.maxX),
+      y: min(max(point.y, rect.minY), rect.maxY)
+    )
   }
 }
 

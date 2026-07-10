@@ -19,6 +19,12 @@ typedef struct {
     char color_description[5];
     float iso_speed;
     uint32_t processing_flags;
+    double open_seconds;
+    double unpack_seconds;
+    double demosaic_seconds;
+    double libraw_postprocess_seconds;
+    double processed_image_seconds;
+    double iso_policy_seconds;
     const uint16_t *bgr_pixels;
     void *_internal;
 } fsc_raw_direct;
@@ -46,6 +52,18 @@ int fsc_decode_raw_direct_with_profile(
 );
 
 void fsc_free_raw_direct(fsc_raw_direct *output);
+
+typedef struct {
+    size_t blocks_in_use;
+    size_t size_in_use;
+    size_t max_size_in_use;
+    size_t size_allocated;
+} fsc_heap_statistics;
+
+// Captures the default allocator zone's live and reserved byte counts. This is
+// diagnostic-only: use it to distinguish live allocations from allocator
+// retention when measuring a sequential full-resolution export run.
+int fsc_default_heap_statistics(fsc_heap_statistics *output);
 
 typedef struct {
     uint32_t width;

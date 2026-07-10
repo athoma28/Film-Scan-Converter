@@ -31,10 +31,34 @@ private struct RawDecodeReference: Decodable {
 
 @Suite("LibRaw decoding")
 struct RawImageDecoderTests {
+  @Test("Default heap statistics distinguish live from reserved memory")
+  func defaultHeapStatisticsAreAvailable() throws {
+    let statistics = try #require(RawImageDecoder.defaultHeapStatistics())
+    #expect(statistics.blocksInUse > 0)
+    #expect(statistics.sizeAllocated >= statistics.sizeInUse)
+    #expect(statistics.maxSizeInUse >= statistics.sizeInUse)
+  }
+
   @Test("RAW decode profiles expose stable C bridge values")
   func rawDecodeProfileBridgeValues() {
     #expect(RawDecodeProfile.rawPyCompatibility.rawValue == 0)
     #expect(RawDecodeProfile.rawTherapeeCameraScan.rawValue == 1)
+  }
+
+  @Test("RAW decode timing totals preserve their measured components")
+  func rawDecodeTimingTotals() {
+    let timings = RawDecodeTimings(
+      openSeconds: 1,
+      unpackSeconds: 2,
+      demosaicSeconds: 3,
+      libRawPostprocessSeconds: 4,
+      processedImageSeconds: 5,
+      isoPolicySeconds: 6,
+      swiftCopySwizzleSeconds: 7
+    )
+
+    #expect(timings.nativeDecodeSeconds == 21)
+    #expect(timings.totalSeconds == 28)
   }
 
   @Test(
@@ -161,6 +185,13 @@ struct RawImageDecoderTests {
     #expect(result.processing.contains(.xTransThreePass))
     #expect(result.image.width > 3_876)
     #expect(result.image.height > 2_592)
+    #expect(result.timings.openSeconds > 0)
+    #expect(result.timings.unpackSeconds > 0)
+    #expect(result.timings.demosaicSeconds > 0)
+    #expect(result.timings.libRawPostprocessSeconds >= 0)
+    #expect(result.timings.processedImageSeconds > 0)
+    #expect(result.timings.isoPolicySeconds > 0)
+    #expect(result.timings.swiftCopySwizzleSeconds > 0)
   }
 
   @Test(

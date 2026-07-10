@@ -10,6 +10,7 @@ public struct RawDecodeResult: Sendable {
   public let profile: RawDecodeProfile
   public let isoSpeed: Double
   public let processing: RawProcessingStages
+  public let timings: RawDecodeTimings
 
   public init(
     image: UInt16Image,
@@ -17,7 +18,8 @@ public struct RawDecodeResult: Sendable {
     decoderVersion: String,
     profile: RawDecodeProfile = .rawPyCompatibility,
     isoSpeed: Double = 0,
-    processing: RawProcessingStages = []
+    processing: RawProcessingStages = [],
+    timings: RawDecodeTimings = .zero
   ) {
     self.image = image
     self.colorDescription = colorDescription
@@ -25,6 +27,73 @@ public struct RawDecodeResult: Sendable {
     self.profile = profile
     self.isoSpeed = isoSpeed
     self.processing = processing
+    self.timings = timings
+  }
+}
+
+public struct RawDecodeTimings: Codable, Equatable, Sendable {
+  public let openSeconds: Double
+  public let unpackSeconds: Double
+  public let demosaicSeconds: Double
+  public let libRawPostprocessSeconds: Double
+  public let processedImageSeconds: Double
+  public let isoPolicySeconds: Double
+  public let swiftCopySwizzleSeconds: Double
+
+  public init(
+    openSeconds: Double,
+    unpackSeconds: Double,
+    demosaicSeconds: Double,
+    libRawPostprocessSeconds: Double,
+    processedImageSeconds: Double,
+    isoPolicySeconds: Double,
+    swiftCopySwizzleSeconds: Double
+  ) {
+    self.openSeconds = openSeconds
+    self.unpackSeconds = unpackSeconds
+    self.demosaicSeconds = demosaicSeconds
+    self.libRawPostprocessSeconds = libRawPostprocessSeconds
+    self.processedImageSeconds = processedImageSeconds
+    self.isoPolicySeconds = isoPolicySeconds
+    self.swiftCopySwizzleSeconds = swiftCopySwizzleSeconds
+  }
+
+  public static let zero = RawDecodeTimings(
+    openSeconds: 0,
+    unpackSeconds: 0,
+    demosaicSeconds: 0,
+    libRawPostprocessSeconds: 0,
+    processedImageSeconds: 0,
+    isoPolicySeconds: 0,
+    swiftCopySwizzleSeconds: 0
+  )
+
+  public var nativeDecodeSeconds: Double {
+    openSeconds + unpackSeconds + demosaicSeconds + libRawPostprocessSeconds
+      + processedImageSeconds + isoPolicySeconds
+  }
+
+  public var totalSeconds: Double {
+    nativeDecodeSeconds + swiftCopySwizzleSeconds
+  }
+}
+
+public struct NativeHeapStatistics: Codable, Equatable, Sendable {
+  public let blocksInUse: UInt64
+  public let sizeInUse: UInt64
+  public let maxSizeInUse: UInt64
+  public let sizeAllocated: UInt64
+
+  public init(
+    blocksInUse: UInt64,
+    sizeInUse: UInt64,
+    maxSizeInUse: UInt64,
+    sizeAllocated: UInt64
+  ) {
+    self.blocksInUse = blocksInUse
+    self.sizeInUse = sizeInUse
+    self.maxSizeInUse = maxSizeInUse
+    self.sizeAllocated = sizeAllocated
   }
 }
 
@@ -49,6 +118,22 @@ public enum RawDecodeProfile: UInt32, Sendable, Codable, Equatable {
 }
 
 public enum RawImageDecoder {
+  /// Reports default-allocator state for sequential export diagnostics. The
+  /// values distinguish still-live heap allocations from reserved allocator
+  /// pages; they are not a replacement for an Instruments allocation trace.
+  public static func defaultHeapStatistics() -> NativeHeapStatistics? {
+    var statistics = fsc_heap_statistics()
+    guard fsc_default_heap_statistics(&statistics) == 0 else {
+      return nil
+    }
+    return NativeHeapStatistics(
+      blocksInUse: UInt64(statistics.blocks_in_use),
+      sizeInUse: UInt64(statistics.size_in_use),
+      maxSizeInUse: UInt64(statistics.max_size_in_use),
+      sizeAllocated: UInt64(statistics.size_allocated)
+    )
+  }
+
   public static func decode(
     _ url: URL,
     fullResolution: Bool = false,
@@ -93,6 +178,7 @@ public enum RawImageDecoder {
     }
 
     let pixelCount = Int(output.pixel_count)
+    let copyStart = ContinuousClock.now
     let pixels = [UInt16](unsafeUninitializedCapacity: pixelCount) { buffer, initializedCount in
       let bgr = UnsafeBufferPointer(start: sourcePixels, count: pixelCount)
       for i in stride(from: 0, to: pixelCount, by: 3) {
@@ -102,6 +188,7 @@ public enum RawImageDecoder {
       }
       initializedCount = pixelCount
     }
+    let copySeconds = rawDecodeSeconds(copyStart.duration(to: .now))
     let colorDescription = withUnsafePointer(to: output.color_description) {
       $0.withMemoryRebound(to: CChar.self, capacity: 5) {
         String(cString: $0)
@@ -129,7 +216,16 @@ public enum RawImageDecoder {
       decoderVersion: version,
       profile: profile,
       isoSpeed: Double(output.iso_speed),
-      processing: processing
+      processing: processing,
+      timings: RawDecodeTimings(
+        openSeconds: output.open_seconds,
+        unpackSeconds: output.unpack_seconds,
+        demosaicSeconds: output.demosaic_seconds,
+        libRawPostprocessSeconds: output.libraw_postprocess_seconds,
+        processedImageSeconds: output.processed_image_seconds,
+        isoPolicySeconds: output.iso_policy_seconds,
+        swiftCopySwizzleSeconds: copySeconds
+      )
     )
   }
 
@@ -241,6 +337,11 @@ public enum RawImageDecoder {
     let utf8 = bytes.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }
     return String(decoding: utf8, as: UTF8.self)
   }
+}
+
+private func rawDecodeSeconds(_ duration: Duration) -> Double {
+  let components = duration.components
+  return Double(components.seconds) + Double(components.attoseconds) / 1e18
 }
 
 public enum RawImageDecoderError: LocalizedError {

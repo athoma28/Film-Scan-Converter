@@ -3,12 +3,16 @@ import Foundation
 extension UInt16Image {
 
   func writeDNG(to url: URL) throws {
+    _ = try writeDNGMeasured(to: url)
+  }
+
+  func writeDNGMeasured(to url: URL) throws -> ExportWriteMetrics {
     guard channels == 1 || channels == 3 else {
       throw ExportError.creationFailed
     }
 
     let writer = DNGWriter(width: width, height: height, channels: channels, pixels: pixels)
-    try writer.write(to: url)
+    return try writer.write(to: url)
   }
 }
 
@@ -54,9 +58,12 @@ private final class DNGWriter {
     self.outputChannels = channels == 1 ? 1 : 3
   }
 
-  func write(to url: URL) throws {
+  func write(to url: URL) throws -> ExportWriteMetrics {
+    let packingStart = ContinuousClock.now
     let imageStrip = buildImageData()
+    let packingSeconds = dngSeconds(packingStart.duration(to: .now))
 
+    let writerStart = ContinuousClock.now
     let ifdEntries = buildIFDEntries(stripByteCount: imageStrip.count)
     let subIFDEntries = buildSubIFDEntries()
     let ifdSize = ifdDataBytes(ifdEntries)
@@ -81,6 +88,13 @@ private final class DNGWriter {
     appendInlineValues(subIFDEntries, to: &data, startOffset: valueDataStart)
 
     try data.write(to: url)
+    let values = try url.resourceValues(forKeys: [.fileSizeKey])
+    return ExportWriteMetrics(
+      pixelPackingSeconds: packingSeconds,
+      encodingFinalizationSeconds: dngSeconds(writerStart.duration(to: .now)),
+      packedPixelBytes: imageStrip.count,
+      outputBytes: values.fileSize ?? 0
+    )
   }
 
   private func ifdDataBytes(_ entries: [IFDEntry]) -> UInt32 {
@@ -205,4 +219,9 @@ private final class DNGWriter {
       IFDEntry(tag: 37387, type: 5, count: 1, value: .rational(10, 1)),
     ]
   }
+}
+
+private func dngSeconds(_ duration: Duration) -> Double {
+  let components = duration.components
+  return Double(components.seconds) + Double(components.attoseconds) / 1e18
 }

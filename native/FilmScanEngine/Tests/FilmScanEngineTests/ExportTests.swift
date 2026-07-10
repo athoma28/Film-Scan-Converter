@@ -53,6 +53,22 @@ struct ExportTests {
     #expect(imported.width == original.width)
     #expect(imported.height == original.height)
     #expect(imported.channels == 3)
+    #expect(imported == original)
+  }
+
+  @Test func measuredExportReportsProductionWriterStagesAndSize() throws {
+    let original = makeTestImage()
+    let params = ExportParameters(format: .tiff)
+    let url = tempDir.appendingPathComponent("measured.tiff")
+
+    let metrics = try original.writeMeasured(
+      to: url, format: .tiff, parameters: params)
+
+    #expect(metrics.pixelPackingSeconds >= 0)
+    #expect(metrics.encodingFinalizationSeconds >= 0)
+    #expect(metrics.packedPixelBytes == original.width * original.height * 6)
+    #expect(metrics.outputBytes > 0)
+    #expect(metrics.outputBytes == (try url.resourceValues(forKeys: [.fileSizeKey])).fileSize)
   }
 
   @Test func tiffExportWithLZWCompression() throws {
@@ -65,6 +81,17 @@ struct ExportTests {
     let imported = try StandardImageDecoder.decode(url)
     #expect(imported.width == original.width)
     #expect(imported.height == original.height)
+  }
+
+  @Test func tiffExportUsesCompact16BitRGBComponentLayout() throws {
+    let image = makeTestImage(width: 7, height: 5)
+    let cgImage = try #require(image.makeExportCGImageRGB16())
+
+    #expect(cgImage.bitsPerComponent == 16)
+    #expect(cgImage.bitsPerPixel == 48)
+    #expect(cgImage.bytesPerRow == 7 * 6)
+    #expect(cgImage.alphaInfo == .none)
+    #expect(cgImage.bitmapInfo.contains(.byteOrder16Little))
   }
 
   @Test func jpegExportProducesValidFile() throws {
@@ -279,6 +306,32 @@ struct ExportTests {
     for request in requests {
       #expect(FileManager.default.fileExists(atPath: request.destinationURL.path))
     }
+  }
+
+  @Test func cancelledBatchReturnsOneResultPerRequestWithoutWriting() async throws {
+    let params = ExportParameters(format: .tiff)
+    let requests = (0..<8).map { index in
+      ExportManager.ExportRequest(
+        sourceURL: URL(fileURLWithPath: "/fake/cancelled_\(index).raf"),
+        destinationURL: tempDir.appendingPathComponent("cancelled_batch_\(index).tiff"),
+        image: makeTestImage(),
+        parameters: params
+      )
+    }
+
+    let manager = ExportManager()
+    let task = Task {
+      withUnsafeCurrentTask { $0?.cancel() }
+      return await manager.exportBatch(requests: requests, maxConcurrent: 2)
+    }
+    let results = await task.value
+
+    #expect(results.count == requests.count)
+    #expect(
+      results.allSatisfy {
+        ($0.error as? ExportManager.ExportManagerError) == .cancelled
+      })
+    #expect(requests.allSatisfy { !FileManager.default.fileExists(atPath: $0.destinationURL.path) })
   }
 
   @Test func exportFormatRoundTrip() throws {

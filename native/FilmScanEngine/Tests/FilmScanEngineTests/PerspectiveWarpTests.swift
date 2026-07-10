@@ -6,6 +6,56 @@ import Testing
 @Suite("Perspective warp")
 struct PerspectiveWarpTests {
 
+  @Test("Interactive four-corner crop preserves a full source canvas")
+  func fullFramePerspectiveCropPreservesImage() throws {
+    let image = UInt16Image(
+      width: 5, height: 4, channels: 1,
+      pixels: (0..<20).map(UInt16.init)
+    )
+
+    let cropped = try #require(PerspectiveTransform.crop(
+      image, perspectiveCrop: .fullFrame
+    ))
+
+    #expect(cropped.width == image.width)
+    #expect(cropped.height == image.height)
+    #expect(cropped.pixels == image.pixels)
+  }
+
+  @Test("Interactive crop rejects a folded or degenerate quadrilateral")
+  func invalidPerspectiveCropIsRejected() {
+    let folded = PerspectiveCrop(
+      topLeft: .init(x: 0.1, y: 0.1),
+      topRight: .init(x: 0.9, y: 0.9),
+      bottomRight: .init(x: 0.9, y: 0.1),
+      bottomLeft: .init(x: 0.1, y: 0.9)
+    )
+    let image = UInt16Image(width: 4, height: 4, channels: 1, pixels: [UInt16](repeating: 1, count: 16))
+
+    #expect(!folded.isValid)
+    #expect(PerspectiveTransform.crop(image, perspectiveCrop: folded) == nil)
+  }
+
+  @Test("Interactive crop rectifies a trapezoid to its mean edge dimensions")
+  func trapezoidPerspectiveCropRectifiesCanvas() throws {
+    let image = UInt16Image(
+      width: 100, height: 80, channels: 1,
+      pixels: [UInt16](repeating: 30_000, count: 100 * 80)
+    )
+    let crop = PerspectiveCrop(
+      topLeft: .init(x: 0.2, y: 0.1),
+      topRight: .init(x: 0.8, y: 0.2),
+      bottomRight: .init(x: 0.9, y: 0.9),
+      bottomLeft: .init(x: 0.1, y: 0.8)
+    )
+
+    let cropped = try #require(PerspectiveTransform.crop(image, perspectiveCrop: crop))
+
+    #expect(cropped.width == 71)
+    #expect(cropped.height == 57)
+    #expect(cropped.pixels.allSatisfy { $0 == 30_000 })
+  }
+
   // MARK: - Homography computation
 
   @Test("computeHomography returns identity for identical point sets")

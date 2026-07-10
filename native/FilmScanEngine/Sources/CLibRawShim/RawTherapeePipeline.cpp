@@ -7,6 +7,7 @@
 
 #include <libraw/libraw.h>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -25,6 +26,7 @@ class FSCRawTherapeeDecoder final : public LibRaw {
 public:
     bool usedRCD = false;
     bool usedXTransThreePass = false;
+    double demosaicSeconds = 0;
 
     FSCRawTherapeeDecoder() : LibRaw(LIBRAW_OPTIONS_NONE) {
         callbacks.interpolate_bayer_cb = &FSCRawTherapeeDecoder::rcdCallback;
@@ -44,7 +46,10 @@ private:
         // LibRaw's X-Trans implementation is Markesteijn-derived. Three passes
         // trade decode time for the cleaner fine colour detail RawTherapee
         // recommends for final-quality X-Trans output.
+        const auto start = std::chrono::steady_clock::now();
         xtrans_interpolate(3);
+        demosaicSeconds = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - start).count();
         usedXTransThreePass = true;
     }
 
@@ -54,6 +59,7 @@ private:
     }
 
     void rcdDemosaic() {
+        const auto start = std::chrono::steady_clock::now();
         const int width = imgdata.sizes.width;
         const int height = imgdata.sizes.height;
         if (!imgdata.image || width < 20 || height < 20 || imgdata.idata.filters <= 1000) {
@@ -200,6 +206,8 @@ private:
             }
         }
         border_interpolate(5);
+        demosaicSeconds = std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - start).count();
         usedRCD = true;
     }
 };
@@ -254,8 +262,11 @@ extern "C" int fsc_decode_rawtherapee_direct(
     const char *path, int full_resolution, fsc_raw_direct *output,
     char *error_message, size_t error_capacity
 ) {
+    using Clock = std::chrono::steady_clock;
     std::unique_ptr<FSCRawTherapeeDecoder> raw(new FSCRawTherapeeDecoder());
+    const auto openStart = Clock::now();
     int code = raw->open_file(path);
+    output->open_seconds = std::chrono::duration<double>(Clock::now() - openStart).count();
     if (code != LIBRAW_SUCCESS) {
         std::snprintf(error_message, error_capacity, "%s", libraw_strerror(code));
         return code;
@@ -265,14 +276,27 @@ extern "C" int fsc_decode_rawtherapee_direct(
     p.output_color = 1; p.gamm[0] = 1.0 / 2.4; p.gamm[1] = 12.92;
     p.no_auto_bright = 1; p.highlight = 3; p.half_size = full_resolution ? 0 : 1;
     p.adjust_maximum_thr = 0.75f; p.bright = 1.f; p.exp_correc = 0;
+    const auto unpackStart = Clock::now();
     code = raw->unpack();
-    if (code == LIBRAW_SUCCESS) { code = raw->dcraw_process(); }
+    output->unpack_seconds = std::chrono::duration<double>(Clock::now() - unpackStart).count();
+    if (code == LIBRAW_SUCCESS) {
+        const auto processStart = Clock::now();
+        code = raw->dcraw_process();
+        const double processSeconds = std::chrono::duration<double>(
+            Clock::now() - processStart).count();
+        output->demosaic_seconds = raw->demosaicSeconds;
+        output->libraw_postprocess_seconds = std::max(
+            0.0, processSeconds - output->demosaic_seconds);
+    }
     if (code != LIBRAW_SUCCESS) {
         std::snprintf(error_message, error_capacity, "%s", libraw_strerror(code));
         return code;
     }
     int imageError = LIBRAW_SUCCESS;
+    const auto processedImageStart = Clock::now();
     libraw_processed_image_t *processed = raw->dcraw_make_mem_image(&imageError);
+    output->processed_image_seconds = std::chrono::duration<double>(
+        Clock::now() - processedImageStart).count();
     if (!processed || imageError != LIBRAW_SUCCESS || processed->bits != 16 || processed->colors != 3) {
         if (processed) { libraw_dcraw_clear_mem(processed); }
         std::snprintf(error_message, error_capacity, "LibRaw returned an invalid camera-scan image.");
@@ -281,7 +305,10 @@ extern "C" int fsc_decode_rawtherapee_direct(
     uint32_t flags = 0;
     if (raw->usedRCD) { flags |= FSC_RAW_PROCESSING_RCD; }
     if (raw->usedXTransThreePass) { flags |= FSC_RAW_PROCESSING_XTRANS_THREE_PASS; }
+    const auto isoPolicyStart = Clock::now();
     isoAdaptiveFilter(processed, raw->imgdata.other.iso_speed, flags);
+    output->iso_policy_seconds = std::chrono::duration<double>(
+        Clock::now() - isoPolicyStart).count();
     output->width = processed->width; output->height = processed->height;
     output->channels = processed->colors;
     output->pixel_count = static_cast<size_t>(processed->width) * processed->height * 3;

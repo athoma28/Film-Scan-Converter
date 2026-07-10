@@ -4,9 +4,9 @@
 
 This document records the main conclusions from the June 2026 Swift-port
 evaluation. It is not a roadmap or implementation checklist. For current
-capabilities, limitations, and ordered work, use
-[Native macOS Development](native-macos.md). For longer-term design material,
-use the [macOS Native Roadmap](../improvements/MacOS-Native-Roadmap.md).
+capabilities and limitations, use
+[Native macOS Development Status](native-macos.md). For ordered work, use the
+[Native macOS Product Roadmap](../improvements/MacOS-Native-Roadmap.md).
 
 ## Conclusions That Still Apply
 
@@ -45,8 +45,8 @@ shared preview/export entry point with workflow-level tests.
 
 ## Current Boundary
 
-Dust-mask detection exists, but Telea inpainting and dust controls remain
-paused. Self-contained app/ZIP packaging is complete; Developer ID
-notarization, Gatekeeper/clean-machine validation, broader fixture independence,
-and the deferred direct-display/idle-render preview work remain. The
-authoritative status page owns any changes to that boundary.
+Dust-mask detection exists, but Telea inpainting and applied dust removal do
+not. Self-contained app/ZIP packaging is complete; Developer ID notarization,
+Gatekeeper/clean-machine validation, broader packaged-app corpus evidence, and
+essential editing-workflow work remain. The authoritative status page owns any
+changes to that boundary.

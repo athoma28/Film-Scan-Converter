@@ -1,7 +1,117 @@
 import Accelerate
 import Foundation
 
+/// A source-space quadrilateral for an interactive perspective crop.
+///
+/// Coordinates are normalized with `(0, 0)` at the source image's top-left
+/// and `(1, 1)` at its bottom-right.  The corner order is fixed so settings
+/// can be safely persisted and the editor never has to infer a winding order.
+public struct PerspectiveCrop: Codable, Equatable, Sendable {
+  public struct Point: Codable, Equatable, Sendable {
+    public var x: Double
+    public var y: Double
+
+    public init(x: Double, y: Double) {
+      self.x = x
+      self.y = y
+    }
+  }
+
+  public var topLeft: Point
+  public var topRight: Point
+  public var bottomRight: Point
+  public var bottomLeft: Point
+
+  public init(topLeft: Point, topRight: Point, bottomRight: Point, bottomLeft: Point) {
+    self.topLeft = topLeft
+    self.topRight = topRight
+    self.bottomRight = bottomRight
+    self.bottomLeft = bottomLeft
+  }
+
+  public static let fullFrame = PerspectiveCrop(
+    topLeft: Point(x: 0, y: 0),
+    topRight: Point(x: 1, y: 0),
+    bottomRight: Point(x: 1, y: 1),
+    bottomLeft: Point(x: 0, y: 1)
+  )
+
+  public var points: [Point] { [topLeft, topRight, bottomRight, bottomLeft] }
+
+  public var isValid: Bool {
+    guard points.allSatisfy({ $0.x.isFinite && $0.y.isFinite && $0.x >= 0 && $0.x <= 1 && $0.y >= 0 && $0.y <= 1 }) else {
+      return false
+    }
+    let ring = points + [topLeft]
+    let signedArea = zip(ring, ring.dropFirst()).reduce(0.0) { area, pair in
+      area + pair.0.x * pair.1.y - pair.1.x * pair.0.y
+    } / 2
+    guard signedArea > 0.000_1 else { return false }
+    return (0..<4).allSatisfy { index in
+      let a = points[index]
+      let b = points[(index + 1) % 4]
+      let c = points[(index + 2) % 4]
+      let cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x)
+      return cross > 0.000_1
+    }
+  }
+
+  public func replacing(_ corner: Int, with point: Point) -> PerspectiveCrop {
+    let clamped = Point(x: min(max(point.x, 0), 1), y: min(max(point.y, 0), 1))
+    var result = self
+    switch corner {
+    case 0: result.topLeft = clamped
+    case 1: result.topRight = clamped
+    case 2: result.bottomRight = clamped
+    case 3: result.bottomLeft = clamped
+    default: preconditionFailure("Perspective crop corner must be in 0...3")
+    }
+    return result
+  }
+}
+
 public enum PerspectiveTransform {
+
+  /// Straightens a selected source quadrilateral into a rectangular canvas.
+  /// The result dimensions follow the mean opposing edge lengths, preserving
+  /// the source detail density instead of stretching to an arbitrary size.
+  public static func crop(
+    _ image: UInt16Image,
+    perspectiveCrop: PerspectiveCrop,
+    borderPercent: Double = 0
+  ) -> UInt16Image? {
+    guard perspectiveCrop.isValid else { return nil }
+    let insetScale = max(0, 1 - max(0, borderPercent) / 100)
+    let center = PerspectiveCrop.Point(
+      x: perspectiveCrop.points.map(\.x).reduce(0, +) / 4,
+      y: perspectiveCrop.points.map(\.y).reduce(0, +) / 4
+    )
+    let points = perspectiveCrop.points.map {
+      PerspectiveCrop.Point(
+        x: center.x + ($0.x - center.x) * insetScale,
+        y: center.y + ($0.y - center.y) * insetScale
+      )
+    }
+    let source = points.map {
+      (x: Float($0.x * Double(image.width - 1)), y: Float($0.y * Double(image.height - 1)))
+    }
+    func distance(_ a: (x: Float, y: Float), _ b: (x: Float, y: Float)) -> Double {
+      hypot(Double(a.x - b.x), Double(a.y - b.y))
+    }
+    let outputWidth = max(1, Int(((distance(source[0], source[1]) + distance(source[3], source[2])) / 2).rounded()) + 1)
+    let outputHeight = max(1, Int(((distance(source[0], source[3]) + distance(source[1], source[2])) / 2).rounded()) + 1)
+    let destination: [(x: Float, y: Float)] = [
+      (0, 0),
+      (Float(outputWidth - 1), 0),
+      (Float(outputWidth - 1), Float(outputHeight - 1)),
+      (0, Float(outputHeight - 1)),
+    ]
+    guard let homography = computeHomography(srcPoints: source, dstPoints: destination) else {
+      return nil
+    }
+    return warpPerspective(
+      image, homography: homography, outputWidth: outputWidth, outputHeight: outputHeight)
+  }
 
   public static func crop(
     _ image: UInt16Image,

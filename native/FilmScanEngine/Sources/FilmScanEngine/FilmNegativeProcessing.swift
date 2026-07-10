@@ -1,4 +1,13 @@
+import Dispatch
 import Foundation
+
+private final class SendableMutableBuffer<Element>: @unchecked Sendable {
+  let baseAddress: UnsafeMutablePointer<Element>
+
+  init(_ baseAddress: UnsafeMutablePointer<Element>) {
+    self.baseAddress = baseAddress
+  }
+}
 
 public struct BGRChannelValues: Codable, Equatable, Sendable {
   public var blue: Double
@@ -280,6 +289,7 @@ public struct DisplayRenderingParameters: Codable, Equatable, Sendable {
 public enum FilmNegativeProcessing {
   private static let maxOutput: Double = 65535.0
   public static let calibrationTargetFraction: Double = 1.0 / 24.0
+  static let fusedPowerLawParallelPixelThreshold = 1_000_000
 
   // ── Accelerated UInt16 → linear sRGB LUT ──
 
@@ -331,7 +341,7 @@ public enum FilmNegativeProcessing {
     let pixelCount = image.width * image.height
     var output = [UInt16](repeating: 0, count: pixelCount * 3)
 
-    for i in 0..<pixelCount {
+    @Sendable func processPixel(_ i: Int, output: UnsafeMutablePointer<UInt16>) {
       let base = i * 3
       let b = image.pixels[base]
       let g = image.pixels[base + 1]
@@ -355,6 +365,27 @@ public enum FilmNegativeProcessing {
       output[base] = displayEncodedFilmNegativeValue(srgbB)
       output[base + 1] = displayEncodedFilmNegativeValue(srgbG)
       output[base + 2] = displayEncodedFilmNegativeValue(srgbR)
+    }
+
+    let workerCount = min(8, ProcessInfo.processInfo.activeProcessorCount)
+    output.withUnsafeMutableBufferPointer { buffer in
+      guard let baseAddress = buffer.baseAddress else { return }
+      if pixelCount >= fusedPowerLawParallelPixelThreshold, workerCount > 1 {
+        let sendableBuffer = SendableMutableBuffer(baseAddress)
+        let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
+        DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
+          let start = worker * pixelsPerWorker
+          let end = min(start + pixelsPerWorker, pixelCount)
+          guard start < end else { return }
+          for pixelIndex in start..<end {
+            processPixel(pixelIndex, output: sendableBuffer.baseAddress)
+          }
+        }
+      } else {
+        for pixelIndex in 0..<pixelCount {
+          processPixel(pixelIndex, output: baseAddress)
+        }
+      }
     }
 
     return UInt16Image(width: image.width, height: image.height, channels: 3, pixels: output)

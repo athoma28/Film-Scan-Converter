@@ -202,6 +202,42 @@ public struct UInt16Image: Equatable, Sendable {
     return data
   }
 
+  package func rgb16Data() -> Data? {
+    guard channels == 1 || channels == 3 else {
+      return nil
+    }
+
+    let pixelCount = width * height
+    var data = Data(count: pixelCount * 6)
+    let singleChannel = channels == 1
+    data.withUnsafeMutableBytes { (rbp: UnsafeMutableRawBufferPointer) in
+      let buf = rbp.bindMemory(to: UInt16.self)
+      pixels.withUnsafeBufferPointer { src in
+        if singleChannel {
+          var di = 0
+          for i in 0..<pixelCount {
+            let value = src[i]
+            buf[di] = value
+            buf[di + 1] = value
+            buf[di + 2] = value
+            di += 3
+          }
+        } else {
+          var si = 0
+          var di = 0
+          for _ in 0..<pixelCount {
+            buf[di] = src[si + 2]
+            buf[di + 1] = src[si + 1]
+            buf[di + 2] = src[si]
+            si += 3
+            di += 3
+          }
+        }
+      }
+    }
+    return data
+  }
+
   func rgba8Data() -> Data? {
     guard channels == 1 || channels == 3 else {
       return nil
