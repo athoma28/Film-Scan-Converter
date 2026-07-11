@@ -6,8 +6,8 @@ blocks a high-quality public release, and what is being worked on now. Use the
 [feature inventory](../features.md) for user-visible behavior, and the
 [40 MP benchmark](../performance/40mp-export.md) for detailed measurements.
 
-**Last verified:** 2026-07-10 against the current working tree. The native test
-suite contains 340 tests across 20 files. Some representative-RAW tests require
+**Last verified:** 2026-07-11 against the current working tree. The native test
+suite contains 359 tests across 21 files. Some representative-RAW tests require
 the untracked local `sample-raw/` corpus and are explicitly disabled when it is
 absent.
 
@@ -31,11 +31,10 @@ performance rewrite from the existing one-file smoke result.
 
 The current measurement evidence is:
 
-- bounded RAW and standard-image provisional previews are implemented;
-- selected and lookahead authoritative decodes are serialized and cancellable
-  before entering the synchronous decoder;
-- app-path signposts cover provisional loading, authoritative replacement, and
-  export from queue wait through cleanup;
+- 1000px RAW embedded and standard-image previews are the normal interactive sources;
+- lookahead extracts preview thumbnails and never starts speculative full RAW decodes;
+- app-path signposts cover selection-to-first-corrected-paint, preview extraction,
+  conversion, analysis, and export from queue wait through cleanup;
 - export cancellation now stops speculative lookahead decoding, checks each
   decode/correction/geometry boundary before advancing, and reports every
   unstarted batch item as cancelled;
@@ -66,6 +65,14 @@ The current measurement evidence is:
   allocating a padded RGBA buffer. The 40.19 MP intermediate is 80.37 MB
   smaller, the ten-file median packing interval fell from 29.73 ms to 22.88 ms
   (23.0%), and all ten TIFF byte counts and SHA-256 hashes remained identical.
+- the release-mode app-path benchmark now records first corrected paint,
+  cached and uncached switching, rapid-selection drain, preview-cache bytes,
+  and Mach physical footprint. On six local RAFs with three repetitions,
+  p50/p95 were 50.71/63.72 ms for first paint, 14.57/83.98 ms for a cached
+  switch, 126.32/126.32 ms for an uncached switch, and 81.55/133.77 ms for a
+  six-file rapid-selection drain. The largest two-file preview cache was
+  8.53 MB and the process ended at 28.79 MB physical footprint after a
+  155.57 MB process-lifetime peak;
 
 These numbers are diagnostic, not release claims. `ru_maxrss` and Mach
 `resident_size` include reusable pages and are not live-memory gates; use
@@ -76,8 +83,7 @@ differ.
 
 The next bounded measurements are:
 
-1. p50/p95 provisional paint, authoritative replacement, cached/uncached
-   switching, and rapid-selection drain;
+1. preview-cache physical footprint at depths 2, 8, and 32;
 2. an app-path ten-file sequential export with cancellation latency and
    post-run memory checks.
 
@@ -90,10 +96,10 @@ the one-full-resolution-RAW-at-a-time bound.
 | Area | Current behavior |
 |---|---|
 | Import | Drag/drop, file picker, Finder Open With, standard PNG/JPEG/BMP/TIFF decode, and LibRaw-backed camera RAW decode. |
-| First paint | RAW embedded thumbnails and standard images use bounded provisional previews before authoritative background replacement. Orientation remains stable across the swap. |
-| Processing | Color/B&W negative and slide startup classification, RawTherapee-compatible power-law inversion, a reference-derived Kodachrome-like adaptive look, an optional density pipeline, film-base measurement, flat field, protected color and tone controls with center-weighted UI response and pipeline-calibrated tone references, shape-preserving overall/per-channel curves, color wheels, neutral-white handling for clipped near-zero holder pixels, automatic frame detection, a two-click horizontal/vertical straighten guide, a post-straighten drag-box crop, a direct four-corner perspective crop grid, live full-resolution output dimensions, frame, and aspect ratio. |
-| Preview | A bounded 16-bit Core Image/Metal still renderer uses latest-value-wins scheduling and is the primary interactive development target on supported MacBook Pro hardware. X-Trans RAW previews use one-pass full-mosaic interpolation followed by immediate 2× downsampling; this preserves the bounded cached shape without exposing LibRaw's incomplete half-size X-Trans output on bright frames. CPU rendering remains the deterministic reference, CI/headless path, and fallback for preview features that have not moved to GPU yet. |
-| Editing state | Per-file settings, named presets, a built-in Kodachrome-like Auto action, system-clipboard copy/paste, reset, edited markers, apply-to-all-open-files, and configurable 2/4/8/16/32-session lookahead cache. Transferred looks preserve target crop/orientation and measured film-base state. |
+| First paint | RAW embedded thumbnails and ImageIO standard-image thumbnails decode directly to at most 1000px off the main actor. A separate 256px proxy drives classification and median calibration before the first filtered render. |
+| Processing | Color/B&W negative and slide startup classification, RawTherapee-compatible power-law inversion, a reference-derived Kodachrome-like adaptive look, an optional density pipeline, film-base measurement, flat field, protected color and tone controls with center-weighted UI response and pipeline-calibrated tone references, shape-preserving overall/per-channel curves, color wheels, neutral-white handling for clipped near-zero holder pixels, automatic frame detection, a centered two-click horizontal/vertical straighten guide, an immediately visible post-straighten drag-box crop with full-canvas replacement and reset, a direct four-corner perspective crop grid, live full-resolution output dimensions, frame, and aspect ratio. |
+| Preview | The interactive contract is a bounded 16-bit 1000px display source plus a 256px analysis source. Embedded RAW pixels are fast previews, not authoritative RAW output. The Core Image/Metal renderer uses latest-value-wins scheduling; CPU remains the reference and fallback. |
+| Editing state | Per-file settings, named presets, a built-in Kodachrome-like Auto action, one-step removal of the last applied preset without resetting geometry, system-clipboard copy/paste, reset, edited markers, apply-to-all-open-files, and configurable 2/4/8/16/32-file lookahead. Lookahead caches preview sessions only and is bounded by count and 256 MiB. |
 | Export | TIFF, JPEG, PNG, and processed-RGB DNG; individual and lazy memory-bounded batch-all workflows; collision-safe names; partial-file cleanup; progress, per-file errors, queued cancellation, and append-selected during an active sequential run. |
 | Dust | Native parity-tested candidate-mask detection and a non-destructive aligned overlay. Dust removal is not applied to preview or export. |
 | Packaging | Self-contained app/ZIP assembly, embedded non-system libraries, bundle-relative load paths, icon/document registration, hardened-runtime signing support, local bundle validation, archive extraction/revalidation, and local packaged launch. |
@@ -109,7 +115,8 @@ and command details.
 Exercise the actual packaged app, not only engine entry points:
 
 - import representative standard images and RAWs;
-- wait for provisional-to-authoritative replacement and verify orientation;
+- verify bounded corrected-preview orientation against the reopened
+  full-resolution export;
 - apply default power-law, density/flat-field, crop/perspective/frame, and saved
   settings workflows;
 - export TIFF, JPEG, PNG, and DNG, then reopen and inspect dimensions, pixels,
@@ -190,7 +197,7 @@ Use the [native release runbook](native-release.md) with the final candidate:
 
 ## Verification Summary
 
-- 331 native tests across 19 files in the current working tree.
+- 359 native tests across 21 files in the current working tree.
 - Frozen Python-generated fixtures cover shared numerical behavior.
 - Production CPU/GPU correction comparisons cover 2,725 channel comparisons
   with zero failures and a maximum difference of 2/255.

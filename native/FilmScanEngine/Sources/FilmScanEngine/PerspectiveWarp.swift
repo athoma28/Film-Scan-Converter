@@ -139,8 +139,8 @@ public enum PerspectiveTransform {
     let outputWidth = dimensions.width
     let outputHeight = dimensions.height
     let homography: [Float] = [
-      Float(cosAngle), Float(-sinAngle), Float(centerX - minX - cosAngle * centerX + sinAngle * centerY),
-      Float(sinAngle), Float(cosAngle), Float(centerY - minY - sinAngle * centerX - cosAngle * centerY),
+      Float(cosAngle), Float(-sinAngle), Float(-minX - cosAngle * centerX + sinAngle * centerY),
+      Float(sinAngle), Float(cosAngle), Float(-minY - sinAngle * centerX - cosAngle * centerY),
       0, 0, 1,
     ]
     return warpPerspective(

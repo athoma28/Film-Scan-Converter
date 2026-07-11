@@ -28,8 +28,8 @@ The native application is the primary product. It provides:
    A bounded preview appears first for large files, while the inspector header
    reports full-resolution output dimensions from file metadata. That readout
    updates after crop, rotation, and straightening; it does not report the
-   preview proxy size. Standard-image orientation remains stable across the
-   provisional-to-authoritative swap.
+   preview proxy size. Browsing keeps this bounded source; full-resolution RAW
+   decoding happens independently during export.
 3. New files are automatically classified as color negative, B&W negative, or
    slide. Review and adjust the film mode and film negative preset as needed.
 4. Adjust corrections in the inspector panel: orientation, white balance,
@@ -44,14 +44,19 @@ The native application is the primary product. It provides:
    Corrections are saved automatically for that source file and restored the
    next time the same path is imported.
 5. Use the Settings section to copy or paste a look, or save, apply, and delete
-   named presets. Transferred looks keep the destination scan's rotation, crop,
-   and measured film-base state.
+   named presets. After applying a named preset or **Kodachrome-like Auto**, use
+   its **Remove** action to restore the adjustments from immediately before the
+   preset without resetting crop or orientation. Transferred looks keep the
+   destination scan's rotation, crop, and measured film-base state.
 6. In Film Base, optionally load a matching flat field and measure a clear,
    unexposed film edge automatically or by dragging over it. This enables the
    measured density pipeline for negative conversion.
 7. In Film Frame, choose **Straighten**, click two points along a horizon or
    vertical edge, and the app rotates the canvas to make that guide horizontal
-   or vertical. Choose **Crop** and drag a box over the area to keep. Tune the
+   or vertical. Choose **Crop** and drag a box over the area to keep; the preview
+   switches to the cropped canvas immediately. Choose **Crop** again to reveal
+   the whole straightened canvas and replace the crop, or use **Reset Crop** to
+   remove it. Tune the
    dark/light thresholds and choose **Detect Frame** for automatic frame
    detection, or use **Adjust Perspective** for a four-corner correction.
    Preview, the full-resolution dimension readout, and export use the same

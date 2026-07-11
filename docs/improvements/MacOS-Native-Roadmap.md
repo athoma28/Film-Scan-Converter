@@ -60,11 +60,16 @@ Completed evidence:
    the 40.19 MP writer intermediate, reduced the ten-file median packing
    interval from 29.73 ms to 22.88 ms (23.0%), and preserved all ten output byte
    counts and SHA-256 hashes.
+4. A reproducible release-mode app-path benchmark now covers first corrected
+   paint, cached and uncached switching, six-file rapid-selection drain,
+   preview-cache bytes, and Mach physical footprint. On the local six-RAF
+   corpus, three-repetition p50/p95 results were 50.71/63.72 ms, 14.57/83.98
+   ms, 126.32/126.32 ms, and 81.55/133.77 ms respectively. No result exposes a
+   new dominant interactive latency seam.
 
 Remaining deliverables:
 
-1. p50/p95 first corrected pixels, authoritative replacement, cached/uncached
-   switching, and rapid-selection drain;
+1. preview-cache physical footprint at depths 2, 8, and 32;
 2. an app-path ten-file sequential export result including cancellation latency
    and post-run physical footprint;
 3. no further engine optimization in this cycle unless those remaining
@@ -85,7 +90,8 @@ Acceptance:
 Build a release-candidate matrix around the actual app path:
 
 - standard image plus representative RAW import;
-- provisional-to-authoritative replacement with stable orientation;
+- bounded corrected-preview orientation matching reopened full-resolution
+  exports;
 - default power-law and density/flat-field processing;
 - automatic frame detection, interactive crop/straighten adjustment,
   perspective crop, frame, presets, copy/paste, and relaunch restoration;

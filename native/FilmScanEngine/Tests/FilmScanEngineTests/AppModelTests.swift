@@ -14,7 +14,7 @@ private let appModelRepositoryRoot = URL(fileURLWithPath: #filePath)
 
 private var appModelRawCorpusAvailable: Bool {
   FileManager.default.fileExists(
-    atPath: appModelRepositoryRoot.appending(path: "sample-raw/DSCF2422.RAF").path
+    atPath: appModelRepositoryRoot.appending(path: "sample-raw/DSCF2819.RAF").path
   )
 }
 
@@ -41,6 +41,14 @@ struct AppModelTests {
         "Standard Preview Decode",
         "Authoritative Replacement",
         "First Corrected Preview",
+        "Selection Received",
+        "Metadata and Dimensions",
+        "1000px Conversion",
+        "Classification and Median Calibration",
+        "Preview Renderer Setup",
+        "GPU Render",
+        "Display Publication",
+        "RAW Detail Queue Delay",
       ])
   }
 
@@ -331,6 +339,135 @@ struct AppModelTests {
       URL(fileURLWithPath: "/tmp/scan.tiff")))
   }
 
+  @Test(
+    "Power-law export recalibrates film-base medians from export pixels",
+    arguments: [FilmType.colourNegative, .blackAndWhiteNegative]
+  )
+  func exportRecalibratesFilmBaseMedians(filmType: FilmType) throws {
+    var parameters = ProcessingParameters()
+    parameters.filmType = filmType
+    parameters.filmNegativeParams = .colourNegative
+    parameters.filmNegativeParams.measuredMedians = BGRChannelValues(
+      blue: 60_000, green: 8_000, red: 60_000)
+    let decoded = UInt16Image(
+      width: 4,
+      height: 4,
+      channels: 3,
+      pixels: Array(repeating: [UInt16(12_000), 24_000, 36_000], count: 16).flatMap { $0 }
+    )
+
+    let exportParameters = AppModel.parametersForExport(parameters, decodedImage: decoded)
+    let medians = try #require(exportParameters.filmNegativeParams.measuredMedians)
+
+    #expect(medians == BGRChannelValues(blue: 12_000, green: 24_000, red: 36_000))
+    #expect(parameters.filmNegativeParams.measuredMedians?.blue == 60_000)
+  }
+
+  @Test(
+    "Export preserves calibration outside the power-law negative path",
+    arguments: [FilmType.cropOnly, .slide]
+  )
+  func exportPreservesCalibrationForOtherFilmTypes(filmType: FilmType) {
+    var parameters = ProcessingParameters()
+    parameters.filmType = filmType
+    parameters.filmNegativeParams = .colourNegative
+    parameters.filmNegativeParams.measuredMedians = BGRChannelValues(
+      blue: 60_000, green: 8_000, red: 60_000)
+    let decoded = UInt16Image(
+      width: 1, height: 1, channels: 3, pixels: [12_000, 24_000, 36_000])
+
+    let exportParameters = AppModel.parametersForExport(parameters, decodedImage: decoded)
+
+    #expect(exportParameters == parameters)
+  }
+
+  @Test("Export preserves density-pipeline film-base calibration")
+  func exportPreservesDensityPipelineCalibration() {
+    var parameters = ProcessingParameters()
+    parameters.filmType = .colourNegative
+    parameters.filmNegativeParams = .colourNegative
+    parameters.filmNegativeParams.measuredMedians = BGRChannelValues(
+      blue: 60_000, green: 8_000, red: 60_000)
+    parameters.densityPipelineEnabled = true
+    let decoded = UInt16Image(
+      width: 1, height: 1, channels: 3, pixels: [12_000, 24_000, 36_000])
+
+    let exportParameters = AppModel.parametersForExport(parameters, decodedImage: decoded)
+
+    #expect(exportParameters == parameters)
+  }
+
+  @Test("Export preserves disabled and non-color calibration inputs")
+  func exportPreservesUnsupportedCalibrationInputs() {
+    var disabled = ProcessingParameters()
+    disabled.filmType = .colourNegative
+    disabled.filmNegativeParams.enabled = false
+    let color = UInt16Image(
+      width: 1, height: 1, channels: 3, pixels: [12_000, 24_000, 36_000])
+    #expect(AppModel.parametersForExport(disabled, decodedImage: color) == disabled)
+
+    var grayscaleParameters = ProcessingParameters()
+    grayscaleParameters.filmType = .blackAndWhiteNegative
+    grayscaleParameters.filmNegativeParams = .blackAndWhite
+    let grayscale = UInt16Image(width: 2, height: 1, channels: 1, pixels: [12_000, 24_000])
+    #expect(
+      AppModel.parametersForExport(grayscaleParameters, decodedImage: grayscale)
+        == grayscaleParameters)
+  }
+
+  @Test("App export rejects stale preview calibration end to end")
+  func appExportRejectsStalePreviewCalibrationEndToEnd() async throws {
+    let workDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-export-calibration-\(UUID().uuidString)", isDirectory: true)
+    let destination = workDirectory.appendingPathComponent("export", isDirectory: true)
+    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDirectory) }
+
+    let input = workDirectory.appendingPathComponent("negative.tiff")
+    var sourcePixels: [UInt16] = []
+    for index in 0..<64 {
+      sourcePixels.append(UInt16(9_000 + index * 71))
+      sourcePixels.append(UInt16(21_000 + index * 43))
+      sourcePixels.append(UInt16(37_000 + index * 29))
+    }
+    let source = UInt16Image(
+      width: 8,
+      height: 8,
+      channels: 3,
+      pixels: sourcePixels
+    )
+    try source.write(to: input, format: .tiff, parameters: ExportParameters(format: .tiff))
+
+    var stale = ProcessingParameters()
+    stale.filmType = .colourNegative
+    stale.filmNegativeParams = .colourNegative
+    stale.filmNegativeParams.measuredMedians = BGRChannelValues(
+      blue: 60_000, green: 8_000, red: 60_000)
+    let settingsStore = PerFileSettingsStore(baseDirectory: workDirectory)
+    try settingsStore.save(.init(
+      settingsByPath: [input.standardizedFileURL.path: stale], editedPaths: []))
+
+    let model = AppModel(settingsStore: settingsStore)
+    model.importFiles([input])
+    try await waitUntil { model.previewImage != nil }
+    model.setExportDestinationDirectory(destination)
+    model.setExportFormat(.png)
+    model.exportSelected()
+    try await waitUntil { !model.isExporting && model.exportProgressCurrent == 1 }
+
+    let exported = try StandardImageDecoder.decode(
+      destination.appendingPathComponent("negative.png"))
+    let decodedSource = try StandardImageDecoder.decode(input)
+    let expectedParameters = AppModel.parametersForExport(stale, decodedImage: decodedSource)
+    let expected = FilmProcessing.correctedPreview(
+      image: decodedSource, parameters: expectedParameters)
+    let staleOutput = FilmProcessing.correctedPreview(image: decodedSource, parameters: stale)
+
+    #expect(model.exportErrors.isEmpty)
+    #expect(exported == expected)
+    #expect(exported != staleOutput)
+  }
+
   @Test("Crop-only export applies the interactive perspective crop")
   func cropOnlyExportAppliesCrop() async throws {
     let workDirectory = FileManager.default.temporaryDirectory
@@ -394,6 +531,47 @@ struct AppModelTests {
 
     #expect(model.previewImage != nil)
     #expect(model.previewStatistics.sampleCount > 0)
+  }
+
+  @Test("Manual crop immediately changes the displayed preview canvas")
+  func manualCropUpdatesDisplayedPreview() async throws {
+    let model = AppModel()
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input",
+        withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"
+      )
+    )
+
+    model.importFiles([input])
+    try await waitUntil { model.previewImage != nil && !model.isRendering }
+    let originalSize = try #require(model.previewImage?.size)
+    let displayedBeforeCrop = model.renderStats.displayedRenders
+
+    model.setManualCrop(NormalizedCropRect(
+      x: 1.0 / 3.0, y: 0.5, width: 1.0 / 3.0, height: 0.5))
+    try await waitUntil {
+      model.renderStats.displayedRenders > displayedBeforeCrop && !model.isRendering
+    }
+
+    let croppedSize = try #require(model.previewImage?.size)
+    #expect(croppedSize.width < originalSize.width)
+    #expect(croppedSize.height < originalSize.height)
+
+    let displayedBeforeReenteringCrop = model.renderStats.displayedRenders
+    model.beginManualCropEditing()
+    try await waitUntil {
+      model.renderStats.displayedRenders > displayedBeforeReenteringCrop && !model.isRendering
+    }
+    #expect(model.previewImage?.size == originalSize)
+
+    let displayedBeforeCancelingCrop = model.renderStats.displayedRenders
+    model.endManualCropEditing()
+    try await waitUntil {
+      model.renderStats.displayedRenders > displayedBeforeCancelingCrop && !model.isRendering
+    }
+    #expect(model.previewImage?.size == croppedSize)
   }
 
   @Test("Reset corrections clears crop processing and inspector state")
@@ -473,8 +651,8 @@ struct AppModelTests {
     #expect(!model.rebateCandidates.isEmpty)
     #expect(
       model.rebateCandidates.allSatisfy {
-        $0.region.x + $0.region.width <= 640
-          && $0.region.y + $0.region.height <= 640
+        $0.region.x + $0.region.width <= AppModel.displayPreviewMaxDimension
+          && $0.region.y + $0.region.height <= AppModel.displayPreviewMaxDimension
       })
   }
 
@@ -538,27 +716,23 @@ struct AppModelTests {
   }
 
   @Test(
-    "RAW import shows embedded thumbnail before full decode swaps in",
-    .enabled(if: appModelRawCorpusAvailable, "sample-raw corpus unavailable; AppModel RAW thumbnail-swap test skipped")
+    "RAW import keeps the embedded 1000px preview as the interactive source",
+    .enabled(if: appModelRawCorpusAvailable, "sample-raw corpus unavailable; AppModel RAW preview test skipped")
   )
-  func rawImportShowsThumbnailBeforeFullDecodeSwap() async throws {
-    let raw = repositoryRoot.appending(path: "sample-raw/DSCF2422.RAF")
+  func rawImportUsesFastEmbeddedPreview() async throws {
+    let raw = repositoryRoot.appending(path: "sample-raw/DSCF2819.RAF")
 
     let model = AppModel()
     model.importFiles([raw])
 
-    try await waitUntil(timeout: .seconds(3)) {
-      model.isShowingEmbeddedRawPreview && model.previewImage != nil && model.decodedImage == nil
-    }
-
-    try await waitUntil(timeout: .seconds(10)) {
-      !model.isShowingEmbeddedRawPreview && model.decodedImage != nil && model.previewImage != nil
-    }
+    try await waitUntil(timeout: .seconds(3)) { model.previewImage != nil }
+    #expect(model.previewSourceKind == .embeddedRAW)
     #expect(model.decodedImage?.channels == 3)
+    #expect(max(model.decodedImage?.width ?? 0, model.decodedImage?.height ?? 0) <= 1_000)
   }
 
-  @Test("Standard image import shows a bounded preview before authoritative decode swaps in")
-  func standardImportShowsBoundedPreviewBeforeFullDecodeSwap() async throws {
+  @Test("Standard image import keeps a bounded thumbnail and full-resolution geometry")
+  func standardImportUsesBoundedPreview() async throws {
     let directory = FileManager.default.temporaryDirectory
       .appendingPathComponent("fsc-standard-swap-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -574,24 +748,18 @@ struct AppModelTests {
     let model = AppModel()
     model.importFiles([input])
 
-    #expect(model.isShowingProvisionalPreview)
-    #expect(model.previewImage == nil || model.decodedImage == nil)
+    try await waitUntil { model.previewImage != nil }
+    #expect(model.previewSourceKind == .standardThumbnail)
     let provisionalDimensions = try #require(model.selectedImageDimensions)
     #expect(provisionalDimensions.provisional)
-    #expect(max(provisionalDimensions.width, provisionalDimensions.height) <= 640)
+    #expect(max(provisionalDimensions.width, provisionalDimensions.height) <= 1_000)
     model.setFilmType(.cropOnly)
-    try await waitUntil {
-      !model.isShowingProvisionalPreview
-        && model.decodedImage != nil
-        && model.previewStatistics.sampleCount > 0
-    }
-    #expect(model.decodedImage?.width == 1_200)
-    #expect(model.decodedImage?.height == 800)
+    try await waitUntil { model.previewStatistics.sampleCount > 0 }
+    #expect(model.decodedImage?.width == 1_000)
+    #expect(model.decodedImage?.height == 667)
     #expect(model.parameters.filmType == .cropOnly)
     let fullDimensions = try #require(model.selectedImageDimensions)
-    #expect(!fullDimensions.provisional)
-    #expect(fullDimensions.width == 1_200)
-    #expect(fullDimensions.height == 800)
+    #expect(fullDimensions.provisional)
     #expect(model.selectedOutputDimensions == PixelDimensions(width: 1_200, height: 800))
     model.setManualCrop(NormalizedCropRect(x: 0.25, y: 0.25, width: 0.5, height: 0.5))
     #expect(model.selectedCanvasDimensions == PixelDimensions(width: 600, height: 400))
@@ -868,6 +1036,7 @@ struct AppModelTests {
         subdirectory: "Fixtures/decode_png8"))
     model.importFiles([input])
     try await waitUntil { model.previewImage != nil && !model.isRendering }
+    model.setFilmType(.slide)
     model.rotateClockwise()
     try await waitUntil { !model.isRendering }
     let submissionsBeforeApply = model.renderStats.submittedSnapshots
@@ -880,6 +1049,15 @@ struct AppModelTests {
     #expect(model.parameters.photoAdjustments.vibrance == 0.25)
     #expect(model.renderStats.submittedSnapshots == submissionsBeforeApply + 1)
     #expect(model.settingsStatus == "Applied Kodachrome-like Auto.")
+    #expect(model.appliedPresetName == "Kodachrome-like Auto")
+
+    model.removeAppliedPreset()
+
+    #expect(model.parameters.filmType == .slide)
+    #expect(model.parameters.rotation == 1)
+    #expect(model.parameters.photoAdjustments.vibrance == 0)
+    #expect(model.appliedPresetName == nil)
+    #expect(model.settingsStatus.contains("restored the previous adjustments"))
   }
 
   @Test("Preview cache limit persists, expands lookahead, and trims immediately")
@@ -905,6 +1083,8 @@ struct AppModelTests {
     model.setPreviewCacheLimit(3)
     model.importFiles(files)
     try await waitUntil { model.previewCacheSessionCount == 3 }
+    #expect(model.previewCachePhysicalBytes > 0)
+    #expect(model.previewCachePhysicalBytes <= AppModel.previewCacheByteLimit)
 
     model.setPreviewCacheLimit(2)
     #expect(model.previewCacheSessionCount == 2)
@@ -1094,7 +1274,6 @@ struct AppModelTests {
       try await Task.sleep(for: .milliseconds(10))
     }
   }
-
   private var repositoryRoot: URL {
     appModelRepositoryRoot
   }

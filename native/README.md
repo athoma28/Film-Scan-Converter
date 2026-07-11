@@ -80,11 +80,26 @@ nearest-rank p95 totals, stages, decode substages, packed-pixel bytes, current
 and peak physical footprint, reusable bytes, legacy resident-memory checkpoints,
 and default-zone live/reserved heap checkpoints after per-sample release.
 Physical footprint is the live-memory gate; resident size can include clean
-reusable pages. The executable covers engine
-decode/process/write. Use the app's correlated signposts in Instruments for
-settings, classification, flat-field,
-queue, destination, cancellation, and UI timing. See the
+reusable pages. The executable covers engine decode/process/write. Use the
+app's correlated signposts in Instruments for deeper settings, classification,
+flat-field, queue, destination, cancellation, and UI timing. See the
 [40 MP benchmark notes](../docs/performance/40mp-export.md).
+
+Run the opt-in real-app preview and switching benchmark:
+
+```sh
+RUN_APP_PATH_PERFORMANCE_TESTS=1 \
+APP_PATH_BENCHMARK_REPETITIONS=3 \
+APP_PATH_BENCHMARK_OUTPUT=/tmp/film-scan-app-path.json \
+CLANG_MODULE_CACHE_PATH=/tmp/film-scan-clang-cache \
+SWIFTPM_MODULECACHE_OVERRIDE=/tmp/film-scan-swiftpm-cache \
+swift test --disable-sandbox -c release \
+  --package-path native/FilmScanEngine --no-parallel \
+  --filter AppPathPerformanceTests
+```
+
+This uses the local RAF corpus, emits a compact JSON latency/memory report, and
+writes no exports.
 
 Run the RAW and preview tools:
 
@@ -129,9 +144,16 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
 ## Implementation Contracts
 
 - Keep interactive previews bounded and latest-value-wins.
+- Use explicit image contracts: a 1000px display source, a 256px analysis
+  source, optional selected-file RAW detail for validated features, and an
+  independent full-resolution export decode.
+- Keep lookahead preview-only, LRU, and bounded by both file count and bytes.
 - Keep adaptive-look analysis bounded independently of imported image size;
   Kodachrome-like Auto currently analyzes at most a 1024-pixel long edge and
   stores a concrete five-point curve for deterministic preview/export parity.
+- Keep a session-local rollback snapshot when applying a named preset or
+  Kodachrome-like Auto so the look can be removed without resetting crop or
+  orientation.
 - Treat manual film-frame geometry as a persisted, validated clockwise
   four-corner quadrilateral. Preview, dust-overlay alignment, density flat
   field, and export must use the same CPU perspective warp; this corrects one
@@ -141,6 +163,10 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   flip. Apply the simple normalized canvas crop after that expanded rotation.
   Preview, full-resolution dimension prediction, flat field, dust overlay, and
   export must preserve this geometry order.
+- Exclude manual crop from the Metal correction-only fast path until that path
+  implements canvas cropping; committed crops must update the preview canvas
+  immediately. While the Crop tool is active, preview the full post-straighten
+  canvas so the next drag replaces the existing crop.
 - Treat the Core Image/Metal renderer as the primary interactive development
   path on supported MacBook Pro hardware. Keep CPU rendering correct for
   deterministic tests, CI/headless runs, export/reference behavior, and fallback

@@ -6,10 +6,17 @@ intended to identify the dominant stage before implementation changes are made.
 It is not a complete app-path benchmark: stored-settings resolution, automatic
 classification, flat-field lookup, destination reservation, queue management,
 and app-level cancellation/error reporting remain outside this executable.
-The production app now supplies separate correlated signposts from queue wait
-through cleanup; use Instruments alongside this executable when measuring the
-whole workflow. Destination reservation remains app-only work outside the
-engine benchmark and is not yet a separately timed interval.
+The production app supplies separate correlated signposts from queue wait
+through cleanup. A release-mode app-path benchmark now covers selection and
+preview-cache latency without requiring Instruments; Instruments remains useful
+for stage-level traces. Destination reservation remains app-only work outside
+the engine benchmark and is not yet a separately timed interval.
+
+Interactive loading and export have separate image contracts. Browsing and
+editing use a 1000px embedded-RAW or ImageIO preview with a 256px analysis
+proxy. The preview cache never owns full-resolution decoded files. Export
+always decodes on demand; camera-scan RAW export retains the final-quality
+three-pass X-Trans path measured below.
 
 App cancellation is cooperative at safe stage boundaries: starting an export
 cancels speculative lookahead decoding, cancellation prevents completed decode
@@ -74,8 +81,47 @@ live/reserved snapshot, as a secondary classification aid. All-zone `vmmap`
 snapshots of the sequential run identified the apparent growth as
 `MALLOC_LARGE_REUSABLE` and empty allocator regions: those pages increased the
 resident count without increasing dirty live memory or physical footprint.
-These engine-level readings still do not replace app preview-cache measurement
-or correlated app-path traces.
+These engine-level readings do not replace the app preview-cache depth
+comparison or correlated stage-level app-path traces.
+
+## App-Path Preview Baseline
+
+The opt-in `AppPathPerformanceTests` benchmark exercises the real `AppModel`,
+embedded-RAW thumbnail extraction, 1000px display source, 256px analysis
+source, production preview renderer, lookahead cache, and latest-selection-wins
+drain. It records nearest-rank p50/p95 latency plus Mach physical footprint and
+the maximum logical preview-cache byte count. It writes no exports.
+
+Run it in release mode with writable Swift caches:
+
+```sh
+RUN_APP_PATH_PERFORMANCE_TESTS=1 \
+APP_PATH_BENCHMARK_REPETITIONS=3 \
+APP_PATH_BENCHMARK_OUTPUT=/tmp/film-scan-app-path.json \
+CLANG_MODULE_CACHE_PATH=/tmp/film-scan-clang-cache \
+SWIFTPM_MODULECACHE_OVERRIDE=/tmp/film-scan-swiftpm-cache \
+swift test --disable-sandbox -c release \
+  --package-path native/FilmScanEngine --no-parallel \
+  --filter AppPathPerformanceTests
+```
+
+On 2026-07-11, a Mac16,7 ran three rotated repetitions over six local RAFs:
+
+| App-path interval | p50 | nearest-rank p95 |
+|---|---:|---:|
+| First corrected paint | 50.71 ms | 63.72 ms |
+| Cached next-file switch | 14.57 ms | 83.98 ms |
+| Uncached switch | 126.32 ms | 126.32 ms |
+| Six-file rapid-selection drain | 81.55 ms | 133.77 ms |
+
+The largest observed two-file preview cache was 8,529,312 bytes. Process
+physical footprint ended at 28,787,792 bytes after a 155,567,136-byte
+process-lifetime peak; reusable bytes were 376,029,184 and are not counted as
+live physical memory. With three repetitions, p95 is the slowest sample, so
+these are compact regression baselines rather than population-tail claims.
+The bounded preview architecture has no normal authoritative replacement
+interval: browsing keeps the preview source, while export independently decodes
+the full-resolution camera RAW.
 
 ## Sequential Memory Baseline
 
@@ -124,8 +170,9 @@ The range across RAFs confirms that final-quality camera-scan decode remains
 the dominant stage and varies materially with source content. PNG is writer
 bound; TIFF's LZW finalize is its only substantial non-decode component. The
 compact-buffer slice below reduces writer memory traffic without claiming to
-change that dominant-stage conclusion. Further engine optimization waits on
-the remaining app-path latency evidence.
+change that dominant-stage conclusion. The first app-path latency baseline is
+now complete; further engine optimization waits on the remaining cache-depth
+and sequential-export evidence.
 
 ## Compact TIFF Packing Optimization
 
@@ -198,7 +245,7 @@ Both outputs were 179,226,416 bytes with SHA-256
 First-run peak RSS was effectively unchanged (1,210,269,696 versus
 1,211,367,424 bytes). The later physical-footprint instrumentation supersedes
 RSS as the live-memory gate and the corrected ten-file sequence closes that
-engine-level question; app preview-cache measurement remains open.
+engine-level question; preview-cache depth comparison remains open.
 
 ## Decode-Baseline Correction
 
@@ -234,23 +281,26 @@ input and a regression gate:
    processed-image creation, and the Swift copy/swizzle boundary. On the first
    decomposed run, three-pass X-Trans demosaic consumed 19.710 of 21.678 decode
    seconds. Keep these fields in every repeated/corpus report.
-3. **App-path coverage.** Instrumentation complete. Each export item carries one
+3. **App-path coverage.** Instrumentation and the first reproducible latency
+   baseline are complete. Each export item carries one
    correlation ID across queue wait, settings/classification resolution, decode,
    flat-field lookup, correction, crop/perspective/frame geometry,
-   write/finalize, and cleanup. Loading also spans thumbnail or bounded standard
-   preview decode, first corrected pixels, and authoritative replacement. Next,
-   capture Instruments traces for a default power-law correction, density plus
-   flat field, and a heavily edited crop/perspective/frame case.
+   write/finalize, and cleanup. Loading spans selection-to-first-corrected-paint,
+   thumbnail extraction, 1000px conversion, and bounded analysis. The benchmark
+   records first paint, cached/uncached switching, rapid-selection drain, cache
+   bytes, and physical footprint. Use Instruments only when a later regression
+   needs deeper render-stage attribution.
 4. **Memory envelope.** Engine gate complete. The corrected ten-file report
    records physical footprint, peak physical footprint, reusable bytes, legacy
    resident size, and default-zone statistics. Post-release physical footprint
    fell from 52.74 MB to 42.78 MB and peak stayed at 686.11 MB; the prior RSS
    growth was reclaimable allocator memory. Next measure app preview-cache
    depths 2, 8, and 32 with the same physical-footprint contract.
-5. **Large-file handling.** Record p50/p95 for first corrected provisional
-   pixels, authoritative replacement, cached next-file switching, uncached
-   switching, and rapid-selection queue drain. Record peak memory for the same
-   runs.
+5. **Large-file handling.** First corrected paint, cached and uncached
+   switching, rapid-selection drain, and process memory now have a reproducible
+   release baseline. The bounded browsing contract has no authoritative
+   replacement stage. Next compare preview-cache depths 2, 8, and 32 using the
+   same physical-footprint fields.
 6. **Optimization slice.** Two safe secondary-stage slices are complete:
    multicore fused power-law correction is 74.9% faster at the measured median,
    and compact TIFF packing removes 80.37 MB while cutting the ten-file median

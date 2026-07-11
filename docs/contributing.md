@@ -17,11 +17,12 @@ starting native work, read
 source for verified progress, limitations, and release position. Use the
 [product roadmap](improvements/MacOS-Native-Roadmap.md) for ordered work.
 
-The current native priority is the bounded 40 MP measurement cycle, followed by
-packaged-app correctness, essential editing workflow, and final distribution
-proof. Additional processing or SwiftUI controls must close a roadmap gate or
-be supported by concrete user evidence. Standalone prototypes are not product
-progress.
+The current native priority is to finish the bounded measurement cycle with
+preview-cache depth and app-path sequential-export memory/cancellation evidence,
+followed by packaged-app correctness, essential editing workflow, and final
+distribution proof. Additional processing or SwiftUI controls must close a
+roadmap gate or be supported by concrete user evidence. Standalone prototypes
+are not product progress.
 
 Useful contribution areas:
 

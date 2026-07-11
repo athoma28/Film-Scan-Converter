@@ -121,7 +121,8 @@ the source checkout:
 2. Move the app to `/Applications`.
 3. Confirm the first launch passes Gatekeeper without a bypass.
 4. Import and preview one standard image and representative supported RAWs;
-   verify provisional-to-authoritative replacement does not change orientation.
+   verify each bounded corrected preview matches the orientation of its reopened
+   full-resolution export.
 5. Exercise the default power-law path, density/flat-field path, crop,
    perspective, frame, preset, and copy/paste behavior.
 6. Export TIFF, JPEG, PNG, and DNG outputs and reopen them. Verify dimensions,

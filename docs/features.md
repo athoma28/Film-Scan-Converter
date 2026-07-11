@@ -56,11 +56,16 @@ features.
 ### Batch And Settings Workflow
 
 - Per-file correction settings persisted across launches.
-- Named presets and versioned system-clipboard copy/paste.
+- Named presets and versioned system-clipboard copy/paste, with a one-step
+  remove action that restores the adjustments from before the last applied
+  preset while retaining frame-specific geometry.
 - A built-in **Kodachrome-like Auto** look keeps the standard color-negative
   inversion, then derives a per-frame tone curve from a bounded center-frame
   analysis and adds modest protected saturation/vibrance. It preserves the
   current rotation, flip, straighten, and crop geometry.
+- Manual crop updates the preview canvas immediately. Re-entering Crop reveals
+  the whole straightened canvas for a replacement selection, and Reset Crop
+  removes the committed crop.
 - Apply the current look to all open files while preserving each target's crop,
   orientation, and measured film-base state.
 - Edited and preview-ready indicators in the browser.

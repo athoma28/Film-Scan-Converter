@@ -14,6 +14,14 @@ enum AppPerformanceStage: String, CaseIterable, Sendable {
   case standardPreviewDecode = "Standard Preview Decode"
   case authoritativeReplacement = "Authoritative Replacement"
   case firstCorrectedPreview = "First Corrected Preview"
+  case selectionReceived = "Selection Received"
+  case metadataRead = "Metadata and Dimensions"
+  case previewConversion = "1000px Conversion"
+  case analysis = "Classification and Median Calibration"
+  case rendererSetup = "Preview Renderer Setup"
+  case gpuRender = "GPU Render"
+  case displayPublication = "Display Publication"
+  case rawDetailQueueDelay = "RAW Detail Queue Delay"
 }
 
 struct AppPerformanceInterval: @unchecked Sendable {
@@ -65,6 +73,14 @@ enum AppPerformanceSignposts {
     case .authoritativeReplacement:
       emit(type, name: "Authoritative Replacement", interval: interval)
     case .firstCorrectedPreview: emit(type, name: "First Corrected Preview", interval: interval)
+    case .selectionReceived: emit(type, name: "Selection Received", interval: interval)
+    case .metadataRead: emit(type, name: "Metadata and Dimensions", interval: interval)
+    case .previewConversion: emit(type, name: "1000px Conversion", interval: interval)
+    case .analysis: emit(type, name: "Classification and Median Calibration", interval: interval)
+    case .rendererSetup: emit(type, name: "Preview Renderer Setup", interval: interval)
+    case .gpuRender: emit(type, name: "GPU Render", interval: interval)
+    case .displayPublication: emit(type, name: "Display Publication", interval: interval)
+    case .rawDetailQueueDelay: emit(type, name: "RAW Detail Queue Delay", interval: interval)
     }
   }
 

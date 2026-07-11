@@ -36,15 +36,16 @@
   adjustment-heavy benchmark includes protected tone/color controls, curves,
   and color wheels. Scheduling contract tests verify coalescing,
   latest-value-wins, cancellation, and bounded backlog.
-- A Metal-backed preview surface and the idle authoritative preview remain
-  deferred (Stage 4).
+- A direct Metal-backed preview surface remains deferred (Stage 4). A separate
+  idle full-resolution replacement is no longer part of the browsing contract;
+  export owns the independent authoritative decode.
 
 ## Next Step
 
 The direct Core Image renderer is verified against the CPU path across 2,655
-comparisons with zero failures and a maximum difference of 2/255. Stage 4
-(Metal-backed preview surface, direct display-path instrumentation, and idle
-authoritative rendering) remains deferred.
+comparisons with zero failures and a maximum difference of 2/255. Stage 4 is
+limited to a direct Metal-backed preview surface and deeper display-path
+instrumentation if measurement shows that work is worthwhile.
 
 ## Original Blocker
 
@@ -62,8 +63,10 @@ There are three causes:
    changes to create a render backlog.
 
 Live bindings, a reusable GPU correction renderer, and a bounded render queue
-now address those causes. The remaining work is direct Metal-backed display,
-end-to-end latency measurement, and idle authoritative rendering.
+now address those causes. End-to-end first-paint and switching latency now has a
+release-mode app-path baseline. Remaining measurement work is preview-cache
+physical footprint at the supported depths and deeper Instruments attribution
+only when a regression exposes a slower stage.
 
 ## Definition Of Done
 
@@ -76,8 +79,8 @@ The still preview is real-time when:
 - a file is decoded and uploaded to the preview renderer once, not once per
   slider event;
 - the interactive preview never blocks the main actor;
-- the full 16-bit CPU pipeline remains the authoritative path for idle
-  verification and final export;
+- the full 16-bit CPU pipeline remains the deterministic verification and final
+  export authority;
 - preview differences from the authoritative render are measured and
   documented.
 
@@ -93,8 +96,8 @@ cannot reproduce the intended controls.
 
 On file selection:
 
-1. Decode the RAW file once into the full-resolution `UInt16Image`.
-2. Build a bounded preview proxy once.
+1. Extract the RAW embedded preview or ImageIO thumbnail directly at 1000px.
+2. Build a separate 256px analysis proxy once.
 3. Upload that proxy once as a GPU-owned image or texture.
 4. Keep the source texture immutable while controls change.
 

@@ -258,6 +258,13 @@ struct ContentView: View {
           "Apply the color-negative profile, then adapt tone and color to the successful reference look."
         )
 
+        if let appliedPresetName = model.appliedPresetName {
+          Button(action: model.removeAppliedPreset) {
+            Label("Remove \(appliedPresetName)", systemImage: "arrow.uturn.backward")
+          }
+          .help("Restore the adjustments from immediately before this preset was applied. Crop and orientation stay unchanged.")
+        }
+
         Picker(
           "Files kept ready",
           selection: Binding(
@@ -269,7 +276,7 @@ struct ContentView: View {
             Text("\(count)").tag(count)
           }
         }
-        .help("Higher values use substantially more memory but make file switching faster.")
+        .help("Keeps 1000px previews ready in the count- and byte-bounded LRU cache; full RAW files are never prefetched.")
 
         HStack {
           TextField("Preset name", text: $presetName)
@@ -810,7 +817,7 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
             }
             Spacer()
-            Button("Clear", action: model.clearManualCrop)
+            Button("Reset Crop", action: model.clearManualCrop)
               .controlSize(.small)
           }
         }
@@ -1168,8 +1175,8 @@ struct ContentView: View {
           isActive: isStraightening,
           imageSize: model.previewImage?.size ?? .zero,
           onGuideCompleted: { deviation in
-            model.straighten(usingGuideDeviation: deviation)
             endStraightening()
+            model.straighten(usingGuideDeviation: deviation)
           }
         )
 
@@ -1177,8 +1184,8 @@ struct ContentView: View {
           isActive: isCropping,
           imageSize: model.previewImage?.size ?? .zero,
           onCropCompleted: { crop in
-            model.cropCurrentCanvas(to: crop)
             endCropping()
+            model.setManualCrop(crop)
           }
         )
       }
@@ -1287,12 +1294,14 @@ struct ContentView: View {
     }
     endPerspectiveEditing()
     endCropping()
+    model.beginManualCropEditing()
     isStraightening = true
   }
 
   private func endStraightening() {
     guard isStraightening else { return }
     isStraightening = false
+    model.endManualCropEditing()
   }
 
   private func toggleCropping() {
@@ -1302,11 +1311,14 @@ struct ContentView: View {
     }
     endPerspectiveEditing()
     endStraightening()
+    model.beginManualCropEditing()
     isCropping = true
   }
 
   private func endCropping() {
+    guard isCropping else { return }
     isCropping = false
+    model.endManualCropEditing()
   }
 
   private func pointText(_ point: PerspectiveCrop.Point) -> String {

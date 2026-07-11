@@ -70,6 +70,19 @@ struct PerspectiveWarpTests {
     #expect(rotated.pixels == [4, 1, 5, 2, 6, 3])
   }
 
+  @Test("Straighten rotation keeps the source centered on the expanded canvas")
+  func straightenRotationCentersSource() {
+    let image = UInt16Image(
+      width: 11, height: 7, channels: 1,
+      pixels: [UInt16](repeating: 40_000, count: 77)
+    )
+
+    let rotated = PerspectiveTransform.rotate(image, clockwiseDegrees: 10)
+    let center = (rotated.height / 2) * rotated.width + rotated.width / 2
+
+    #expect(rotated.pixels[center] > 30_000)
+  }
+
   @Test("Manual canvas crop copies the selected pixel rectangle exactly")
   func manualCanvasCrop() throws {
     let image = UInt16Image(

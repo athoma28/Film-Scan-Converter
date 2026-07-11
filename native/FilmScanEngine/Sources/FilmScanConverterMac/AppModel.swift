@@ -21,8 +21,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var status = "Drop film scans into the window to begin."
   @Published private(set) var renderStats = RenderStats()
   @Published private(set) var previewStatistics = RenderReadyImageStatistics.empty
-  @Published private(set) var isShowingEmbeddedRawPreview = false
-  @Published private(set) var isShowingProvisionalPreview = false
+  @Published private(set) var previewSourceKind: PreviewSourceKind?
   @Published private(set) var exportParameters = ExportParameters()
   @Published private(set) var isExporting = false
   @Published private(set) var exportProgressCurrent = 0
@@ -50,6 +49,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var isDustDetectionRunning = false
   @Published private(set) var dustStatus: String = ""
   @Published private(set) var namedCorrectionPresets: [NamedCorrectionPreset] = []
+  @Published private(set) var appliedPresetName: String?
   @Published private(set) var settingsStatus: String = ""
   @Published private(set) var previewCacheLimit: Int
   @Published private(set) var availableCaptureProfiles: [CaptureProfile] = []
@@ -125,8 +125,12 @@ final class AppModel: ObservableObject {
   private var sameRollFilmTypeHint: FilmType?
   private var previewCache: [String: CachedPreviewSession] = [:]
   private var previewCacheOrder: [String] = []
+  private var previewCacheBytes = 0
   private var previewSource: UInt16Image?
   private var previewRenderer: StillPreviewRenderer?
+  private var isPreviewingUncroppedCanvas = false
+  private var presetRollbacks: [String: CorrectionSettings] = [:]
+  private var appliedPresetNames: [String: String] = [:]
   private var loadTask: Task<Void, Never>?
   private var authoritativeDecodeTask: Task<Void, Never>?
   private var predecodeTask: Task<Void, Never>?
@@ -150,18 +154,21 @@ final class AppModel: ObservableObject {
   // Keep latest-value-wins scheduling bounded while allowing 120 Hz displays
   // to consume the sub-4 ms Metal renderer without an artificial 60 Hz cap.
   private static let renderCoalesceInterval: Duration = .milliseconds(8)
-  nonisolated private static let previewMaxDimension = 640
+  nonisolated static let displayPreviewMaxDimension = 1_000
+  nonisolated static let analysisPreviewMaxDimension = 256
+  nonisolated static let previewCacheByteLimit = 256 * 1_024 * 1_024
 
   var previewCacheSessionCount: Int {
     previewCache.count
   }
 
+  var previewCachePhysicalBytes: Int { previewCacheBytes }
+
   var selectedImageDimensions: (width: Int, height: Int, provisional: Bool)? {
-    if let decodedImage {
-      return (decodedImage.width, decodedImage.height, false)
-    }
     if let previewSource {
-      return (previewSource.width, previewSource.height, true)
+      return (
+        previewSource.width, previewSource.height,
+        previewSourceKind != .rawDetail)
     }
     return nil
   }
@@ -238,8 +245,8 @@ final class AppModel: ObservableObject {
       previewSource = nil
       previewRenderer = nil
       previewStatistics = .empty
-      isShowingEmbeddedRawPreview = false
-      isShowingProvisionalPreview = false
+      previewSourceKind = nil
+      appliedPresetName = nil
       isLoading = false
       sourcePixelDimensions = nil
       cancelPredecode()
@@ -248,6 +255,10 @@ final class AppModel: ObservableObject {
     }
 
     let loadCorrelationID = UUID().uuidString
+    let selectionInterval = AppPerformanceSignposts.begin(
+      .selectionReceived, correlationID: loadCorrelationID,
+      filename: selection.lastPathComponent)
+    AppPerformanceSignposts.end(selectionInterval)
     pendingFirstPreviewInterval = AppPerformanceSignposts.begin(
       .firstCorrectedPreview,
       correlationID: loadCorrelationID,
@@ -256,19 +267,17 @@ final class AppModel: ObservableObject {
 
     isLoading = true
 
-    sourcePixelDimensions = Self.fullResolutionDimensions(of: selection)
-
     cancelPredecode()
     ImportLog.loadSelectionStarted(path: selection.lastPathComponent)
 
     decodedImage = nil
     previewSource = nil
     previewRenderer = nil
-    isShowingEmbeddedRawPreview = false
-    isShowingProvisionalPreview = false
+    previewSourceKind = nil
     let key = settingsKey(selection)
     let hasStoredSettings = settingsByPath[key] != nil
     parameters = settingsByPath[key] ?? ProcessingParameters()
+    appliedPresetName = appliedPresetNames[key]
     cropRect = parameters.cropRect
     perspectiveCrop = parameters.perspectiveCrop
     manualCrop = parameters.manualCrop
@@ -294,142 +303,54 @@ final class AppModel: ObservableObject {
         correlationID: loadCorrelationID,
         filename: selection.lastPathComponent)
       : nil
-    let rawThumbnail = isRaw
-      ? try? RawImageDecoder.extractThumbnail(selection, maxDimension: Self.previewMaxDimension)
-      : nil
-    if let thumbnailInterval { AppPerformanceSignposts.end(thumbnailInterval) }
-
-    if let thumbnail = rawThumbnail {
-      let proxy = thumbnail.image
-      previewSource = proxy
-      previewRenderer = StillPreviewRenderer(image: proxy)
-      isShowingEmbeddedRawPreview = true
-      isShowingProvisionalPreview = true
-      isLoading = false
-      status = "Loading \(selection.lastPathComponent)..."
-      if hasStoredSettings {
-        populateFilmNegativeMedians()
-      }
-      cacheCurrentSession(for: selection)
-      scheduleRender(immediate: true)
-
-      let replacementInterval = AppPerformanceSignposts.begin(
-        .authoritativeReplacement,
-        correlationID: loadCorrelationID,
-        filename: selection.lastPathComponent)
-      authoritativeDecodeTask = Task { [weak self] in
-        defer { AppPerformanceSignposts.end(replacementInterval) }
-        guard let self else { return }
-        do {
-          let decoded = try await self.authoritativeDecoder.decode(selection)
-          try Task.checkCancellation()
-          guard gen == self.loadGeneration else { return }
-          guard self.selection == selection else { return }
-          ImportLog.loadSelectionDecodeComplete(
-            path: selection.lastPathComponent,
-            width: decoded.width,
-            height: decoded.height,
-            channels: decoded.channels
-          )
-          decodedImage = decoded
-          isShowingEmbeddedRawPreview = false
-          isShowingProvisionalPreview = false
-          let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
-          previewSource = proxy
-          previewRenderer = StillPreviewRenderer(image: proxy)
-          isLoading = false
-          if self.settingsByPath[key] != nil {
-            populateFilmNegativeMedians()
-          } else {
-            applyAutomaticFilmClassification(from: proxy)
-          }
-          cacheCurrentSession(for: selection)
-          scheduleRender(immediate: true)
-          scheduleLookaheadPredecode(after: selection)
-        } catch is CancellationError {
-          return
-        } catch {
-          guard gen == self.loadGeneration else { return }
-          guard self.selection == selection else { return }
-          ImportLog.loadSelectionDecodeFailed(
-            path: selection.lastPathComponent,
-            error: error.localizedDescription
-          )
-          isLoading = false
-          isShowingEmbeddedRawPreview = false
-          isShowingProvisionalPreview = false
-          status = "Unable to decode \(selection.lastPathComponent): \(error.localizedDescription)"
-        }
-      }
-      return
-    }
-
     let supportsStandardPreview = StandardImageDecoder.supportedExtensions.contains(
       selection.pathExtension.lowercased())
-    let standardPreviewInterval = supportsStandardPreview
-      ? AppPerformanceSignposts.begin(
-        .standardPreviewDecode,
-        correlationID: loadCorrelationID,
-        filename: selection.lastPathComponent)
-      : nil
-    let standardProxy = supportsStandardPreview
-      ? try? StandardImageDecoder.decodePreview(
-        selection, maxDimension: Self.previewMaxDimension)
-      : nil
-    if let standardPreviewInterval { AppPerformanceSignposts.end(standardPreviewInterval) }
-
-    if let proxy = standardProxy {
-      previewSource = proxy
-      previewRenderer = StillPreviewRenderer(image: proxy)
-      isShowingProvisionalPreview = true
-      isLoading = false
-      status = "Loading \(selection.lastPathComponent)..."
-      if hasStoredSettings {
-        populateFilmNegativeMedians()
-      }
-      scheduleRender(immediate: true)
-
-      let replacementInterval = AppPerformanceSignposts.begin(
-        .authoritativeReplacement,
-        correlationID: loadCorrelationID,
-        filename: selection.lastPathComponent)
-      authoritativeDecodeTask = Task { [weak self] in
-        defer { AppPerformanceSignposts.end(replacementInterval) }
+    if isRaw || supportsStandardPreview {
+      loadTask = Task { [weak self] in
         guard let self else { return }
-        do {
-          let decoded = try await self.authoritativeDecoder.decode(selection)
-          try Task.checkCancellation()
-          guard gen == self.loadGeneration, self.selection == selection else { return }
-          ImportLog.loadSelectionDecodeComplete(
-            path: selection.lastPathComponent,
-            width: decoded.width,
-            height: decoded.height,
-            channels: decoded.channels
-          )
-          decodedImage = decoded
-          isShowingProvisionalPreview = false
-          let authoritativeProxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
-          previewSource = authoritativeProxy
-          previewRenderer = StillPreviewRenderer(image: authoritativeProxy)
-          if self.settingsByPath[key] != nil {
-            populateFilmNegativeMedians()
+        let conversionInterval = AppPerformanceSignposts.begin(
+          .previewConversion, correlationID: loadCorrelationID,
+          filename: selection.lastPathComponent)
+        let session = await Task.detached(priority: .userInitiated) { () -> CachedPreviewSession? in
+          let display: UInt16Image
+          let kind: PreviewSourceKind
+          if isRaw {
+            guard let thumbnail = try? RawImageDecoder.extractThumbnail(
+              selection, maxDimension: Self.displayPreviewMaxDimension) else { return nil }
+            display = thumbnail.image
+            kind = .embeddedRAW
           } else {
-            applyAutomaticFilmClassification(from: authoritativeProxy)
+            guard let thumbnail = try? StandardImageDecoder.decodePreview(
+              selection, maxDimension: Self.displayPreviewMaxDimension) else { return nil }
+            display = thumbnail
+            kind = .standardThumbnail
           }
-          cacheCurrentSession(for: selection)
-          scheduleRender(immediate: true)
-          scheduleLookaheadPredecode(after: selection)
-        } catch is CancellationError {
+          guard let renderer = StillPreviewRenderer(image: display) else { return nil }
+          return CachedPreviewSession(
+            sourceKind: kind,
+            displaySource: display,
+            analysisSource: display.resizedToFit(maxDimension: Self.analysisPreviewMaxDimension),
+            previewRenderer: renderer,
+            sourcePixelDimensions: Self.fullResolutionDimensions(of: selection))
+        }.value
+        AppPerformanceSignposts.end(conversionInterval)
+        if let thumbnailInterval { AppPerformanceSignposts.end(thumbnailInterval) }
+        guard !Task.isCancelled, gen == self.loadGeneration, self.selection == selection else {
           return
-        } catch {
-          guard gen == self.loadGeneration, self.selection == selection else { return }
-          ImportLog.loadSelectionDecodeFailed(
-            path: selection.lastPathComponent,
-            error: error.localizedDescription
-          )
-          isShowingProvisionalPreview = false
-          status = "Unable to decode \(selection.lastPathComponent): \(error.localizedDescription)"
         }
+        guard let session else {
+          self.isLoading = false
+          self.status = "Unable to create a fast preview for \(selection.lastPathComponent)."
+          return
+        }
+        let analysisInterval = AppPerformanceSignposts.begin(
+          .analysis, correlationID: loadCorrelationID,
+          filename: selection.lastPathComponent)
+        self.applyPreviewSession(session, selection: selection, hasStoredSettings: hasStoredSettings)
+        AppPerformanceSignposts.end(analysisInterval)
+        self.cacheSession(session, for: selection)
+        self.scheduleRender(immediate: true)
+        self.scheduleLookaheadPredecode(after: selection)
       }
       return
     }
@@ -463,12 +384,11 @@ final class AppModel: ObservableObject {
           channels: decoded.channels
         )
         decodedImage = decoded
-        let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
+        let proxy = decoded.resizedToFit(maxDimension: Self.displayPreviewMaxDimension)
         previewSource = proxy
         previewRenderer = StillPreviewRenderer(image: proxy)
         isLoading = false
-        isShowingEmbeddedRawPreview = false
-        isShowingProvisionalPreview = false
+        previewSourceKind = .rawDetail
         if hasStoredSettings {
           populateFilmNegativeMedians()
         } else {
@@ -688,6 +608,7 @@ final class AppModel: ObservableObject {
       settingsStatus = "The Kodachrome-like look needs a loaded color scan."
       return
     }
+    capturePresetRollback(named: "Kodachrome-like Auto")
     let look = KodachromeLikeLook.parameters(for: source, preserving: parameters)
     updateParameters { $0 = look }
     settingsStatus = "Applied Kodachrome-like Auto."
@@ -846,6 +767,7 @@ final class AppModel: ObservableObject {
   func resetCorrections() {
     resetDustState(cancelTask: true)
     parameters = ProcessingParameters()
+    clearPresetRollback()
     straightenAngle = 0
     if let selection { editedKeys.insert(settingsKey(selection)) }
     resetCropState(cancelTask: true)
@@ -902,8 +824,19 @@ final class AppModel: ObservableObject {
   }
 
   func applyCorrectionPreset(_ preset: NamedCorrectionPreset) {
+    capturePresetRollback(named: preset.name)
     applyCorrectionSettings(preset.settings)
     settingsStatus = "Applied preset “\(preset.name)”."
+  }
+
+  func removeAppliedPreset() {
+    guard let selection else { return }
+    let key = settingsKey(selection)
+    guard let rollback = presetRollbacks.removeValue(forKey: key) else { return }
+    let name = appliedPresetNames.removeValue(forKey: key) ?? "preset"
+    appliedPresetName = nil
+    applyCorrectionSettings(rollback)
+    settingsStatus = "Removed “\(name)” and restored the previous adjustments."
   }
 
   func deleteCorrectionPreset(_ preset: NamedCorrectionPreset) {
@@ -1501,6 +1434,18 @@ final class AppModel: ObservableObject {
     scheduleRender(immediate: true)
   }
 
+  func beginManualCropEditing() {
+    guard !isPreviewingUncroppedCanvas else { return }
+    isPreviewingUncroppedCanvas = true
+    scheduleRender(immediate: true)
+  }
+
+  func endManualCropEditing() {
+    guard isPreviewingUncroppedCanvas else { return }
+    isPreviewingUncroppedCanvas = false
+    scheduleRender(immediate: true)
+  }
+
   func cropCurrentCanvas(to crop: NormalizedCropRect) {
     guard let existing = manualCrop else {
       setManualCrop(crop)
@@ -1785,6 +1730,12 @@ final class AppModel: ObservableObject {
     parameters.filmNegativeParams.measuredMedians = medians
   }
 
+  private func populateFilmNegativeMedians(from image: UInt16Image) {
+    guard image.channels == 3 else { return }
+    parameters.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(
+      image: image, borderPercent: 20.0)
+  }
+
   private func applyAutomaticFilmClassification(from image: UInt16Image) {
     parameters = Self.automaticallyClassifiedParameters(
       base: parameters,
@@ -1819,11 +1770,11 @@ final class AppModel: ObservableObject {
       .settingsAndClassification,
       correlationID: correlationID,
       filename: url.lastPathComponent)
-    let fileParams: ProcessingParameters
+    var fileParams: ProcessingParameters
     if let stored = settingsByPath[key] {
       fileParams = stored
     } else {
-      let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
+      let proxy = decoded.resizedToFit(maxDimension: Self.analysisPreviewMaxDimension)
       let automatic = Self.automaticallyClassifiedParameters(
         base: ProcessingParameters(),
         image: proxy,
@@ -1833,6 +1784,7 @@ final class AppModel: ObservableObject {
       automaticallyClassifiedKeys.insert(key)
       fileParams = automatic
     }
+    fileParams = Self.parametersForExport(fileParams, decodedImage: decoded)
     AppPerformanceSignposts.end(settingsInterval)
 
     let flatFieldInterval = AppPerformanceSignposts.begin(
@@ -1885,13 +1837,6 @@ final class AppModel: ObservableObject {
         ).image
       }.value
     }
-    let key = settingsKey(url)
-    if selection == url, let decodedImage {
-      return decodedImage
-    }
-    if let cached = previewCache[key] {
-      return cached.decodedImage
-    }
     return try await Task.detached(priority: .userInitiated) {
       return try Self.decodeImage(url)
     }.value
@@ -1899,6 +1844,29 @@ final class AppModel: ObservableObject {
 
   nonisolated static func requiresFullResolutionExportDecode(_ url: URL) -> Bool {
     FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased())
+  }
+
+  /// Preview calibration may come from an embedded RAW thumbnail or another
+  /// bounded proxy. Re-measure the film base in the pixels that export will
+  /// actually process so thumbnail color rendering cannot contaminate the
+  /// full-resolution correction.
+  nonisolated static func parametersForExport(
+    _ parameters: ProcessingParameters,
+    decodedImage: UInt16Image
+  ) -> ProcessingParameters {
+    let usesPowerLawFilmBase =
+      !parameters.densityPipelineEnabled
+      && (parameters.filmType == .colourNegative
+        || parameters.filmType == .blackAndWhiteNegative)
+      && parameters.filmNegativeParams.enabled
+    guard usesPowerLawFilmBase, decodedImage.channels == 3 else {
+      return parameters
+    }
+    var exportParameters = parameters
+    let analysisImage = decodedImage.resizedToFit(maxDimension: analysisPreviewMaxDimension)
+    exportParameters.filmNegativeParams.measuredMedians =
+      FilmNegativeProcessing.computeMedians(image: analysisImage, borderPercent: 20.0)
+    return exportParameters
   }
 
   private func reserveDestinationURLs(
@@ -1983,12 +1951,31 @@ final class AppModel: ObservableObject {
   }
 
   private func applyCachedSession(_ session: CachedPreviewSession, selection: URL) {
-    decodedImage = session.decodedImage
-    previewSource = session.previewSource
-    previewRenderer = session.previewRenderer
-    populateFilmNegativeMedians()
+    applyPreviewSession(
+      session, selection: selection,
+      hasStoredSettings: settingsByPath[settingsKey(selection)] != nil)
     status = "Loaded \(selection.lastPathComponent) from preview cache."
     scheduleRender(immediate: true)
+  }
+
+  private func applyPreviewSession(
+    _ session: CachedPreviewSession,
+    selection: URL,
+    hasStoredSettings: Bool
+  ) {
+    // Compatibility for feature gates while they migrate to explicit preview
+    // requirements. This is never consulted by export.
+    decodedImage = session.displaySource
+    previewSource = session.displaySource
+    previewRenderer = session.previewRenderer
+    previewSourceKind = session.sourceKind
+    sourcePixelDimensions = session.sourcePixelDimensions
+    isLoading = false
+    if hasStoredSettings {
+      populateFilmNegativeMedians(from: session.analysisSource)
+    } else {
+      applyAutomaticFilmClassification(from: session.analysisSource)
+    }
   }
 
   private func scheduleLookaheadPredecode(after selection: URL) {
@@ -2011,17 +1998,14 @@ final class AppModel: ObservableObject {
       for target in candidates {
         let targetKey = self.settingsKey(target)
         do {
-          ImportLog.loadSelectionDecodeStarted(path: "predecode \(target.lastPathComponent)")
-          let decoded = try await self.authoritativeDecoder.decode(target)
-          let proxy = decoded.resizedToFit(maxDimension: Self.previewMaxDimension)
-          guard let renderer = StillPreviewRenderer(image: proxy) else { continue }
-          let session = CachedPreviewSession(
-            decodedImage: decoded, previewSource: proxy, previewRenderer: renderer)
+          let session = try await Task.detached(priority: .utility) {
+            try Self.makeFastPreviewSession(for: target)
+          }.value
           try Task.checkCancellation()
           guard self.selection == selection, self.previewCache[targetKey] == nil else { continue }
           if self.settingsByPath[targetKey] == nil {
             self.settingsByPath[targetKey] = Self.automaticallyClassifiedParameters(
-              base: ProcessingParameters(), image: session.previewSource,
+              base: ProcessingParameters(), image: session.analysisSource,
               weakPrior: self.sameRollFilmTypeHint)
             self.automaticallyClassifiedKeys.insert(targetKey)
           }
@@ -2053,21 +2037,23 @@ final class AppModel: ObservableObject {
       }
       settingsByPath[key] = Self.automaticallyClassifiedParameters(
         base: existing,
-        image: session.previewSource,
+        image: session.analysisSource,
         weakPrior: sameRollFilmTypeHint
       )
     }
   }
 
   private func cacheCurrentSession(for selection: URL) {
-    guard let decodedImage, let previewSource, let previewRenderer else {
+    guard let previewSource, let previewRenderer else {
       return
     }
     cacheSession(
       CachedPreviewSession(
-        decodedImage: decodedImage,
-        previewSource: previewSource,
-        previewRenderer: previewRenderer
+        sourceKind: previewSourceKind ?? .rawDetail,
+        displaySource: previewSource,
+        analysisSource: previewSource.resizedToFit(maxDimension: Self.analysisPreviewMaxDimension),
+        previewRenderer: previewRenderer,
+        sourcePixelDimensions: sourcePixelDimensions
       ),
       for: selection
     )
@@ -2075,15 +2061,21 @@ final class AppModel: ObservableObject {
 
   private func cacheSession(_ session: CachedPreviewSession, for url: URL) {
     let key = settingsKey(url)
+    if let previous = previewCache[key] { previewCacheBytes -= previous.byteCount }
     previewCache[key] = session
+    previewCacheBytes += session.byteCount
     touchPreviewCache(key)
     trimPreviewCache()
   }
 
   private func trimPreviewCache() {
-    while previewCacheOrder.count > previewCacheLimit {
+    while previewCacheOrder.count > previewCacheLimit
+      || previewCacheBytes > Self.previewCacheByteLimit
+    {
       let evicted = previewCacheOrder.removeFirst()
-      previewCache.removeValue(forKey: evicted)
+      if let removed = previewCache.removeValue(forKey: evicted) {
+        previewCacheBytes -= removed.byteCount
+      }
     }
   }
 
@@ -2099,11 +2091,15 @@ final class AppModel: ObservableObject {
 
     let previousHadPending = pendingRender != nil
     let ff = preparedFlatField(for: previewSource)
+    var displayParameters = parameters
+    if isPreviewingUncroppedCanvas {
+      displayParameters.manualCrop = nil
+    }
     pendingRender = PreviewRenderRequest(
       selection: selection,
       source: previewSource,
       renderer: previewRenderer,
-      parameters: parameters,
+      parameters: displayParameters,
       showOriginal: showOriginal,
       submitTime: Date(),
       flatField: ff
@@ -2211,6 +2207,7 @@ final class AppModel: ObservableObject {
           && request.parameters.cropRect == nil
           && request.parameters.perspectiveCrop == nil
           && abs(request.parameters.straightenAngle) < 0.000_001
+          && request.parameters.manualCrop == nil
         if useGPU,
           let rendered = request.renderer?.render(
             parameters: request.parameters,
@@ -2263,8 +2260,12 @@ final class AppModel: ObservableObject {
         guard generation == renderLoopGeneration else { break }
         continue
       }
+      var expectedDisplayParameters = parameters
+      if isPreviewingUncroppedCanvas {
+        expectedDisplayParameters.manualCrop = nil
+      }
       guard selection == request.selection,
-        parameters == request.parameters,
+        expectedDisplayParameters == request.parameters,
         showOriginal == request.showOriginal,
         let result
       else {
@@ -2295,8 +2296,15 @@ final class AppModel: ObservableObject {
         AppPerformanceSignposts.end(interval)
         pendingFirstPreviewInterval = nil
       }
-      status =
-        "\(request.selection.lastPathComponent) • \(preview.width)×\(preview.height) \(result.rendererName) preview"
+      if !status.localizedCaseInsensitiveContains("cancel") {
+        let sourceLabel = request.selection.pathExtension.lowercased().isEmpty
+          ? "Fast preview"
+          : previewSourceKind == .embeddedRAW
+            ? "Fast embedded preview · RAW detail available when needed"
+            : "Fast image preview · full resolution used for export"
+        status =
+          "\(request.selection.lastPathComponent) • \(preview.width)×\(preview.height) \(result.rendererName) · \(sourceLabel)"
+      }
 
       lastRenderEnd = ContinuousClock.now
       guard pendingRender == nil else {
@@ -2316,6 +2324,25 @@ final class AppModel: ObservableObject {
     }
     renderTask = nil
     isRendering = false
+  }
+
+  private func capturePresetRollback(named name: String) {
+    guard let selection else { return }
+    let key = settingsKey(selection)
+    presetRollbacks[key] = CorrectionSettings(capturing: parameters)
+    appliedPresetNames[key] = name
+    appliedPresetName = name
+  }
+
+  private func clearPresetRollback() {
+    guard let selection else {
+      appliedPresetName = nil
+      return
+    }
+    let key = settingsKey(selection)
+    presetRollbacks.removeValue(forKey: key)
+    appliedPresetNames.removeValue(forKey: key)
+    appliedPresetName = nil
   }
 
   private func cancelRenderLoop() {
@@ -2346,6 +2373,31 @@ final class AppModel: ObservableObject {
     }
     return nil
   }
+
+  nonisolated private static func makeFastPreviewSession(
+    for url: URL
+  ) throws -> CachedPreviewSession {
+    let display: UInt16Image
+    let kind: PreviewSourceKind
+    if FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased()) {
+      display = try RawImageDecoder.extractThumbnail(
+        url, maxDimension: displayPreviewMaxDimension).image
+      kind = .embeddedRAW
+    } else {
+      display = try StandardImageDecoder.decodePreview(
+        url, maxDimension: displayPreviewMaxDimension)
+      kind = .standardThumbnail
+    }
+    guard let renderer = StillPreviewRenderer(image: display) else {
+      throw CocoaError(.coderInvalidValue)
+    }
+    return CachedPreviewSession(
+      sourceKind: kind,
+      displaySource: display,
+      analysisSource: display.resizedToFit(maxDimension: analysisPreviewMaxDimension),
+      previewRenderer: renderer,
+      sourcePixelDimensions: fullResolutionDimensions(of: url))
+  }
 }
 
 actor AuthoritativeImageDecoder {
@@ -2375,10 +2427,23 @@ private struct PreviewRenderRequest: Sendable {
   let flatField: UInt16Image?
 }
 
+enum PreviewSourceKind: String, Sendable {
+  case embeddedRAW
+  case standardThumbnail
+  case rawDetail
+}
+
 private struct CachedPreviewSession: Sendable {
-  let decodedImage: UInt16Image
-  let previewSource: UInt16Image
+  let sourceKind: PreviewSourceKind
+  let displaySource: UInt16Image
+  let analysisSource: UInt16Image
   let previewRenderer: StillPreviewRenderer
+  let sourcePixelDimensions: PixelDimensions?
+
+  var byteCount: Int {
+    (displaySource.pixels.count + analysisSource.pixels.count)
+      * MemoryLayout<UInt16>.stride
+  }
 }
 
 private struct RenderedPreview: Sendable {
