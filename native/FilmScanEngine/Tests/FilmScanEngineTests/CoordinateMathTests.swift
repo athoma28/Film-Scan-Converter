@@ -73,4 +73,24 @@ struct CoordinateMathTests {
     let result = CoordinateMath.shrinkBox(box: box, xPercent: 5, yPercent: 3)
     #expect(result.map { [$0.x, $0.y] } == [[349, 569], [382, 382], [650, 430], [617, 617]])
   }
+
+  @Test("shrinkBox preserves one-pixel distinctions above Float precision")
+  func shrinkBoxPreservesDoublePrecision() {
+    let origin = 16_777_216.0
+    let box: [(Double, Double)] = [
+      (origin, 180),
+      (origin, 120),
+      (origin + 1, 120),
+      (origin + 1, 180),
+    ]
+
+    let result = CoordinateMath.shrinkBox(box: box, xPercent: 0, yPercent: 0)
+
+    #expect(result.map { [$0.x, $0.y] } == [
+      [16_777_216, 180],
+      [16_777_216, 120],
+      [16_777_217, 120],
+      [16_777_217, 180],
+    ])
+  }
 }

@@ -191,12 +191,14 @@ public enum PerspectiveTransform {
   public static func crop(
     _ image: UInt16Image,
     normalizedRect: RotatedRect,
+    coordinateSpace: NormalizedCropCoordinateSpace = .imageAxes,
     borderPercent: Double = 0
   ) -> UInt16Image? {
     let rect = ContourDetection.denormalize(
       normalizedRect,
       imageWidth: image.width,
-      imageHeight: image.height
+      imageHeight: image.height,
+      coordinateSpace: coordinateSpace
     )
     guard rect.width > 1, rect.height > 1 else { return nil }
 
@@ -215,14 +217,14 @@ public enum PerspectiveTransform {
       xPercent: xCrop,
       yPercent: yCrop
     )
-    let outputWidth = max(1, Int(rect.height * (1 - xCrop / 100)))
-    let outputHeight = max(1, Int(rect.width * (1 - yCrop / 100)))
+    let destinationHeight = max(1, Int(rect.height * (1 - xCrop / 100)))
+    let destinationWidth = max(1, Int(rect.width * (1 - yCrop / 100)))
     let source = box.map { (x: Float($0.x), y: Float($0.y)) }
     let destination: [(x: Float, y: Float)] = [
-      (0, Float(outputWidth - 1)),
+      (0, Float(destinationHeight - 1)),
       (0, 0),
-      (Float(outputHeight - 1), 0),
-      (Float(outputHeight - 1), Float(outputWidth - 1)),
+      (Float(destinationWidth - 1), 0),
+      (Float(destinationWidth - 1), Float(destinationHeight - 1)),
     ]
     guard let homography = computeHomography(srcPoints: source, dstPoints: destination) else {
       return nil
@@ -230,8 +232,8 @@ public enum PerspectiveTransform {
     var result = warpPerspective(
       image,
       homography: homography,
-      outputWidth: outputHeight,
-      outputHeight: outputWidth
+      outputWidth: destinationWidth,
+      outputHeight: destinationHeight
     )
     if rect.angle > 45 {
       result = result.rotated(quarterTurns: 1)
@@ -310,7 +312,17 @@ public enum PerspectiveTransform {
     precondition(outputWidth > 0 && outputHeight > 0,
                  "Output dimensions must be positive")
 
-    let invH = invertHomographyDouble(homography)
+    guard let invH = invertHomographyDouble(homography) else {
+      return UInt16Image(
+        width: outputWidth,
+        height: outputHeight,
+        channels: image.channels,
+        pixels: [UInt16](
+          repeating: 0,
+          count: outputWidth * outputHeight * image.channels
+        )
+      )
+    }
 
     let h00 = invH[0]
     let h01 = invH[1]
@@ -337,10 +349,11 @@ public enum PerspectiveTransform {
         let dy = h10 * fx + h11 * fy + h12
         let dz = h20 * fx + h21 * fy + h22
 
-        guard abs(dz) > 1e-10 else { continue }
+        guard dx.isFinite, dy.isFinite, dz.isFinite, abs(dz) > 1e-10 else { continue }
 
         let srcX = dx / dz
         let srcY = dy / dz
+        guard srcX.isFinite, srcY.isFinite else { continue }
 
         let x0f = floor(srcX)
         let y0f = floor(srcY)
@@ -386,15 +399,16 @@ public enum PerspectiveTransform {
                        channels: channels, pixels: output)
   }
 
-  private static func invertHomographyDouble(_ h: [Float]) -> [Double] {
+  private static func invertHomographyDouble(_ h: [Float]) -> [Double]? {
     let a = Double(h[0]), b = Double(h[1]), c = Double(h[2])
     let d = Double(h[3]), e = Double(h[4]), f = Double(h[5])
     let g = Double(h[6]), hh = Double(h[7]), i = Double(h[8])
 
     let det = a * (e * i - f * hh) - b * (d * i - f * g) + c * (d * hh - e * g)
+    guard det.isFinite, det != 0 else { return nil }
     let invDet = 1.0 / det
 
-    return [
+    let inverse = [
       (e * i - f * hh) * invDet,
       (c * hh - b * i) * invDet,
       (b * f - c * e) * invDet,
@@ -405,5 +419,6 @@ public enum PerspectiveTransform {
       (b * g - a * hh) * invDet,
       (a * e - b * d) * invDet,
     ]
+    return inverse.allSatisfy(\.isFinite) ? inverse : nil
   }
 }

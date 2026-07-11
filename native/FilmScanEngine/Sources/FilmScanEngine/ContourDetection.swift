@@ -93,10 +93,10 @@ public enum ContourDetection {
     imageHeight: Int
   ) -> RotatedRect {
     RotatedRect(
-      centerX: rect.centerX / Double(imageHeight),
-      centerY: rect.centerY / Double(imageWidth),
-      width: rect.width / Double(imageHeight),
-      height: rect.height / Double(imageWidth),
+      centerX: rect.centerX / Double(imageWidth),
+      centerY: rect.centerY / Double(imageHeight),
+      width: rect.width / Double(imageWidth),
+      height: rect.height / Double(imageHeight),
       angle: rect.angle
     )
   }
@@ -104,15 +104,27 @@ public enum ContourDetection {
   public static func denormalize(
     _ rect: RotatedRect,
     imageWidth: Int,
-    imageHeight: Int
+    imageHeight: Int,
+    coordinateSpace: NormalizedCropCoordinateSpace = .imageAxes
   ) -> RotatedRect {
-    RotatedRect(
-      centerX: rect.centerX * Double(imageHeight),
-      centerY: rect.centerY * Double(imageWidth),
-      width: rect.width * Double(imageHeight),
-      height: rect.height * Double(imageWidth),
-      angle: rect.angle
-    )
+    switch coordinateSpace {
+    case .imageAxes:
+      return RotatedRect(
+        centerX: rect.centerX * Double(imageWidth),
+        centerY: rect.centerY * Double(imageHeight),
+        width: rect.width * Double(imageWidth),
+        height: rect.height * Double(imageHeight),
+        angle: rect.angle
+      )
+    case .legacyTransposedAxes:
+      return RotatedRect(
+        centerX: rect.centerX * Double(imageHeight),
+        centerY: rect.centerY * Double(imageWidth),
+        width: rect.width * Double(imageHeight),
+        height: rect.height * Double(imageWidth),
+        angle: rect.angle
+      )
+    }
   }
 
   // MARK: - Connected Component Labeling

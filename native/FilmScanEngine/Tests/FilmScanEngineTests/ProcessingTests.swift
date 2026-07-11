@@ -974,6 +974,48 @@ struct ProcessingTests {
     #expect(result.height == 40)
   }
 
+  @Test("Legacy and image-axis crop storage render identical geometry")
+  func correctedPreviewMigratesLegacyCropGeometry() {
+    let image = UInt16Image(
+      width: 100,
+      height: 80,
+      channels: 1,
+      pixels: (0..<8_000).map { UInt16($0) }
+    )
+    let conventional = ProcessingParameters(
+      filmType: .cropOnly,
+      cropRect: RotatedRect(
+        centerX: 0.5,
+        centerY: 0.5,
+        width: 0.6,
+        height: 0.5,
+        angle: 0
+      )
+    )
+    let legacy = ProcessingParameters(
+      filmType: .cropOnly,
+      cropRect: RotatedRect(
+        centerX: 50.0 / 80.0,
+        centerY: 40.0 / 100.0,
+        width: 60.0 / 80.0,
+        height: 40.0 / 100.0,
+        angle: 0
+      ),
+      cropRectCoordinateSpace: .legacyTransposedAxes
+    )
+
+    let conventionalResult = FilmProcessing.correctedPreview(
+      image: image,
+      parameters: conventional
+    )
+    let legacyResult = FilmProcessing.correctedPreview(
+      image: image,
+      parameters: legacy
+    )
+
+    #expect(legacyResult == conventionalResult)
+  }
+
   @Test("Manual perspective crop takes precedence over detected rectangle geometry")
   func correctedPreviewAppliesManualPerspectiveCrop() {
     let image = UInt16Image(

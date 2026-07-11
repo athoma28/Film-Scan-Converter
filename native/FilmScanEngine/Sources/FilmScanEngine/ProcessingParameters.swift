@@ -37,6 +37,17 @@ public struct ColorWheel: Codable, Equatable, Sendable {
   public var isNeutral: Bool { strength == 0 }
 }
 
+public enum NormalizedCropCoordinateSpace: String, Codable, Equatable, Sendable {
+  /// Conventional image coordinates: x and width use image width; y and
+  /// height use image height.
+  case imageAxes
+
+  /// Compatibility for crop rectangles saved before image-axis normalization
+  /// was introduced. Those values used image height for x/width and image
+  /// width for y/height.
+  case legacyTransposedAxes
+}
+
 public struct FilmNegativeParams: Codable, Equatable, Sendable {
   public var enabled: Bool
   public var redRatio: Double
@@ -136,6 +147,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
   public var darkThreshold: Int
   public var lightThreshold: Int
   public var cropRect: RotatedRect?
+  public var cropRectCoordinateSpace: NormalizedCropCoordinateSpace
   public var perspectiveCrop: PerspectiveCrop?
   public var manualCrop: NormalizedCropRect?
 
@@ -171,6 +183,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     darkThreshold: Int = 25,
     lightThreshold: Int = 100,
     cropRect: RotatedRect? = nil,
+    cropRectCoordinateSpace: NormalizedCropCoordinateSpace = .imageAxes,
     perspectiveCrop: PerspectiveCrop? = nil,
     manualCrop: NormalizedCropRect? = nil
   ) {
@@ -212,6 +225,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     self.darkThreshold = darkThreshold
     self.lightThreshold = lightThreshold
     self.cropRect = cropRect
+    self.cropRectCoordinateSpace = cropRectCoordinateSpace
     self.perspectiveCrop = perspectiveCrop
     self.manualCrop = manualCrop
   }
@@ -229,7 +243,8 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     case photoAdjustments
     case densityPipelineEnabled, densityBaseDensity
     case densityC41Profile, densityDisplayParams
-    case darkThreshold, lightThreshold, cropRect, perspectiveCrop, manualCrop
+    case darkThreshold, lightThreshold, cropRect, cropRectCoordinateSpace
+    case perspectiveCrop, manualCrop
   }
 
   public init(from decoder: Decoder) throws {
@@ -274,6 +289,10 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     darkThreshold = try container.decodeIfPresent(Int.self, forKey: .darkThreshold) ?? 25
     lightThreshold = try container.decodeIfPresent(Int.self, forKey: .lightThreshold) ?? 100
     cropRect = try container.decodeIfPresent(RotatedRect.self, forKey: .cropRect)
+    cropRectCoordinateSpace = try container.decodeIfPresent(
+      NormalizedCropCoordinateSpace.self,
+      forKey: .cropRectCoordinateSpace
+    ) ?? (cropRect == nil ? .imageAxes : .legacyTransposedAxes)
     perspectiveCrop = try container.decodeIfPresent(PerspectiveCrop.self, forKey: .perspectiveCrop)
     manualCrop = try container.decodeIfPresent(NormalizedCropRect.self, forKey: .manualCrop)
   }

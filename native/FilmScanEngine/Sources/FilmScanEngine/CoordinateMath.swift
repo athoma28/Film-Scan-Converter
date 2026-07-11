@@ -1,6 +1,16 @@
 import Foundation
 
 enum CoordinateMath {
+  private struct Point {
+    let x: Double
+    let y: Double
+  }
+
+  private struct Offset {
+    var x = 0.0
+    var y = 0.0
+  }
+
   static func shrinkBox(
     box: [(x: Double, y: Double)],
     xPercent: Double,
@@ -8,80 +18,73 @@ enum CoordinateMath {
   ) -> [(x: Int, y: Int)] {
     precondition(box.count == 4, "shrinkBox requires exactly 4 corner points")
 
-    let sortedX = box.map { _sortKey($0.x) }.sorted()
-    let sortedY = box.map { _sortKey($0.y) }.sorted()
-
-    let topleft = box.min { _sortKey($0.x + $0.y) < _sortKey($1.x + $1.y) }!
-
-    var index = 0
-    for (i, point) in box.enumerated() {
-      if _sortKey(point.x) == _sortKey(topleft.x) || _sortKey(point.y) == _sortKey(topleft.y) {
-        index = i
-        break
-      }
-    }
-
-    var ordered = [Double]()
-    for i in 0..<4 {
-      let p = box[(index + i) % 4]
-      ordered.append(p.x)
-      ordered.append(p.y)
-    }
+    let points = box.map { Point(x: $0.x, y: $0.y) }
+    let sortedX = points.map(\.x).sorted()
+    let sortedY = points.map(\.y).sorted()
+    let referenceIndex = pythonCompatibleReferenceIndex(in: points)
+    let ordered = rotateLeft(points, by: referenceIndex)
 
     let h = (sortedY[2] + sortedY[3] - sortedY[0] - sortedY[1]) / 2
     let w = (sortedX[2] + sortedX[3] - sortedX[0] - sortedX[1]) / 2
-    let skew = (ordered[6] - ordered[0]) / w * 1.5
-    let centreX = (ordered[0] + ordered[2] + ordered[4] + ordered[6]) / 4
-    let centreY = (ordered[1] + ordered[3] + ordered[5] + ordered[7]) / 4
+    let pythonSkewCompensation = (ordered[3].x - ordered[0].x) / w * 1.5
+    let centreX = ordered.map(\.x).reduce(0, +) / 4
+    let centreY = ordered.map(\.y).reduce(0, +) / 4
     let yOffsetAmount = yPercent / 100 * h
     let xOffsetAmount = xPercent / 100 * w
 
-    var offset = [Double](repeating: 0, count: 8)
-    for i in 0..<4 {
-      if ordered[i * 2 + 1] < centreY {
-        offset[i * 2 + 1] += Double(Int(yOffsetAmount))
-      } else if ordered[i * 2 + 1] > centreY {
-        offset[i * 2 + 1] -= Double(Int(yOffsetAmount))
+    var offsets = [Offset](repeating: Offset(), count: ordered.count)
+    for index in ordered.indices {
+      let point = ordered[index]
+      if point.y < centreY {
+        offsets[index].y += Double(Int(yOffsetAmount))
+      } else if point.y > centreY {
+        offsets[index].y -= Double(Int(yOffsetAmount))
       }
-      if ordered[i * 2] < centreX {
-        offset[i * 2] += Double(Int(xOffsetAmount))
-      } else if ordered[i * 2] > centreX {
-        offset[i * 2] -= Double(Int(xOffsetAmount))
+      if point.x < centreX {
+        offsets[index].x += Double(Int(xOffsetAmount))
+      } else if point.x > centreX {
+        offsets[index].x -= Double(Int(xOffsetAmount))
       }
     }
 
-    let intXOff = xOffsetAmount
-    let intYOff = yOffsetAmount
-    for i in 0..<4 {
-      let px = i * 2
-      let py = i * 2 + 1
-      if offset[px] > 0 {
-        offset[py] -= Double(Int(intXOff * skew))
+    for index in offsets.indices {
+      if offsets[index].x > 0 {
+        offsets[index].y -= Double(Int(xOffsetAmount * pythonSkewCompensation))
       } else {
-        offset[py] += Double(Int(intXOff * skew))
+        offsets[index].y += Double(Int(xOffsetAmount * pythonSkewCompensation))
       }
-      if offset[py] < 0 {
-        offset[px] -= Double(Int(intYOff * skew))
+      if offsets[index].y < 0 {
+        offsets[index].x -= Double(Int(yOffsetAmount * pythonSkewCompensation))
       } else {
-        offset[px] += Double(Int(intYOff * skew))
+        offsets[index].x += Double(Int(yOffsetAmount * pythonSkewCompensation))
       }
     }
 
-    var newBox = [(Double, Double)]()
-    for i in 0..<4 {
-      newBox.append((ordered[i * 2] + offset[i * 2], ordered[i * 2 + 1] + offset[i * 2 + 1]))
+    let adjusted = zip(ordered, offsets).map { point, offset in
+      Point(x: point.x + offset.x, y: point.y + offset.y)
     }
 
-    var rolled = [(Int, Int)]()
-    for i in 0..<4 {
-      let srcIndex = (i + 4 - index) % 4
-      rolled.append((Int(newBox[srcIndex].0), Int(newBox[srcIndex].1)))
+    return points.indices.map { index in
+      let adjustedIndex = (index + points.count - referenceIndex) % points.count
+      let point = adjusted[adjustedIndex]
+      return (Int(point.x), Int(point.y))
     }
-
-    return rolled
   }
 
-  private static func _sortKey(_ value: Double) -> Double {
-    Double(Float(value))
+  /// Matches NumPy's historical `where(box == topLeft)[0][0]` behavior,
+  /// including its coordinate-wise match and Float tie-breaking. Keeping this
+  /// compatibility in one named helper makes the rest of the geometry use
+  /// ordinary points and Double-precision dimensions.
+  private static func pythonCompatibleReferenceIndex(in points: [Point]) -> Int {
+    let reference = points.min {
+      Float($0.x + $0.y) < Float($1.x + $1.y)
+    }!
+    return points.firstIndex {
+      $0.x == reference.x || $0.y == reference.y
+    } ?? 0
+  }
+
+  private static func rotateLeft(_ points: [Point], by offset: Int) -> [Point] {
+    points.indices.map { points[($0 + offset) % points.count] }
   }
 }

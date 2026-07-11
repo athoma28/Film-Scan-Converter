@@ -1395,6 +1395,7 @@ final class AppModel: ObservableObject {
         PerspectiveTransform.crop(
           mask,
           normalizedRect: $0,
+          coordinateSpace: displayParameters.cropRectCoordinateSpace,
           borderPercent: displayParameters.borderCrop
         )
       } ?? mask
@@ -1597,6 +1598,7 @@ final class AppModel: ObservableObject {
     perspectiveCrop = nil
     manualCrop = nil
     parameters.cropRect = rect
+    parameters.cropRectCoordinateSpace = .imageAxes
     parameters.perspectiveCrop = nil
     parameters.manualCrop = nil
     if let selection { editedKeys.insert(settingsKey(selection)) }

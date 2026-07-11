@@ -25,6 +25,7 @@ struct CorrectionSettings: Codable, Equatable {
     result.flip = destination.flip
     result.straightenAngle = destination.straightenAngle
     result.cropRect = destination.cropRect
+    result.cropRectCoordinateSpace = destination.cropRectCoordinateSpace
     result.perspectiveCrop = destination.perspectiveCrop
     result.manualCrop = destination.manualCrop
     result.densityPipelineEnabled = destination.densityPipelineEnabled

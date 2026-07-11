@@ -27,11 +27,7 @@ public enum FilmProcessing {
     image: UInt16Image,
     parameters: ProcessingParameters
   ) -> UInt16Image {
-    let cropped = parameters.perspectiveCrop.flatMap {
-      PerspectiveTransform.crop(image, perspectiveCrop: $0, borderPercent: parameters.borderCrop)
-    } ?? parameters.cropRect.flatMap {
-      PerspectiveTransform.crop(image, normalizedRect: $0, borderPercent: parameters.borderCrop)
-    } ?? image
+    let cropped = applyAutomaticCrop(to: image, parameters: parameters)
     var working = cropped.rotated(
       quarterTurns: parameters.rotation,
       flipHorizontally: parameters.flip
@@ -303,22 +299,14 @@ public enum FilmProcessing {
     parameters: ProcessingParameters,
     flatField: UInt16Image? = nil
   ) -> UInt16Image {
-    let croppedImage = parameters.perspectiveCrop.flatMap {
-      PerspectiveTransform.crop(image, perspectiveCrop: $0, borderPercent: parameters.borderCrop)
-    } ?? parameters.cropRect.flatMap {
-      PerspectiveTransform.crop(image, normalizedRect: $0, borderPercent: parameters.borderCrop)
-    } ?? image
+    let croppedImage = applyAutomaticCrop(to: image, parameters: parameters)
     let sourceFlatField = flatField.flatMap { field in
       field.channels == image.channels
         ? field.resized(width: image.width, height: image.height)
         : nil
     }
-    let croppedFlatField = sourceFlatField.flatMap { field in
-      parameters.perspectiveCrop.flatMap {
-        PerspectiveTransform.crop(field, perspectiveCrop: $0, borderPercent: parameters.borderCrop)
-      } ?? parameters.cropRect.flatMap {
-        PerspectiveTransform.crop(field, normalizedRect: $0, borderPercent: parameters.borderCrop)
-      } ?? field
+    let croppedFlatField = sourceFlatField.map {
+      applyAutomaticCrop(to: $0, parameters: parameters)
     }
     var working = croppedImage.rotated(
       quarterTurns: parameters.rotation,
@@ -505,6 +493,32 @@ public enum FilmProcessing {
       from: source,
       threshold: FilmNegativeProcessing.sensorBlackThreshold
     )
+  }
+
+  private static func applyAutomaticCrop(
+    to image: UInt16Image,
+    parameters: ProcessingParameters
+  ) -> UInt16Image {
+    if let perspectiveCrop = parameters.perspectiveCrop,
+      let cropped = PerspectiveTransform.crop(
+        image,
+        perspectiveCrop: perspectiveCrop,
+        borderPercent: parameters.borderCrop
+      )
+    {
+      return cropped
+    }
+    if let cropRect = parameters.cropRect,
+      let cropped = PerspectiveTransform.crop(
+        image,
+        normalizedRect: cropRect,
+        coordinateSpace: parameters.cropRectCoordinateSpace,
+        borderPercent: parameters.borderCrop
+      )
+    {
+      return cropped
+    }
+    return image
   }
 
   private static func unityFlatField(for image: UInt16Image) -> UInt16Image {

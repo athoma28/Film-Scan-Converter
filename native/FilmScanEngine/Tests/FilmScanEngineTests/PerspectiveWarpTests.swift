@@ -262,6 +262,54 @@ struct PerspectiveWarpTests {
     }
   }
 
+  @Test("warpPerspective rejects a singular matrix with infinite inverse terms")
+  func warpPerspectiveRejectsSingularInverse() {
+    let image = UInt16Image(
+      width: 2,
+      height: 2,
+      channels: 1,
+      pixels: [1, 2, 3, 4]
+    )
+    let singular: [Float] = [
+      1, 0, 0,
+      0, 1, 0,
+      0, 0, 0,
+    ]
+
+    let warped = PerspectiveTransform.warpPerspective(
+      image,
+      homography: singular,
+      outputWidth: 2,
+      outputHeight: 2
+    )
+
+    #expect(warped.pixels == [0, 0, 0, 0])
+  }
+
+  @Test("warpPerspective rejects non-finite homography values")
+  func warpPerspectiveRejectsNonFiniteHomography() {
+    let image = UInt16Image(
+      width: 1,
+      height: 1,
+      channels: 1,
+      pixels: [UInt16.max]
+    )
+    let nonFinite: [Float] = [
+      .infinity, 0, 0,
+      0, 1, 0,
+      0, 0, 1,
+    ]
+
+    let warped = PerspectiveTransform.warpPerspective(
+      image,
+      homography: nonFinite,
+      outputWidth: 1,
+      outputHeight: 1
+    )
+
+    #expect(warped.pixels == [0])
+  }
+
   @Test("warpPerspective uses zero for out-of-bounds source coordinates")
   func warpPerspectiveOutOfBoundsZero() {
     let w = 4

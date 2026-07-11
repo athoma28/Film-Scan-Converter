@@ -145,7 +145,11 @@ public enum ImageGeometry {
     }
     if let crop = parameters.cropRect {
       let rect = ContourDetection.denormalize(
-        crop, imageWidth: source.width, imageHeight: source.height)
+        crop,
+        imageWidth: source.width,
+        imageHeight: source.height,
+        coordinateSpace: parameters.cropRectCoordinateSpace
+      )
       guard rect.width > 1, rect.height > 1 else { return source }
       let xCrop: Double
       let yCrop: Double

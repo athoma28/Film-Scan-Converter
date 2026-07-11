@@ -758,6 +758,7 @@ struct AppModelTests {
     destination.cropRect = RotatedRect(
       centerX: 0.5, centerY: 0.5, width: 0.9, height: 0.6, angle: -1
     )
+    destination.cropRectCoordinateSpace = .legacyTransposedAxes
     destination.perspectiveCrop = PerspectiveCrop(
       topLeft: .init(x: 0.2, y: 0.2),
       topRight: .init(x: 0.8, y: 0.2),
@@ -777,6 +778,7 @@ struct AppModelTests {
     #expect(applied.rotation == destination.rotation)
     #expect(applied.flip == destination.flip)
     #expect(applied.cropRect == destination.cropRect)
+    #expect(applied.cropRectCoordinateSpace == destination.cropRectCoordinateSpace)
     #expect(applied.perspectiveCrop == destination.perspectiveCrop)
     #expect(applied.straightenAngle == destination.straightenAngle)
     #expect(applied.manualCrop == destination.manualCrop)

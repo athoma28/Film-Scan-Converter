@@ -213,10 +213,10 @@ struct ContourDetectionTests {
     let rect = RotatedRect(centerX: 240, centerY: 320, width: 200, height: 300, angle: 15)
     let normalized = ContourDetection.normalizeToUnit(rect, imageWidth: 480, imageHeight: 640)
 
-    #expect(abs(normalized.centerX - 240.0 / 640.0) < 0.001)
-    #expect(abs(normalized.centerY - 320.0 / 480.0) < 0.001)
-    #expect(abs(normalized.width - 200.0 / 640.0) < 0.001)
-    #expect(abs(normalized.height - 300.0 / 480.0) < 0.001)
+    #expect(abs(normalized.centerX - 240.0 / 480.0) < 0.001)
+    #expect(abs(normalized.centerY - 320.0 / 640.0) < 0.001)
+    #expect(abs(normalized.width - 200.0 / 480.0) < 0.001)
+    #expect(abs(normalized.height - 300.0 / 640.0) < 0.001)
     #expect(normalized.angle == rect.angle)
   }
 
@@ -231,6 +231,32 @@ struct ContourDetectionTests {
     #expect(abs(denormalized.width - original.width) < 0.001)
     #expect(abs(denormalized.height - original.height) < 0.001)
     #expect(denormalized.angle == original.angle)
+  }
+
+  @Test("Legacy transposed crop coordinates decode to the original pixel rectangle")
+  func legacyTransposedCropCoordinates() {
+    let legacy = RotatedRect(
+      centerX: 300.0 / 400.0,
+      centerY: 200.0 / 600.0,
+      width: 150.0 / 400.0,
+      height: 100.0 / 600.0,
+      angle: 45
+    )
+
+    let decoded = ContourDetection.denormalize(
+      legacy,
+      imageWidth: 600,
+      imageHeight: 400,
+      coordinateSpace: .legacyTransposedAxes
+    )
+
+    #expect(decoded == RotatedRect(
+      centerX: 300,
+      centerY: 200,
+      width: 150,
+      height: 100,
+      angle: 45
+    ))
   }
 
   @Test("findOptimalCrop on threshold from a real image produces valid normalized rect")
