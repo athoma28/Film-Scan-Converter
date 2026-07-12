@@ -58,7 +58,13 @@ The native application is the primary product. It provides:
    the whole straightened canvas and replace the crop, or use **Reset Crop** to
    remove it. Tune the
    dark/light thresholds and choose **Detect Frame** for automatic frame
-   detection, or use **Adjust Perspective** for a four-corner correction.
+   detection, or use **Adjust Perspective** for a four-corner correction. Each
+   corner is a targeting reticle; while dragging, its loupe magnifies a
+   100×100-pixel preview area around the exact designation point. Parallel-edge
+   assist softly snaps likely trapezoids; hold Option while dragging for an
+   unconstrained quadrilateral. Perspective warps the full canvas and remains
+   separate from the later rectangular **Crop**, so either can be reset without
+   clearing the other.
    Preview, the full-resolution dimension readout, and export use the same
    stored geometry.
 8. Use the original/corrected comparison toggle to evaluate your adjustments.

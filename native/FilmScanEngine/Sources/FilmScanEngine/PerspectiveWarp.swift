@@ -68,6 +68,59 @@ public struct PerspectiveCrop: Codable, Equatable, Sendable {
     }
     return result
   }
+
+  /// Moves one corner while softly snapping either incident edge parallel to
+  /// its opposite edge. This favors the common one-axis/trapezoidal scan
+  /// geometry without preventing a fully free quadrilateral edit.
+  public func replacing(
+    _ corner: Int,
+    with point: Point,
+    parallelismAssistThreshold threshold: Double
+  ) -> PerspectiveCrop {
+    guard (0..<4).contains(corner), threshold.isFinite, threshold > 0 else {
+      return replacing(corner, with: point)
+    }
+    let clamped = Point(x: min(max(point.x, 0), 1), y: min(max(point.y, 0), 1))
+    let current = points
+    let previous = (corner + 3) % 4
+    let next = (corner + 1) % 4
+    let opposite = (corner + 2) % 4
+    let candidates = [
+      projection(
+        of: clamped,
+        ontoLineThrough: current[previous],
+        parallelTo: vector(from: current[next], to: current[opposite])),
+      projection(
+        of: clamped,
+        ontoLineThrough: current[next],
+        parallelTo: vector(from: current[previous], to: current[opposite]))
+    ].compactMap { $0 }
+    guard let closest = candidates.min(by: {
+      squaredDistance($0, clamped) < squaredDistance($1, clamped)
+    }), squaredDistance(closest, clamped) <= threshold * threshold else {
+      return replacing(corner, with: clamped)
+    }
+    return replacing(corner, with: closest)
+  }
+
+  private func vector(from start: Point, to end: Point) -> Point {
+    Point(x: end.x - start.x, y: end.y - start.y)
+  }
+
+  private func projection(of point: Point, ontoLineThrough origin: Point, parallelTo direction: Point) -> Point? {
+    let magnitudeSquared = direction.x * direction.x + direction.y * direction.y
+    guard magnitudeSquared > 0.000_000_001 else { return nil }
+    let offsetX = point.x - origin.x
+    let offsetY = point.y - origin.y
+    let scale = (offsetX * direction.x + offsetY * direction.y) / magnitudeSquared
+    return Point(x: origin.x + scale * direction.x, y: origin.y + scale * direction.y)
+  }
+
+  private func squaredDistance(_ lhs: Point, _ rhs: Point) -> Double {
+    let dx = lhs.x - rhs.x
+    let dy = lhs.y - rhs.y
+    return dx * dx + dy * dy
+  }
 }
 
 public enum PerspectiveTransform {

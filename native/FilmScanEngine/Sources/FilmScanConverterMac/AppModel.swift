@@ -1396,7 +1396,7 @@ final class AppModel: ObservableObject {
 
   func setPerspectiveCrop(_ crop: PerspectiveCrop?) {
     guard let crop else {
-      clearCrop()
+      clearPerspectiveCrop()
       return
     }
     guard crop.isValid else {
@@ -1406,11 +1406,20 @@ final class AppModel: ObservableObject {
     resetDustState(cancelTask: true)
     cropRect = nil
     perspectiveCrop = crop
-    manualCrop = nil
     parameters.cropRect = nil
     parameters.perspectiveCrop = crop
-    parameters.manualCrop = nil
-    cropStatus = "Perspective crop is active. Drag corners to align the grid."
+    cropStatus = "Perspective warp is active. Drag corners to align the grid."
+    if let selection { editedKeys.insert(settingsKey(selection)) }
+    saveParameters()
+    scheduleRender(immediate: true)
+  }
+
+  func clearPerspectiveCrop() {
+    guard perspectiveCrop != nil || parameters.perspectiveCrop != nil else { return }
+    resetDustState(cancelTask: true)
+    perspectiveCrop = nil
+    parameters.perspectiveCrop = nil
+    cropStatus = manualCrop == nil ? "" : "Manual canvas crop is active."
     if let selection { editedKeys.insert(settingsKey(selection)) }
     saveParameters()
     scheduleRender(immediate: true)

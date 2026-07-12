@@ -5,6 +5,24 @@ import Testing
 
 @Suite("Perspective warp")
 struct PerspectiveWarpTests {
+  @Test("Parallelism assist softly snaps an edge and leaves distant drags free")
+  func parallelismAssist() {
+    let crop = PerspectiveCrop.fullFrame
+
+    let snapped = crop.replacing(
+      0,
+      with: .init(x: 0.2, y: 0.01),
+      parallelismAssistThreshold: 0.02)
+    #expect(abs(snapped.topLeft.x - 0.2) < 0.000_001)
+    #expect(abs(snapped.topLeft.y) < 0.000_001)
+
+    let free = crop.replacing(
+      0,
+      with: .init(x: 0.2, y: 0.15),
+      parallelismAssistThreshold: 0.02)
+    #expect(abs(free.topLeft.x - 0.2) < 0.000_001)
+    #expect(abs(free.topLeft.y - 0.15) < 0.000_001)
+  }
 
   @Test("Interactive four-corner crop preserves a full source canvas")
   func fullFramePerspectiveCropPreservesImage() throws {

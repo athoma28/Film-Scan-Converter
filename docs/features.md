@@ -40,9 +40,12 @@ features.
 - Near-zero holder-mask pixels that invert into clipped highlights are rendered
   as neutral white after adjustments in both preview and export.
 - Automatic frame detection plus a built-in four-corner perspective tool:
-  drag the canvas handles onto the film edges, use the drawn 4×4 grid to align
-  the frame, and non-destructively straighten that quadrilateral in preview
-  and export. A separate Photoshop-style straighten tool takes two points along
+  drag targeting-reticle handles onto the film edges, using the 100×100-pixel
+  loupe for exact corner placement and the drawn 4×4 grid for alignment.
+  Parallel-edge assist softly favors the common trapezoidal case while Option
+  dragging remains fully free. The resulting perspective warp is independent
+  from the later crop and is applied in preview and export. A separate
+  Photoshop-style straighten tool takes two points along
   an edge and automatically makes the guide horizontal or vertical. A simple
   drag-box crop then trims the current straightened canvas. The inspector shows
   the resulting full-resolution pixel dimensions even though the canvas uses a

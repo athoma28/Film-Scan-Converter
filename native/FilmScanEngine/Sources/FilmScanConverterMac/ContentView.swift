@@ -14,6 +14,7 @@ struct ContentView: View {
   @State private var rebateSelectionPreviousShowOriginal = false
   @State private var isPerspectiveEditing = false
   @State private var perspectiveEditingPreviousShowOriginal = false
+  @State private var usesPerspectiveParallelAssist = true
   @State private var isStraightening = false
   @State private var isCropping = false
   @State private var presetName = ""
@@ -761,12 +762,14 @@ struct ContentView: View {
         .disabled(model.decodedImage == nil)
 
         if isPerspectiveEditing {
-          Text("Drag the four corners onto the film edges. The grid shows the rectangular canvas that will be straightened on preview and export.")
+          Text("Drag each targeting reticle onto the film edge. A 100 × 100 px loupe appears while dragging. Parallel-edge assist softly snaps likely trapezoids; hold Option for a free corner.")
             .font(.caption2)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+          Toggle("Parallel-edge assist", isOn: $usesPerspectiveParallelAssist)
+            .controlSize(.small)
           Button("Reset Perspective") {
-            model.clearCrop()
+            model.clearPerspectiveCrop()
             model.beginPerspectiveCrop()
           }
           .controlSize(.small)
@@ -784,7 +787,7 @@ struct ContentView: View {
             .foregroundStyle(.secondary)
           Button("Clear") {
             endPerspectiveEditing()
-            model.clearCrop()
+            model.clearPerspectiveCrop()
           }
           .controlSize(.small)
           .font(.caption2)
@@ -1165,9 +1168,11 @@ struct ContentView: View {
         PerspectiveCropOverlay(
           isActive: isPerspectiveEditing,
           crop: model.perspectiveCrop,
+          image: model.previewImage,
           imageSize: model.previewImage?.size ?? .zero,
           rotation: model.parameters.rotation,
           flipHorizontally: model.parameters.flip,
+          usesParallelAssist: usesPerspectiveParallelAssist,
           onCropChanged: model.setPerspectiveCrop
         )
 
@@ -1529,10 +1534,14 @@ private struct ManualCropOverlay: View {
 private struct PerspectiveCropOverlay: View {
   let isActive: Bool
   let crop: PerspectiveCrop?
+  let image: NSImage?
   let imageSize: CGSize
   let rotation: Int
   let flipHorizontally: Bool
+  let usesParallelAssist: Bool
   let onCropChanged: (PerspectiveCrop) -> Void
+
+  @State private var draggedCorner: Int?
 
   var body: some View {
     GeometryReader { geometry in
@@ -1570,29 +1579,59 @@ private struct PerspectiveCropOverlay: View {
           .stroke(Color.accentColor.opacity(0.85), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
 
           ForEach(Array(points.enumerated()), id: \.offset) { index, point in
-            Circle()
-              .fill(Color.accentColor)
-              .overlay(Circle().stroke(.white, lineWidth: 2))
-              .frame(width: 16, height: 16)
-              .contentShape(Circle().inset(by: -8))
+            cornerReticle
+              .contentShape(Circle().inset(by: -10))
               .position(point)
               .gesture(
                 DragGesture(minimumDistance: 0)
                   .onChanged { value in
+                    draggedCorner = index
                     let clamped = clamped(value.location, to: imageRect)
                     let displayed = PerspectiveCrop.Point(
                       x: (clamped.x - imageRect.minX) / imageRect.width,
                       y: (clamped.y - imageRect.minY) / imageRect.height
                     )
-                    onCropChanged(crop.replacing(index, with: sourcePoint(fromDisplayed: displayed)))
+                    let source = sourcePoint(fromDisplayed: displayed)
+                    let assistEnabled = usesParallelAssist && !NSEvent.modifierFlags.contains(.option)
+                    let threshold = 18 / max(1, min(imageRect.width, imageRect.height))
+                    onCropChanged(assistEnabled
+                      ? crop.replacing(index, with: source, parallelismAssistThreshold: threshold)
+                      : crop.replacing(index, with: source))
                   }
+                  .onEnded { _ in draggedCorner = nil }
               )
               .help(["Top left", "Top right", "Bottom right", "Bottom left"][index])
+          }
+
+          if let draggedCorner, let image {
+            CornerLoupe(
+              image: image,
+              normalizedPoint: displayedPoints[draggedCorner],
+              samplePixelSize: 100)
+              .frame(width: 144, height: 144)
+              .position(points[draggedCorner])
+              .allowsHitTesting(false)
           }
         }
       }
     }
     .allowsHitTesting(isActive)
+  }
+
+  private var cornerReticle: some View {
+    ZStack {
+      Circle()
+        .fill(.black.opacity(0.22))
+        .stroke(.white, lineWidth: 1.5)
+      Circle()
+        .stroke(Color.accentColor, lineWidth: 2)
+        .padding(4)
+      Rectangle().fill(.white).frame(width: 1, height: 24)
+      Rectangle().fill(.white).frame(width: 24, height: 1)
+      Circle().fill(Color.accentColor).frame(width: 3, height: 3)
+    }
+    .frame(width: 28, height: 28)
+    .shadow(color: .black.opacity(0.65), radius: 2)
   }
 
   private func displayedPoint(_ point: PerspectiveCrop.Point) -> CGPoint {
@@ -1643,6 +1682,40 @@ private struct PerspectiveCropOverlay: View {
       x: min(max(point.x, rect.minX), rect.maxX),
       y: min(max(point.y, rect.minY), rect.maxY)
     )
+  }
+}
+
+private struct CornerLoupe: View {
+  let image: NSImage
+  let normalizedPoint: CGPoint
+  let samplePixelSize: CGFloat
+
+  var body: some View {
+    GeometryReader { geometry in
+      let scale = geometry.size.width / max(1, samplePixelSize)
+      let scaledSize = CGSize(
+        width: image.size.width * scale,
+        height: image.size.height * scale)
+      ZStack {
+        Color.black
+        Image(nsImage: image)
+          .resizable()
+          .interpolation(.none)
+          .frame(width: scaledSize.width, height: scaledSize.height)
+          .offset(
+            x: (0.5 - normalizedPoint.x) * scaledSize.width,
+            y: (0.5 - normalizedPoint.y) * scaledSize.height)
+        Rectangle().fill(.black.opacity(0.8)).frame(width: 1, height: 34)
+        Rectangle().fill(.black.opacity(0.8)).frame(width: 34, height: 1)
+        Rectangle().fill(.white).frame(width: 1, height: 18)
+        Rectangle().fill(.white).frame(width: 18, height: 1)
+        Circle().stroke(Color.accentColor, lineWidth: 2).frame(width: 10, height: 10)
+      }
+      .clipShape(RoundedRectangle(cornerRadius: 8))
+      .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white, lineWidth: 2))
+      .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.accentColor, lineWidth: 2).padding(-3))
+      .shadow(color: .black.opacity(0.8), radius: 5)
+    }
   }
 }
 

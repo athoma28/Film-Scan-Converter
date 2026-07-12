@@ -152,9 +152,14 @@ usage evidence before implementation:
    that a crop/straighten perspective warp cannot correct. This needs
    representative fixtures and a preview/export parity contract before UI
    exposure.
-6. **Progress estimates** only after measured stage histories are stable enough
+6. **Film-frame edge assistance** after assembling representative holder and
+   rebate fixtures: detect long mask/frame lines, score their intersections,
+   and offer the measured quadrilateral as a visible starting suggestion for
+   the perspective editor. Keep the current reticle/loupe interaction and free
+   four-corner override; do not silently force detected edges or a trapezoid.
+7. **Progress estimates** only after measured stage histories are stable enough
    to outperform honest determinate/indeterminate progress.
-7. **Contact sheets** only when requested by a concrete review or proofing
+8. **Contact sheets** only when requested by a concrete review or proofing
    workflow.
 
 ## Not Currently Planned
@@ -196,8 +201,10 @@ replanned:
 - frozen compatibility fixtures plus deterministic native CPU contracts;
 - automatic frame detection, a two-click horizontal/vertical straighten guide,
   a post-straighten drag-box crop with full-resolution output dimensions,
-  direct four-corner crop handles, a visible alignment grid, persisted planar
-  perspective correction, rotation, flip, frame, and aspect ratio;
+  direct four-corner targeting reticles, a 100×100-pixel drag loupe, soft
+  parallel-edge assistance, a visible alignment grid, independent persisted
+  planar perspective correction and manual crop, rotation, flip, frame, and
+  aspect ratio;
 - RawTherapee-compatible power-law film-negative inversion and an optional
   capture-aware density path;
 - protected semantic color/tone controls, curves, three-way color wheels, and a

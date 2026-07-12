@@ -155,7 +155,11 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   Kodachrome-like Auto so the look can be removed without resetting crop or
   orientation.
 - Treat manual film-frame geometry as a persisted, validated clockwise
-  four-corner quadrilateral. Preview, dust-overlay alignment, density flat
+  four-corner quadrilateral. Its reticle/loupe editor may softly snap either
+  incident edge parallel to its opposite edge, but must preserve an explicit
+  free-drag path. Perspective state is independent from the later normalized
+  canvas crop: changing or clearing one must not clear the other. Preview,
+  dust-overlay alignment, density flat
   field, and export must use the same CPU perspective warp; this corrects one
   planar frame and is not a lens-distortion model.
 - Resolve each two-point straighten guide against its nearest horizontal or

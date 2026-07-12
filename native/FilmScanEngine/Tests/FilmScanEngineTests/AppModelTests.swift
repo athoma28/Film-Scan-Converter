@@ -600,6 +600,31 @@ struct AppModelTests {
     #expect(model.cropStatus.isEmpty)
   }
 
+  @Test("Perspective warp and manual crop remain independent")
+  func perspectiveWarpAndCropRemainIndependent() {
+    let model = AppModel()
+    let crop = NormalizedCropRect(x: 0.1, y: 0.15, width: 0.8, height: 0.7)
+    let perspective = PerspectiveCrop(
+      topLeft: .init(x: 0.05, y: 0.08),
+      topRight: .init(x: 0.95, y: 0.04),
+      bottomRight: .init(x: 0.9, y: 0.94),
+      bottomLeft: .init(x: 0.08, y: 0.9))
+
+    model.setManualCrop(crop)
+    model.setPerspectiveCrop(perspective)
+
+    #expect(model.manualCrop == crop)
+    #expect(model.parameters.manualCrop == crop)
+    #expect(model.perspectiveCrop == perspective)
+
+    model.clearPerspectiveCrop()
+
+    #expect(model.perspectiveCrop == nil)
+    #expect(model.parameters.perspectiveCrop == nil)
+    #expect(model.manualCrop == crop)
+    #expect(model.parameters.manualCrop == crop)
+  }
+
   @Test("Manual film-base selection maps oriented preview coordinates to source")
   func rebateSelectionMapsOrientedCoordinates() {
     let displayed = CGRect(x: 0.1, y: 0.2, width: 0.3, height: 0.4)
