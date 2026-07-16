@@ -50,13 +50,17 @@ struct FilmScanConverterMacApp: App {
           model.exportSelected()
         }
         .keyboardShortcut("e", modifiers: [.command])
-        .disabled(model.selection == nil || model.exportParameters.destinationDirectory == nil || model.isExporting)
+        .disabled(
+          model.selection == nil || model.exportParameters.destinationDirectory == nil
+            || model.isExporting || model.isLoading)
 
         Button("Export All") {
           model.exportAll()
         }
         .keyboardShortcut("e", modifiers: [.command, .shift])
-        .disabled(model.files.isEmpty || model.exportParameters.destinationDirectory == nil || model.isExporting)
+        .disabled(
+          model.files.isEmpty || model.exportParameters.destinationDirectory == nil
+            || model.isExporting || model.isLoading)
       }
 
       CommandMenu("Corrections") {

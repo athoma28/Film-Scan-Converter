@@ -81,8 +81,9 @@ live/reserved snapshot, as a secondary classification aid. All-zone `vmmap`
 snapshots of the sequential run identified the apparent growth as
 `MALLOC_LARGE_REUSABLE` and empty allocator regions: those pages increased the
 resident count without increasing dirty live memory or physical footprint.
-These engine-level readings do not replace the app preview-cache depth
-comparison or correlated stage-level app-path traces.
+These engine-level readings complement the completed app preview-cache depth
+comparison and correlated stage-level app-path traces; they do not replace the
+remaining app-path sequential-export run.
 
 ## App-Path Preview Baseline
 
@@ -122,6 +123,25 @@ these are compact regression baselines rather than population-tail claims.
 The bounded preview architecture has no normal authoritative replacement
 interval: browsing keeps the preview source, while export independently decodes
 the full-resolution camera RAW.
+
+The 2026-07-14 follow-up extended the same release benchmark with cache-depth
+samples. Each sample records configured depth, realized sessions, logical cache
+bytes, fill time, and Mach physical footprint before fill, at capacity, and
+after model release:
+
+| Configured depth | Realized sessions | Logical cache | Fill time | Physical at capacity | Physical after release |
+|---:|---:|---:|---:|---:|---:|
+| 2 | 2 of 6 | 8.53 MB | 95.62 ms | 40.04 MB | 27.82 MB |
+| 8 | 6 of 6 | 25.59 MB | 270.05 ms | 76.92 MB | 26.23 MB |
+| 32 | 6 of 6 | 25.59 MB | 251.41 ms | 44.19 MB | 26.49 MB |
+
+The local corpus has six RAFs, so depths 8 and 32 intentionally report the same
+realized population; this does not claim a fully populated 32-file cache. The
+depth samples run sequentially in one process, and later samples reuse allocator
+pages. Therefore the at-capacity physical-footprint values are diagnostic, not
+a monotonic depth comparison. Logical cache bytes show the deterministic
+scaling, while the roughly 26-28 MB post-release readings show no sustained
+per-depth physical-footprint growth.
 
 ## Sequential Memory Baseline
 
@@ -171,14 +191,15 @@ the dominant stage and varies materially with source content. PNG is writer
 bound; TIFF's LZW finalize is its only substantial non-decode component. The
 compact-buffer slice below reduces writer memory traffic without claiming to
 change that dominant-stage conclusion. The first app-path latency baseline is
-now complete; further engine optimization waits on the remaining cache-depth
-and sequential-export evidence.
+now complete; further engine optimization waits on the remaining
+sequential-export evidence.
 
-## Compact TIFF Packing Optimization
+## Compact And Parallel Export Packing
 
 TIFF previously built a padded 64-bit RGBA `CGImage` buffer even though the
 writer emits three 16-bit RGB channels. The production TIFF path now builds a
-48-bit RGB buffer directly; PNG deliberately keeps its explicit RGBA layout.
+48-bit RGB buffer directly; the follow-up below applies the same compact layout
+to PNG.
 For a 7752 x 5184 image, the packed intermediate fell from 321,490,944 bytes to
 241,118,208 bytes, a 25% or 80,372,736-byte reduction.
 
@@ -188,6 +209,32 @@ from 0.02973 to 0.02288 seconds (23.0%). Total export remains decode-dominated,
 so no broader latency claim is warranted. The output remained 179,226,416 bytes with SHA-256
 `e809f0ab4431336d6092e8828e2ad9d8e399baac9c3cbf216b1ae01494189a75`.
 The ten-file confirmation preserved every prior TIFF byte count and hash.
+
+The follow-up applies the same bounded packing strategy to every writer. Pixel
+ranges are independent, so images of at least one megapixel now use at most
+eight workers for BGR-to-RGB conversion. TIFF and DNG retain their 48-bit RGB
+buffers; JPEG moves from padded 32-bit RGBA to 24-bit RGB, and PNG moves from
+padded 64-bit RGBA to 48-bit RGB. At 7752 x 5184 this removes 40,186,368 bytes
+from the JPEG intermediate and 80,372,736 bytes from PNG.
+
+On 2026-07-11, one release-mode before/after run used the same
+`DSCF2819.RAF`, settings, and production writer path. All outputs were hashed
+and removed immediately. The table isolates the pack and writer intervals;
+full export remained dominated by the separately measured three-pass X-Trans
+decode.
+
+| Format | Packed bytes before -> after | Pack before -> after | Pack + finalize before -> after |
+|---|---:|---:|---:|
+| TIFF | 241,118,208 -> 241,118,208 | 20.18 -> 11.54 ms (-42.8%) | 1.6462 -> 1.6215 s (-1.5%) |
+| JPEG | 160,745,472 -> 120,559,104 | 14.22 -> 10.67 ms (-24.9%) | 0.2366 -> 0.2310 s (-2.4%) |
+| PNG | 321,490,944 -> 241,118,208 | 24.75 -> 19.39 ms (-21.7%) | 3.8790 -> 3.7844 s (-2.4%) |
+| DNG | 241,118,208 -> 241,118,208 | 23.81 -> 19.60 ms (-17.7%) | 0.0907 -> 0.0635 s (-30.0%) |
+
+The output byte count and SHA-256 were identical before and after for each of
+the four formats. This is a single controlled A/B, so the percentages are
+bounded-run evidence rather than stable population estimates. The large-image
+packing regression also crosses worker boundaries and verifies exact 8-bit and
+16-bit channel values; small images stay on a one-worker path.
 
 ## Initial Smoke Measurement
 
@@ -245,7 +292,8 @@ Both outputs were 179,226,416 bytes with SHA-256
 First-run peak RSS was effectively unchanged (1,210,269,696 versus
 1,211,367,424 bytes). The later physical-footprint instrumentation supersedes
 RSS as the live-memory gate and the corrected ten-file sequence closes that
-engine-level question; preview-cache depth comparison remains open.
+engine-level question. The later app-path benchmark closes the local six-RAF
+preview-cache depth comparison.
 
 ## Decode-Baseline Correction
 
@@ -290,23 +338,27 @@ input and a regression gate:
    records first paint, cached/uncached switching, rapid-selection drain, cache
    bytes, and physical footprint. Use Instruments only when a later regression
    needs deeper render-stage attribution.
-4. **Memory envelope.** Engine gate complete. The corrected ten-file report
+4. **Memory envelope.** Engine and preview-cache gates complete. The corrected
+   ten-file report
    records physical footprint, peak physical footprint, reusable bytes, legacy
    resident size, and default-zone statistics. Post-release physical footprint
    fell from 52.74 MB to 42.78 MB and peak stayed at 686.11 MB; the prior RSS
-   growth was reclaimable allocator memory. Next measure app preview-cache
-   depths 2, 8, and 32 with the same physical-footprint contract.
+   growth was reclaimable allocator memory. The app benchmark now samples
+   preview-cache depths 2, 8, and 32 with the same physical-footprint contract;
+   its six-file corpus saturates the latter two depths at six sessions and
+   returns to roughly 26-28 MB after each model release.
 5. **Large-file handling.** First corrected paint, cached and uncached
    switching, rapid-selection drain, and process memory now have a reproducible
    release baseline. The bounded browsing contract has no authoritative
-   replacement stage. Next compare preview-cache depths 2, 8, and 32 using the
-   same physical-footprint fields.
+   replacement stage. Preview-cache depth sampling is complete for the local
+   six-RAF corpus; retain the realized-session count in future larger-corpus
+   reports rather than implying depth 32 was fully populated here.
 6. **Optimization slice.** Two safe secondary-stage slices are complete:
    multicore fused power-law correction is 74.9% faster at the measured median,
    and compact TIFF packing removes 80.37 MB while cutting the ten-file median
    interval 23.0%. Both preserve deterministic output bytes and hashes.
    Do not substitute a one-pass X-Trans quality mode; defer further engine work
-   until the remaining app measurements expose a dominant seam.
+   until the remaining app measurement exposes a dominant seam.
 7. **Batch confirmation.** Engine confirmation complete for ten sequential
    TIFF exports, including output contracts and physical memory. The remaining
    app-path run must add cancellation latency, queue timing, preview-cache

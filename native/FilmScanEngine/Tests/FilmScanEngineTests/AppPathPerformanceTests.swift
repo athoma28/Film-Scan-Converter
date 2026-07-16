@@ -30,6 +30,17 @@ struct AppPathPerformanceTests {
     let p95Milliseconds: Double
   }
 
+  private struct PreviewCacheDepthSample: Codable {
+    let configuredDepth: Int
+    let availableFiles: Int
+    let populatedSessions: Int
+    let cachedPreviewBytes: Int
+    let fillMilliseconds: Double
+    let memoryBeforeFill: MemorySample
+    let memoryAtCapacity: MemorySample
+    let memoryAfterRelease: MemorySample
+  }
+
   private struct Report: Codable {
     let generatedAt: String
     let hardware: String
@@ -42,6 +53,7 @@ struct AppPathPerformanceTests {
     let memoryBefore: MemorySample
     let memoryAfter: MemorySample
     let maximumPreviewCacheBytes: Int
+    let previewCacheDepths: [PreviewCacheDepthSample]
     let note: String
   }
 
@@ -50,6 +62,13 @@ struct AppPathPerformanceTests {
     let summary = summarize([4, 1, 3, 2])
     #expect(summary.p50Milliseconds == 2)
     #expect(summary.p95Milliseconds == 4)
+  }
+
+  @Test("Preview-cache depth sampling reports corpus-limited populations")
+  func previewCacheDepthPopulationContract() {
+    #expect(expectedCachePopulation(limit: 2, fileCount: 6) == 2)
+    #expect(expectedCachePopulation(limit: 8, fileCount: 6) == 6)
+    #expect(expectedCachePopulation(limit: 32, fileCount: 6) == 6)
   }
 
   @Test(
@@ -75,6 +94,7 @@ struct AppPathPerformanceTests {
       Int(ProcessInfo.processInfo.environment["APP_PATH_BENCHMARK_REPETITIONS"] ?? "3") ?? 3)
     let corpus = Array(rawFiles.prefix(max(4, min(10, rawFiles.count))))
     let memoryBefore = memorySample()
+    let previewCacheDepths = try await measurePreviewCacheDepths(corpus: corpus)
     var firstPaintSamples = [Double]()
     var cachedSamples = [Double]()
     var uncachedSamples = [Double]()
@@ -153,7 +173,8 @@ struct AppPathPerformanceTests {
       memoryBefore: memoryBefore,
       memoryAfter: memorySample(),
       maximumPreviewCacheBytes: maximumPreviewCacheBytes,
-      note: "Browsing uses bounded embedded-RAW previews; export performs independent full-resolution decode. No benchmark exports are written."
+      previewCacheDepths: previewCacheDepths,
+      note: "Browsing uses bounded embedded-RAW previews; configured cache depths can populate only up to the available file count and the 256 MiB cache cap. Export performs independent full-resolution decode. No benchmark exports are written."
     )
 
     let encoder = JSONEncoder()
@@ -165,11 +186,55 @@ struct AppPathPerformanceTests {
     print(String(decoding: data, as: UTF8.self))
   }
 
+  private func measurePreviewCacheDepths(
+    corpus: [URL]
+  ) async throws -> [PreviewCacheDepthSample] {
+    var samples = [PreviewCacheDepthSample]()
+    for depth in [2, 8, 32] {
+      let beforeFill = memorySample()
+      var model: AppModel? = makeModel(cacheLimit: depth)
+      let fillStart = ContinuousClock.now
+      model?.importFiles(corpus)
+      let firstFile = try #require(corpus.first)
+      try await waitForDisplayedPreview(
+        in: try #require(model), file: firstFile, afterDisplayedCount: 0)
+      let expectedPopulation = expectedCachePopulation(
+        limit: depth, fileCount: corpus.count)
+      try await waitUntil("preview cache depth \(depth)") {
+        model?.previewCacheSessionCount == expectedPopulation
+      }
+
+      let populatedSessions = model?.previewCacheSessionCount ?? 0
+      let cachedPreviewBytes = model?.previewCachePhysicalBytes ?? 0
+      let fillMilliseconds = milliseconds(since: fillStart)
+      let atCapacity = memorySample()
+      model = nil
+      await Task.yield()
+      try await Task.sleep(for: .milliseconds(50))
+
+      samples.append(PreviewCacheDepthSample(
+        configuredDepth: depth,
+        availableFiles: corpus.count,
+        populatedSessions: populatedSessions,
+        cachedPreviewBytes: cachedPreviewBytes,
+        fillMilliseconds: fillMilliseconds,
+        memoryBeforeFill: beforeFill,
+        memoryAtCapacity: atCapacity,
+        memoryAfterRelease: memorySample()
+      ))
+    }
+    return samples
+  }
+
   private func makeModel(cacheLimit: Int) -> AppModel {
     let suiteName = "fsc-app-path-benchmark-\(UUID().uuidString)"
     let preferences = UserDefaults(suiteName: suiteName)!
     preferences.set(cacheLimit, forKey: "previewCacheLimit")
     return AppModel(preferences: preferences)
+  }
+
+  private func expectedCachePopulation(limit: Int, fileCount: Int) -> Int {
+    min(max(2, limit), fileCount)
   }
 
   private func waitForDisplayedPreview(

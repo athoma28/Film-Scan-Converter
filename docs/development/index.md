@@ -16,16 +16,19 @@ capture-aware, density-domain inversion direction and its staged implementation
 track.
 
 The [native RAW decode and quality benchmark](native-raw-benchmark.md) records
-the current five-file sample-corpus quality and performance results.
+the eight-file `rawPyCompatibility` decode snapshot. The local regression
+manifest uses a five-file half-resolution subset plus one full-resolution
+sample; neither should be confused with the app's camera-scan export profile.
 
-A [real-time still preview plan](realtime-preview-plan.md) records historical
-interactive-preview design and deferred display-surface/idle-render options. It
-does not set current priority.
+A [real-time still preview outcome](realtime-preview-plan.md) records the
+historical interactive design, the retired idle-replacement proposal, and
+deferred display-surface options. It does not set current priority.
 
-The `FilmScanPreviewComparator` tool (`swift run FilmScanPreviewComparator`)
+The `FilmScanPreviewComparator` tool
+(`swift run --package-path native/FilmScanEngine FilmScanPreviewComparator`)
 supports visual review of GPU and CPU rendering. The current automated
-parameter grids perform 2,725 channel comparisons within the documented
-2/255 tolerance.
+parameter grids perform 2,725 channel comparisons within the documented 2/255
+tolerance.
 
 A [Swift port evaluation](swift-port-evaluation.md) records an earlier
 architecture review. Treat it as historical evidence rather than a checklist.

@@ -12,9 +12,9 @@ single ordered plan.
 The Python/Tkinter application is retained as a maintenance-only legacy
 workflow because dust removal remains Python-only and fixture tools still use
 legacy modules. Python retirement is not itself a blocker for the first native
-release. Native automatic
-crop/perspective correction, self-contained app/ZIP assembly, and TIFF, JPEG,
-PNG, and processed-RGB DNG export are implemented. The legacy
+release. Native automatic frame detection, manual crop/perspective correction,
+self-contained app/ZIP assembly, and TIFF, JPEG, PNG, and processed-RGB DNG
+export are implemented. The legacy
 installation and usage guides remain available for users who need dust removal
 or the historical all-in-one workflow. See
 [Legacy Python Application](legacy-python.md) for the retirement policy.

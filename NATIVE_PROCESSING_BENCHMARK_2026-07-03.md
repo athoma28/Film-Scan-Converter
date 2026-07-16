@@ -1,5 +1,11 @@
 # Native Processing Benchmark — Optimized
 
+> **Historical benchmark snapshot:** timings and the 312-test count below are
+> retained as recorded evidence from July 2026, not current status. Use
+> [Native macOS Development Status](docs/development/native-macos.md) and
+> [40 MP Export Performance](docs/performance/40mp-export.md) for the current
+> suite count, app-path contract, and performance cycle.
+
 Initial run: 2026-07-03  
 Corrected-matrix rerun: 2026-07-05  
 Branch: `dev`  

@@ -60,20 +60,29 @@ Completed evidence:
    the 40.19 MP writer intermediate, reduced the ten-file median packing
    interval from 29.73 ms to 22.88 ms (23.0%), and preserved all ten output byte
    counts and SHA-256 hashes.
-4. A reproducible release-mode app-path benchmark now covers first corrected
+4. Full-resolution packing now uses up to eight workers for TIFF, JPEG, PNG,
+   and DNG. JPEG and PNG also drop unused alpha padding, removing 40.19 MB and
+   80.37 MB from their 40.19 MP writer inputs. The same-RAW release A/B kept
+   all four output hashes identical while reducing combined pack/finalize time
+   by 1.5%, 2.4%, 2.4%, and 30.0% respectively.
+5. A reproducible release-mode app-path benchmark now covers first corrected
    paint, cached and uncached switching, six-file rapid-selection drain,
    preview-cache bytes, and Mach physical footprint. On the local six-RAF
    corpus, three-repetition p50/p95 results were 50.71/63.72 ms, 14.57/83.98
    ms, 126.32/126.32 ms, and 81.55/133.77 ms respectively. No result exposes a
    new dominant interactive latency seam.
+6. Preview-cache depth sampling now records configured depth, realized session
+   count, logical cache bytes, fill latency, and physical footprint before,
+   during, and after each run. On the six-RAF corpus, depth 2 held two sessions
+   and 8.53 MB while depths 8 and 32 both saturated at six sessions and 25.59
+   MB; post-release footprint returned to roughly 26-28 MB after every sample.
 
 Remaining deliverables:
 
-1. preview-cache physical footprint at depths 2, 8, and 32;
-2. an app-path ten-file sequential export result including cancellation latency
+1. an app-path ten-file sequential export result including cancellation latency
    and post-run physical footprint;
-3. no further engine optimization in this cycle unless those remaining
-   measurements expose another dominant, safely output-preserving seam.
+2. no further engine optimization in this cycle unless that remaining
+   measurement exposes another dominant, safely output-preserving seam.
 
 Acceptance:
 
@@ -110,8 +119,11 @@ Implement and validate, in this order:
 
 1. undo/redo for editing-state changes;
 2. zoom and pan in the still preview;
-3. ordered sidebar multi-selection and lazy Export Selected;
-4. a real batch-editing usability pass and fixes found by it.
+3. a real batch-editing usability pass and fixes found by it.
+
+Completed in the current app: native Command/Shift sidebar multi-selection,
+import-ordered Export Selected, multi-selected append during an active run, and
+duplicate-friendly queue entries with independent export-setting snapshots.
 
 The current Original toggle is adequate unless testing demonstrates that a
 split view is needed. Sidebar drag reordering becomes a release requirement

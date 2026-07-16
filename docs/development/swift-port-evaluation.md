@@ -12,9 +12,11 @@ capabilities and limitations, use
 
 - Keep LibRaw behind a narrow C bridge and return owned 16-bit BGR buffers to
   Swift.
-- Keep preview and export on the same authoritative processing contract. The
-  bounded Core Image renderer may accelerate interaction, but CPU processing
-  remains the export reference.
+- Keep preview and export on the same adjustment and geometry semantics while
+  preserving their explicit image-source boundary: bounded thumbnails for
+  browsing, independent full-resolution decode for export. The Core Image
+  renderer accelerates interaction, while CPU processing remains the export
+  reference.
 - Use exact frozen fixtures where deterministic Python/OpenCV equivalence is a
   product requirement. Use documented tolerances only for genuinely different
   decoder or interpolation implementations.

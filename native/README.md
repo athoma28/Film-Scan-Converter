@@ -99,7 +99,11 @@ swift test --disable-sandbox -c release \
 ```
 
 This uses the local RAF corpus, emits a compact JSON latency/memory report, and
-writes no exports.
+writes no exports. The report also samples preview-cache depths 2, 8, and 32,
+including realized session count, logical cache bytes, fill latency, and
+physical footprint before fill, at capacity, and after model release. A corpus
+smaller than the configured depth is reported explicitly rather than treated as
+a fully populated cache.
 
 Run the RAW and preview tools:
 
@@ -144,9 +148,10 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
 ## Implementation Contracts
 
 - Keep interactive previews bounded and latest-value-wins.
-- Use explicit image contracts: a 1000px display source, a 256px analysis
-  source, optional selected-file RAW detail for validated features, and an
-  independent full-resolution export decode.
+- Use explicit image contracts: normal browsing starts with a 1000px display
+  source and a 256px analysis source; the explicit **Load RAW Preview** action
+  may replace the selected embedded RAW source with a demosaiced preview up to
+  2400px; export owns an independent full-resolution decode.
 - Keep lookahead preview-only, LRU, and bounded by both file count and bytes.
 - Keep adaptive-look analysis bounded independently of imported image size;
   Kodachrome-like Auto currently analyzes at most a 1024-pixel long edge and
@@ -175,12 +180,13 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   path on supported MacBook Pro hardware. Keep CPU rendering correct for
   deterministic tests, CI/headless runs, export/reference behavior, and fallback
   paths that are not GPU-integrated yet.
-- Serialize authoritative large-image decode work and check cancellation before
-  entering synchronous LibRaw/ImageIO calls.
+- Serialize fallback/detail decode work and full-resolution RAW export decode;
+  check cancellation before entering synchronous LibRaw/ImageIO calls.
 - Keep full-resolution RAW export one-file-at-a-time.
 - Give export priority over speculative lookahead work and check cancellation
   between decode, correction, geometry, and write stages.
-- Preserve atomic staging, collision-safe naming, and cleanup on export failure.
+- Preserve PNG's staged commit, collision-safe naming, and destination cleanup
+  on export failure for every format.
 - Compare performance only across identical profiles, stage sets, hardware, and
   quality contracts.
 - Keep product claims in `docs/features.md`, current evidence in

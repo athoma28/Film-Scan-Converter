@@ -112,7 +112,7 @@ extension UInt16Image {
       url: url,
       packingSeconds: packingSeconds,
       writerSeconds: exportSeconds(writerStart.duration(to: .now)),
-      packedPixelBytes: width * height * 4
+      packedPixelBytes: width * height * 3
     )
   }
 
@@ -191,7 +191,7 @@ extension UInt16Image {
       url: url,
       packingSeconds: packingSeconds,
       writerSeconds: exportSeconds(writerStart.duration(to: .now)),
-      packedPixelBytes: width * height * 8
+      packedPixelBytes: width * height * 6
     )
   }
 
@@ -211,7 +211,7 @@ extension UInt16Image {
   }
 
   public func makeExportCGImage16() -> CGImage? {
-    guard let data = rgba16Data() else {
+    guard let data = rgb16Data() else {
       return nil
     }
 
@@ -222,12 +222,10 @@ extension UInt16Image {
       width: width,
       height: height,
       bitsPerComponent: 16,
-      bitsPerPixel: 64,
-      bytesPerRow: width * 8,
+      bitsPerPixel: 48,
+      bytesPerRow: width * 6,
       space: CGColorSpaceCreateDeviceRGB(),
-      bitmapInfo: .byteOrder16Little.union(
-        CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue)
-      ),
+      bitmapInfo: .byteOrder16Little,
       provider: provider,
       decode: nil,
       shouldInterpolate: false,
@@ -259,7 +257,7 @@ extension UInt16Image {
   }
 
   public func makeExportCGImage8() -> CGImage? {
-    guard let data = rgba8Data() else {
+    guard let data = rgb8Data() else {
       return nil
     }
 
@@ -270,10 +268,10 @@ extension UInt16Image {
       width: width,
       height: height,
       bitsPerComponent: 8,
-      bitsPerPixel: 32,
-      bytesPerRow: width * 4,
+      bitsPerPixel: 24,
+      bytesPerRow: width * 3,
       space: CGColorSpaceCreateDeviceRGB(),
-      bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
+      bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
       provider: provider,
       decode: nil,
       shouldInterpolate: false,

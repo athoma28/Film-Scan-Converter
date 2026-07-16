@@ -2,7 +2,8 @@
 
 The native Swift/macOS application is the primary product. The legacy Python
 application is maintenance-only and remains available for workflows the native
-app has not yet replaced, primarily dust handling and packaged legacy releases. See
+app has not replaced, primarily applied dust removal and cross-platform legacy
+use. See
 [Native macOS Development](development/native-macos.md) for the active product
 and [Legacy Python Application](legacy-python.md) for the retirement policy.
 

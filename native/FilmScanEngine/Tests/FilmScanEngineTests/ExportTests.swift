@@ -106,6 +106,16 @@ struct ExportTests {
     #expect(imported.height == original.height)
   }
 
+  @Test func jpegExportUsesCompact8BitRGBComponentLayout() throws {
+    let image = makeTestImage(width: 7, height: 5)
+    let cgImage = try #require(image.makeExportCGImage8())
+
+    #expect(cgImage.bitsPerComponent == 8)
+    #expect(cgImage.bitsPerPixel == 24)
+    #expect(cgImage.bytesPerRow == 7 * 3)
+    #expect(cgImage.alphaInfo == .none)
+  }
+
   @Test func jpegQualityParameterShowsSizeDifference() throws {
     let original = makeTestImage()
     let highURL = tempDir.appendingPathComponent("high.jpg")
@@ -133,17 +143,54 @@ struct ExportTests {
     #expect(imported.width == original.width)
     #expect(imported.height == original.height)
     #expect(imported.channels == 3)
+    #expect(imported == original)
   }
 
-  @Test func pngExportUsesExplicit16BitRGBAComponentLayout() throws {
+  @Test func pngExportUsesCompact16BitRGBComponentLayout() throws {
     let image = makeTestImage(width: 7, height: 5)
     let cgImage = try #require(image.makeExportCGImage16())
 
     #expect(cgImage.bitsPerComponent == 16)
-    #expect(cgImage.bitsPerPixel == 64)
-    #expect(cgImage.bytesPerRow == 7 * 8)
-    #expect(cgImage.alphaInfo == .noneSkipLast)
+    #expect(cgImage.bitsPerPixel == 48)
+    #expect(cgImage.bytesPerRow == 7 * 6)
+    #expect(cgImage.alphaInfo == .none)
     #expect(cgImage.bitmapInfo.contains(.byteOrder16Little))
+  }
+
+  @Test func largeExportPackingPreservesRGBValuesAcrossParallelRanges() throws {
+    let width = 1_001
+    let height = 1_000
+    let pixelCount = width * height
+    var pixels = [UInt16](repeating: 0, count: pixelCount * 3)
+    for pixelIndex in 0..<pixelCount {
+      let component = pixelIndex * 3
+      pixels[component] = UInt16(truncatingIfNeeded: pixelIndex * 3)
+      pixels[component + 1] = UInt16(truncatingIfNeeded: pixelIndex * 5)
+      pixels[component + 2] = UInt16(truncatingIfNeeded: pixelIndex * 7)
+    }
+    let image = UInt16Image(
+      width: width, height: height, channels: 3, pixels: pixels)
+    let rgb16 = try #require(image.rgb16Data())
+    let rgb8 = try #require(image.rgb8Data())
+
+    rgb16.withUnsafeBytes { rawBytes in
+      let components = rawBytes.bindMemory(to: UInt16.self)
+      for pixelIndex in [0, pixelCount / 8, pixelCount / 2, pixelCount - 1] {
+        let component = pixelIndex * 3
+        #expect(components[component] == pixels[component + 2])
+        #expect(components[component + 1] == pixels[component + 1])
+        #expect(components[component + 2] == pixels[component])
+      }
+    }
+    rgb8.withUnsafeBytes { rawBytes in
+      let components = rawBytes.bindMemory(to: UInt8.self)
+      for pixelIndex in [0, pixelCount / 8, pixelCount / 2, pixelCount - 1] {
+        let component = pixelIndex * 3
+        #expect(components[component] == UInt8(truncatingIfNeeded: pixels[component + 2] >> 8))
+        #expect(components[component + 1] == UInt8(truncatingIfNeeded: pixels[component + 1] >> 8))
+        #expect(components[component + 2] == UInt8(truncatingIfNeeded: pixels[component] >> 8))
+      }
+    }
   }
 
   @Test func pngExportReportsDestinationAndRemovesStagingFileOnFailure() throws {

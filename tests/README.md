@@ -79,5 +79,6 @@ native/FilmScanEngine/.build/release/FilmScanRawBenchmark \
   --output /tmp/film_scan_decode_comparison.json
 ```
 
-See [Native RAW Decode And Quality Benchmark](../docs/development/native-raw-benchmark.md)
-for the verified five-file results.
+See [Native RAW Compatibility Decode And Quality Benchmark](../docs/development/native-raw-benchmark.md)
+for the eight-file compatibility-profile snapshot and its distinction from the
+current app export profile.

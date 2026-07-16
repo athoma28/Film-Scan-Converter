@@ -10,11 +10,12 @@ The native application is the primary product. It provides:
   film-negative inversion using RawTherapee's exponent model and presets,
   orientation, white balance, exposure, shadows, highlights, saturation,
   RGB tone curves, highlight/midtone/shadow color wheels.
-- Camera-scan RAW processing with ISO-tier noise/detail filtering. Preview uses
-  bounded half-size output; X-Trans previews are fully interpolated with one
-  pass before downsampling so the 6×6 sensor mosaic cannot leak into bright
-  frames. Export re-decodes RAW files at full resolution, using RCD for Bayer
-  data or three-pass Markesteijn interpolation for X-Trans.
+- Camera-scan RAW processing with ISO-tier noise/detail filtering. Browsing
+  starts with the camera's embedded preview, bounded to a 1000px long edge.
+  **Load RAW Preview** explicitly replaces it with a demosaiced preview up to
+  2400px, recalibrated from RAW pixels for unusual film bases. Export still
+  re-decodes RAW files at full resolution, using RCD for Bayer data or
+  three-pass Markesteijn interpolation for X-Trans.
 - Interactive GPU-accelerated preview that updates during slider drags.
 - Export to TIFF (16-bit, optional LZW), JPEG (8-bit, configurable quality),
   PNG (16-bit lossless), and DNG (processed 16-bit RGB).
@@ -28,8 +29,10 @@ The native application is the primary product. It provides:
    A bounded preview appears first for large files, while the inspector header
    reports full-resolution output dimensions from file metadata. That readout
    updates after crop, rotation, and straightening; it does not report the
-   preview proxy size. Browsing keeps this bounded source; full-resolution RAW
-   decoding happens independently during export.
+   preview proxy size. For a camera RAW, choose **Load RAW Preview** in the
+   toolbar when the embedded preview's color is untrustworthy or more detail is
+   useful. Full-resolution RAW decoding still happens independently during
+   export.
 3. New files are automatically classified as color negative, B&W negative, or
    slide. Review and adjust the film mode and film negative preset as needed.
 4. Adjust corrections in the inspector panel: orientation, white balance,
@@ -72,11 +75,14 @@ The native application is the primary product. It provides:
    when finished; the overlay is diagnostic and is not exported.
 10. Set export options (format, frame, aspect ratio) and choose a destination
    folder.
-11. Click Export Selected or Export All to write processed images. While an
-    export is running, additional files can be appended with the "Add Selected
-    to Export Queue" button. Duplicates are rejected and progress updates
-    dynamically. Standard images retain source resolution; RAW files are
-    re-decoded at full resolution one at a time so batch memory remains bounded.
+11. Command-click or Shift-click sidebar rows to select a subset, then click
+    **Export Selected**; use **Export All** for every imported file. While an
+    export is running, **Add Selected** appends another independent job for each
+    selected file. Duplicate jobs are allowed, and each addition snapshots the
+    format, destination, JPEG quality, TIFF compression, frame, and aspect-ratio
+    settings currently shown. Collision-safe suffixes keep every requested
+    copy. Standard images retain source resolution; RAW files are re-decoded at
+    full resolution one at a time so batch memory remains bounded.
 
 The native app can display dust-mask candidates, but it does not apply dust
 removal until Telea inpainting is connected. Use the legacy Python application

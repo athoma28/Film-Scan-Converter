@@ -1,5 +1,11 @@
 # Representative RAF Benchmark — Rerun
 
+> **Historical legacy-Python benchmark:** This snapshot is retained for the
+> selected-edit history. It is not a current native performance baseline. See
+> [Native RAW Compatibility Decode And Quality Benchmark](docs/development/native-raw-benchmark.md)
+> and [40 MP Export Performance](docs/performance/40mp-export.md) for the current
+> contract boundaries and measurements.
+
 Date: 2026-07-03 15:49:49 PDT  
 Branch: `dev`  
 Hardware: Apple M4 Pro, 14 cores, 48 GB memory
@@ -68,10 +74,9 @@ Best processing times from three runs:
 
 Warm/cold ratio remains 61% — consistent with the original benchmark.
 
-The ~48% slowdown is expected: the native engine has added several correction
-stages and a full TIFF/JPEG/PNG/DNG export path since the original benchmark.
-The legacy Python path exercises the same expanding codebase within the Swift
-engine bridge.
+The ~48% slowdown belongs to the legacy Python selected-edit pipeline at this
+dated snapshot. It does not measure the native Swift correction or export path
+and must not be used to explain current native performance.
 
 ## Selected-Edit Quality
 

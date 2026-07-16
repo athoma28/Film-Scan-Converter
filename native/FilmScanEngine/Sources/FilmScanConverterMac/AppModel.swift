@@ -7,6 +7,7 @@ import os.signpost
 final class AppModel: ObservableObject {
   @Published private(set) var files: [URL] = []
   @Published var selection: URL?
+  @Published var selectedFiles: Set<URL> = []
   @Published private(set) var previewImage: NSImage?
   @Published private(set) var decodedImage: UInt16Image?
   @Published private(set) var parameters = ProcessingParameters()
@@ -141,10 +142,9 @@ final class AppModel: ObservableObject {
   private var pendingRender: PreviewRenderRequest?
   private var activeExportQueue: [URL] = []
   private var activeExportDestinations: [URL] = []
+  private var activeExportItemParameters: [ExportParameters] = []
   private var activeExportCorrelationIDs: [String] = []
   private var activeExportQueueWaitIntervals: [AppPerformanceInterval] = []
-  private var activeExportSeen: Set<String> = []
-  private var activeExportParameters: ExportParameters?
   private var exportTask: Task<Void, Never>?
   private var exportWasCancelled = false
   private var renderLoopGeneration = 0
@@ -155,6 +155,7 @@ final class AppModel: ObservableObject {
   // to consume the sub-4 ms Metal renderer without an artificial 60 Hz cap.
   private static let renderCoalesceInterval: Duration = .milliseconds(8)
   nonisolated static let displayPreviewMaxDimension = 1_000
+  nonisolated static let rawDetailPreviewMaxDimension = 2_400
   nonisolated static let analysisPreviewMaxDimension = 256
   nonisolated static let previewCacheByteLimit = 256 * 1_024 * 1_024
 
@@ -184,6 +185,24 @@ final class AppModel: ObservableObject {
       canvas,
       framePercent: exportParameters.framePercent,
       aspectRatio: exportParameters.aspectRatio)
+  }
+
+  var selectedFileCount: Int {
+    orderedSelectedFiles.count
+  }
+
+  var canLoadRawDetailPreview: Bool {
+    guard let selection else { return false }
+    return FileDropPolicy.rawExtensions.contains(selection.pathExtension.lowercased())
+      && previewSourceKind != .rawDetail
+      && !isLoading
+      && !isExporting
+  }
+
+  private var orderedSelectedFiles: [URL] {
+    guard let selection else { return [] }
+    guard selectedFiles.contains(selection) else { return [selection] }
+    return files.filter { selectedFiles.contains($0) }
   }
 
   func hasCachedPreview(for url: URL) -> Bool {
@@ -219,7 +238,77 @@ final class AppModel: ObservableObject {
     ImportLog.importAdded(path: "appending \(newFiles.count) new files (total will be \(files.count + newFiles.count))")
     files.append(contentsOf: newFiles)
     selection = supported.first
+    selectedFiles = selection.map { Set([$0]) } ?? []
     loadSelection()
+  }
+
+  /// Keeps the detail view anchored to one primary file while SwiftUI owns a
+  /// native multi-selection set for Command- and Shift-click export workflows.
+  /// Adding another selected row does not unexpectedly replace the image being
+  /// edited; clicking a different row by itself still changes the primary file.
+  @discardableResult
+  func sidebarSelectionDidChange() -> Bool {
+    let previous = selection
+    if let selection, selectedFiles.contains(selection) {
+      return false
+    }
+    selection = files.first { selectedFiles.contains($0) }
+    return selection != previous
+  }
+
+  func loadRawDetailPreview() {
+    guard let selection,
+      FileDropPolicy.rawExtensions.contains(selection.pathExtension.lowercased())
+    else {
+      status = "RAW preview detail is only available for camera RAW files."
+      return
+    }
+    guard previewSourceKind != .rawDetail else {
+      status = "The high-detail RAW preview is already loaded."
+      return
+    }
+
+    authoritativeDecodeTask?.cancel()
+    cancelPredecode()
+    let generation = loadGeneration
+    let hasStoredSettings = settingsByPath[settingsKey(selection)] != nil
+    isLoading = true
+    status = "Loading high-detail RAW preview for \(selection.lastPathComponent)..."
+
+    authoritativeDecodeTask = Task { [weak self] in
+      guard let self else { return }
+      do {
+        let decoded = try await self.authoritativeDecoder.decode(selection)
+        try Task.checkCancellation()
+        guard generation == self.loadGeneration, self.selection == selection else { return }
+        let display = await Task.detached(priority: .userInitiated) {
+          decoded.resizedToFit(maxDimension: Self.rawDetailPreviewMaxDimension)
+        }.value
+        try Task.checkCancellation()
+        guard let renderer = StillPreviewRenderer(image: display) else {
+          throw CocoaError(.coderInvalidValue)
+        }
+        let session = CachedPreviewSession(
+          sourceKind: .rawDetail,
+          displaySource: display,
+          analysisSource: display.resizedToFit(maxDimension: Self.analysisPreviewMaxDimension),
+          previewRenderer: renderer,
+          sourcePixelDimensions: Self.fullResolutionDimensions(of: selection)
+        )
+        guard generation == self.loadGeneration, self.selection == selection else { return }
+        self.applyPreviewSession(
+          session, selection: selection, hasStoredSettings: hasStoredSettings)
+        self.cacheSession(session, for: selection)
+        self.scheduleRender(immediate: true)
+        self.status = "Loaded high-detail RAW preview for \(selection.lastPathComponent)."
+      } catch is CancellationError {
+        return
+      } catch {
+        guard generation == self.loadGeneration, self.selection == selection else { return }
+        self.isLoading = false
+        self.status = "Unable to load RAW preview detail: \(error.localizedDescription)"
+      }
+    }
   }
 
   private var loadGeneration = 0
@@ -936,11 +1025,12 @@ final class AppModel: ObservableObject {
   }
 
   func exportSelected() {
-    guard let selection else {
+    let urls = orderedSelectedFiles
+    guard !urls.isEmpty else {
       status = "No image selected for export."
       return
     }
-    exportFiles([selection])
+    exportFiles(urls)
   }
 
   func exportAll() {
@@ -952,52 +1042,43 @@ final class AppModel: ObservableObject {
   }
 
   func addSelectedToExportQueue() {
-    guard isExporting, let selection,
-      let activeExportParameters,
-      let destinationDirectory = activeExportParameters.destinationDirectory
-    else { return }
-    let key = settingsKey(selection)
-    guard !activeExportSeen.contains(key) else {
-      status = "\(selection.lastPathComponent) is already in this export run."
+    let urls = orderedSelectedFiles
+    guard isExporting, !urls.isEmpty,
+      let destinationDirectory = exportParameters.destinationDirectory
+    else {
       return
     }
 
-    let stem = selection.deletingPathExtension().lastPathComponent
-    let ext = activeExportParameters.format.fileExtension
-
-    var existingNames: Set<String>
-    if let dirContents = try? FileManager.default.contentsOfDirectory(
-      at: destinationDirectory, includingPropertiesForKeys: nil
-    ).map({ $0.lastPathComponent.lowercased() }) {
-      existingNames = Set(dirContents)
-    } else {
-      existingNames = []
+    let itemParameters = exportParameters
+    let destinations: [URL]
+    do {
+      destinations = try reserveDestinationURLs(
+        for: urls,
+        destinationDirectory: destinationDirectory,
+        format: itemParameters.format,
+        alreadyReserved: activeExportDestinations
+      )
+    } catch {
+      status = "Unable to inspect export destination: \(error.localizedDescription)"
+      return
     }
-    for dest in activeExportDestinations {
-      existingNames.insert(dest.lastPathComponent.lowercased())
+    for (url, destination) in zip(urls, destinations) {
+      activeExportQueue.append(url)
+      activeExportDestinations.append(destination)
+      activeExportItemParameters.append(itemParameters)
+      let correlationID = UUID().uuidString
+      activeExportCorrelationIDs.append(correlationID)
+      activeExportQueueWaitIntervals.append(
+        AppPerformanceSignposts.begin(
+          .queueWait,
+          correlationID: correlationID,
+          filename: url.lastPathComponent))
     }
-
-    var filename = "\(stem).\(ext)"
-    var suffix = 1
-    while existingNames.contains(filename.lowercased()) {
-      suffix += 1
-      filename = "\(stem)-\(suffix).\(ext)"
-    }
-    let destination = destinationDirectory.appendingPathComponent(filename)
-
-    activeExportSeen.insert(key)
-    activeExportQueue.append(selection)
-    activeExportDestinations.append(destination)
-    let correlationID = UUID().uuidString
-    activeExportCorrelationIDs.append(correlationID)
-    activeExportQueueWaitIntervals.append(
-      AppPerformanceSignposts.begin(
-        .queueWait,
-        correlationID: correlationID,
-        filename: selection.lastPathComponent))
     exportQueueCount = max(0, activeExportQueue.count - exportProgressCurrent - 1)
-    exportProgressTotal += 1
-    status = "Added \(selection.lastPathComponent) to the export queue."
+    exportProgressTotal += urls.count
+    status = urls.count == 1
+      ? "Added \(urls[0].lastPathComponent) to the export queue."
+      : "Added \(urls.count) exports to the queue."
   }
 
   func cancelExport() {
@@ -1572,6 +1653,10 @@ final class AppModel: ObservableObject {
 
   private func exportFiles(_ urls: [URL]) {
     guard !urls.isEmpty else { return }
+    guard !isLoading else {
+      status = "Wait for the active preview decode to finish before exporting."
+      return
+    }
     guard let destDir = exportParameters.destinationDirectory else {
       status = "Select an export destination folder first."
       return
@@ -1585,9 +1670,8 @@ final class AppModel: ObservableObject {
     var params = exportParameters
     params.destinationDirectory = destDir
     let exportParams = params
-    activeExportParameters = exportParams
     activeExportQueue = urls
-    activeExportSeen = Set(urls.map(settingsKey))
+    activeExportItemParameters = Array(repeating: exportParams, count: urls.count)
     exportQueueCount = max(0, urls.count - 1)
     do {
       activeExportDestinations = try reserveDestinationURLs(
@@ -1595,10 +1679,9 @@ final class AppModel: ObservableObject {
     } catch {
       status = "Unable to inspect export destination: \(error.localizedDescription)"
       activeExportQueue = []
+      activeExportItemParameters = []
       activeExportCorrelationIDs = []
       activeExportQueueWaitIntervals = []
-      activeExportSeen = []
-      activeExportParameters = nil
       exportQueueCount = 0
       return
     }
@@ -1653,13 +1736,14 @@ final class AppModel: ObservableObject {
         for requestIndex in index..<endIndex {
           let url = self.activeExportQueue[requestIndex]
           let destinationURL = self.activeExportDestinations[requestIndex]
+          let itemParameters = self.activeExportItemParameters[requestIndex]
           let correlationID = self.activeExportCorrelationIDs[requestIndex]
           AppPerformanceSignposts.end(self.activeExportQueueWaitIntervals[requestIndex])
           do {
             requests.append(
               try await self.makeExportRequest(
                 for: url,
-                exportParams: exportParams,
+                exportParams: itemParameters,
                 destinationURL: destinationURL,
                 correlationID: correlationID
               ))
@@ -1707,10 +1791,9 @@ final class AppModel: ObservableObject {
         self.activeExportFilename = nil
         self.activeExportQueue = []
         self.activeExportDestinations = []
+        self.activeExportItemParameters = []
         self.activeExportCorrelationIDs = []
         self.activeExportQueueWaitIntervals = []
-        self.activeExportSeen = []
-        self.activeExportParameters = nil
         self.exportTask = nil
         self.exportQueueCount = 0
         let failures = results.filter { !$0.isSuccess }
@@ -1881,13 +1964,21 @@ final class AppModel: ObservableObject {
   private func reserveDestinationURLs(
     for urls: [URL],
     destinationDirectory: URL,
-    format: ExportFormat
+    format: ExportFormat,
+    alreadyReserved: [URL] = []
   ) throws -> [URL] {
     let existingNames = try FileManager.default.contentsOfDirectory(
       at: destinationDirectory,
       includingPropertiesForKeys: nil
     ).map { $0.lastPathComponent.lowercased() }
     var reservedNames = Set(existingNames)
+    reservedNames.formUnion(
+      alreadyReserved
+        .filter {
+          $0.deletingLastPathComponent().standardizedFileURL
+            == destinationDirectory.standardizedFileURL
+        }
+        .map { $0.lastPathComponent.lowercased() })
 
     return urls.map { sourceURL in
       let stem = sourceURL.deletingPathExtension().lastPathComponent
@@ -2306,11 +2397,17 @@ final class AppModel: ObservableObject {
         pendingFirstPreviewInterval = nil
       }
       if !status.localizedCaseInsensitiveContains("cancel") {
-        let sourceLabel = request.selection.pathExtension.lowercased().isEmpty
-          ? "Fast preview"
-          : previewSourceKind == .embeddedRAW
-            ? "Fast embedded preview · RAW detail available when needed"
-            : "Fast image preview · full resolution used for export"
+        let sourceLabel: String
+        switch previewSourceKind {
+        case .embeddedRAW:
+          sourceLabel = "Fast embedded preview · use Load RAW Preview for accurate RAW color"
+        case .rawDetail:
+          sourceLabel = "High-detail demosaiced RAW preview · full resolution used for export"
+        case .standardThumbnail:
+          sourceLabel = "Fast image preview · full resolution used for export"
+        case nil:
+          sourceLabel = "Fast preview"
+        }
         status =
           "\(request.selection.lastPathComponent) • \(preview.width)×\(preview.height) \(result.rendererName) · \(sourceLabel)"
       }

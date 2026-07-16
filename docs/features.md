@@ -15,9 +15,11 @@ features.
 - Drag/drop, file picker, and Finder Open With import.
 - Standard PNG, JPEG, BMP, and TIFF decoding.
 - LibRaw-backed camera RAW decoding.
-- Fast bounded provisional previews for large standard images and embedded RAW
-  thumbnails, followed by an authoritative background replacement with stable
-  orientation.
+- Fast bounded previews from ImageIO thumbnails for standard images and
+  embedded thumbnails for camera RAW files. An explicit **Load RAW Preview**
+  action replaces an embedded thumbnail with a demosaiced, RAW-calibrated
+  preview up to 2400px when color or detail needs closer inspection;
+  full-resolution decoding remains reserved for export.
 - A bounded 16-bit Core Image/Metal correction preview with latest-value-wins
   scheduling. This GPU path is the primary interactive target on supported
   MacBook Pro hardware; CPU rendering remains the correctness/fallback path.
@@ -82,13 +84,18 @@ features.
 - 16-bit lossless PNG.
 - Processed 16-bit RGB DNG in a valid TIFF/DNG container. This is not untouched
   sensor RAW.
-- Individual and lazy memory-bounded Export All workflows.
+- Individual, ordered multi-selection, and lazy memory-bounded Export All
+  workflows.
 - Full-resolution RAW re-decode one file at a time during export.
-- Collision-safe destination names, per-file errors, cancellation between
-  synchronous file operations, atomic staging/cleanup, and protection against
-  misleading partial outputs.
-- Append the selected file to an active sequential export with duplicate
-  rejection and active/pending status.
+- Collision-safe destination names, per-file errors, and cooperative
+  cancellation at safe decode/correction/geometry/write boundaries. An active
+  synchronous LibRaw or writer call finishes before cancellation advances.
+- PNG uses a staged commit; every format removes a failed destination so a
+  partial output is not presented as successful.
+- Append selected files to an active sequential export with active/pending
+  status. Duplicate source jobs are accepted, collision-safe names preserve
+  every copy, and each addition snapshots its own format, destination,
+  compression, frame, and aspect-ratio settings.
 
 ### Packaging And Verification
 
@@ -102,8 +109,7 @@ features.
 ## Native Limitations
 
 - No applied dust removal or Telea inpainting.
-- No undo/redo, zoom/pan, ordered multi-selection, Export Selected, or sidebar
-  reordering yet.
+- No undo/redo, zoom/pan, or sidebar reordering yet.
 - No lens-distortion model or calibrated correction for film-plane/sensor-plane
   non-alignment beyond the current perspective crop.
 - The real RAW test corpus is Fujifilm X-Trans-focused and partly local-only;

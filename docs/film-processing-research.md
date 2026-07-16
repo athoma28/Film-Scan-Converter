@@ -1,5 +1,15 @@
 # Film Processing Research: Practical Film-Specific Negative Inversion for Camera-Scanned Film
 
+> **Research reference, not the active roadmap.** The native app now wires an
+> optional density pipeline through preview and export with capture
+> normalization, flat field, film-base measurement, roll profiles, and generic
+> capture/stock profile types. The default color-negative path remains the
+> RawTherapee-oriented power-law model. Calibrated per-stock curves, fitted
+> capture matrices, and residual LUTs remain evidence-driven research
+> candidates. See [Native macOS Development Status](development/native-macos.md)
+> for current behavior and the
+> [Product Roadmap](improvements/MacOS-Native-Roadmap.md) for delivery priority.
+
 ## Executive summary
 
 Film Scan Converter should not jump directly from “simple inversion” to a fully film-stock-specific color-science engine. The fastest path is a sequence of small, visible wins:
@@ -1308,7 +1318,13 @@ writeOutput(display)
 
 ---
 
-# Recommended development roadmap
+# Original Research Sequence
+
+This sequence describes how the scientific work can be decomposed; it is not a
+second product roadmap. Early engine and app plumbing exists for the first four
+milestones, while calibrated capture/stock data and held-out validation remain
+unfinished. Priority and acceptance criteria belong only in the product
+roadmap.
 
 ## Milestone 1: Linear capture sanity
 

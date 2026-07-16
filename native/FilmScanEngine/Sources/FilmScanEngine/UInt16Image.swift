@@ -1,4 +1,13 @@
+import Dispatch
 import Foundation
+
+private final class ExportMutableBuffer<Element>: @unchecked Sendable {
+  let baseAddress: UnsafeMutablePointer<Element>
+
+  init(_ baseAddress: UnsafeMutablePointer<Element>) {
+    self.baseAddress = baseAddress
+  }
+}
 
 public struct UInt16Image: Equatable, Sendable {
   public let width: Int
@@ -202,6 +211,47 @@ public struct UInt16Image: Equatable, Sendable {
     return data
   }
 
+  package func rgb8Data() -> Data? {
+    guard channels == 1 || channels == 3 else {
+      return nil
+    }
+
+    let pixelCount = width * height
+    var data = Data(count: pixelCount * 3)
+    let singleChannel = channels == 1
+    data.withUnsafeMutableBytes { (rbp: UnsafeMutableRawBufferPointer) in
+      guard let baseAddress = rbp.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+        return
+      }
+      let output = ExportMutableBuffer(baseAddress)
+      let workerCount = exportPackingWorkerCount(pixelCount: pixelCount)
+      let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
+      DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
+        let start = worker * pixelsPerWorker
+        let end = min(start + pixelsPerWorker, pixelCount)
+        guard start < end else { return }
+        if singleChannel {
+          for pixelIndex in start..<end {
+            let value = UInt8(truncatingIfNeeded: pixels[pixelIndex] >> 8)
+            let destination = pixelIndex * 3
+            output.baseAddress[destination] = value
+            output.baseAddress[destination + 1] = value
+            output.baseAddress[destination + 2] = value
+          }
+        } else {
+          for pixelIndex in start..<end {
+            let source = pixelIndex * 3
+            let destination = source
+            output.baseAddress[destination] = UInt8(truncatingIfNeeded: pixels[source + 2] >> 8)
+            output.baseAddress[destination + 1] = UInt8(truncatingIfNeeded: pixels[source + 1] >> 8)
+            output.baseAddress[destination + 2] = UInt8(truncatingIfNeeded: pixels[source] >> 8)
+          }
+        }
+      }
+    }
+    return data
+  }
+
   package func rgb16Data() -> Data? {
     guard channels == 1 || channels == 3 else {
       return nil
@@ -211,26 +261,31 @@ public struct UInt16Image: Equatable, Sendable {
     var data = Data(count: pixelCount * 6)
     let singleChannel = channels == 1
     data.withUnsafeMutableBytes { (rbp: UnsafeMutableRawBufferPointer) in
-      let buf = rbp.bindMemory(to: UInt16.self)
-      pixels.withUnsafeBufferPointer { src in
+      guard let baseAddress = rbp.baseAddress?.assumingMemoryBound(to: UInt16.self) else {
+        return
+      }
+      let output = ExportMutableBuffer(baseAddress)
+      let workerCount = exportPackingWorkerCount(pixelCount: pixelCount)
+      let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
+      DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
+        let start = worker * pixelsPerWorker
+        let end = min(start + pixelsPerWorker, pixelCount)
+        guard start < end else { return }
         if singleChannel {
-          var di = 0
-          for i in 0..<pixelCount {
-            let value = src[i]
-            buf[di] = value
-            buf[di + 1] = value
-            buf[di + 2] = value
-            di += 3
+          for pixelIndex in start..<end {
+            let value = pixels[pixelIndex]
+            let destination = pixelIndex * 3
+            output.baseAddress[destination] = value
+            output.baseAddress[destination + 1] = value
+            output.baseAddress[destination + 2] = value
           }
         } else {
-          var si = 0
-          var di = 0
-          for _ in 0..<pixelCount {
-            buf[di] = src[si + 2]
-            buf[di + 1] = src[si + 1]
-            buf[di + 2] = src[si]
-            si += 3
-            di += 3
+          for pixelIndex in start..<end {
+            let source = pixelIndex * 3
+            let destination = source
+            output.baseAddress[destination] = pixels[source + 2]
+            output.baseAddress[destination + 1] = pixels[source + 1]
+            output.baseAddress[destination + 2] = pixels[source]
           }
         }
       }
@@ -274,5 +329,10 @@ public struct UInt16Image: Equatable, Sendable {
       }
     }
     return data
+  }
+
+  private func exportPackingWorkerCount(pixelCount: Int) -> Int {
+    guard pixelCount >= 1_000_000 else { return 1 }
+    return max(1, min(8, ProcessInfo.processInfo.activeProcessorCount))
   }
 }

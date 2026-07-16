@@ -1,4 +1,13 @@
+import Dispatch
 import Foundation
+
+private final class DNGMutableBuffer<Element>: @unchecked Sendable {
+  let baseAddress: UnsafeMutablePointer<Element>
+
+  init(_ baseAddress: UnsafeMutablePointer<Element>) {
+    self.baseAddress = baseAddress
+  }
+}
 
 extension UInt16Image {
 
@@ -163,18 +172,32 @@ private final class DNGWriter {
   private func buildImageData() -> Data {
     let count = width * height * outputChannels
     var strip = Data(count: count * 2)
+    let sourcePixels = pixels
+    let sourceChannels = channels
     strip.withUnsafeMutableBytes { ptr in
-      let buf = ptr.bindMemory(to: UInt16.self)
-      if channels == 3 {
-        for pixelIndex in 0..<(width * height) {
-          let ci = pixelIndex * 3
-          buf[pixelIndex * 3] = pixels[ci + 2].littleEndian
-          buf[pixelIndex * 3 + 1] = pixels[ci + 1].littleEndian
-          buf[pixelIndex * 3 + 2] = pixels[ci].littleEndian
-        }
-      } else {
-        for pixelIndex in 0..<(width * height) {
-          buf[pixelIndex] = pixels[pixelIndex].littleEndian
+      guard let baseAddress = ptr.baseAddress?.assumingMemoryBound(to: UInt16.self) else {
+        return
+      }
+      let output = DNGMutableBuffer(baseAddress)
+      let pixelCount = width * height
+      let workerCount = pixelCount >= 1_000_000
+        ? max(1, min(8, ProcessInfo.processInfo.activeProcessorCount)) : 1
+      let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
+      DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
+        let start = worker * pixelsPerWorker
+        let end = min(start + pixelsPerWorker, pixelCount)
+        guard start < end else { return }
+        if sourceChannels == 3 {
+          for pixelIndex in start..<end {
+            let component = pixelIndex * 3
+            output.baseAddress[component] = sourcePixels[component + 2].littleEndian
+            output.baseAddress[component + 1] = sourcePixels[component + 1].littleEndian
+            output.baseAddress[component + 2] = sourcePixels[component].littleEndian
+          }
+        } else {
+          for pixelIndex in start..<end {
+            output.baseAddress[pixelIndex] = sourcePixels[pixelIndex].littleEndian
+          }
         }
       }
     }

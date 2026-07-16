@@ -6,8 +6,8 @@ blocks a high-quality public release, and what is being worked on now. Use the
 [feature inventory](../features.md) for user-visible behavior, and the
 [40 MP benchmark](../performance/40mp-export.md) for detailed measurements.
 
-**Last verified:** 2026-07-11 against the current working tree. The native test
-suite contains 359 tests across 21 files. Some representative-RAW tests require
+**Last verified:** 2026-07-14 against the current working tree. The native test
+suite contains 367 tests across 21 files. Some representative-RAW tests require
 the untracked local `sample-raw/` corpus and are explicitly disabled when it is
 absent.
 
@@ -31,7 +31,8 @@ performance rewrite from the existing one-file smoke result.
 
 The current measurement evidence is:
 
-- 1000px RAW embedded and standard-image previews are the normal interactive sources;
+- 1000px RAW embedded and standard-image previews are the default interactive
+  sources; selected RAWs can explicitly switch to a 2400px demosaiced preview;
 - lookahead extracts preview thumbnails and never starts speculative full RAW decodes;
 - app-path signposts cover selection-to-first-corrected-paint, preview extraction,
   conversion, analysis, and export from queue wait through cleanup;
@@ -65,6 +66,12 @@ The current measurement evidence is:
   allocating a padded RGBA buffer. The 40.19 MP intermediate is 80.37 MB
   smaller, the ten-file median packing interval fell from 29.73 ms to 22.88 ms
   (23.0%), and all ten TIFF byte counts and SHA-256 hashes remained identical.
+- all four writers now split full-resolution channel packing across at most
+  eight workers. JPEG and PNG also use compact RGB rather than padded RGBA
+  inputs, removing 40.19 MB and 80.37 MB respectively at 40.19 MP. A same-RAW
+  release A/B reduced the combined packing/finalization interval by 1.5% for
+  TIFF, 2.4% for JPEG, 2.4% for PNG, and 30.0% for DNG while preserving each
+  format's output byte count and SHA-256;
 - the release-mode app-path benchmark now records first corrected paint,
   cached and uncached switching, rapid-selection drain, preview-cache bytes,
   and Mach physical footprint. On six local RAFs with three repetitions,
@@ -73,6 +80,13 @@ The current measurement evidence is:
   six-file rapid-selection drain. The largest two-file preview cache was
   8.53 MB and the process ended at 28.79 MB physical footprint after a
   155.57 MB process-lifetime peak;
+- the preview-cache depth run is complete on the same six-RAF corpus. Depth 2
+  populated two sessions and 8.53 MB of logical preview data; depths 8 and 32
+  both saturated at the six available files and 25.59 MB. Physical footprint
+  after releasing each model returned to 27.82, 26.23, and 26.49 MB,
+  respectively, so the run shows no sustained depth-by-depth growth. Absolute
+  in-capacity footprint is reported but is not directly ordered because later
+  samples reuse allocator pages from earlier samples;
 
 These numbers are diagnostic, not release claims. `ru_maxrss` and Mach
 `resident_size` include reusable pages and are not live-memory gates; use
@@ -81,13 +95,10 @@ current camera-scan decode contract is not comparable with the faster
 RawPy-compatibility profile because the stage sets and demosaic algorithms
 differ.
 
-The next bounded measurements are:
+The next bounded measurement is an app-path ten-file sequential export with
+cancellation latency and post-run memory checks.
 
-1. preview-cache physical footprint at depths 2, 8, and 32;
-2. an app-path ten-file sequential export with cancellation latency and
-   post-run memory checks.
-
-Optimize another stage only when those measurements identify a user-visible or
+Optimize another stage only when that measurement identifies a user-visible or
 resource-safety problem. Preserve final-quality demosaic, output contracts, and
 the one-full-resolution-RAW-at-a-time bound.
 
@@ -98,9 +109,9 @@ the one-full-resolution-RAW-at-a-time bound.
 | Import | Drag/drop, file picker, Finder Open With, standard PNG/JPEG/BMP/TIFF decode, and LibRaw-backed camera RAW decode. |
 | First paint | RAW embedded thumbnails and ImageIO standard-image thumbnails decode directly to at most 1000px off the main actor. A separate 256px proxy drives classification and median calibration before the first filtered render. |
 | Processing | Color/B&W negative and slide startup classification, RawTherapee-compatible power-law inversion, a reference-derived Kodachrome-like adaptive look, an optional density pipeline, film-base measurement, flat field, protected color and tone controls with center-weighted UI response and pipeline-calibrated tone references, shape-preserving overall/per-channel curves, color wheels, neutral-white handling for clipped near-zero holder pixels, automatic frame detection, a centered two-click horizontal/vertical straighten guide, an immediately visible post-straighten drag-box crop with full-canvas replacement and reset, an independent four-corner perspective warp with targeting reticles, a 100×100-pixel drag loupe, soft parallel-edge assistance, and a visible grid, live full-resolution output dimensions, frame, and aspect ratio. |
-| Preview | The interactive contract is a bounded 16-bit 1000px display source plus a 256px analysis source. Embedded RAW pixels are fast previews, not authoritative RAW output. The Core Image/Metal renderer uses latest-value-wins scheduling; CPU remains the reference and fallback. |
+| Preview | First paint uses a bounded 16-bit 1000px display source plus a 256px analysis source. Embedded RAW pixels are fast previews, not authoritative RAW output. **Load RAW Preview** explicitly decodes the selected RAW through the app-facing camera-scan profile, builds an up-to-2400px display source, and recalibrates from those RAW pixels. The Core Image/Metal renderer uses latest-value-wins scheduling; CPU remains the reference and fallback. |
 | Editing state | Per-file settings, named presets, a built-in Kodachrome-like Auto action, one-step removal of the last applied preset without resetting geometry, system-clipboard copy/paste, reset, edited markers, apply-to-all-open-files, and configurable 2/4/8/16/32-file lookahead. Lookahead caches preview sessions only and is bounded by count and 256 MiB. |
-| Export | TIFF, JPEG, PNG, and processed-RGB DNG; individual and lazy memory-bounded batch-all workflows; collision-safe names; partial-file cleanup; progress, per-file errors, queued cancellation, and append-selected during an active sequential run. |
+| Export | TIFF, JPEG, PNG, and processed-RGB DNG; individual, ordered multi-selection, and lazy memory-bounded batch-all workflows; collision-safe names; partial-file cleanup; progress, per-file errors, queued cancellation, and duplicate-friendly append-selected jobs with per-addition export-setting snapshots during an active sequential run. |
 | Dust | Native parity-tested candidate-mask detection and a non-destructive aligned overlay. Dust removal is not applied to preview or export. |
 | Packaging | Self-contained app/ZIP assembly, embedded non-system libraries, bundle-relative load paths, icon/document registration, hardened-runtime signing support, local bundle validation, archive extraction/revalidation, and local packaged launch. |
 
@@ -138,7 +149,6 @@ Before calling the application high quality, complete and validate:
 
 - undo/redo for destructive editing-state changes;
 - zoom and pan for judging focus, dust, crop, and corrections;
-- native ordered multi-selection with lazy Export Selected;
 - another real batch-editing usability pass covering file switching, applying a
   look, correcting exceptions, and exporting the intended subset.
 
@@ -152,7 +162,7 @@ workflows.
 Close the current measurement cycle. The release gate is not an arbitrary
 multiple of Python performance. It is:
 
-- prompt provisional feedback;
+- prompt bounded corrected feedback;
 - no overlapping authoritative full-resolution decode buffers;
 - one full-resolution RAW export at a time;
 - no sustained physical-footprint growth through a representative batch (the
@@ -175,8 +185,7 @@ Use the [native release runbook](native-release.md) with the final candidate:
 
 - Telea dust inpainting and applying dust removal to preview/export are not
   implemented natively.
-- Undo/redo, zoom/pan, ordered multi-selection, Export Selected, and sidebar
-  reordering remain incomplete.
+- Undo/redo, zoom/pan, and sidebar reordering remain incomplete.
 - Lens-distortion correction and calibrated film-plane/sensor-plane
   non-alignment correction are not implemented. The current four-corner warp
   rectifies one planar film frame; it does not model curved or spatially varying
@@ -197,7 +206,7 @@ Use the [native release runbook](native-release.md) with the final candidate:
 
 ## Verification Summary
 
-- 359 native tests across 21 files in the current working tree.
+- 367 native tests across 21 files in the current working tree.
 - Frozen Python-generated fixtures cover shared numerical behavior.
 - Production CPU/GPU correction comparisons cover 2,725 channel comparisons
   with zero failures and a maximum difference of 2/255.

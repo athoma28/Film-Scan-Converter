@@ -1,5 +1,4 @@
 site_name: Film-Scan-Converter
-site_url: https://github.com/kaimonmok/Film-Scan-Converter/fork
 theme:
   name: material
   features:
@@ -19,7 +18,7 @@ nav:
       - Native macOS Status: development/native-macos.md
       - Native macOS Product Roadmap: improvements/MacOS-Native-Roadmap.md
       - Native macOS Release: development/native-release.md
-      - Real-Time Still Preview Plan: development/realtime-preview-plan.md
+      - Real-Time Still Preview Outcome: development/realtime-preview-plan.md
       - Native RAW Benchmark: development/native-raw-benchmark.md
       - Film Processing Research: film-processing-research.md
       - Building: development/building.md

@@ -756,6 +756,29 @@ struct AppModelTests {
     #expect(max(model.decodedImage?.width ?? 0, model.decodedImage?.height ?? 0) <= 1_000)
   }
 
+  @Test(
+    "Load RAW Preview replaces embedded pixels with a bounded demosaiced preview",
+    .enabled(if: appModelRawCorpusAvailable, "sample-raw corpus unavailable; RAW detail preview test skipped")
+  )
+  func rawDetailPreviewUsesCameraScanDecode() async throws {
+    let raw = repositoryRoot.appending(path: "sample-raw/DSCF2819.RAF")
+    let model = AppModel()
+    model.importFiles([raw])
+
+    try await waitUntil(timeout: .seconds(3)) { model.previewSourceKind == .embeddedRAW }
+    #expect(model.canLoadRawDetailPreview)
+    model.loadRawDetailPreview()
+
+    try await waitUntil(timeout: .seconds(25)) {
+      model.previewSourceKind == .rawDetail && !model.isLoading
+    }
+    let dimensions = try #require(model.selectedImageDimensions)
+    #expect(!dimensions.provisional)
+    #expect(max(dimensions.width, dimensions.height) <= AppModel.rawDetailPreviewMaxDimension)
+    #expect(max(dimensions.width, dimensions.height) > AppModel.displayPreviewMaxDimension)
+    #expect(!model.canLoadRawDetailPreview)
+  }
+
   @Test("Standard image import keeps a bounded thumbnail and full-resolution geometry")
   func standardImportUsesBoundedPreview() async throws {
     let directory = FileManager.default.temporaryDirectory
@@ -1145,8 +1168,8 @@ struct AppModelTests {
     #expect(model.parameters.photoAdjustments.exposureEV == 1.5)
   }
 
-  @Test("Files added during export keep the active run's format and destination")
-  func queuedExportUsesActiveSnapshot() async throws {
+  @Test("Files added during export snapshot the current format and destination")
+  func queuedExportUsesPerItemSnapshot() async throws {
     let png = try #require(
       Bundle.module.url(
         forResource: "input", withExtension: "png",
@@ -1184,8 +1207,85 @@ struct AppModelTests {
     #expect(FileManager.default.fileExists(
       atPath: firstDestination.appendingPathComponent("first.png").path))
     #expect(FileManager.default.fileExists(
-      atPath: firstDestination.appendingPathComponent("second.png").path))
-    #expect((try FileManager.default.contentsOfDirectory(atPath: changedDestination.path)).isEmpty)
+      atPath: changedDestination.appendingPathComponent("second.jpeg").path))
+  }
+
+  @Test("The same file can be queued repeatedly with independent JPEG quality snapshots")
+  func duplicateQueuedExportsUseIndependentSettings() async throws {
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-duplicate-queue-\(UUID().uuidString)", isDirectory: true)
+    let destination = workDir.appendingPathComponent("destination", isDirectory: true)
+    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let input = workDir.appendingPathComponent("scan.png")
+    let width = 256
+    let height = 192
+    var pixels = [UInt16]()
+    pixels.reserveCapacity(width * height * 3)
+    for component in 0..<(width * height * 3) {
+      let value = component &* 7_919 &+ (component / 3) &* 104_729
+      pixels.append(UInt16(value & 0xffff))
+    }
+    try UInt16Image(width: width, height: height, channels: 3, pixels: pixels).write(
+      to: input,
+      format: .png,
+      parameters: ExportParameters(format: .png)
+    )
+
+    let model = AppModel()
+    model.importFiles([input])
+    try await waitUntil { model.decodedImage != nil }
+    model.setExportDestinationDirectory(destination)
+    model.setExportFormat(.jpeg)
+    model.setJpegQuality(0.95)
+    model.exportSelected()
+    model.setJpegQuality(0.40)
+    model.addSelectedToExportQueue()
+    model.setJpegQuality(0.75)
+    model.addSelectedToExportQueue()
+
+    try await waitUntil { !model.isExporting && model.exportProgressCurrent == 3 }
+    let names = try FileManager.default.contentsOfDirectory(atPath: destination.path).sorted()
+    #expect(names == ["scan-2.jpeg", "scan-3.jpeg", "scan.jpeg"])
+    let highQualityBytes = try Data(contentsOf: destination.appendingPathComponent("scan.jpeg")).count
+    let lowQualityBytes = try Data(contentsOf: destination.appendingPathComponent("scan-2.jpeg")).count
+    let mediumQualityBytes = try Data(contentsOf: destination.appendingPathComponent("scan-3.jpeg")).count
+    #expect(lowQualityBytes < mediumQualityBytes)
+    #expect(mediumQualityBytes < highQualityBytes)
+  }
+
+  @Test("Export Selected writes every sidebar-selected file in import order")
+  func exportSelectedSupportsMultipleFiles() async throws {
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"))
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-multi-export-\(UUID().uuidString)", isDirectory: true)
+    let sourceDirectory = workDir.appendingPathComponent("source", isDirectory: true)
+    let destination = workDir.appendingPathComponent("destination", isDirectory: true)
+    try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+
+    let first = sourceDirectory.appendingPathComponent("first.png")
+    let second = sourceDirectory.appendingPathComponent("second.png")
+    try FileManager.default.copyItem(at: input, to: first)
+    try FileManager.default.copyItem(at: input, to: second)
+
+    let model = AppModel()
+    model.importFiles([first, second])
+    try await waitUntil { model.decodedImage != nil }
+    model.selectedFiles = [first, second]
+    model.setExportDestinationDirectory(destination)
+    model.setExportFormat(.png)
+    model.exportSelected()
+
+    try await waitUntil { !model.isExporting && model.exportProgressCurrent == 2 }
+    #expect(FileManager.default.fileExists(
+      atPath: destination.appendingPathComponent("first.png").path))
+    #expect(FileManager.default.fileExists(
+      atPath: destination.appendingPathComponent("second.png").path))
   }
 
   @Test("Export cancellation clears active and pending queue state")

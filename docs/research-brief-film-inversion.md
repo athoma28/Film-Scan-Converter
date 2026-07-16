@@ -1,10 +1,22 @@
 # Research Brief: Film-Specific Negative Inversion for Film Scan Converter
 
+> **Historical research brief.** This document frames open color-science
+> questions; it does not describe current product priority. The current status
+> and roadmap are [Native macOS Development Status](development/native-macos.md)
+> and [Native macOS Product Roadmap](improvements/MacOS-Native-Roadmap.md).
+
 ## Context
 
 Film Scan Converter is a Swift desktop app that processes RAW scans of film negatives and slides. In the legacy design, the initial "inversion" step for colour negative film was mathematically trivial: `65535 - pixel_value` (a simple per-pixel negation in 16-bit), followed by generic color adjustments applied identically regardless of film stock.
 
-**Milestone: RawTherapee-oriented power-law front-end implemented (updated 2026-06-18).** The inversion step uses `output = multiplier × pixel^-(greenExp × ratio)`, 20%-border-cut references, RawTherapee's `1/24` output reference, and the two bundled Film Negative tone curves. Reference resolution and inversion run in linear Rec.2020 after LibRaw's sRGB conversion, then return to display sRGB. Color Negative (RedRatio=1.36, GreenExp=1.5, BlueRatio=0.86) and Black & White (all ratios=1.0) presets match the bundled profiles. This remains an operational front-end, not full RawTherapee pipeline parity or the final physical density pipeline.
+**Implemented boundary, updated 2026-07-14.** The default inversion step uses
+`output = multiplier × pixel^-(greenExp × ratio)`, 20%-border-cut references,
+RawTherapee's `1/24` output reference, and the two bundled Film Negative tone
+curves. Reference resolution and inversion run in linear Rec.2020 after
+LibRaw's sRGB conversion, then return to display sRGB. The separate density
+pipeline is now wired through preview and export with film-base measurement,
+flat field, and generic capture/stock/roll profiles. This is not full
+RawTherapee pipeline parity or a calibrated per-stock color-science library.
 
 **We are explicitly avoiding deep learning for this project.** The goal is a deterministic, math-based, performant Swift implementation. No CNNs, no models, no training.
 
@@ -88,7 +100,7 @@ The reference library is our calibration asset. Approach:
 These projects have already solved pieces of this problem. Read their source code:
 
 - **darktable negadoctor** (`src/iop/negadoctor.c`): Per-channel black point from rebate, automatic mask detection, D-log E curve approximation.
-- **RawTherapee Film Negative tool** (`rtengine/filmnegativeproc.cc`): Per-channel power-law model adopted for the operational front-end. Swift now includes working-space reference placement, the bundled output reference/tone curves, and CPU/GPU/Metal parity. The physically grounded density/display APIs exist separately and still require app wiring and calibrated profiles.
+- **RawTherapee Film Negative tool** (`rtengine/filmnegativeproc.cc`): Per-channel power-law model adopted for the operational front-end. Swift now includes working-space reference placement, the bundled output reference/tone curves, and CPU/GPU/Metal parity. The physically grounded density/display path is app-wired; calibrated per-stock profiles and held-out validation remain unfinished.
 - **filmulator** (`github.com/CarVac/filmulator-gui`): Approaches the problem from the other direction — simulates film development from a digital image. The forward model might be invertible.
 - **Grain2Pixel** (Photoshop plugin, closed source but worth studying the output/methodology): Reportedly uses a large database of per-stock calibration shots.
 - **Negative Lab Pro** (Lightroom plugin, closed source): The most popular commercial tool. Any technical blog posts, interviews with the developer, or reverse-engineering writeups?
@@ -98,7 +110,9 @@ These projects have already solved pieces of this problem. Read their source cod
 
 Assuming we settle on a pipeline, how to implement it efficiently in Swift:
 
-- **vImage / Accelerate**: Apple's SIMD image processing framework. Gives us per-channel operations, histogram operations, LUT application, and color conversion all on the GPU via Metal, transparently. Much faster than pixel-by-pixel loops.
+- **vImage / Accelerate**: Apple's CPU vector and image-processing frameworks
+  provide per-channel operations, histograms, LUT application, and color
+  conversion without implying GPU execution.
 - **Metal shaders**: If vImage doesn't cover everything (e.g., complex per-stock curves, 3D LUT interpolation), write Metal compute shaders for the hot path.
 - **LUT format**: 3D LUTs as `.cube` files (industry standard, simple text format, trivially readable in Swift) or a compact binary format.
 - **Parameter storage**: Per-stock calibration data as a simple JSON/Plist file or compiled into the binary. A few kilobytes per stock.

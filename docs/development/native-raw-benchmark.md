@@ -1,15 +1,21 @@
-# Native RAW Decode And Quality Benchmark
+# Native RAW Compatibility Decode And Quality Benchmark
 
 **Date:** 2026-06-16
 
 **Hardware:** Apple M4 Pro, 14 cores, 48 GB memory
 **Corpus:** Eight user-provided Fujifilm X-T5 RAF film scans
 
+> **Scope:** This is a historical `rawPyCompatibility` profile snapshot. It
+> validates the frozen RawPy-equivalent decoder contract; it is not a timing
+> baseline for the app's current `rawTherapeeCameraScan` full-resolution export
+> profile. Current app-path and export measurements live in
+> [40 MP Export Performance](../performance/40mp-export.md).
+
 ## Result
 
-The native thread-safe LibRaw decoder produces **byte-for-byte identical**
-16-bit BGR buffers to the production RawPy decoder for every sample RAF at both
-half and full resolution.
+Under the `rawPyCompatibility` profile, the native thread-safe LibRaw decoder
+produces **byte-for-byte identical** 16-bit BGR buffers to the frozen RawPy
+reference for every sample RAF at both half and full resolution.
 
 - All dimensions match.
 - All SHA-256 pixel hashes match.
@@ -47,15 +53,16 @@ preview without a full RAW decode:
 | DSCF0729.RAF | 4416 × 2944 | ~67 ms | ~15× faster |
 
 The JPEG is at the camera's native embedded resolution (4416 × 2944 for X-T5),
-which is higher than the half-res LibRaw decode (2592 × 3876). `AppModel` shows
-the JPEG instantly while a background `authoritativeDecodeTask` uses the serial
-decode coordinator to decode the LibRaw buffer
-and swaps it in at the same correction settings and proxy dimensions.
+which is higher than the half-res LibRaw decode (2592 × 3876). The current app
+extracts and downsizes this embedded preview directly to a 1000px display
+source, builds a separate 256px analysis source, and keeps that preview for
+browsing. It does not start a background authoritative replacement. Export
+independently decodes the full-resolution RAW with the camera-scan profile.
 
 ## Method
 
-Both decoders use the production processing settings and return owned,
-contiguous 16-bit BGR buffers. Timing includes the full decode pipeline:
+Both compatibility decoders use matched RawPy-equivalent settings and return
+owned, contiguous 16-bit BGR buffers. Timing includes the full decode pipeline:
 file I/O, unpack, dcraw processing, memory image creation, and the
 Swift-side buffer copy with BGR→RGB conversion.
 
@@ -103,10 +110,12 @@ Each output is `5184 x 7752 x 3`, approximately 241.1 MB.
 Full-resolution decode is dominated by `libraw_dcraw_process` (demosaicing via
 PPG interpolation, color space conversion, gamma, brightness). The direct decode
 path eliminates the C-side `malloc` + BGR→RGB swizzle copy previously noted as
-a 19.7% overhead source; current measurements show no measurable overhead from
-the bridge layer. Further full-res improvements require LibRaw-level changes
-(e.g. GPU-accelerated demosaicing) or architectural changes (e.g. using the
-embedded JPEG for preview and deferring full-res decode to export time).
+a 19.7% overhead source; these compatibility-profile measurements show no
+measurable overhead from the bridge layer. The architectural change suggested
+by this snapshot—embedded-preview browsing with full-resolution decode deferred
+to export—is now implemented. Further performance decisions must use the
+separately measured camera-scan profile, whose quality stages and three-pass
+X-Trans demosaic are intentionally different.
 
 ## Selected-Edit Quality
 
@@ -123,10 +132,10 @@ buffers. These metrics therefore apply equally to RawPy and native decode.
 
 Across all 23 edit variants, best cold processing totaled **17.22 seconds** and
 best warm cached processing totaled **10.52 seconds**. These are historical
-legacy-Python selected-edit baselines. The native engine now contains several
-correction stages and a complete TIFF/JPEG/PNG/DNG export path. A direct
-full-pipeline comparison including crop, perspective, and dust stages still
-requires the remaining legacy replacement gates.
+legacy-Python selected-edit baselines, not current native app-path timings. The
+native app now has correction, crop, perspective, and TIFF/JPEG/PNG/DNG export
+coverage; native applied dust removal remains absent. Use the status page and
+40 MP report for current workflow and performance evidence.
 
 ## Reproduce
 

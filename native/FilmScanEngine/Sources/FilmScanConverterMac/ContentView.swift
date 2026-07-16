@@ -38,7 +38,7 @@ struct ContentView: View {
 
   var body: some View {
     NavigationSplitView {
-      List(model.files, id: \.self, selection: $model.selection) { url in
+      List(model.files, id: \.self, selection: $model.selectedFiles) { url in
         HStack(spacing: 8) {
           Image(systemName: "photo")
             .foregroundStyle(.secondary)
@@ -67,7 +67,8 @@ struct ContentView: View {
       }
       .navigationTitle("Scans")
       .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
-      .onChange(of: model.selection) {
+      .onChange(of: model.selectedFiles) {
+        guard model.sidebarSelectionDidChange() else { return }
         endRebateSelection()
         endPerspectiveEditing()
         endStraightening()
@@ -153,6 +154,13 @@ struct ContentView: View {
       Spacer()
 
       if !showLivePreview, model.previewImage != nil {
+        if model.canLoadRawDetailPreview {
+          Button(action: model.loadRawDetailPreview) {
+            Label("Load RAW Preview", systemImage: "sparkles.rectangle.stack")
+          }
+          .help("Decode the selected camera RAW and build a 2400px high-detail preview")
+        }
+
         Toggle(isOn: $model.showOriginal) {
           Label("Original", systemImage: "rectangle.on.rectangle")
         }
@@ -1079,18 +1087,29 @@ struct ContentView: View {
         }
 
         HStack(spacing: 8) {
-          Button("Export Selected", action: model.exportSelected)
+          Button(
+            model.selectedFileCount > 1
+              ? "Export Selected (\(model.selectedFileCount))"
+              : "Export Selected",
+            action: model.exportSelected
+          )
             .buttonStyle(.borderedProminent)
             .frame(maxWidth: .infinity)
           Button("Export All", action: model.exportAll)
             .buttonStyle(.bordered)
             .frame(maxWidth: .infinity)
         }
-        .disabled(model.exportParameters.destinationDirectory == nil || model.isExporting)
+        .disabled(
+          model.exportParameters.destinationDirectory == nil || model.isExporting || model.isLoading)
 
         if model.isExporting {
           HStack(spacing: 8) {
-            Button("Add Selected", action: model.addSelectedToExportQueue)
+            Button(
+              model.selectedFileCount > 1
+                ? "Add Selected (\(model.selectedFileCount))"
+                : "Add Selected",
+              action: model.addSelectedToExportQueue
+            )
               .buttonStyle(.borderedProminent)
               .frame(maxWidth: .infinity)
             Button("Cancel", role: .cancel, action: model.cancelExport)
