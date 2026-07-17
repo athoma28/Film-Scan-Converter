@@ -40,7 +40,7 @@ software and reporting reproducible problems.
 
 ## Verification
 
-The 2026-07-17 local candidate passed all 394 native regression tests with
+The 2026-07-17 local candidate passed all 395 native regression tests with
 normal Metal access and all 24 legacy Python tests; opt-in performance tests
 remained intentionally skipped. The unsigned-beta packager passed dependency,
 architecture, license-resource, strict signature, extracted-archive, checksum,

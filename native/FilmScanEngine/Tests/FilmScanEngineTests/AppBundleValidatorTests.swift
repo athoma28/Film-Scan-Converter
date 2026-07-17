@@ -84,6 +84,26 @@ struct AppBundleValidatorTests {
     ))
   }
 
+  @Test("Does not require license files for libraries absent from the bundle")
+  func ignoresLicensesForAbsentLibraries() throws {
+    let bundle = try makeBundle(
+      info: validInfo,
+      executableData: Data("binary".utf8)
+    )
+    let contents = bundle.appendingPathComponent("Contents", isDirectory: true)
+    let jasperLibrary = contents
+      .appendingPathComponent("Frameworks", isDirectory: true)
+      .appendingPathComponent("libjasper.dylib")
+    let licenses = contents
+      .appendingPathComponent("Resources", isDirectory: true)
+      .appendingPathComponent("ThirdPartyLicenses", isDirectory: true)
+    try FileManager.default.removeItem(at: jasperLibrary)
+    try FileManager.default.removeItem(at: licenses.appendingPathComponent("JasPer-LICENSE.txt"))
+    try FileManager.default.removeItem(at: licenses.appendingPathComponent("JasPer-COPYRIGHT.txt"))
+
+    #expect(AppBundleValidator.validate(bundleAt: bundle).isEmpty)
+  }
+
   @Test("Requires standard image and camera RAW document registration")
   func requiresDocumentRegistration() throws {
     var info = validInfo
@@ -129,8 +149,10 @@ struct AppBundleValidatorTests {
     let contents = root.appendingPathComponent("Contents")
     let macOS = contents.appendingPathComponent("MacOS")
     let resources = contents.appendingPathComponent("Resources")
+    let frameworks = contents.appendingPathComponent("Frameworks")
     try FileManager.default.createDirectory(at: macOS, withIntermediateDirectories: true)
     try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: frameworks, withIntermediateDirectories: true)
     let plist = try PropertyListSerialization.data(
       fromPropertyList: info,
       format: .xml,
@@ -148,6 +170,15 @@ struct AppBundleValidatorTests {
       "BUNDLED-LIBRARIES.txt",
     ] where filename != omittedResource {
       try Data("release resource".utf8).write(to: resources.appendingPathComponent(filename))
+    }
+    for filename in [
+      "libraw_r.dylib",
+      "libomp.dylib",
+      "libjpeg.dylib",
+      "libjasper.dylib",
+      "liblcms2.dylib",
+    ] {
+      try Data("library".utf8).write(to: frameworks.appendingPathComponent(filename))
     }
     let thirdPartyLicenses = resources.appendingPathComponent(
       "ThirdPartyLicenses",

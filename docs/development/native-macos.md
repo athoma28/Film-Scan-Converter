@@ -7,7 +7,7 @@ blocks a high-quality public release, and what is being worked on now. Use the
 [40 MP benchmark](../performance/40mp-export.md) for detailed measurements.
 
 **Last verified:** 2026-07-17 against the current working tree. The native test
-suite contains 394 tests across 28 files. Some representative-RAW tests require
+suite contains 395 tests across 28 files. Some representative-RAW tests require
 the untracked local `sample-raw/` corpus and are explicitly disabled when it is
 absent.
 
@@ -250,7 +250,7 @@ fail-closed `public` path. The following remain for the notarized build:
 
 ## Verification Summary
 
-- 394 native tests across 28 files in the current working tree.
+- 395 native tests across 28 files in the current working tree.
 - Frozen Python-generated fixtures cover shared numerical behavior.
 - Production CPU/GPU correction comparisons cover 2,725 channel comparisons
   with zero failures and a maximum difference of 2/255.

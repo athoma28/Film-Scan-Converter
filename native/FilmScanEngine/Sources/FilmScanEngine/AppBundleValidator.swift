@@ -16,15 +16,12 @@ public enum AppBundleValidator {
     "BUNDLED-LIBRARIES.txt",
   ]
 
-  private static let requiredThirdPartyLicenseFilenames = [
-    "LibRaw-LGPL-2.1.txt",
-    "LibRaw-CDDL-1.0.txt",
-    "LibRaw-COPYRIGHT.txt",
-    "LLVM-OpenMP-LICENSE.txt",
-    "libjpeg-turbo-LICENSE.md",
-    "JasPer-LICENSE.txt",
-    "JasPer-COPYRIGHT.txt",
-    "Little-CMS-LICENSE.txt",
+  private static let thirdPartyLicenseRequirements: [(libraryPrefix: String, licenses: [String])] = [
+    ("libraw", ["LibRaw-LGPL-2.1.txt", "LibRaw-CDDL-1.0.txt", "LibRaw-COPYRIGHT.txt"]),
+    ("libomp", ["LLVM-OpenMP-LICENSE.txt"]),
+    ("libjpeg", ["libjpeg-turbo-LICENSE.md"]),
+    ("libjasper", ["JasPer-LICENSE.txt", "JasPer-COPYRIGHT.txt"]),
+    ("liblcms2", ["Little-CMS-LICENSE.txt"]),
   ]
 
   public static func validate(
@@ -89,6 +86,13 @@ public enum AppBundleValidator {
       "ThirdPartyLicenses",
       isDirectory: true
     )
+    let frameworksURL = contentsURL.appendingPathComponent("Frameworks", isDirectory: true)
+    let bundledLibraryNames = (try? fileManager.contentsOfDirectory(atPath: frameworksURL.path)) ?? []
+    let requiredThirdPartyLicenseFilenames = thirdPartyLicenseRequirements.flatMap {
+      requirement in
+      bundledLibraryNames.contains(where: { $0.hasPrefix(requirement.libraryPrefix) })
+        ? requirement.licenses : []
+    }
     for filename in requiredThirdPartyLicenseFilenames {
       let licenseURL = thirdPartyLicensesURL.appendingPathComponent(filename)
       guard
