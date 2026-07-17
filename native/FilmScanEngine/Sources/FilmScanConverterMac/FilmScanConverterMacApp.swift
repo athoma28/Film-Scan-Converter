@@ -34,6 +34,21 @@ struct FilmScanConverterMacApp: App {
         }
     }
     .commands {
+      PreviewViewCommands()
+
+      CommandGroup(after: .appInfo) {
+        Button("Open Source Licenses…") {
+          guard let noticesURL = Bundle.main.url(
+            forResource: "THIRD_PARTY_NOTICES",
+            withExtension: "md"
+          ) else { return }
+          NSWorkspace.shared.open(noticesURL)
+        }
+        .disabled(
+          Bundle.main.url(forResource: "THIRD_PARTY_NOTICES", withExtension: "md") == nil
+        )
+      }
+
       CommandGroup(replacing: .newItem) {
         Button("Import Files...") {
           model.showImportPanel()

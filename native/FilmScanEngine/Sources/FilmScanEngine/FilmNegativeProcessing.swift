@@ -729,6 +729,7 @@ public enum FilmNegativeProcessing {
 
   public static func genericC41SceneEstimate(
     baseSubtractedDensity: [Double],
+    densityCorrection: DensityCorrectionMatrix = .identity,
     profile: GenericC41Profile = .identity
   ) -> [Double] {
     precondition(
@@ -736,11 +737,30 @@ public enum FilmNegativeProcessing {
       "Density data must contain BGR pixels"
     )
 
-    return baseSubtractedDensity.enumerated().map { index, density in
-      let channel = index % 3
-      let logE = profile.densitySlope[channel] * density + profile.densityOffset[channel]
-      return pow(10, logE)
+    var sceneLinear = Array(repeating: 0.0, count: baseSubtractedDensity.count)
+    for pixel in 0..<(baseSubtractedDensity.count / 3) {
+      let base = pixel * 3
+      let corrected = densityCorrection.applying(
+        to: BGRChannelValues(
+          blue: baseSubtractedDensity[base],
+          green: baseSubtractedDensity[base + 1],
+          red: baseSubtractedDensity[base + 2]
+        )
+      )
+      sceneLinear[base] = pow(
+        10,
+        profile.densitySlope.blue * corrected.blue + profile.densityOffset.blue
+      )
+      sceneLinear[base + 1] = pow(
+        10,
+        profile.densitySlope.green * corrected.green + profile.densityOffset.green
+      )
+      sceneLinear[base + 2] = pow(
+        10,
+        profile.densitySlope.red * corrected.red + profile.densityOffset.red
+      )
     }
+    return sceneLinear
   }
 
   public static func normalizeSceneExposure(
@@ -797,6 +817,7 @@ public enum FilmNegativeProcessing {
     image: UInt16Image,
     flatField: UInt16Image,
     baseDensity: BGRChannelValues,
+    densityCorrection: DensityCorrectionMatrix = .identity,
     c41Profile: GenericC41Profile = .identity,
     parameters: CaptureNormalizationParameters = CaptureNormalizationParameters()
   ) -> [Double] {
@@ -808,6 +829,7 @@ public enum FilmNegativeProcessing {
     )
     let scene = genericC41SceneEstimate(
       baseSubtractedDensity: density,
+      densityCorrection: densityCorrection,
       profile: c41Profile
     )
     return normalizeSceneExposure(sceneLinear: scene)
@@ -817,6 +839,7 @@ public enum FilmNegativeProcessing {
     image: UInt16Image,
     flatField: UInt16Image,
     baseDensity: BGRChannelValues,
+    densityCorrection: DensityCorrectionMatrix = .identity,
     c41Profile: GenericC41Profile = .identity,
     parameters: CaptureNormalizationParameters = CaptureNormalizationParameters()
   ) -> RenderReadyLinearImage {
@@ -827,6 +850,7 @@ public enum FilmNegativeProcessing {
         image: image,
         flatField: flatField,
         baseDensity: baseDensity,
+        densityCorrection: densityCorrection,
         c41Profile: c41Profile,
         parameters: parameters
       )

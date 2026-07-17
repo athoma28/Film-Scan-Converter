@@ -555,6 +555,20 @@ final class AppModel: ObservableObject {
     updateParameters { $0.photoAdjustments.vibrance = min(max(value, -1), 1) }
   }
 
+  func setFilmDyeMixing(
+    _ keyPath: WritableKeyPath<FilmDyeMixingParameters, Double>,
+    to value: Double
+  ) {
+    updateParameters {
+      $0.filmDyeMixing[keyPath: keyPath] = value
+      $0.filmDyeMixing = $0.filmDyeMixing.clamped()
+    }
+  }
+
+  func resetFilmDyeMixing() {
+    updateParameters { $0.filmDyeMixing = .neutral }
+  }
+
   func setExposureEV(_ value: Double) {
     updateParameters { $0.photoAdjustments.exposureEV = value }
   }
@@ -725,13 +739,20 @@ final class AppModel: ObservableObject {
         rollProfile: rollProfile,
         frameMeasurement: selectedRebateMeasurement?.baseDensity
       )
+      let currentMedians = computeFilmNegativeMedians()
+        ?? parameters.filmNegativeParams.measuredMedians
       updateParameters {
+        $0.filmType = resolved.stockProfile.filmType
         $0.densityPipelineEnabled = true
         if let baseDensity = resolved.resolvedBaseDensity?.baseDensity {
           $0.densityBaseDensity = baseDensity
         }
+        $0.densityCorrection = resolved.captureProfile.densityCorrection
         $0.densityC41Profile = resolved.stockProfile.c41Profile
         $0.densityDisplayParams = resolved.stockProfile.displayRendering
+        $0.filmNegativeParams = resolved.stockProfile.filmNegativeParams
+        $0.filmNegativeParams.measuredMedians = currentMedians
+        $0.filmDyeMixing = resolved.stockProfile.dyeMixing
       }
       let baseMessage = rebateStatus.isEmpty ? "" : rebateStatus + " "
       rebateStatus = baseMessage
@@ -773,6 +794,7 @@ final class AppModel: ObservableObject {
         backlightDescription: source.backlightDescription,
         estimatedColorTemperature: source.estimatedColorTemperature,
         normalizationParams: source.normalizationParams,
+        densityCorrection: source.densityCorrection,
         preferredISO: source.preferredISO,
         notes: source.notes
       )
@@ -798,6 +820,8 @@ final class AppModel: ObservableObject {
         filmType: parameters.filmType,
         c41Profile: parameters.densityC41Profile,
         displayRendering: parameters.densityDisplayParams,
+        filmNegativeParams: parameters.filmNegativeParams,
+        dyeMixing: parameters.filmDyeMixing,
         notes: "Saved from Film Scan Converter"
       )
       try profileStore.saveFilmStockProfile(profile)

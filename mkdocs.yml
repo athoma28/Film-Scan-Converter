@@ -21,6 +21,7 @@ nav:
       - Real-Time Still Preview Outcome: development/realtime-preview-plan.md
       - Native RAW Benchmark: development/native-raw-benchmark.md
       - Film Processing Research: film-processing-research.md
+      - Density-Matrix Calibration (Parked): development/density-matrix-calibration.md
       - Building: development/building.md
       - Contributing: contributing.md
   - Legacy Python:

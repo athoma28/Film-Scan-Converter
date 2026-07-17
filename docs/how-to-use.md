@@ -16,10 +16,15 @@ The native application is the primary product. It provides:
   2400px, recalibrated from RAW pixels for unusual film bases. Export still
   re-decodes RAW files at full resolution, using RCD for Bayer data or
   three-pass Markesteijn interpolation for X-Trans.
-- Interactive GPU-accelerated preview that updates during slider drags.
-- Export to TIFF (16-bit, optional LZW), JPEG (8-bit, configurable quality),
-  PNG (16-bit lossless), and DNG (processed 16-bit RGB).
-- Individual and batch-all export with background processing.
+- Interactive GPU-accelerated preview that updates during slider drags, with
+  native pan/pinch navigation plus Fit, step-zoom, and 100% commands.
+- Export to named-sRGB TIFF (16-bit, optional LZW), JPEG (8-bit, configurable
+  quality), and PNG (16-bit lossless), plus processed 16-bit RGB DNG encoded as
+  output-referred linear sRGB. Prefer TIFF when another application has limited
+  processed-DNG support.
+- Individual, import-ordered multi-selection, and memory-bounded Export All
+  workflows, plus duplicate-friendly append-selected jobs during an active
+  sequential export.
 
 ### Workflow
 
@@ -32,7 +37,13 @@ The native application is the primary product. It provides:
    preview proxy size. For a camera RAW, choose **Load RAW Preview** in the
    toolbar when the embedded preview's color is untrustworthy or more detail is
    useful. Full-resolution RAW decoding still happens independently during
-   export.
+   export. The badge over the preview names the current source and its displayed
+   pixel dimensions, so an embedded RAW thumbnail is not mistaken for export
+   evidence.
+   Use a two-finger trackpad gesture or mouse wheel to pan, pinch to zoom, or use
+   the toolbar's minus/plus buttons and Fit/100% menu. Command-0 fits the image,
+   Command-1 shows one preview pixel per point, and Command-plus/minus changes
+   magnification in steps.
 3. New files are automatically classified as color negative, B&W negative, or
    slide. Review and adjust the film mode and film negative preset as needed.
 4. Adjust corrections in the inspector panel: orientation, white balance,
@@ -46,15 +57,27 @@ The native application is the primary product. It provides:
    Grade-page clipping statistics are available from the first displayed render.
    Corrections are saved automatically for that source file and restored the
    next time the same path is imported.
-5. Use the Settings section to copy or paste a look, or save, apply, and delete
+5. For a color negative whose dye records do not separate cleanly, open
+   **Film Setup > Dye crossover**. Each slider says which source channel is
+   being mixed into a destination channel. Use a small negative value to
+   subtract an unwanted crossover cast, or a positive value to add that source
+   channel. The matrix operates before tone and grading and preserves neutral
+   gray, so it can correct relationships that Temperature/Tint or the three
+   exponent controls cannot. **Reset Dye Crossover** returns to the exact
+   neutral matrix.
+6. Use the Settings section to copy or paste a look, or save, apply, and delete
    named presets. After applying a named preset or **Kodachrome-like Auto**, use
    its **Remove** action to restore the adjustments from immediately before the
    preset without resetting crop or orientation. Transferred looks keep the
    destination scan's rotation, crop, and measured film-base state.
-6. In Film Base, optionally load a matching flat field and measure a clear,
+7. In **Processing Profiles**, a saved Film-Stock Profile captures the current
+   negative exponents, dye-crossover matrix, density response, and display
+   rendering settings. These are user-created priors; the app does not yet
+   claim calibrated built-in profiles for individual stocks.
+8. In Film Base, optionally load a matching flat field and measure a clear,
    unexposed film edge automatically or by dragging over it. This enables the
    measured density pipeline for negative conversion.
-7. In Film Frame, choose **Straighten**, click two points along a horizon or
+9. In Film Frame, choose **Straighten**, click two points along a horizon or
    vertical edge, and the app rotates the canvas to make that guide horizontal
    or vertical. Choose **Crop** and drag a box over the area to keep; the preview
    switches to the cropped canvas immediately. Choose **Crop** again to reveal
@@ -70,12 +93,13 @@ The native application is the primary product. It provides:
    clearing the other.
    Preview, the full-resolution dimension readout, and export use the same
    stored geometry.
-8. Use the original/corrected comparison toggle to evaluate your adjustments.
-9. Use **Detect Dust** to inspect a non-destructive candidate overlay. Clear it
+10. Use the original/corrected comparison toggle to evaluate your adjustments.
+    The current pan position and magnification stay fixed across the comparison.
+11. Use **Detect Dust** to inspect a non-destructive candidate overlay. Clear it
    when finished; the overlay is diagnostic and is not exported.
-10. Set export options (format, frame, aspect ratio) and choose a destination
+12. Set export options (format, frame, aspect ratio) and choose a destination
    folder.
-11. Command-click or Shift-click sidebar rows to select a subset, then click
+13. Command-click or Shift-click sidebar rows to select a subset, then click
     **Export Selected**; use **Export All** for every imported file. While an
     export is running, **Add Selected** appends another independent job for each
     selected file. Duplicate jobs are allowed, and each addition snapshots the
@@ -85,8 +109,9 @@ The native application is the primary product. It provides:
     full resolution one at a time so batch memory remains bounded.
 
 The native app can display dust-mask candidates, but it does not apply dust
-removal until Telea inpainting is connected. Use the legacy Python application
-when automatic removal is required. See
+removal. Applied dust removal is an evidence-driven post-release candidate, not
+an active implementation step. Use the legacy Python application when automatic
+removal is required. See
 [Native macOS Development](development/native-macos.md) for the current status.
 
 ## Legacy Python Application (Maintenance Only)

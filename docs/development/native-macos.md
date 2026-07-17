@@ -6,28 +6,38 @@ blocks a high-quality public release, and what is being worked on now. Use the
 [feature inventory](../features.md) for user-visible behavior, and the
 [40 MP benchmark](../performance/40mp-export.md) for detailed measurements.
 
-**Last verified:** 2026-07-14 against the current working tree. The native test
-suite contains 367 tests across 21 files. Some representative-RAW tests require
+**Last verified:** 2026-07-17 against the current working tree. The native test
+suite contains 394 tests across 28 files. Some representative-RAW tests require
 the untracked local `sample-raw/` corpus and are explicitly disabled when it is
 absent.
 
 ## Release Position
 
 The Swift/SwiftUI application is the primary product and the only destination
-for new functionality. It is suitable for continued native development and
-local validation, but it is not yet proven as a generally distributable
-release.
+for new functionality. It is ready for an explicitly labeled, ad-hoc-signed,
+Apple Silicon technical beta on macOS 14 or later. It is not yet an
+Apple-notarized general release.
 
-The remaining release work is not “finish every historical phase.” It is to
-prove the real application path, close essential editing-workflow gaps, measure
-large-file memory and latency, and validate the final signed artifact on a
-clean machine.
+The technical beta boundary is intentionally smaller than the high-quality
+first-release standard below. Undo/redo, a deeper representative roll pass,
+Developer ID notarization, and independent-Mac validation remain important,
+but are disclosed beta limitations rather than reasons to withhold useful
+open-source software.
+
+Stock-specific look learning and calibration are not part of the active plan.
+The existing generic controls, profile seams, fitter, and research notes remain
+available, but no further corpus preparation, named-stock fitting, or ML work
+should begin until the project owner explicitly reactivates that track.
 
 ## Current Work
 
-Finish the bounded 40 MP measurement cycle already in progress, then return to
-release-candidate correctness and workflow work. Do not start another broad
-performance rewrite from the existing one-file smoke result.
+The bounded 40 MP measurement cycle and beta packaging/output correctness work
+are complete. The still-preview viewport has native pan/pinch navigation,
+Fit/step/100% commands, shared image and editing-overlay transforms,
+viewport-stable comparison, and explicit preview-source status. Next, use beta
+feedback and representative images to prioritize undo/redo, roll workflow, and
+performance work. Do not start another broad performance rewrite or divert
+into stock-look calibration without measured evidence.
 
 The current measurement evidence is:
 
@@ -87,6 +97,13 @@ The current measurement evidence is:
   respectively, so the run shows no sustained depth-by-depth growth. Absolute
   in-capacity footprint is reported but is not directly ordered because later
   samples reuse allocator pages from earlier samples;
+- the release app path completed ten sequential TIFF jobs in 225.21 seconds
+  over six unique local RAFs plus four duplicate queue additions. Per-job p50
+  and nearest-rank p95 were 22.57 and 22.80 seconds. The observed physical
+  footprint stayed between 71.03 and 74.14 MB, returned to 61.41 MB after model
+  release, and all ten temporary outputs were removed. Cancellation requested
+  250 ms into the first full-resolution decode stopped at the next safe boundary
+  in 21.57 seconds, wrote no output, and returned to 59.62 MB after model release;
 
 These numbers are diagnostic, not release claims. `ru_maxrss` and Mach
 `resident_size` include reusable pages and are not live-memory gates; use
@@ -95,12 +112,12 @@ current camera-scan decode contract is not comparable with the faster
 RawPy-compatibility profile because the stage sets and demosaic algorithms
 differ.
 
-The next bounded measurement is an app-path ten-file sequential export with
-cancellation latency and post-run memory checks.
-
-Optimize another stage only when that measurement identifies a user-visible or
-resource-safety problem. Preserve final-quality demosaic, output contracts, and
-the one-full-resolution-RAW-at-a-time bound.
+This closes the bounded performance cycle. The still-preview zoom/pan surface
+is implemented in the current working tree; it still needs a direct
+representative-image workflow check before the release gate is claimed closed.
+Optimize export again only when a later measurement identifies a user-visible
+or resource-safety problem. Preserve final-quality demosaic, output contracts,
+and the one-full-resolution-RAW-at-a-time bound.
 
 ## Implemented Product Scope
 
@@ -108,12 +125,12 @@ the one-full-resolution-RAW-at-a-time bound.
 |---|---|
 | Import | Drag/drop, file picker, Finder Open With, standard PNG/JPEG/BMP/TIFF decode, and LibRaw-backed camera RAW decode. |
 | First paint | RAW embedded thumbnails and ImageIO standard-image thumbnails decode directly to at most 1000px off the main actor. A separate 256px proxy drives classification and median calibration before the first filtered render. |
-| Processing | Color/B&W negative and slide startup classification, RawTherapee-compatible power-law inversion, a reference-derived Kodachrome-like adaptive look, an optional density pipeline, film-base measurement, flat field, protected color and tone controls with center-weighted UI response and pipeline-calibrated tone references, shape-preserving overall/per-channel curves, color wheels, neutral-white handling for clipped near-zero holder pixels, automatic frame detection, a centered two-click horizontal/vertical straighten guide, an immediately visible post-straighten drag-box crop with full-canvas replacement and reset, an independent four-corner perspective warp with targeting reticles, a 100×100-pixel drag loupe, soft parallel-edge assistance, and a visible grid, live full-resolution output dimensions, frame, and aspect ratio. |
-| Preview | First paint uses a bounded 16-bit 1000px display source plus a 256px analysis source. Embedded RAW pixels are fast previews, not authoritative RAW output. **Load RAW Preview** explicitly decodes the selected RAW through the app-facing camera-scan profile, builds an up-to-2400px display source, and recalibrates from those RAW pixels. The Core Image/Metal renderer uses latest-value-wins scheduling; CPU remains the reference and fallback. |
+| Processing | Color/B&W negative and slide startup classification, RawTherapee-compatible power-law inversion, a reference-derived Kodachrome-like adaptive look, an optional density pipeline, film-base measurement, flat field, capture-profile 3x3-plus-offset density correction before curve inversion, a neutral-preserving six-control dye-crossover matrix shared by basic/power-law/density color-negative paths, protected color and tone controls with center-weighted UI response and pipeline-calibrated tone references, shape-preserving overall/per-channel curves, color wheels, neutral-white handling for clipped near-zero holder pixels, automatic frame detection, a centered two-click horizontal/vertical straighten guide, an immediately visible post-straighten drag-box crop with full-canvas replacement and reset, an independent four-corner perspective warp with targeting reticles, a 100×100-pixel drag loupe, soft parallel-edge assistance, and a visible grid, live full-resolution output dimensions, frame, and aspect ratio. |
+| Preview | First paint uses a bounded 16-bit 1000px display source plus a 256px analysis source. Embedded RAW pixels are fast previews, not authoritative RAW output. **Load RAW Preview** explicitly decodes the selected RAW through the app-facing camera-scan profile, builds an up-to-2400px display source, and recalibrates from those RAW pixels. A native scroll viewport supplies momentum pan, cursor-centered pinch zoom, Fit/step/100% commands, viewport-stable Original comparison, shared editing-overlay transforms, and an explicit source/dimension badge. The Core Image/Metal renderer uses latest-value-wins scheduling; CPU remains the reference and fallback. |
 | Editing state | Per-file settings, named presets, a built-in Kodachrome-like Auto action, one-step removal of the last applied preset without resetting geometry, system-clipboard copy/paste, reset, edited markers, apply-to-all-open-files, and configurable 2/4/8/16/32-file lookahead. Lookahead caches preview sessions only and is bounded by count and 256 MiB. |
-| Export | TIFF, JPEG, PNG, and processed-RGB DNG; individual, ordered multi-selection, and lazy memory-bounded batch-all workflows; collision-safe names; partial-file cleanup; progress, per-file errors, queued cancellation, and duplicate-friendly append-selected jobs with per-addition export-setting snapshots during an active sequential run. |
+| Export | Named-sRGB TIFF, JPEG, and PNG plus output-referred linear-sRGB processed DNG; individual, ordered multi-selection, and lazy memory-bounded batch-all workflows; collision-safe names; partial-file cleanup; progress, per-file errors, queued cancellation, and duplicate-friendly append-selected jobs with per-addition export-setting snapshots during an active sequential run. |
 | Dust | Native parity-tested candidate-mask detection and a non-destructive aligned overlay. Dust removal is not applied to preview or export. |
-| Packaging | Self-contained app/ZIP assembly, embedded non-system libraries, bundle-relative load paths, icon/document registration, hardened-runtime signing support, local bundle validation, archive extraction/revalidation, and local packaged launch. |
+| Packaging | Self-contained app/ZIP/checksum assembly, embedded non-system libraries, bundle-relative load paths, licenses/notices/library manifest, icon/document registration, ad-hoc beta signing, gated Developer ID/notary support, local bundle validation, archive extraction/revalidation, and local packaged launch. |
 
 See [Features](../features.md) for a user-facing description and
 [`native/README.md`](../../native/README.md) for package-local implementation
@@ -121,59 +138,72 @@ and command details.
 
 ## Release Gates
 
-### 1. Representative End-to-End Correctness
+### 1. Large-File Performance And Memory — Closed
 
-Exercise the actual packaged app, not only engine entry points:
-
-- import representative standard images and RAWs;
-- verify bounded corrected-preview orientation against the reopened
-  full-resolution export;
-- apply default power-law, density/flat-field, crop/perspective/frame, and saved
-  settings workflows;
-- export TIFF, JPEG, PNG, and DNG, then reopen and inspect dimensions, pixels,
-  orientation, profile, and metadata as applicable;
-- test cancellation, collision handling, unwritable destinations, corrupt
-  settings, relaunch, and partial-output cleanup;
-- reproduce the originally reported PNG source/destination case before closing
-  that regression.
-
-The existing Fujifilm X-T5 RAF corpus is useful but insufficient as the entire
-product claim. Add or acquire held-out representative files only when their
-license and repository footprint are explicit. A compact committed CI corpus
-is preferable; local-only files must remain a clearly reported supplemental
-gate.
-
-### 2. Essential Editing Workflow
-
-Before calling the application high quality, complete and validate:
-
-- undo/redo for destructive editing-state changes;
-- zoom and pan for judging focus, dust, crop, and corrections;
-- another real batch-editing usability pass covering file switching, applying a
-  look, correcting exceptions, and exporting the intended subset.
-
-The existing Original toggle is sufficient unless usability testing proves a
-split comparison materially better. Sidebar reordering is useful but does not
-block the first release unless scan order is shown to be unreliable in real
-workflows.
-
-### 3. Large-File Performance And Memory
-
-Close the current measurement cycle. The release gate is not an arbitrary
-multiple of Python performance. It is:
+The 2026-07-15 app-path batch and cancellation run closed this cycle. The
+standing contract is:
 
 - prompt bounded corrected feedback;
 - no overlapping authoritative full-resolution decode buffers;
 - one full-resolution RAW export at a time;
-- no sustained physical-footprint growth through a representative batch (the
-  engine-level ten-file gate now passes; the app-path gate remains);
+- no sustained physical-footprint growth through a representative batch;
 - stable output and metadata across optimizations;
 - documented p50/p95 latency and peak-live-memory baselines that future changes
   can detect regressions against.
 
-### 4. Distribution
+### 2. Photographic Judgment And Editing Confidence
 
-Use the [native release runbook](native-release.md) with the final candidate:
+Implemented in the current working tree:
+
+- native pan/pinch navigation plus Fit, zoom-in/out, and 100% commands;
+- original/corrected comparison at the same viewport and magnification;
+- a shared transform for image, dust, crop, straighten, and perspective layers;
+- an explicit preview-source and displayed-dimensions badge.
+
+Still required before calling the application high quality:
+
+- complete a direct representative-image workflow check for focus, grain,
+  dust, crop-edge, overlay-drag, comparison, and clipping-diagnostic behavior;
+- add undo/redo with one history step per slider gesture and safe per-file
+  boundaries;
+- preserve the explicit bounded-preview versus full-resolution-export contract.
+
+### 3. Roll And Batch Workflow
+
+Exercise a real roll workflow: choose an anchor frame, establish a look, apply
+it to selected or all open frames, correct exceptions, choose intended exports,
+and complete the batch. Verify immediate visible application, preserved
+per-frame geometry/base measurements, edited and queue state, and import-ordered
+selection/export.
+
+Sidebar reordering, ratings, or a larger queue become requirements only when
+this workflow demonstrates a need.
+
+### 4. Representative Packaged-App And Output Correctness — Beta Contract Closed
+
+Exercise the actual packaged app, not only engine entry points:
+
+- import representative standard images and RAWs;
+- verify bounded corrected-preview orientation against reopened
+  full-resolution exports;
+- apply default power-law, density/flat-field, crop/perspective/frame, preset,
+  batch, and relaunch workflows;
+- export TIFF, JPEG, PNG, and DNG, then inspect dimensions, pixels, orientation,
+  depth, metadata, and color interpretation;
+- preserve the named-sRGB contract for TIFF/JPEG/PNG and the explicit
+  output-referred linear-sRGB DNG metadata contract;
+- test cancellation, collision handling, unwritable destinations, corrupt
+  settings, relaunch, and partial-output cleanup;
+- reproduce the originally reported PNG source/destination case.
+
+The existing Fujifilm X-T5 RAF corpus is useful but insufficient as the entire
+product claim. A small legally distributable committed CI corpus is preferable;
+local-only files remain an explicitly supplemental gate.
+
+### 5. Distribution Hardening
+
+The release packager now provides a validated `unsigned-beta` path and a
+fail-closed `public` path. The following remain for the notarized build:
 
 - Developer ID sign;
 - notarize and staple;
@@ -185,7 +215,9 @@ Use the [native release runbook](native-release.md) with the final candidate:
 
 - Telea dust inpainting and applying dust removal to preview/export are not
   implemented natively.
-- Undo/redo, zoom/pan, and sidebar reordering remain incomplete.
+- Undo/redo is not implemented.
+- Sidebar order remains import order. Manual reordering is unavailable and is
+  not a release gate unless the roll workflow demonstrates a need.
 - Lens-distortion correction and calibrated film-plane/sensor-plane
   non-alignment correction are not implemented. The current four-corner warp
   rectifies one planar film frame; it does not model curved or spatially varying
@@ -196,23 +228,42 @@ Use the [native release runbook](native-release.md) with the final candidate:
   real-file gate for the Bayer RCD path.
 - Camera-scan ISO denoise/sharpen policy is a bounded native approximation, not
   an exact RawTherapee kernel port.
+- TIFF, JPEG, and PNG use named sRGB profiles. Processed DNG uses
+  output-referred linear-sRGB DNG metadata and may not open in applications
+  that only support known-camera sensor DNGs; use TIFF for broad interchange.
 - The density pipeline uses an authoritative CPU fallback rather than a fully
   product-integrated GPU path.
+- Capture profiles can store a custom density correction, and the offline
+  fitter produces a candidate plus fit/held-out/identity-baseline metrics while
+  preventing frame leakage across the validation split. The repository does
+  not contain the paired measured corpus needed to validate or ship a built-in
+  capture/stock matrix. Reference-pair alignment and target-log-exposure
+  extraction, fitted per-stock curves, residual LUTs, and halation compensation
+  are not implemented. This calibration track is intentionally parked until the
+  project owner explicitly asks to resume it.
 - Processed-RGB DNG does not claim untouched sensor-RAW semantics.
 - Standard images with alpha are rejected because four-channel processing has
   not been defined.
-- Developer ID notarization, Gatekeeper, and clean-machine validation have not
-  been completed.
+- The technical beta is ad-hoc signed and Apple Silicon-only. Developer ID
+  notarization, no-bypass Gatekeeper assessment, and independent clean-machine
+  validation have not been completed.
 
 ## Verification Summary
 
-- 367 native tests across 21 files in the current working tree.
+- 394 native tests across 28 files in the current working tree.
 - Frozen Python-generated fixtures cover shared numerical behavior.
 - Production CPU/GPU correction comparisons cover 2,725 channel comparisons
   with zero failures and a maximum difference of 2/255.
+- A separate directed dye-crossover fixture verifies the new linear matrix
+  against the production Metal renderer within the same 2/255 tolerance.
+- Synthetic calibration tests recover a known density-space affine transform,
+  enforce frame-level fit/validation separation, compare held-out RMSE against
+  identity, and exercise capture-profile migration plus the app processing seam.
 - Export tests cover format round trips, manager behavior, cancellation,
   collisions, partial cleanup, and app-level integration.
-- Local packaging validates the assembled app and the extracted ZIP copy.
+- Local packaging validates the assembled app and extracted ZIP copy, bundled
+  license/notice/manifest resources, dependency closure, signature, and
+  checksum-oriented archive contract.
 - The GitHub workflow currently runs the Swift test suite and builds the app on
   macOS; it does not yet prove a notarized artifact or committed real RAW corpus.
 

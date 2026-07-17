@@ -591,6 +591,31 @@ struct FilmNegativeProcessingTests {
     #expect(abs(scene[2] - pow(10, 1.0 * 0.6 + 0.1)) < 1e-12)
   }
 
+  @Test("Density correction matrix runs before per-channel curve inversion")
+  func densityCorrectionPrecedesCurveInversion() {
+    let density: [Double] = [0.2, 0.4, 0.6]
+    let correction = DensityCorrectionMatrix(
+      blueOutput: BGRChannelValues(blue: 1, green: 0.5, red: 0),
+      greenOutput: BGRChannelValues(blue: 0, green: 1, red: -0.25),
+      redOutput: BGRChannelValues(blue: 0.2, green: 0, red: 1),
+      offset: BGRChannelValues(blue: 0.01, green: 0.02, red: 0.03)
+    )
+    let profile = GenericC41Profile(
+      densitySlope: BGRChannelValues(blue: 2, green: 3, red: 4),
+      densityOffset: BGRChannelValues(blue: -0.1, green: 0.1, red: 0.2)
+    )
+
+    let scene = FilmNegativeProcessing.genericC41SceneEstimate(
+      baseSubtractedDensity: density,
+      densityCorrection: correction,
+      profile: profile
+    )
+
+    #expect(abs(scene[0] - pow(10, 2 * 0.41 - 0.1)) < 1e-12)
+    #expect(abs(scene[1] - pow(10, 3 * 0.27 + 0.1)) < 1e-12)
+    #expect(abs(scene[2] - pow(10, 4 * 0.67 + 0.2)) < 1e-12)
+  }
+
   @Test("Generic C-41 scene estimate is monotonic in each channel")
   func genericC41Monotonicity() {
     let density: [Double] = [0.1, 0.2, 0.3, 0.9, 1.0, 1.1]
@@ -848,12 +873,42 @@ struct FilmNegativeProcessingTests {
       normalizationParams: CaptureNormalizationParameters(
         blackLevel: BGRChannelValues(blue: 128, green: 128, red: 128)
       ),
+      densityCorrection: DensityCorrectionMatrix(
+        blueOutput: BGRChannelValues(blue: 1.02, green: -0.03, red: 0.01),
+        greenOutput: BGRChannelValues(blue: 0.02, green: 0.97, red: 0.01),
+        redOutput: BGRChannelValues(blue: -0.01, green: 0.04, red: 0.98)
+      ),
       preferredISO: 200,
       notes: "Standard copy stand setup"
     )
     let encoded = try JSONEncoder().encode(profile)
     let decoded = try JSONDecoder().decode(CaptureProfile.self, from: encoded)
     #expect(decoded == profile)
+  }
+
+  @Test("Version-one CaptureProfile migrates an identity density correction")
+  func captureProfileVersionOneMigration() throws {
+    let oldDocument = """
+      {
+        "schemaVersion": 1,
+        "id": "legacy-capture",
+        "cameraModel": "Camera",
+        "lensModel": "Lens",
+        "backlightDescription": "Light",
+        "normalizationParams": {
+          "blackLevel": {"blue": 0, "green": 0, "red": 0},
+          "epsilon": 0.000001
+        },
+        "notes": ""
+      }
+      """
+
+    let decoded = try JSONDecoder().decode(
+      CaptureProfile.self,
+      from: Data(oldDocument.utf8)
+    )
+
+    #expect(decoded.densityCorrection == .identity)
   }
 
   @Test("FilmStockProfile round-trips through JSON")
@@ -871,11 +926,49 @@ struct FilmNegativeProcessingTests {
         toneMap: .reinhard,
         maximumSceneGain: 8
       ),
+      filmNegativeParams: FilmNegativeParams(
+        enabled: true, redRatio: 1.28, greenExp: 1.62, blueRatio: 0.91),
+      dyeMixing: FilmDyeMixingParameters(
+        redFromGreen: -0.08,
+        greenFromBlue: 0.04,
+        blueFromRed: -0.06
+      ),
       notes: "Calibrated from IT8 target / Portra 400 roll #1"
     )
     let encoded = try JSONEncoder().encode(profile)
     let decoded = try JSONDecoder().decode(FilmStockProfile.self, from: encoded)
     #expect(decoded == profile)
+  }
+
+  @Test("Version-one FilmStockProfile migrates neutral dye mixing")
+  func filmStockProfileVersionOneMigration() throws {
+    let oldDocument = """
+      {
+        "schemaVersion": 1,
+        "id": "legacy-stock",
+        "displayName": "Legacy Stock",
+        "filmType": 1,
+        "c41Profile": {
+          "densitySlope": {"blue": 1, "green": 1, "red": 1},
+          "densityOffset": {"blue": 0, "green": 0, "red": 0}
+        },
+        "displayRendering": {
+          "exposureEV": 0,
+          "whiteBalance": {"blue": 1, "green": 1, "red": 1},
+          "toneMap": "linear",
+          "maximumSceneGain": 16
+        },
+        "notes": ""
+      }
+      """
+
+    let decoded = try JSONDecoder().decode(
+      FilmStockProfile.self,
+      from: Data(oldDocument.utf8)
+    )
+
+    #expect(decoded.filmNegativeParams == .colourNegative)
+    #expect(decoded.dyeMixing == .neutral)
   }
 
   @Test("RollProfile codable round-trip uses type-safe profile IDs")
@@ -1013,13 +1106,13 @@ struct FilmNegativeProcessingTests {
     defer { try? FileManager.default.removeItem(at: dir) }
     let store = ProfileStore(baseDirectory: dir)
     let profile = CaptureProfile(
-      schemaVersion: 2,
+      schemaVersion: 3,
       id: CaptureProfileID(rawValue: "future")
     )
     try store.saveCaptureProfile(profile)
 
     #expect(
-      throws: ProfileResolutionError.incompatibleSchemaVersion(2, supported: 1)
+      throws: ProfileResolutionError.incompatibleSchemaVersion(3, supported: 2)
     ) {
       try store.loadCaptureProfile(id: profile.id)
     }

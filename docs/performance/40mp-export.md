@@ -7,10 +7,11 @@ It is not a complete app-path benchmark: stored-settings resolution, automatic
 classification, flat-field lookup, destination reservation, queue management,
 and app-level cancellation/error reporting remain outside this executable.
 The production app supplies separate correlated signposts from queue wait
-through cleanup. A release-mode app-path benchmark now covers selection and
-preview-cache latency without requiring Instruments; Instruments remains useful
-for stage-level traces. Destination reservation remains app-only work outside
-the engine benchmark and is not yet a separately timed interval.
+through cleanup. Release-mode app-path benchmarks now cover selection and
+preview-cache latency plus a ten-job sequential export and active-decode
+cancellation without requiring Instruments; Instruments remains useful for
+stage-level traces. Destination reservation is included in the app-path total
+but is not reported as a separate interval.
 
 Interactive loading and export have separate image contracts. Browsing and
 editing use a 1000px embedded-RAW or ImageIO preview with a 256px analysis
@@ -81,9 +82,8 @@ live/reserved snapshot, as a secondary classification aid. All-zone `vmmap`
 snapshots of the sequential run identified the apparent growth as
 `MALLOC_LARGE_REUSABLE` and empty allocator regions: those pages increased the
 resident count without increasing dirty live memory or physical footprint.
-These engine-level readings complement the completed app preview-cache depth
-comparison and correlated stage-level app-path traces; they do not replace the
-remaining app-path sequential-export run.
+These engine-level readings complement the completed app preview-cache depth,
+sequential-export, cancellation, and correlated stage-level app-path evidence.
 
 ## App-Path Preview Baseline
 
@@ -143,6 +143,55 @@ a monotonic depth comparison. Logical cache bytes show the deterministic
 scaling, while the roughly 26-28 MB post-release readings show no sustained
 per-depth physical-footprint growth.
 
+## App-Path Sequential Export And Cancellation Baseline
+
+`AppPathExportPerformanceTests` exercises the production `AppModel` queue,
+destination reservation, stored/default settings resolution, full-resolution
+camera-scan decode, correction, geometry, TIFF write, progress state, cleanup,
+and cancellation reporting. The local corpus currently contains six RAFs, so
+the benchmark starts Export All and appends the first four files again through
+the duplicate-friendly queue contract to reach ten independent export jobs.
+
+Run the release benchmark with writable Swift caches:
+
+```sh
+RUN_APP_PATH_EXPORT_PERFORMANCE_TESTS=1 \
+APP_PATH_EXPORT_BENCHMARK_OUTPUT=/tmp/film-scan-app-path-export.json \
+CLANG_MODULE_CACHE_PATH=/tmp/film-scan-clang-cache \
+SWIFTPM_MODULECACHE_OVERRIDE=/tmp/film-scan-swiftpm-cache \
+swift test --disable-sandbox -c release \
+  --package-path native/FilmScanEngine --no-parallel \
+  --filter AppPathExportPerformanceTests
+```
+
+On 2026-07-15, a Mac16,7 completed the ten TIFF jobs in 225.213 seconds.
+Per-job completion time was 22.521 seconds on average, with a 22.567-second p50
+and 22.804-second nearest-rank p95. With ten samples, p95 is the slowest job and
+is a compact run marker rather than a population-tail estimate.
+
+| App-path batch evidence | Result |
+|---|---:|
+| Unique RAFs / queued jobs | 6 / 10 |
+| Per-job p50 / nearest-rank p95 | 22.57 / 22.80 s |
+| Physical footprint at progress observations | 71.03–74.14 MB |
+| First-to-last observed footprint change | +3.11 MB |
+| Physical footprint after model release | 61.41 MB |
+| Process-lifetime peak physical footprint | 714.15 MB |
+| Temporary outputs removed / remaining | 10 / 0 |
+
+Progress observations may overlap the next decode, so their narrow band is a
+bounded-growth diagnostic rather than a clean after-each-file release sample.
+The post-run and post-model-release readings are the live-memory gates. The
+sequence had no export errors and shows no runaway per-file growth.
+
+The same process then started another ten-job queue and requested cancellation
+250 ms into its first full-resolution decode. Cancellation reached the next
+safe boundary in 21.573 seconds, reported `Export cancelled after 1 of 10
+images.`, wrote no output, and returned from 67.24 MB at completion to 59.62 MB
+after model release. This is intentionally not an instant-cancellation claim:
+the active synchronous LibRaw call finishes before the task observes
+cancellation and prevents correction, geometry, write, and later queue items.
+
 ## Sequential Memory Baseline
 
 On 2026-07-09, the corrected release executable ran one TIFF export for each of
@@ -190,9 +239,9 @@ The range across RAFs confirms that final-quality camera-scan decode remains
 the dominant stage and varies materially with source content. PNG is writer
 bound; TIFF's LZW finalize is its only substantial non-decode component. The
 compact-buffer slice below reduces writer memory traffic without claiming to
-change that dominant-stage conclusion. The first app-path latency baseline is
-now complete; further engine optimization waits on the remaining
-sequential-export evidence.
+change that dominant-stage conclusion. The app-path measurement cycle is now
+complete; further engine optimization waits on a measured user-visible or
+resource-safety regression.
 
 ## Compact And Parallel Export Packing
 
@@ -314,10 +363,12 @@ Use two explicit contracts:
    tone conversion, ISO denoise/sharpen, processed-image creation, and Swift
    copy/swizzle costs separately before optimizing it.
 
-## Next Run Cycle
+## Closed Run Cycle
 
-Run these milestones in order so each optimization decision has a measured
-input and a regression gate:
+These milestones were run in order so each optimization decision had a measured
+input and a regression gate. The cycle is now closed; retain these results as
+regression evidence and reopen optimization only for a measured user-visible or
+resource-safety problem.
 
 1. **Repeated format baseline.** Complete. Three TIFF/JPEG/PNG/DNG runs for
    `DSCF0669.RAF` plus three TIFF runs for `DSCF0718.RAF` and `DSCF0729.RAF`
@@ -338,7 +389,7 @@ input and a regression gate:
    records first paint, cached/uncached switching, rapid-selection drain, cache
    bytes, and physical footprint. Use Instruments only when a later regression
    needs deeper render-stage attribution.
-4. **Memory envelope.** Engine and preview-cache gates complete. The corrected
+4. **Memory envelope.** Engine, preview-cache, and app-export gates complete. The corrected
    ten-file report
    records physical footprint, peak physical footprint, reusable bytes, legacy
    resident size, and default-zone statistics. Post-release physical footprint
@@ -346,10 +397,13 @@ input and a regression gate:
    growth was reclaimable allocator memory. The app benchmark now samples
    preview-cache depths 2, 8, and 32 with the same physical-footprint contract;
    its six-file corpus saturates the latter two depths at six sessions and
-   returns to roughly 26-28 MB after each model release.
+   returns to roughly 26-28 MB after each model release. The ten-job app export
+   stayed within a 71.03–74.14 MB observed band and returned to 61.41 MB after
+   model release; the following cancellation run returned to 59.62 MB.
 5. **Large-file handling.** First corrected paint, cached and uncached
-   switching, rapid-selection drain, and process memory now have a reproducible
-   release baseline. The bounded browsing contract has no authoritative
+   switching, rapid-selection drain, ten-job sequential export, active-decode
+   cancellation, and process memory now have reproducible release baselines.
+   The bounded browsing contract has no authoritative
    replacement stage. Preview-cache depth sampling is complete for the local
    six-RAF corpus; retain the realized-session count in future larger-corpus
    reports rather than implying depth 32 was fully populated here.
@@ -358,8 +412,8 @@ input and a regression gate:
    and compact TIFF packing removes 80.37 MB while cutting the ten-file median
    interval 23.0%. Both preserve deterministic output bytes and hashes.
    Do not substitute a one-pass X-Trans quality mode; defer further engine work
-   until the remaining app measurement exposes a dominant seam.
-7. **Batch confirmation.** Engine confirmation complete for ten sequential
-   TIFF exports, including output contracts and physical memory. The remaining
-   app-path run must add cancellation latency, queue timing, preview-cache
-   effects, and post-batch physical footprint.
+   until a later measurement exposes a user-visible or resource-safety problem.
+7. **Batch confirmation.** Complete. Engine confirmation covers ten sequential
+   TIFF exports with output contracts and physical memory. The app-path run adds
+   ten queue completions, preview-cache effects, post-batch physical footprint,
+   per-run output removal, and measured safe-boundary cancellation latency.

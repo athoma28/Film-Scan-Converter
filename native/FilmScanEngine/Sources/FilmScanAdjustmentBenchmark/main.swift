@@ -38,6 +38,14 @@ private func makeParameters(image: UInt16Image) -> [ProcessingParameters] {
       midtoneWheel: ColorWheel(hue: Double((index * 61) % 360), strength: 0.25),
       shadowWheel: ColorWheel(hue: Double((index * 83) % 360), strength: 0.5),
       filmNegativeParams: filmNegative,
+      filmDyeMixing: FilmDyeMixingParameters(
+        redFromGreen: -0.08,
+        redFromBlue: 0.04,
+        greenFromRed: 0.03,
+        greenFromBlue: -0.06,
+        blueFromRed: 0.07,
+        blueFromGreen: -0.03
+      ),
       photoAdjustments: PhotoAdjustmentParameters(
         exposureEV: -0.5 + phase,
         brightness: -0.15 + phase * 0.3,

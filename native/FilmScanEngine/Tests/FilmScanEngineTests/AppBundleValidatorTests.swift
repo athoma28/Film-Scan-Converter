@@ -58,6 +58,32 @@ struct AppBundleValidatorTests {
     #expect(AppBundleValidator.validate(bundleAt: bundle).contains("Contents/Resources/AppIcon.icns is missing"))
   }
 
+  @Test("Requires license, notices, release notes, and library manifest")
+  func requiresReleaseResources() throws {
+    let bundle = try makeBundle(
+      info: validInfo,
+      executableData: Data("binary".utf8),
+      omittedResource: "THIRD_PARTY_NOTICES.md"
+    )
+
+    #expect(AppBundleValidator.validate(bundleAt: bundle).contains(
+      "Contents/Resources/THIRD_PARTY_NOTICES.md is missing or empty"
+    ))
+  }
+
+  @Test("Requires complete bundled-library license texts")
+  func requiresThirdPartyLicenseTexts() throws {
+    let bundle = try makeBundle(
+      info: validInfo,
+      executableData: Data("binary".utf8),
+      omittedResource: "LLVM-OpenMP-LICENSE.txt"
+    )
+
+    #expect(AppBundleValidator.validate(bundleAt: bundle).contains(
+      "Contents/Resources/ThirdPartyLicenses/LLVM-OpenMP-LICENSE.txt is missing or empty"
+    ))
+  }
+
   @Test("Requires standard image and camera RAW document registration")
   func requiresDocumentRegistration() throws {
     var info = validInfo
@@ -94,7 +120,8 @@ struct AppBundleValidatorTests {
   private func makeBundle(
     info: [String: Any],
     executableData: Data?,
-    includeIcon: Bool = true
+    includeIcon: Bool = true,
+    omittedResource: String? = nil
   ) throws -> URL {
     let root = FileManager.default.temporaryDirectory
       .appendingPathComponent(UUID().uuidString)
@@ -113,6 +140,36 @@ struct AppBundleValidatorTests {
     if includeIcon, let icon = info["CFBundleIconFile"] as? String {
       let iconFilename = icon.hasSuffix(".icns") ? icon : "\(icon).icns"
       try Data("icon".utf8).write(to: resources.appendingPathComponent(iconFilename))
+    }
+    for filename in [
+      "LICENSE.txt",
+      "THIRD_PARTY_NOTICES.md",
+      "RELEASE_NOTES.md",
+      "BUNDLED-LIBRARIES.txt",
+    ] where filename != omittedResource {
+      try Data("release resource".utf8).write(to: resources.appendingPathComponent(filename))
+    }
+    let thirdPartyLicenses = resources.appendingPathComponent(
+      "ThirdPartyLicenses",
+      isDirectory: true
+    )
+    try FileManager.default.createDirectory(
+      at: thirdPartyLicenses,
+      withIntermediateDirectories: true
+    )
+    for filename in [
+      "LibRaw-LGPL-2.1.txt",
+      "LibRaw-CDDL-1.0.txt",
+      "LibRaw-COPYRIGHT.txt",
+      "LLVM-OpenMP-LICENSE.txt",
+      "libjpeg-turbo-LICENSE.md",
+      "JasPer-LICENSE.txt",
+      "JasPer-COPYRIGHT.txt",
+      "Little-CMS-LICENSE.txt",
+    ] where filename != omittedResource {
+      try Data("license text".utf8).write(
+        to: thirdPartyLicenses.appendingPathComponent(filename)
+      )
     }
     if let executableData, let name = info["CFBundleExecutable"] as? String {
       let executable = macOS.appendingPathComponent(name)

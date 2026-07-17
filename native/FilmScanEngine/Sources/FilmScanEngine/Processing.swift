@@ -66,13 +66,18 @@ public enum FilmProcessing {
       }
     } else if parameters.filmType == .colourNegative {
       if parameters.filmNegativeParams.enabled {
-        let needsLinearSeam = parameters.photoAdjustments.hasColorAdjustment
+        let needsDyeMixing = !parameters.filmDyeMixing.isNeutral
+        let needsLinearSeam = needsDyeMixing
+          || parameters.photoAdjustments.hasColorAdjustment
           || parameters.photoAdjustments.hasToneAdjustment
         if needsLinearSeam {
           var renderReady = FilmNegativeProcessing.powerLawRenderReadyLinear(
             image: working,
             params: parameters.filmNegativeParams
           )
+          if needsDyeMixing {
+            renderReady.applyFilmDyeMixing(parameters.filmDyeMixing)
+          }
           if parameters.photoAdjustments.hasToneAdjustment {
             renderReady = renderReady.applyingLinearToneAdjustments(
               parameters.photoAdjustments,
@@ -93,12 +98,23 @@ public enum FilmProcessing {
         }
       } else {
         working = inverted(working)
+        let needsDyeMixing = !parameters.filmDyeMixing.isNeutral
+        if needsDyeMixing || parameters.photoAdjustments.hasToneAdjustment {
+          working = applySemanticLinearAdjustmentsToDisplayImage(
+            working,
+            parameters: parameters.photoAdjustments,
+            dyeMixing: needsDyeMixing ? parameters.filmDyeMixing : nil
+          )
+          usedLinearToneSeam = parameters.photoAdjustments.hasToneAdjustment
+        }
       }
     }
 
     if parameters.photoAdjustments.hasToneAdjustment && !usedLinearToneSeam {
-      working = applySemanticToneToDisplayImage(
-        working, parameters: parameters.photoAdjustments)
+      working = applySemanticLinearAdjustmentsToDisplayImage(
+        working,
+        parameters: parameters.photoAdjustments
+      )
       usedLinearToneSeam = true
     }
 
@@ -343,8 +359,12 @@ public enum FilmProcessing {
       image: working,
       flatField: ff,
       baseDensity: baseDensity,
+      densityCorrection: parameters.densityCorrection,
       c41Profile: parameters.densityC41Profile
     )
+    if parameters.filmType == .colourNegative, !parameters.filmDyeMixing.isNeutral {
+      renderReady.applyFilmDyeMixing(parameters.filmDyeMixing)
+    }
     if parameters.photoAdjustments.hasToneAdjustment {
       renderReady = renderReady.applyingLinearToneAdjustments(
         parameters.photoAdjustments,
@@ -529,9 +549,10 @@ public enum FilmProcessing {
       pixels: pixels)
   }
 
-  private static func applySemanticToneToDisplayImage(
+  private static func applySemanticLinearAdjustmentsToDisplayImage(
     _ image: UInt16Image,
-    parameters: PhotoAdjustmentParameters
+    parameters: PhotoAdjustmentParameters,
+    dyeMixing: FilmDyeMixingParameters? = nil
   ) -> UInt16Image {
     guard image.channels == 3 else { return image }
     var linearPixels = [Double](repeating: 0, count: image.pixels.count)
@@ -546,9 +567,15 @@ public enum FilmProcessing {
       linearPixels[base + 1] = linear.green
       linearPixels[base + 2] = linear.red
     }
-    let adjusted = RenderReadyLinearImage(
+    var adjusted = RenderReadyLinearImage(
       width: image.width, height: image.height, pixels: linearPixels
-    ).applyingLinearToneAdjustments(parameters)
+    )
+    if let dyeMixing {
+      adjusted.applyFilmDyeMixing(dyeMixing)
+    }
+    if parameters.hasToneAdjustment {
+      adjusted = adjusted.applyingLinearToneAdjustments(parameters)
+    }
     var output = [UInt16](repeating: 0, count: image.pixels.count)
     for pixelIndex in 0..<(image.width * image.height) {
       let base = pixelIndex * 3

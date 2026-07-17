@@ -1,26 +1,38 @@
 # Research Brief: Film-Specific Negative Inversion for Film Scan Converter
 
-> **Historical research brief.** This document frames open color-science
-> questions; it does not describe current product priority. The current status
-> and roadmap are [Native macOS Development Status](development/native-macos.md)
+> **Historical, parked research brief.** This document frames open color-science
+> questions; it does not describe current product priority. Corpus preparation,
+> named-stock fitting, residual LUT work, and ML experimentation are paused
+> until the project owner explicitly asks to resume. The current status and
+> roadmap are [Native macOS Development Status](development/native-macos.md)
 > and [Native macOS Product Roadmap](improvements/MacOS-Native-Roadmap.md).
 
 ## Context
 
 Film Scan Converter is a Swift desktop app that processes RAW scans of film negatives and slides. In the legacy design, the initial "inversion" step for colour negative film was mathematically trivial: `65535 - pixel_value` (a simple per-pixel negation in 16-bit), followed by generic color adjustments applied identically regardless of film stock.
 
-**Implemented boundary, updated 2026-07-14.** The default inversion step uses
+**Implemented boundary, updated 2026-07-15.** The default inversion step uses
 `output = multiplier × pixel^-(greenExp × ratio)`, 20%-border-cut references,
 RawTherapee's `1/24` output reference, and the two bundled Film Negative tone
 curves. Reference resolution and inversion run in linear Rec.2020 after
 LibRaw's sRGB conversion, then return to display sRGB. The separate density
 pipeline is now wired through preview and export with film-base measurement,
-flat field, and generic capture/stock/roll profiles. This is not full
-RawTherapee pipeline parity or a calibrated per-stock color-science library.
+flat field, and generic capture/stock/roll profiles. A manual,
+neutral-preserving six-parameter crossover matrix now corrects channel
+relationships on the shared scene-linear seam across basic, power-law, and
+density inversion; user film-stock profiles can persist it alongside exponent
+and density settings. It is not a fitted density-space capture matrix, full
+RawTherapee pipeline parity, or a calibrated per-stock color-science library.
 
 **We are explicitly avoiding deep learning for this project.** The goal is a deterministic, math-based, performant Swift implementation. No CNNs, no models, no training.
 
-**We have access to a large curated library of "target-fidelity" scans from many different film stocks.** These are high-quality positive references paired with their corresponding raw negative scans. This library is useful for calibration (fitting parameters, generating LUTs, validating output) but will not be used for training neural networks.
+**The practical local reference set is currently small—roughly eight stocks,
+including older or discontinued material.** It may support bounded spot checks,
+but it is not an active stock-learning corpus and does not justify a product
+claim spanning diverse film stocks. If this research is explicitly resumed,
+paired positives and raw negatives may support deterministic calibration and
+held-out validation; they will not be treated as an invitation to train a
+neural model.
 
 ## Goal
 
@@ -100,7 +112,7 @@ The reference library is our calibration asset. Approach:
 These projects have already solved pieces of this problem. Read their source code:
 
 - **darktable negadoctor** (`src/iop/negadoctor.c`): Per-channel black point from rebate, automatic mask detection, D-log E curve approximation.
-- **RawTherapee Film Negative tool** (`rtengine/filmnegativeproc.cc`): Per-channel power-law model adopted for the operational front-end. Swift now includes working-space reference placement, the bundled output reference/tone curves, and CPU/GPU/Metal parity. The physically grounded density/display path is app-wired; calibrated per-stock profiles and held-out validation remain unfinished.
+- **RawTherapee Film Negative tool** (`rtengine/filmnegativeproc.cc`): Per-channel power-law model adopted for the operational front-end. Swift now includes working-space reference placement, the bundled output reference/tone curves, and CPU/GPU/Metal parity. The physically grounded density/display path is app-wired, and an offline density-matrix fitter reports frame-level held-out error against identity; preparing the real paired corpus and validating per-stock profiles remain unfinished.
 - **filmulator** (`github.com/CarVac/filmulator-gui`): Approaches the problem from the other direction — simulates film development from a digital image. The forward model might be invertible.
 - **Grain2Pixel** (Photoshop plugin, closed source but worth studying the output/methodology): Reportedly uses a large database of per-stock calibration shots.
 - **Negative Lab Pro** (Lightroom plugin, closed source): The most popular commercial tool. Any technical blog posts, interviews with the developer, or reverse-engineering writeups?

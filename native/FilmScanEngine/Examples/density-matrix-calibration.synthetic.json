@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "captureProfile": {
+    "schemaVersion": 2,
+    "id": "synthetic-capture",
+    "cameraModel": "Synthetic example only",
+    "lensModel": "",
+    "backlightDescription": "",
+    "normalizationParams": {
+      "blackLevel": {"blue": 0, "green": 0, "red": 0},
+      "epsilon": 0.000001
+    },
+    "notes": "Not a measured capture profile"
+  },
+  "stockProfile": {
+    "schemaVersion": 2,
+    "id": "generic_colour_negative",
+    "displayName": "Generic Color Negative",
+    "filmType": 1,
+    "c41Profile": {
+      "densitySlope": {"blue": 1, "green": 1, "red": 1},
+      "densityOffset": {"blue": 0, "green": 0, "red": 0}
+    },
+    "notes": "Synthetic fitter smoke test only"
+  },
+  "regularization": 0.0000000001,
+  "minimumValidationImprovement": 0.01,
+  "samples": [
+    {
+      "sourceFrameID": "fit-zero",
+      "measuredDensity": {"blue": 0, "green": 0, "red": 0},
+      "targetLogExposure": {"blue": 0, "green": 0, "red": 0},
+      "weight": 1,
+      "partition": "fit"
+    },
+    {
+      "sourceFrameID": "fit-blue",
+      "measuredDensity": {"blue": 1, "green": 0, "red": 0},
+      "targetLogExposure": {"blue": 1.1, "green": 0, "red": 0.05},
+      "weight": 1,
+      "partition": "fit"
+    },
+    {
+      "sourceFrameID": "fit-green",
+      "measuredDensity": {"blue": 0, "green": 1, "red": 0},
+      "targetLogExposure": {"blue": 0.1, "green": 0.9, "red": 0},
+      "weight": 1,
+      "partition": "fit"
+    },
+    {
+      "sourceFrameID": "fit-red",
+      "measuredDensity": {"blue": 0, "green": 0, "red": 1},
+      "targetLogExposure": {"blue": 0, "green": 0.1, "red": 1.05},
+      "weight": 1,
+      "partition": "fit"
+    },
+    {
+      "sourceFrameID": "validation-a",
+      "measuredDensity": {"blue": 0.2, "green": 0.3, "red": 0.4},
+      "targetLogExposure": {"blue": 0.25, "green": 0.31, "red": 0.43},
+      "weight": 1,
+      "partition": "validation"
+    },
+    {
+      "sourceFrameID": "validation-b",
+      "measuredDensity": {"blue": 0.5, "green": 0.2, "red": 0.1},
+      "targetLogExposure": {"blue": 0.57, "green": 0.19, "red": 0.13},
+      "weight": 1,
+      "partition": "validation"
+    }
+  ]
+}

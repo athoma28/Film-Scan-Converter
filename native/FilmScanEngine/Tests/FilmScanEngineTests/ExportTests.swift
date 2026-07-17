@@ -1,5 +1,7 @@
+import CoreGraphics
 import FilmScanEngine
 import Foundation
+import ImageIO
 import Testing
 
 @testable import FilmScanEngine
@@ -42,6 +44,40 @@ struct ExportTests {
     return UInt16Image(width: width, height: height, channels: 1, pixels: pixels)
   }
 
+  private func requireSRGBImage(at url: URL) throws -> CGImage {
+    let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+    let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+    #expect(image.colorSpace?.name == CGColorSpace.sRGB)
+    #expect(image.colorSpace?.copyICCData() != nil)
+    return image
+  }
+
+  private func littleEndianUInt16(_ data: Data, at offset: Int) -> UInt16 {
+    UInt16(data[offset]) | UInt16(data[offset + 1]) << 8
+  }
+
+  private func littleEndianUInt32(_ data: Data, at offset: Int) -> UInt32 {
+    UInt32(data[offset])
+      | UInt32(data[offset + 1]) << 8
+      | UInt32(data[offset + 2]) << 16
+      | UInt32(data[offset + 3]) << 24
+  }
+
+  private func dngIFDEntries(_ data: Data) -> [UInt16: (type: UInt16, count: UInt32, value: UInt32)] {
+    let ifdOffset = Int(littleEndianUInt32(data, at: 4))
+    let count = Int(littleEndianUInt16(data, at: ifdOffset))
+    var result: [UInt16: (type: UInt16, count: UInt32, value: UInt32)] = [:]
+    for index in 0..<count {
+      let offset = ifdOffset + 2 + index * 12
+      result[littleEndianUInt16(data, at: offset)] = (
+        littleEndianUInt16(data, at: offset + 2),
+        littleEndianUInt32(data, at: offset + 4),
+        littleEndianUInt32(data, at: offset + 8)
+      )
+    }
+    return result
+  }
+
   @Test func tiffExportRoundTrip() throws {
     let original = makeTestImage()
     let params = ExportParameters(format: .tiff)
@@ -54,6 +90,7 @@ struct ExportTests {
     #expect(imported.height == original.height)
     #expect(imported.channels == 3)
     #expect(imported == original)
+    _ = try requireSRGBImage(at: url)
   }
 
   @Test func measuredExportReportsProductionWriterStagesAndSize() throws {
@@ -92,6 +129,7 @@ struct ExportTests {
     #expect(cgImage.bytesPerRow == 7 * 6)
     #expect(cgImage.alphaInfo == .none)
     #expect(cgImage.bitmapInfo.contains(.byteOrder16Little))
+    #expect(cgImage.colorSpace?.name == CGColorSpace.sRGB)
   }
 
   @Test func jpegExportProducesValidFile() throws {
@@ -104,6 +142,7 @@ struct ExportTests {
     let imported = try StandardImageDecoder.decode(url)
     #expect(imported.width == original.width)
     #expect(imported.height == original.height)
+    _ = try requireSRGBImage(at: url)
   }
 
   @Test func jpegExportUsesCompact8BitRGBComponentLayout() throws {
@@ -114,6 +153,7 @@ struct ExportTests {
     #expect(cgImage.bitsPerPixel == 24)
     #expect(cgImage.bytesPerRow == 7 * 3)
     #expect(cgImage.alphaInfo == .none)
+    #expect(cgImage.colorSpace?.name == CGColorSpace.sRGB)
   }
 
   @Test func jpegQualityParameterShowsSizeDifference() throws {
@@ -144,6 +184,7 @@ struct ExportTests {
     #expect(imported.height == original.height)
     #expect(imported.channels == 3)
     #expect(imported == original)
+    _ = try requireSRGBImage(at: url)
   }
 
   @Test func pngExportUsesCompact16BitRGBComponentLayout() throws {
@@ -155,6 +196,7 @@ struct ExportTests {
     #expect(cgImage.bytesPerRow == 7 * 6)
     #expect(cgImage.alphaInfo == .none)
     #expect(cgImage.bitmapInfo.contains(.byteOrder16Little))
+    #expect(cgImage.colorSpace?.name == CGColorSpace.sRGB)
   }
 
   @Test func largeExportPackingPreservesRGBValuesAcrossParallelRanges() throws {
@@ -232,6 +274,15 @@ struct ExportTests {
     let byteOrder = [UInt8](data[0..<2])
     #expect(byteOrder == [0x49, 0x49] || byteOrder == [0x4D, 0x4D],
       "DNG should have valid TIFF byte order marker")
+
+    let entries = dngIFDEntries(data)
+    let stripOffset = try #require(entries[273]?.value)
+    let stripByteCount = try #require(entries[279]?.value)
+    #expect(Int(stripOffset + stripByteCount) == data.count)
+    #expect(entries[258]?.count == 3)
+    #expect(entries[50706]?.value == 0x00000201)
+    #expect(entries[50721]?.count == 9)
+    #expect(entries[50879]?.value == 1)
   }
 
   @Test func dngExportWithGrayImage() throws {

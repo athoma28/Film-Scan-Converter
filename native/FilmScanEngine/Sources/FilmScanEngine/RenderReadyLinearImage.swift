@@ -118,6 +118,43 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
     return result
   }
 
+  /// Applies the film-dye crossover correction before photographic tone and
+  /// display rendering. The difference form is equivalent to a 3x3 matrix
+  /// whose rows sum to one, which preserves neutral values exactly.
+  public func applyingFilmDyeMixing(
+    _ parameters: FilmDyeMixingParameters
+  ) -> RenderReadyLinearImage {
+    var adjusted = self
+    adjusted.applyFilmDyeMixing(parameters)
+    return adjusted
+  }
+
+  /// In-place form used by full-resolution processing so an active crossover
+  /// correction does not allocate a second scene-linear frame.
+  public mutating func applyFilmDyeMixing(
+    _ parameters: FilmDyeMixingParameters
+  ) {
+    let mixing = parameters.clamped()
+    guard !mixing.isNeutral else { return }
+
+    for pixelIndex in 0..<pixelCount {
+      let base = pixelIndex * 3
+      let blue = pixels[base]
+      let green = pixels[base + 1]
+      let red = pixels[base + 2]
+
+      pixels[base] = blue
+        + mixing.blueFromRed * (red - blue)
+        + mixing.blueFromGreen * (green - blue)
+      pixels[base + 1] = green
+        + mixing.greenFromRed * (red - green)
+        + mixing.greenFromBlue * (blue - green)
+      pixels[base + 2] = red
+        + mixing.redFromGreen * (green - red)
+        + mixing.redFromBlue * (blue - red)
+    }
+  }
+
   /// Applies the Slice 3 color operators in a linear Rec.2020 opponent model.
   /// Luminance is held constant; chroma changes are attenuated in highlights
   /// and near the gamut boundary, then reduced toward the neutral axis when

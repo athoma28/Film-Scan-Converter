@@ -7,7 +7,9 @@ target for new features. Start with
 [Native macOS Development Status](development/native-macos.md) for implemented
 scope, evidence, limitations, and release position. The
 [Native macOS Product Roadmap](improvements/MacOS-Native-Roadmap.md) is the
-single ordered plan.
+single ordered plan. It prioritizes fast image judgment, reversible editing,
+roll consistency, and trustworthy output; stock-look learning is explicitly
+parked until the project owner chooses to resume it.
 
 The Python/Tkinter application is retained as a maintenance-only legacy
 workflow because dust removal remains Python-only and fixture tools still use

@@ -17,10 +17,12 @@ starting native work, read
 source for verified progress, limitations, and release position. Use the
 [product roadmap](improvements/MacOS-Native-Roadmap.md) for ordered work.
 
-The current native priority is to finish the bounded measurement cycle with an
-app-path sequential-export memory/cancellation result, followed by packaged-app
-correctness, essential editing workflow, and final distribution proof. The
-preview-cache depth measurement is complete. Additional processing or SwiftUI
+The bounded app-path export measurement is closed, the still-preview viewport
+is implemented, and packaged output contracts are covered. The current native
+priority is beta feedback, direct representative-image judgment, undo/redo,
+and real roll/batch workflow refinement. Stock-look learning, corpus
+preparation, named-stock fitting, and ML experiments are explicitly parked
+until the project owner reactivates them. Additional processing or SwiftUI
 controls must close a roadmap gate or be supported by concrete user evidence.
 Standalone prototypes are not product progress.
 
@@ -39,13 +41,13 @@ retained only until the retirement gates in
 
 ## Suggesting New Features
 
-- Check that somebody else has not already suggested the same feature in [Issues](https://github.com/kaimonmok/Film-Scan-Converter/issues).
-- Suggest new features to add by [opening an issue](https://github.com/kaimonmok/Film-Scan-Converter/issues/new), and include a title and description that clearly articulates what you think this new feature should do, and how it may be implemented.
+- Check that somebody else has not already suggested the same feature in [Issues](https://github.com/athoma28/Film-Scan-Converter/issues).
+- Suggest new features with the [feature-request template](https://github.com/athoma28/Film-Scan-Converter/issues/new?template=feature_request.yml), including the workflow problem and why it matters.
 
 ## Reporting Bugs
 
-- Check that the bug has not already been reported in [Issues](https://github.com/kaimonmok/Film-Scan-Converter/issues).
-- If the bug has not yet been reported, [open a new issue](https://github.com/kaimonmok/Film-Scan-Converter/issues/new), and include a title and a description that explains the issue, the expected functionality, and the steps to reproduce.
+- Check that the bug has not already been reported in [Issues](https://github.com/athoma28/Film-Scan-Converter/issues).
+- If the bug has not yet been reported, use the [bug-report template](https://github.com/athoma28/Film-Scan-Converter/issues/new?template=bug_report.yml), including the expected behavior and steps to reproduce.
 - If the bug pertains to a specific image or file, please attach a sample file to help diagnose the issue.
 
 ## Pull Requests
@@ -61,10 +63,18 @@ retained only until the retirement gates in
 
 ## Coding Conventions
 
-In general, follow the coding conventions already in the code. A few conventions to highlight are:
+Follow the style of the code being changed rather than applying one language's
+rules to the whole repository.
 
-- Use single tabs for indentation.
-- Use spaces after lists and method parameters (e.g. `[1, 2, 3]`, not `[1,2,3]`), and around operators (e.g. `x += 1`, not `x+=1`).
-- Methods should have a comment directly below explaining what it does, the arguments it takes, and its expected output.
-- Use single quotes (`'Hello World'`) instead of double quotes (`"Hello World"`) for strings.
-- Try to optimize for readability.
+For the primary native Swift code:
+
+- use two-space indentation, as in the existing Swift package;
+- use normal Swift double-quoted string literals;
+- keep spaces after collection elements and parameters and around operators;
+- document public contracts and non-obvious invariants, without comments that
+  merely restate an implementation;
+- preserve the existing actor, cancellation, `Sendable`, and bounded-memory
+  contracts when changing asynchronous image work.
+
+For maintenance-only Python changes, preserve the surrounding legacy style and
+keep formatting-only churn out of narrowly scoped compatibility fixes.

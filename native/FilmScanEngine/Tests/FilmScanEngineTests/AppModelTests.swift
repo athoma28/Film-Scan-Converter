@@ -18,6 +18,35 @@ private var appModelRawCorpusAvailable: Bool {
   )
 }
 
+private final class TestCorrectionSettingsPasteboard: CorrectionSettingsPasteboard {
+  private var dataByType: [NSPasteboard.PasteboardType: Data] = [:]
+  private var stringByType: [NSPasteboard.PasteboardType: String] = [:]
+
+  func clearContents() -> Int {
+    dataByType.removeAll()
+    stringByType.removeAll()
+    return 1
+  }
+
+  func setData(_ data: Data?, forType dataType: NSPasteboard.PasteboardType) -> Bool {
+    dataByType[dataType] = data
+    return true
+  }
+
+  func setString(_ string: String, forType dataType: NSPasteboard.PasteboardType) -> Bool {
+    stringByType[dataType] = string
+    return true
+  }
+
+  func data(forType dataType: NSPasteboard.PasteboardType) -> Data? {
+    dataByType[dataType]
+  }
+
+  func string(forType dataType: NSPasteboard.PasteboardType) -> String? {
+    stringByType[dataType]
+  }
+}
+
 @Suite("Native app model integration", .serialized)
 @MainActor
 struct AppModelTests {
@@ -1022,10 +1051,9 @@ struct AppModelTests {
     #expect(loaded[0].settings.parameters.photoAdjustments.exposureEV == 2)
   }
 
-  @Test("App model copies and pastes corrections through the system pasteboard contract")
+  @Test("App model copies and pastes corrections through the pasteboard contract")
   func appModelCopiesAndPastesCorrections() {
-    let pasteboard = NSPasteboard(name: .init("fsc-tests-\(UUID().uuidString)"))
-    pasteboard.clearContents()
+    let pasteboard = TestCorrectionSettingsPasteboard()
     let clipboard = CorrectionSettingsClipboard(pasteboard: pasteboard)
     let source = AppModel(settingsClipboard: clipboard)
     source.setFilmType(.colourNegative)
@@ -1369,20 +1397,61 @@ struct AppModelTests {
   }
 
   @Test("App profile management saves, lists, and applies stored profiles")
-  func appProfileManagement() {
+  func appProfileManagement() async throws {
     let workDir = FileManager.default.temporaryDirectory
       .appendingPathComponent("fsc-app-profiles-\(UUID().uuidString)", isDirectory: true)
     defer { try? FileManager.default.removeItem(at: workDir) }
     let model = AppModel(profileStore: ProfileStore(baseDirectory: workDir))
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"))
+    model.importFiles([input])
+    try await waitUntil { model.decodedImage != nil }
     model.setFilmType(.colourNegative)
+    model.setFilmNegativePreset(.colourNegative)
+    model.setFilmNegativeRedRatio(1.18)
+    model.setFilmDyeMixing(\.redFromGreen, to: -0.14)
     model.saveCurrentCaptureProfile(named: "My Copy Rig")
     model.saveCurrentFilmStockProfile(named: "My Test Stock")
 
     #expect(model.availableCaptureProfiles.contains { $0.id.rawValue == "my_copy_rig" })
     #expect(model.availableFilmStockProfiles.contains { $0.id.rawValue == "my_test_stock" })
+    model.setFilmNegativePreset(.off)
+    model.setFilmNegativeRedRatio(1.6)
+    model.resetFilmDyeMixing()
     model.applySelectedPipelineProfiles()
     #expect(model.parameters.densityPipelineEnabled)
+    #expect(model.parameters.filmNegativeParams.enabled)
+    #expect(model.parameters.filmNegativeParams.measuredMedians != nil)
+    #expect(model.parameters.filmNegativeParams.redRatio == 1.18)
+    #expect(model.parameters.filmDyeMixing.redFromGreen == -0.14)
     #expect(model.profileStatus.contains("Density pipeline active"))
+  }
+
+  @Test("App applies calibrated density correction from the capture profile")
+  func appAppliesCaptureDensityCorrection() throws {
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-app-density-matrix-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let store = ProfileStore(baseDirectory: workDir)
+    let correction = DensityCorrectionMatrix(
+      blueOutput: BGRChannelValues(blue: 1.04, green: -0.03, red: 0.01),
+      greenOutput: BGRChannelValues(blue: 0.02, green: 0.96, red: 0.02),
+      redOutput: BGRChannelValues(blue: -0.01, green: 0.05, red: 0.97)
+    )
+    let capture = CaptureProfile(
+      id: CaptureProfileID(rawValue: "calibrated-rig"),
+      cameraModel: "Test camera",
+      densityCorrection: correction
+    )
+    try store.saveCaptureProfile(capture)
+    let model = AppModel(profileStore: store)
+
+    model.resolveAndApplyDensityPipeline(captureProfileID: capture.id)
+
+    #expect(model.parameters.densityCorrection == correction)
+    #expect(model.rebateStatus.contains("Density pipeline active"))
   }
 
   private func waitUntil(

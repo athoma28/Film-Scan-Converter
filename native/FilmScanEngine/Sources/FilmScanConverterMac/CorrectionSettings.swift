@@ -140,16 +140,26 @@ final class NamedCorrectionPresetStore {
   }
 }
 
+protocol CorrectionSettingsPasteboard: AnyObject {
+  @discardableResult func clearContents() -> Int
+  @discardableResult func setData(_ data: Data?, forType dataType: NSPasteboard.PasteboardType) -> Bool
+  @discardableResult func setString(_ string: String, forType dataType: NSPasteboard.PasteboardType) -> Bool
+  func data(forType dataType: NSPasteboard.PasteboardType) -> Data?
+  func string(forType dataType: NSPasteboard.PasteboardType) -> String?
+}
+
+extension NSPasteboard: CorrectionSettingsPasteboard {}
+
 final class CorrectionSettingsClipboard {
   private static let pasteboardType = NSPasteboard.PasteboardType(
     "com.filmscanconverter.correction-settings"
   )
 
-  private let pasteboard: NSPasteboard
+  private let pasteboard: any CorrectionSettingsPasteboard
   private let encoder = JSONEncoder()
   private let decoder = JSONDecoder()
 
-  init(pasteboard: NSPasteboard = .general) {
+  init(pasteboard: any CorrectionSettingsPasteboard = NSPasteboard.general) {
     self.pasteboard = pasteboard
   }
 

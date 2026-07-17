@@ -24,6 +24,8 @@
     <string>Film Scan Converter uses a connected camera feed for corrected negative live preview.</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright © 2025–2026 Film Scan Converter contributors. Licensed under GPL-3.0.</string>
     <key>CFBundleDocumentTypes</key>
     <array>
         <dict>

@@ -5,12 +5,20 @@ on:
     paths:
       - ".github/workflows/native-engine.yml"
       - "native/**"
+      - "LICENSE"
+      - "RELEASE_NOTES.md"
+      - "THIRD_PARTY_NOTICES.md"
+      - "third_party/licenses/**"
       - "tests/generate_native_snapshots.py"
       - "tests/generate_raw_decode_reference.py"
   pull_request:
     paths:
       - ".github/workflows/native-engine.yml"
       - "native/**"
+      - "LICENSE"
+      - "RELEASE_NOTES.md"
+      - "THIRD_PARTY_NOTICES.md"
+      - "third_party/licenses/**"
       - "tests/generate_native_snapshots.py"
       - "tests/generate_raw_decode_reference.py"
 
@@ -22,6 +30,11 @@ jobs:
       - name: Install native dependencies
         run: brew install libraw
       - name: Run native engine regression gate
-        run: swift test --package-path native/FilmScanEngine
+        run: swift test --package-path native/FilmScanEngine --no-parallel
       - name: Build native macOS app
         run: swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
+      - name: Assemble and validate unsigned beta artifact
+        run: >-
+          RELEASE_MODE=unsigned-beta RELEASE_LABEL=ci
+          DIST_DIR=/tmp/film-scan-converter-dist
+          native/package-release.sh

@@ -1,0 +1,69 @@
+name: Bug report
+description: Report a reproducible problem in Film Scan Converter
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for testing the beta. Please avoid uploading private images unless you are comfortable sharing them publicly.
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Find this in Film Scan Converter > About Film Scan Converter.
+      placeholder: 0.1.0 beta 1
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Mac and macOS version
+      placeholder: MacBook Pro M2, macOS 15.5
+    validations:
+      required: true
+  - type: dropdown
+    id: input
+    attributes:
+      label: Input type
+      options:
+        - Camera RAW
+        - TIFF
+        - JPEG
+        - PNG
+        - Other / not image-specific
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: Tell us exactly what you opened, changed, and exported.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or sample files
+      description: Paste relevant logs or link a file you are allowed to share. Remove personal paths or metadata first.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues for this problem.
+          required: true
+        - label: I understand this is beta software and kept backups of source images.
+          required: true

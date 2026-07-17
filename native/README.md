@@ -20,10 +20,13 @@ elsewhere:
 - `FilmScanRawBenchmark`: compatibility-profile RAW decode benchmark;
 - `FilmScanExportBenchmark`: staged production export benchmark with per-run
   output hashing and deletion;
-- `FilmScanAdjustmentBenchmark`: release-mode preview adjustment benchmark;
+- `FilmScanAdjustmentBenchmark`: release-mode preview benchmark with active
+  dye crossover, protected color/tone, curves, and color wheels;
 - `FilmScanPreviewComparator`: CPU/GPU visual and numerical comparison tool;
 - `FilmScanReleaseValidator`: packaged-app contract validator;
-- `FilmScanProcessingBenchmark`: focused processing benchmark.
+- `FilmScanProcessingBenchmark`: focused processing benchmark;
+- `FilmScanProfileCalibrator`: offline weighted density-matrix fitter with a
+  frame-level held-out validation gate.
 
 The package requires macOS 14 or later and Homebrew LibRaw. `CLibRawShim`
 provides the narrow C/C++ boundary used by Swift. No LibRaw-owned buffer or
@@ -44,19 +47,45 @@ Use `swift run` for development. It does not exercise the normal installed-app
 Launch Services path, embedded dependencies, icon, document registration, or
 release signature.
 
+## Density-Matrix Calibration
+
+This tool is retained as parked research infrastructure. Do not expand it into
+corpus preparation, named-stock fitting, residual LUT generation, or ML work
+until the project owner explicitly reactivates that track; the active roadmap
+is focused on the photographer-facing core workflow.
+
+Run the synthetic fitter smoke example:
+
+```sh
+swift run --package-path native/FilmScanEngine \
+  FilmScanProfileCalibrator \
+  native/FilmScanEngine/Examples/density-matrix-calibration.synthetic.json \
+  /tmp/film-scan-density-calibration-report.json
+```
+
+The tool consumes already aligned, base-subtracted BGR density and target log
+exposure samples. It fits a regularized 3x3-plus-offset capture transform,
+rejects frame leakage between fit and validation partitions, and compares
+held-out RMSE with the identity transform. It writes a candidate capture
+profile and report but never installs it. The committed example is synthetic,
+not a product profile. See the
+[calibration contract](../docs/development/density-matrix-calibration.md).
+
 ## Packaged-App Validation
 
 Build a self-contained, locally ad-hoc-signed app and ZIP:
 
 ```sh
-native/package-release.sh
+RELEASE_MODE=unsigned-beta RELEASE_LABEL=beta.1 native/package-release.sh
 open "dist/Film Scan Converter.app"
 ```
 
 The packager embeds non-system dynamic libraries, rewrites bundle load paths,
-signs in dependency order, validates the app, creates the ZIP, extracts it, and
-validates the archived copy. Set `SIGNING_IDENTITY` to an exact Developer ID
-Application identity only for a distribution candidate. Follow the
+signs in dependency order, embeds licenses/notices and an exact library
+manifest, validates the app, creates a metadata-clean ZIP and SHA-256 file,
+extracts it, and validates the archived copy. `RELEASE_MODE=public` requires an
+exact Developer ID Application identity and notary keychain profile and performs
+submission, stapling, and Gatekeeper assessment. Follow the
 [release runbook](../docs/development/native-release.md) for notarization,
 stapling, Gatekeeper, and clean-machine validation.
 
@@ -104,6 +133,25 @@ including realized session count, logical cache bytes, fill latency, and
 physical footprint before fill, at capacity, and after model release. A corpus
 smaller than the configured depth is reported explicitly rather than treated as
 a fully populated cache.
+
+Run the opt-in real-app sequential export and cancellation benchmark:
+
+```sh
+RUN_APP_PATH_EXPORT_PERFORMANCE_TESTS=1 \
+APP_PATH_EXPORT_BENCHMARK_OUTPUT=/tmp/film-scan-app-path-export.json \
+CLANG_MODULE_CACHE_PATH=/tmp/film-scan-clang-cache \
+SWIFTPM_MODULECACHE_OVERRIDE=/tmp/film-scan-swiftpm-cache \
+swift test --disable-sandbox -c release \
+  --package-path native/FilmScanEngine --no-parallel \
+  --filter AppPathExportPerformanceTests
+```
+
+This runs ten production app-path TIFF jobs, appending duplicate source jobs
+when fewer than ten local RAFs are available, and then measures cancellation
+during the first decode of a second queue. It records queue completion timing,
+Mach physical footprint, post-model-release memory, status/progress state, and
+artifact cleanup. Completed outputs are removed as the benchmark observes each
+job; only the requested JSON report remains.
 
 Run the RAW and preview tools:
 
@@ -153,9 +201,23 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   may replace the selected embedded RAW source with a demosaiced preview up to
   2400px; export owns an independent full-resolution decode.
 - Keep lookahead preview-only, LRU, and bounded by both file count and bytes.
+- Keep the still image, dust mask, and crop/straighten/perspective editors in
+  one native viewport transform. Original comparison must preserve its pan and
+  magnification, and selection changes must return to a predictable Fit state.
+- Define 100% against the pixels in the current bounded preview, not the
+  full-resolution export source. Keep the preview-source/dimensions badge
+  visible so embedded RAW thumbnails are never presented as export evidence.
 - Keep adaptive-look analysis bounded independently of imported image size;
   Kodachrome-like Auto currently analyzes at most a 1024-pixel long edge and
   stores a concrete five-point curve for deterministic preview/export parity.
+- Treat `FilmDyeMixingParameters` as a neutral-preserving, linear-light film
+  response operator, not a display white-balance replacement. Apply it after
+  inversion and before semantic tone/protected color, curves, and grading in
+  the basic, power-law, and density paths. Keep its CPU and Core Image kernels
+  in parity, and keep the exact-neutral fast path bit-for-bit unchanged.
+- User film-stock profiles persist exponent, dye-mixing, density-response, and
+  display-rendering priors. Do not add named stock matrices until held-out
+  measured data validates them.
 - Keep a session-local rollback snapshot when applying a named preset or
   Kodachrome-like Auto so the look can be removed without resetting crop or
   orientation.

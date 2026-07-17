@@ -11,9 +11,11 @@ The [native product roadmap](../improvements/MacOS-Native-Roadmap.md) is the
 single ordered plan. It separates work required before the first public release
 from evidence-driven post-release candidates and explicitly unplanned ideas.
 
-The [film-processing research](../film-processing-research.md) defines the
-capture-aware, density-domain inversion direction and its staged implementation
-track.
+The [film-processing research](../film-processing-research.md) and
+[density-matrix calibration contract](density-matrix-calibration.md) are parked
+reference material. They preserve the capture-aware color-science work already
+done, but corpus preparation, named-stock fitting, residual LUTs, and ML work
+are not active priorities unless the project owner explicitly resumes them.
 
 The [native RAW decode and quality benchmark](native-raw-benchmark.md) records
 the eight-file `rawPyCompatibility` decode snapshot. The local regression
@@ -47,7 +49,7 @@ Useful development commands:
 
 ```sh
 .venv/bin/python -m unittest discover -v
-swift test --package-path native/FilmScanEngine
+swift test --package-path native/FilmScanEngine --no-parallel
 swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
 ```
 

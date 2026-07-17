@@ -1,12 +1,14 @@
 # Film Processing Research: Practical Film-Specific Negative Inversion for Camera-Scanned Film
 
-> **Research reference, not the active roadmap.** The native app now wires an
+> **Parked research reference, not the active roadmap.** The native app now wires an
 > optional density pipeline through preview and export with capture
 > normalization, flat field, film-base measurement, roll profiles, and generic
 > capture/stock profile types. The default color-negative path remains the
 > RawTherapee-oriented power-law model. Calibrated per-stock curves, fitted
 > capture matrices, and residual LUTs remain evidence-driven research
-> candidates. See [Native macOS Development Status](development/native-macos.md)
+> candidates. Further corpus preparation, named-stock fitting, residual LUTs,
+> or ML work is paused until the project owner explicitly reactivates it. See
+> [Native macOS Development Status](development/native-macos.md)
 > for current behavior and the
 > [Product Roadmap](improvements/MacOS-Native-Roadmap.md) for delivery priority.
 
@@ -856,6 +858,16 @@ over the valid density range.
 
 # Step 10 — Tenth win: camera/backlight-aware crosstalk correction
 
+**Current implementation boundary (2026-07-15):** the app exposes a manual
+neutral-preserving six-parameter crossover matrix on the shared scene-linear
+seam, with CPU/GPU and preview/export parity and user-profile persistence. The
+density path also accepts a separate capture-profile 3x3-plus-offset transform
+before curve inversion. An offline tool fits that transform with weighted
+regularized least squares, rejects frame leakage between fit and validation,
+and reports held-out improvement against identity. This completes the fitting
+seam, not the calibration claim: the repository has no paired measured corpus,
+so no built-in capture or stock matrix has been validated or shipped.
+
 ## Problem
 
 The film’s cyan, magenta, and yellow dye layers are not perfect spectral filters. The camera’s RGB channels are also not clean spectral measurements. The backlight spectrum may be peaky. Therefore the effective measured densities are mixed.
@@ -1401,6 +1413,11 @@ Deliver:
 * before/after gallery.
 
 Result: objective improvement, not vibes.
+
+**Implementation note (2026-07-15):** matrix fitting, an explicit frame-level
+validation split, and JSON report generation are implemented. Reference-pair
+alignment/measurement, a real before/after gallery, and acceptance on the
+curated library remain unfinished.
 
 ## Milestone 8: Residual 3D LUTs
 

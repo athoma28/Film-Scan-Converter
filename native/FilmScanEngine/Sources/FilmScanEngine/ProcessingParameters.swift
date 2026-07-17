@@ -139,9 +139,11 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
   public var midtoneWheel: ColorWheel
   public var shadowWheel: ColorWheel
   public var filmNegativeParams: FilmNegativeParams
+  public var filmDyeMixing: FilmDyeMixingParameters
   public var photoAdjustments: PhotoAdjustmentParameters
   public var densityPipelineEnabled: Bool
   public var densityBaseDensity: BGRChannelValues?
+  public var densityCorrection: DensityCorrectionMatrix
   public var densityC41Profile: GenericC41Profile
   public var densityDisplayParams: DisplayRenderingParameters
   public var darkThreshold: Int
@@ -175,9 +177,11 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     midtoneWheel: ColorWheel = ColorWheel(),
     shadowWheel: ColorWheel = ColorWheel(),
     filmNegativeParams: FilmNegativeParams = FilmNegativeParams(),
+    filmDyeMixing: FilmDyeMixingParameters = .neutral,
     photoAdjustments: PhotoAdjustmentParameters? = nil,
     densityPipelineEnabled: Bool = false,
     densityBaseDensity: BGRChannelValues? = nil,
+    densityCorrection: DensityCorrectionMatrix = .identity,
     densityC41Profile: GenericC41Profile = .identity,
     densityDisplayParams: DisplayRenderingParameters = DisplayRenderingParameters(),
     darkThreshold: Int = 25,
@@ -210,6 +214,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     self.midtoneWheel = midtoneWheel
     self.shadowWheel = shadowWheel
     self.filmNegativeParams = filmNegativeParams
+    self.filmDyeMixing = filmDyeMixing.clamped()
     self.photoAdjustments = photoAdjustments ?? .migratingLegacy(
       gamma: gamma,
       shadows: shadows,
@@ -220,6 +225,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     )
     self.densityPipelineEnabled = densityPipelineEnabled
     self.densityBaseDensity = densityBaseDensity
+    self.densityCorrection = densityCorrection
     self.densityC41Profile = densityC41Profile
     self.densityDisplayParams = densityDisplayParams
     self.darkThreshold = darkThreshold
@@ -239,10 +245,10 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     case greenCurveEnabled, greenCurveControlPoints
     case blueCurveEnabled, blueCurveControlPoints
     case highlightWheel, midtoneWheel, shadowWheel
-    case filmNegativeParams
+    case filmNegativeParams, filmDyeMixing
     case photoAdjustments
     case densityPipelineEnabled, densityBaseDensity
-    case densityC41Profile, densityDisplayParams
+    case densityCorrection, densityC41Profile, densityDisplayParams
     case darkThreshold, lightThreshold, cropRect, cropRectCoordinateSpace
     case perspectiveCrop, manualCrop
   }
@@ -272,6 +278,10 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     midtoneWheel = try container.decodeIfPresent(ColorWheel.self, forKey: .midtoneWheel) ?? ColorWheel()
     shadowWheel = try container.decodeIfPresent(ColorWheel.self, forKey: .shadowWheel) ?? ColorWheel()
     filmNegativeParams = try container.decodeIfPresent(FilmNegativeParams.self, forKey: .filmNegativeParams) ?? FilmNegativeParams()
+    filmDyeMixing = try container.decodeIfPresent(
+      FilmDyeMixingParameters.self,
+      forKey: .filmDyeMixing
+    )?.clamped() ?? .neutral
     photoAdjustments = try container.decodeIfPresent(
       PhotoAdjustmentParameters.self, forKey: .photoAdjustments
     ) ?? .migratingLegacy(
@@ -284,6 +294,9 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     )
     densityPipelineEnabled = try container.decodeIfPresent(Bool.self, forKey: .densityPipelineEnabled) ?? false
     densityBaseDensity = try container.decodeIfPresent(BGRChannelValues.self, forKey: .densityBaseDensity)
+    densityCorrection = try container.decodeIfPresent(
+      DensityCorrectionMatrix.self, forKey: .densityCorrection
+    ) ?? .identity
     densityC41Profile = try container.decodeIfPresent(GenericC41Profile.self, forKey: .densityC41Profile) ?? .identity
     densityDisplayParams = try container.decodeIfPresent(DisplayRenderingParameters.self, forKey: .densityDisplayParams) ?? DisplayRenderingParameters()
     darkThreshold = try container.decodeIfPresent(Int.self, forKey: .darkThreshold) ?? 25

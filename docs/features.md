@@ -20,9 +20,16 @@ features.
   action replaces an embedded thumbnail with a demosaiced, RAW-calibrated
   preview up to 2400px when color or detail needs closer inspection;
   full-resolution decoding remains reserved for export.
-- A bounded 16-bit Core Image/Metal correction preview with latest-value-wins
-  scheduling. This GPU path is the primary interactive target on supported
-  MacBook Pro hardware; CPU rendering remains the correctness/fallback path.
+- A bounded Core Image/Metal correction preview fed by the 16-bit preview
+  source, with latest-value-wins scheduling. This GPU path is the primary
+  interactive target on supported MacBook Pro hardware; CPU rendering remains
+  the correctness/fallback path.
+- A native still-preview viewport with momentum trackpad/mouse-wheel panning,
+  cursor-centered pinch magnification, Fit, zoom-in/out, and 100% preview-pixel
+  commands. Image, dust, crop, straighten, and perspective overlays share the
+  same viewport transform.
+- An on-canvas badge identifies embedded RAW, demosaiced RAW-detail, and bounded
+  standard-image preview sources and reports the displayed pixel dimensions.
 - Optional AVFoundation live camera preview when macOS exposes the camera or
   capture adapter as a video device.
 
@@ -32,7 +39,14 @@ features.
   without overwriting saved per-file choices.
 - RawTherapee-compatible power-law film-negative inversion.
 - An optional capture-aware density pipeline with film-base measurement,
-  flat-field calibration, and capture/stock/roll profiles.
+  flat-field calibration, capture/stock/roll profiles, and a 3x3-plus-offset
+  density-correction slot stored in capture profiles. An offline
+  fitter scores candidate corrections against frame-level held-out samples;
+  no stock-specific matrix is built in without measured evidence.
+- A neutral-preserving six-control dye-crossover matrix for color negatives.
+  It corrects cross-channel dye contamination in linear light before tone,
+  curves, and grading, and works with basic, power-law, and measured-density
+  inversion. The neutral default leaves existing scans unchanged.
 - Semantic Exposure, Brightness, Contrast, Highlights, Shadows, Temperature,
   Tint, Saturation, and Vibrance controls. Tone response is calibrated to the
   active inversion pipeline, with finer slider control around neutral.
@@ -53,7 +67,7 @@ features.
   the resulting full-resolution pixel dimensions even though the canvas uses a
   bounded preview. Rotation, horizontal flip, white frame, and aspect-ratio
   padding remain available.
-- Original/corrected toggle.
+- Original/corrected toggle that retains the current viewport and magnification.
 - Grade diagnostics for sampled display clipping.
 - Non-destructive, orientation/crop-aligned dust-candidate overlay. Detection
   does not remove dust from preview or export.
@@ -61,6 +75,9 @@ features.
 ### Batch And Settings Workflow
 
 - Per-file correction settings persisted across launches.
+- User film-stock profiles preserve the current negative exponents, dye-
+  crossover correction, density response, and display rendering settings.
+  The app does not ship unvalidated stock-specific color matrices.
 - Named presets and versioned system-clipboard copy/paste, with a one-step
   remove action that restores the adjustments from before the last applied
   preset while retaining frame-specific geometry.
@@ -79,11 +96,12 @@ features.
 
 ### Export
 
-- 16-bit TIFF with optional LZW compression.
-- 8-bit JPEG with configurable quality.
-- 16-bit lossless PNG.
-- Processed 16-bit RGB DNG in a valid TIFF/DNG container. This is not untouched
-  sensor RAW.
+- 16-bit TIFF with optional LZW compression and an embedded sRGB profile.
+- 8-bit JPEG with configurable quality and an embedded sRGB profile.
+- 16-bit lossless PNG with an embedded sRGB profile.
+- Processed 16-bit RGB DNG in a standards-valid TIFF/DNG container, encoded as
+  output-referred linear sRGB. This is not untouched sensor RAW; TIFF is the
+  preferred 16-bit interchange format for software with limited DNG support.
 - Individual, ordered multi-selection, and lazy memory-bounded Export All
   workflows.
 - Full-resolution RAW re-decode one file at a time during export.
@@ -109,18 +127,26 @@ features.
 ## Native Limitations
 
 - No applied dust removal or Telea inpainting.
-- No undo/redo, zoom/pan, or sidebar reordering yet.
+- No undo/redo.
+- Sidebar order remains import order. Manual reordering is unavailable and is
+  not a first-release gate unless the roll workflow demonstrates a need.
 - No lens-distortion model or calibrated correction for film-plane/sensor-plane
   non-alignment beyond the current perspective crop.
 - The real RAW test corpus is Fujifilm X-Trans-focused and partly local-only;
   the Bayer RCD path lacks a committed real-file gate.
 - Camera-scan ISO denoise/sharpen behavior is a bounded native policy, not an
   exact RawTherapee kernel port.
+- TIFF, JPEG, and PNG are explicitly tagged as sRGB. DNG records its distinct
+  output-referred linear-sRGB color contract in DNG metadata rather than an ICC
+  profile.
+- Stock/capture calibration research and named-stock fitting are intentionally
+  parked until the project owner explicitly asks to resume them.
 - Standard images with alpha are rejected because four-channel processing has
   not been defined.
-- The app has not completed Developer ID notarization, Gatekeeper assessment,
-  or clean-machine installation validation and is not yet claimed as a
-  generally distributable release.
+- The technical beta is ad-hoc signed, Apple Silicon-only, and requires the
+  normal Control-click **Open** confirmation on first launch. A Developer
+  ID-signed/notarized build and independent clean-machine validation remain
+  future distribution-hardening work.
 
 ## Legacy Python Application
 

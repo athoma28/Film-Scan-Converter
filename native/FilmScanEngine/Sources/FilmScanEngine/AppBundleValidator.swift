@@ -9,6 +9,24 @@ public enum AppBundleValidator {
     "NSCameraUsageDescription",
   ]
 
+  private static let requiredResourceFilenames = [
+    "LICENSE.txt",
+    "THIRD_PARTY_NOTICES.md",
+    "RELEASE_NOTES.md",
+    "BUNDLED-LIBRARIES.txt",
+  ]
+
+  private static let requiredThirdPartyLicenseFilenames = [
+    "LibRaw-LGPL-2.1.txt",
+    "LibRaw-CDDL-1.0.txt",
+    "LibRaw-COPYRIGHT.txt",
+    "LLVM-OpenMP-LICENSE.txt",
+    "libjpeg-turbo-LICENSE.md",
+    "JasPer-LICENSE.txt",
+    "JasPer-COPYRIGHT.txt",
+    "Little-CMS-LICENSE.txt",
+  ]
+
   public static func validate(
     bundleAt bundleURL: URL,
     fileManager: FileManager = .default
@@ -52,6 +70,36 @@ public enum AppBundleValidator {
       }
     } else {
       issues.append("CFBundleIconFile is missing")
+    }
+
+    let resourcesURL = contentsURL.appendingPathComponent("Resources", isDirectory: true)
+    for filename in requiredResourceFilenames {
+      let resourceURL = resourcesURL.appendingPathComponent(filename)
+      guard
+        fileManager.fileExists(atPath: resourceURL.path),
+        let attributes = try? fileManager.attributesOfItem(atPath: resourceURL.path),
+        let size = attributes[.size] as? NSNumber,
+        size.intValue > 0
+      else {
+        issues.append("Contents/Resources/\(filename) is missing or empty")
+        continue
+      }
+    }
+    let thirdPartyLicensesURL = resourcesURL.appendingPathComponent(
+      "ThirdPartyLicenses",
+      isDirectory: true
+    )
+    for filename in requiredThirdPartyLicenseFilenames {
+      let licenseURL = thirdPartyLicensesURL.appendingPathComponent(filename)
+      guard
+        fileManager.fileExists(atPath: licenseURL.path),
+        let attributes = try? fileManager.attributesOfItem(atPath: licenseURL.path),
+        let size = attributes[.size] as? NSNumber,
+        size.intValue > 0
+      else {
+        issues.append("Contents/Resources/ThirdPartyLicenses/\(filename) is missing or empty")
+        continue
+      }
     }
 
     let documentTypes = info["CFBundleDocumentTypes"] as? [[String: Any]]

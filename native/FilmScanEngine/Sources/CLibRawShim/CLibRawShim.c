@@ -371,7 +371,12 @@ int fsc_default_heap_statistics(fsc_heap_statistics *output) {
     zone->introspect->statistics(zone, &statistics);
     output->blocks_in_use = statistics.blocks_in_use;
     output->size_in_use = statistics.size_in_use;
-    output->max_size_in_use = statistics.max_size_in_use;
+    // Some current macOS allocator zones report a zero high-water mark even
+    // while live allocations are present. Preserve the useful invariant for
+    // diagnostics without pretending to know an unavailable historical peak.
+    output->max_size_in_use = statistics.max_size_in_use > statistics.size_in_use
+        ? statistics.max_size_in_use
+        : statistics.size_in_use;
     output->size_allocated = statistics.size_allocated;
     return 0;
 }

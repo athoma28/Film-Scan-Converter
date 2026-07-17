@@ -9,13 +9,36 @@ and [Legacy Python Application](legacy-python.md) for the retirement policy.
 
 ## Native Swift/macOS Application
 
-### Prerequisites
+### Install the public beta
+
+The current binary beta supports Apple Silicon Macs running macOS 14 or later.
+
+1. Download the newest prerelease ZIP and matching `.sha256` file from
+   [GitHub Releases](https://github.com/athoma28/Film-Scan-Converter/releases).
+2. In Terminal, verify the download from your Downloads folder:
+
+    ```sh
+    shasum -a 256 -c Film-Scan-Converter-*.zip.sha256
+    ```
+
+3. Unzip the archive and move **Film Scan Converter.app** to Applications.
+4. Because this beta is ad-hoc signed rather than Apple-notarized,
+   Control-click the app, choose **Open**, then confirm **Open**. This approves
+   only this app. Do not disable Gatekeeper or remove quarantine attributes.
+
+The archive includes the GPL license, third-party notices, release notes, and
+an exact manifest of bundled libraries. Report problems with the
+[bug-report template](https://github.com/athoma28/Film-Scan-Converter/issues/new?template=bug_report.yml).
+
+### Build from source
+
+#### Prerequisites
 
 - macOS 14 or later
 - Xcode Command Line Tools or Xcode
 - [Homebrew](https://brew.sh)
 
-### Build and Run
+#### Build and Run
 
 1. Install the required system library:
 
@@ -29,7 +52,7 @@ and [Legacy Python Application](legacy-python.md) for the retirement policy.
 
     ```sh
     # Run the default regression suite (performance benchmark skipped)
-    swift test --package-path native/FilmScanEngine
+    swift test --package-path native/FilmScanEngine --no-parallel
 
     # Build the app
     swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
@@ -44,11 +67,10 @@ and [Legacy Python Application](legacy-python.md) for the retirement policy.
     ./run-swift.sh
     ```
 
-To assemble the self-contained local app and ZIP used for release validation,
-run `native/package-release.sh`. The default artifact is ad-hoc signed and is
-not a generally distributable release. See the
-[native release guide](development/native-release.md) for Developer ID,
-notarization, Gatekeeper, and clean-machine gates.
+To assemble a self-contained local app and ZIP, run
+`native/package-release.sh`. See the
+[native release guide](development/native-release.md) for the explicit
+unsigned-beta and signed/notarized release modes.
 
 ## Legacy Python Application (Maintenance Only)
 
@@ -56,7 +78,8 @@ This section installs the maintenance-only legacy Python application.
 
 ### Installation from Binaries
 
-Download the latest release from the [Film-Scan-Converter Latest Release](https://github.com/kaimonmok/Film-Scan-Converter/releases/latest).
+Download a legacy build, when available, from
+[Film Scan Converter Releases](https://github.com/athoma28/Film-Scan-Converter/releases).
 
 If no binary exists for your platform yet, please use the manual installation.
 
@@ -68,7 +91,7 @@ If no binary exists for your platform yet, please use the manual installation.
     - Download ZIP:
       Click the "Code" button on the repository page and select "Download ZIP". Extract the downloaded archive.
     - Clone with Git:
-      Run the following command in your terminal: `git clone https://github.com/kaimonmok/Film-Scan-Converter.git`
+      Run the following command in your terminal: `git clone https://github.com/athoma28/Film-Scan-Converter.git`
 
 3. Open the `source` folder in the terminal.
 
@@ -92,7 +115,7 @@ If no binary exists for your platform yet, please use the manual installation.
     - Download ZIP:
       Click the "Code" button on the repository page and select "Download ZIP". Extract the downloaded archive.
     - Clone with Git:
-      Run the following command in your terminal: `git clone https://github.com/kaimonmok/Film-Scan-Converter.git`
+      Run the following command in your terminal: `git clone https://github.com/athoma28/Film-Scan-Converter.git`
 
 3. Open the `source` folder in the terminal.
 

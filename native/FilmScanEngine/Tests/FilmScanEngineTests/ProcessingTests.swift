@@ -1146,6 +1146,58 @@ struct ProcessingTests {
     #expect(actual.pixels == expectedPixels)
   }
 
+  @Test("Density processing applies capture correction before curve inversion")
+  func densityProcessingUsesCaptureCorrection() {
+    let image = UInt16Image(width: 1, height: 1, channels: 3, pixels: [12_000, 20_000, 36_000])
+    let flatField = UInt16Image(
+      width: 1,
+      height: 1,
+      channels: 3,
+      pixels: [UInt16](repeating: 65_535, count: 3)
+    )
+    let baseDensity = BGRChannelValues(blue: 0, green: 0, red: 0)
+    let correction = DensityCorrectionMatrix(
+      blueOutput: BGRChannelValues(blue: 1, green: 0.2, red: 0),
+      greenOutput: BGRChannelValues(blue: -0.1, green: 1, red: 0.15),
+      redOutput: BGRChannelValues(blue: 0, green: 0.1, red: 1),
+      offset: BGRChannelValues(blue: 0.01, green: -0.02, red: 0.03)
+    )
+    let parameters = ProcessingParameters(
+      filmType: .colourNegative,
+      densityPipelineEnabled: true,
+      densityBaseDensity: baseDensity,
+      densityCorrection: correction
+    )
+
+    let actual = FilmProcessing.correctedPreview(
+      image: image,
+      parameters: parameters,
+      flatField: flatField
+    )
+    let renderReady = FilmNegativeProcessing.densityToRenderReadyLinear(
+      image: image,
+      flatField: flatField,
+      baseDensity: baseDensity,
+      densityCorrection: correction
+    )
+    let expectedPixels = FilmNegativeProcessing.renderDisplay(sceneLinear: renderReady.pixels)
+      .map { value in
+        UInt16(min(max(Float(min(max(value, 0), 1) * 65_535), 0), 65_535))
+      }
+    let identity = FilmProcessing.correctedPreview(
+      image: image,
+      parameters: ProcessingParameters(
+        filmType: .colourNegative,
+        densityPipelineEnabled: true,
+        densityBaseDensity: baseDensity
+      ),
+      flatField: flatField
+    )
+
+    #expect(actual.pixels == expectedPixels)
+    #expect(actual.pixels != identity.pixels)
+  }
+
   @Test("Semantic light controls affect slide processing")
   func semanticToneControlsAffectSlides() {
     let image = UInt16Image(

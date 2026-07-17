@@ -22,6 +22,13 @@ public struct ExportWriteMetrics: Codable, Equatable, Sendable {
 }
 
 extension UInt16Image {
+  /// Film Scan Converter's rendered-output contract is display-referred sRGB.
+  /// Use a named, device-independent space so ImageIO embeds the profile in
+  /// TIFF, JPEG, and PNG files instead of inheriting the exporting Mac's RGB.
+  package static let renderedOutputColorSpace = CGColorSpace(
+    name: CGColorSpace.sRGB
+  )!
+
   public enum ExportError: Error, LocalizedError {
     case unsupportedChannels
     case creationFailed
@@ -224,7 +231,7 @@ extension UInt16Image {
       bitsPerComponent: 16,
       bitsPerPixel: 48,
       bytesPerRow: width * 6,
-      space: CGColorSpaceCreateDeviceRGB(),
+      space: Self.renderedOutputColorSpace,
       bitmapInfo: .byteOrder16Little,
       provider: provider,
       decode: nil,
@@ -247,7 +254,7 @@ extension UInt16Image {
       bitsPerComponent: 16,
       bitsPerPixel: 48,
       bytesPerRow: width * 6,
-      space: CGColorSpaceCreateDeviceRGB(),
+      space: Self.renderedOutputColorSpace,
       bitmapInfo: .byteOrder16Little,
       provider: provider,
       decode: nil,
@@ -270,7 +277,7 @@ extension UInt16Image {
       bitsPerComponent: 8,
       bitsPerPixel: 24,
       bytesPerRow: width * 3,
-      space: CGColorSpaceCreateDeviceRGB(),
+      space: Self.renderedOutputColorSpace,
       bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.none.rawValue),
       provider: provider,
       decode: nil,

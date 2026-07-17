@@ -4,7 +4,7 @@
 complete. The proposed idle full-resolution replacement was retired when
 browsing moved to a preview-only contract.
 
-**Last verified:** 2026-07-14
+**Last verified:** 2026-07-17
 
 This page records the design outcome of the real-time preview work. It is not
 the active roadmap. Current product priority belongs in the
@@ -31,6 +31,12 @@ app-path latency measurements belong in
   deterministic reference, export authority, CI/headless path, and fallback.
 - Scheduling is latest-value-wins: one render may be active and only the newest
   pending parameter snapshot is retained.
+- The still image, dust mask, and crop/straighten/perspective editors share one
+  native scroll viewport. It provides momentum pan, trackpad pinch, Fit,
+  step-zoom, and 100% preview-pixel commands.
+- Original/corrected comparison retains the viewport and magnification. An
+  on-canvas badge identifies the bounded preview source and displayed pixel
+  dimensions.
 
 ## Completed Interactive Work
 
@@ -43,13 +49,19 @@ app-path latency measurements belong in
 3. **Visual equivalence.** Current production CPU/GPU grids cover 2,725 channel
    comparisons with zero failures and a maximum difference of 2/255.
 4. **Latency gate.** The deterministic adjustment-heavy 1080×720 release
-   benchmark measured 2.9641–3.0286 ms p95 across four recorded post-change
-   runs on the M4 Pro; the latest recorded run was 2.7034 ms median and 3.0015
-   ms p95. The pre-optimization p95 was 3.9959 ms.
+   benchmark now exercises dye crossover as well as protected color/tone,
+   curves, and color wheels. The 2026-07-15 M4 Pro run with crossover active
+   measured 1.7717 ms median and 2.3590 ms p95 across 120 renders. Before dye
+   crossover joined the workload, four recorded post-change runs measured
+   2.9641–3.0286 ms p95; the pre-optimization p95 was 3.9959 ms.
 5. **App-path baseline.** Release measurements now cover first corrected paint,
    cached and uncached switching, rapid-selection drain, logical preview-cache
    bytes, and Mach physical footprint. Cache-depth sampling at 2, 8, and 32 is
    complete for the local six-RAF corpus.
+6. **Photographic viewport.** A native `NSScrollView` surface supplies normal
+   Mac scrolling, momentum, rubber-banding, and cursor-centered pinch zoom.
+   Menu and toolbar commands provide Fit, zoom-in/out, and 100%, while image and
+   editing overlays retain a common transform.
 
 These are bounded local regression measurements, not universal hardware
 claims. The three-repetition app-path p95 values are the slowest samples rather
@@ -82,9 +94,10 @@ profiling exposes a user-visible display-path bottleneck.
   preview source size, scheduling, kernels, geometry integration, or cache
   ownership.
 
-The only remaining item in the current broader performance cycle is the
-app-path sequential-export/cancellation and post-run-memory measurement. That
-work is tracked by the roadmap rather than this historical preview document.
+The app-path sequential-export/cancellation and post-run-memory measurement is
+complete, so there is no open-ended broader performance cycle. Direct
+representative-image judgment and future UI-automation evidence are tracked by
+the roadmap and native status rather than by this historical outcome document.
 
 ## Durable Rules
 
@@ -93,6 +106,11 @@ work is tracked by the roadmap rather than this historical preview document.
 - Keep only the newest pending render snapshot.
 - Preserve the CPU processing path as the deterministic pixel authority.
 - Keep display transforms outside the authoritative processing result.
+- Keep image and diagnostic/editing overlays in one viewport transform, and do
+  not reset that viewport when Original comparison changes the displayed pixels.
+- Keep 100% explicitly defined against bounded preview pixels, and keep the
+  preview-source badge visible so it is not confused with full-resolution
+  export evidence.
 - Treat color-management, EDR, and display-profile differences as measured
   preview concerns rather than silently baking them into export pixels.
 - Do not revive an authoritative browsing replacement without new evidence and

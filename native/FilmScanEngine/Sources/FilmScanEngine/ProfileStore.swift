@@ -11,6 +11,8 @@ public struct FilmStockProfileID: RawRepresentable, Codable, Equatable, Hashable
 }
 
 public struct CaptureProfile: Codable, Equatable, Sendable {
+  public static let currentSchemaVersion = 2
+
   public var schemaVersion: Int
   public var id: CaptureProfileID
   public var cameraModel: String
@@ -18,17 +20,19 @@ public struct CaptureProfile: Codable, Equatable, Sendable {
   public var backlightDescription: String
   public var estimatedColorTemperature: Double?
   public var normalizationParams: CaptureNormalizationParameters
+  public var densityCorrection: DensityCorrectionMatrix
   public var preferredISO: Double?
   public var notes: String
 
   public init(
-    schemaVersion: Int = 1,
+    schemaVersion: Int = currentSchemaVersion,
     id: CaptureProfileID,
     cameraModel: String = "",
     lensModel: String = "",
     backlightDescription: String = "",
     estimatedColorTemperature: Double? = nil,
     normalizationParams: CaptureNormalizationParameters = CaptureNormalizationParameters(),
+    densityCorrection: DensityCorrectionMatrix = .identity,
     preferredISO: Double? = nil,
     notes: String = ""
   ) {
@@ -39,8 +43,37 @@ public struct CaptureProfile: Codable, Equatable, Sendable {
     self.backlightDescription = backlightDescription
     self.estimatedColorTemperature = estimatedColorTemperature
     self.normalizationParams = normalizationParams
+    self.densityCorrection = densityCorrection
     self.preferredISO = preferredISO
     self.notes = notes
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case schemaVersion, id, cameraModel, lensModel, backlightDescription
+    case estimatedColorTemperature, normalizationParams, densityCorrection
+    case preferredISO, notes
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+    id = try container.decode(CaptureProfileID.self, forKey: .id)
+    cameraModel = try container.decodeIfPresent(String.self, forKey: .cameraModel) ?? ""
+    lensModel = try container.decodeIfPresent(String.self, forKey: .lensModel) ?? ""
+    backlightDescription = try container.decodeIfPresent(
+      String.self, forKey: .backlightDescription
+    ) ?? ""
+    estimatedColorTemperature = try container.decodeIfPresent(
+      Double.self, forKey: .estimatedColorTemperature
+    )
+    normalizationParams = try container.decodeIfPresent(
+      CaptureNormalizationParameters.self, forKey: .normalizationParams
+    ) ?? CaptureNormalizationParameters()
+    densityCorrection = try container.decodeIfPresent(
+      DensityCorrectionMatrix.self, forKey: .densityCorrection
+    ) ?? .identity
+    preferredISO = try container.decodeIfPresent(Double.self, forKey: .preferredISO)
+    notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
   }
 
   public static let `default` = CaptureProfile(
@@ -51,21 +84,27 @@ public struct CaptureProfile: Codable, Equatable, Sendable {
 }
 
 public struct FilmStockProfile: Codable, Equatable, Sendable {
+  public static let currentSchemaVersion = 2
+
   public var schemaVersion: Int
   public var id: FilmStockProfileID
   public var displayName: String
   public var filmType: FilmType
   public var c41Profile: GenericC41Profile
   public var displayRendering: DisplayRenderingParameters
+  public var filmNegativeParams: FilmNegativeParams
+  public var dyeMixing: FilmDyeMixingParameters
   public var notes: String
 
   public init(
-    schemaVersion: Int = 1,
+    schemaVersion: Int = currentSchemaVersion,
     id: FilmStockProfileID,
     displayName: String,
     filmType: FilmType,
     c41Profile: GenericC41Profile = .identity,
     displayRendering: DisplayRenderingParameters = DisplayRenderingParameters(),
+    filmNegativeParams: FilmNegativeParams? = nil,
+    dyeMixing: FilmDyeMixingParameters = .neutral,
     notes: String = ""
   ) {
     self.schemaVersion = schemaVersion
@@ -74,7 +113,54 @@ public struct FilmStockProfile: Codable, Equatable, Sendable {
     self.filmType = filmType
     self.c41Profile = c41Profile
     self.displayRendering = displayRendering
+    self.filmNegativeParams = filmNegativeParams
+      ?? Self.defaultFilmNegativeParams(for: filmType)
+    self.filmNegativeParams.measuredMedians = nil
+    self.dyeMixing = dyeMixing.clamped()
     self.notes = notes
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case schemaVersion, id, displayName, filmType
+    case c41Profile, displayRendering
+    case filmNegativeParams, dyeMixing, notes
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+    id = try container.decode(FilmStockProfileID.self, forKey: .id)
+    displayName = try container.decode(String.self, forKey: .displayName)
+    filmType = try container.decode(FilmType.self, forKey: .filmType)
+    c41Profile = try container.decodeIfPresent(
+      GenericC41Profile.self,
+      forKey: .c41Profile
+    ) ?? .identity
+    displayRendering = try container.decodeIfPresent(
+      DisplayRenderingParameters.self,
+      forKey: .displayRendering
+    ) ?? DisplayRenderingParameters()
+    filmNegativeParams = try container.decodeIfPresent(
+      FilmNegativeParams.self,
+      forKey: .filmNegativeParams
+    ) ?? Self.defaultFilmNegativeParams(for: filmType)
+    filmNegativeParams.measuredMedians = nil
+    dyeMixing = try container.decodeIfPresent(
+      FilmDyeMixingParameters.self,
+      forKey: .dyeMixing
+    )?.clamped() ?? .neutral
+    notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
+  }
+
+  private static func defaultFilmNegativeParams(for filmType: FilmType) -> FilmNegativeParams {
+    switch filmType {
+    case .colourNegative:
+      return .colourNegative
+    case .blackAndWhiteNegative:
+      return .blackAndWhite
+    case .slide, .cropOnly:
+      return FilmNegativeParams(enabled: false)
+    }
   }
 
   public static let genericColorNegative = FilmStockProfile(
@@ -179,7 +265,10 @@ public final class ProfileStore: Sendable {
     }
     let data = try Data(contentsOf: url)
     let profile = try decoder.decode(CaptureProfile.self, from: data)
-    try validateSchemaVersion(profile.schemaVersion, supported: 1)
+    try validateSchemaVersion(
+      profile.schemaVersion,
+      supported: CaptureProfile.currentSchemaVersion
+    )
     return profile
   }
 
@@ -216,7 +305,10 @@ public final class ProfileStore: Sendable {
     }
     let data = try Data(contentsOf: url)
     let profile = try decoder.decode(FilmStockProfile.self, from: data)
-    try validateSchemaVersion(profile.schemaVersion, supported: 1)
+    try validateSchemaVersion(
+      profile.schemaVersion,
+      supported: FilmStockProfile.currentSchemaVersion
+    )
     return profile
   }
 

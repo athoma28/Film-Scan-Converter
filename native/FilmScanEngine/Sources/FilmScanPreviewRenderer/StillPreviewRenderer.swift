@@ -65,6 +65,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       let lutImage = curveLUTImage(parameters: parameters)
 
       let fnp = parameters.filmNegativeParams
+      let dyeMixing = parameters.filmDyeMixing.clamped()
       let fnEnabled = parameters.filmNegativeParams.enabled
         && (parameters.filmType == .colourNegative || parameters.filmType == .blackAndWhiteNegative)
         && fnp.measuredMedians != nil
@@ -113,6 +114,12 @@ public final class StillPreviewRenderer: @unchecked Sendable {
             Float(parameters.photoAdjustments.tint),
             Float(parameters.photoAdjustments.saturation),
             Float(parameters.photoAdjustments.vibrance),
+            Float(dyeMixing.redFromGreen),
+            Float(dyeMixing.redFromBlue),
+            Float(dyeMixing.greenFromRed),
+            Float(dyeMixing.greenFromBlue),
+            Float(dyeMixing.blueFromRed),
+            Float(dyeMixing.blueFromGreen),
             Float(parameters.highlightWheel.hue),
             Float(parameters.highlightWheel.strength),
             Float(parameters.midtoneWheel.hue),
@@ -389,6 +396,21 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         filmNegativeLinearToSrgb(displayLinear.b));
     }
 
+    vec3 filmDyeMixing(
+      vec3 rgb,
+      float redFromGreen,
+      float redFromBlue,
+      float greenFromRed,
+      float greenFromBlue,
+      float blueFromRed,
+      float blueFromGreen
+    ) {
+      return vec3(
+        rgb.r + redFromGreen * (rgb.g - rgb.r) + redFromBlue * (rgb.b - rgb.r),
+        rgb.g + greenFromRed * (rgb.r - rgb.g) + greenFromBlue * (rgb.b - rgb.g),
+        rgb.b + blueFromRed * (rgb.r - rgb.b) + blueFromGreen * (rgb.g - rgb.b));
+    }
+
     bool protectedColorInGamut(vec3 value, float ceiling) {
       return min(value.r, min(value.g, value.b)) >= 0.0
         && max(value.r, max(value.g, value.b)) <= ceiling;
@@ -558,6 +580,12 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       float photoTint,
       float photoSaturation,
       float photoVibrance,
+      float dyeRedFromGreen,
+      float dyeRedFromBlue,
+      float dyeGreenFromRed,
+      float dyeGreenFromBlue,
+      float dyeBlueFromRed,
+      float dyeBlueFromGreen,
       float highlightHue,
       float highlightStrength,
       float midtoneHue,
@@ -581,6 +609,10 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       bool useProtectedColor = filmNegativeEnabled == 1.0 && !isBW
         && (photoTemperatureMired != 0.0 || photoTint != 0.0
           || photoSaturation != 0.0 || photoVibrance != 0.0);
+      bool useDyeMixing = filmType == 1.0
+        && (dyeRedFromGreen != 0.0 || dyeRedFromBlue != 0.0
+          || dyeGreenFromRed != 0.0 || dyeGreenFromBlue != 0.0
+          || dyeBlueFromRed != 0.0 || dyeBlueFromGreen != 0.0);
       bool useLinearTone = abs(photoExposureEV) > 0.0
         || abs(photoBrightness) > 0.0 || abs(photoContrast) > 0.0
         || abs(photoHighlights) > 0.0 || abs(photoShadows) > 0.0;
@@ -588,6 +620,13 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       if (filmNegativeEnabled == 1.0) {
         vec3 filmLinear = filmNegativeLinearValue(
           rgb, vec3(fnRExp, fnGExp, fnBExp), vec3(fnRMult, fnGMult, fnBMult));
+        if (useDyeMixing) {
+          filmLinear = filmDyeMixing(
+            filmLinear,
+            dyeRedFromGreen, dyeRedFromBlue,
+            dyeGreenFromRed, dyeGreenFromBlue,
+            dyeBlueFromRed, dyeBlueFromGreen);
+        }
         if (useLinearTone) {
           filmLinear = linearToneAdjustments(
             filmLinear, photoExposureEV, photoBrightness, photoContrast,
@@ -609,11 +648,20 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         } else if (filmType == 1.0) {
           rgb = 1.0 - rgb;
         }
-        if (useLinearTone) {
+        if (useDyeMixing || useLinearTone) {
           vec3 linear = displayLinearValue(rgb);
-          linear = linearToneAdjustments(
-            linear, photoExposureEV, photoBrightness, photoContrast,
-            photoHighlights, photoShadows, photoToneReference);
+          if (useDyeMixing) {
+            linear = filmDyeMixing(
+              linear,
+              dyeRedFromGreen, dyeRedFromBlue,
+              dyeGreenFromRed, dyeGreenFromBlue,
+              dyeBlueFromRed, dyeBlueFromGreen);
+          }
+          if (useLinearTone) {
+            linear = linearToneAdjustments(
+              linear, photoExposureEV, photoBrightness, photoContrast,
+              photoHighlights, photoShadows, photoToneReference);
+          }
           rgb = displayFromLinear(linear);
         }
       }

@@ -19,6 +19,9 @@ struct ContentView: View {
   @State private var isCropping = false
   @State private var presetName = ""
   @State private var profileName = ""
+  @State private var previewZoomRequest = PreviewZoomRequest()
+  @State private var previewZoomPercent = 100
+  @State private var previewIsFit = true
 
   private enum InspectorPage: String, CaseIterable, Identifiable {
     case edit = "Edit"
@@ -73,6 +76,7 @@ struct ContentView: View {
         endPerspectiveEditing()
         endStraightening()
         endCropping()
+        requestPreviewZoom(.fit)
         model.loadSelection()
       }
     } detail: {
@@ -105,6 +109,16 @@ struct ContentView: View {
         dropTargeted = targeted
       }
     }
+    .focusedSceneValue(
+      \.previewZoomCommands,
+      showLivePreview || model.previewImage == nil
+        ? nil
+        : PreviewZoomCommands(
+          fit: { requestPreviewZoom(.fit) },
+          actualSize: { requestPreviewZoom(.actualSize) },
+          zoomIn: { requestPreviewZoom(.zoomIn) },
+          zoomOut: { requestPreviewZoom(.zoomOut) })
+    )
   }
 
   private var toolbar: some View {
@@ -167,6 +181,36 @@ struct ContentView: View {
         .toggleStyle(.button)
         .disabled(isPickingRebateRegion)
         .help("Press and hold the comparison visually by toggling the original")
+
+        HStack(spacing: 4) {
+          Button {
+            requestPreviewZoom(.zoomOut)
+          } label: {
+            Image(systemName: "minus.magnifyingglass")
+              .frame(width: 18)
+          }
+          .help("Zoom out (Command-minus)")
+
+          Menu {
+            Button("Fit in Window") { requestPreviewZoom(.fit) }
+            Button("100% Preview Pixels") { requestPreviewZoom(.actualSize) }
+          } label: {
+            Text(previewIsFit ? "Fit" : "\(previewZoomPercent)%")
+              .monospacedDigit()
+              .frame(minWidth: 38)
+          }
+          .menuStyle(.borderlessButton)
+          .fixedSize()
+          .help("Choose Fit or inspect preview pixels at 100%")
+
+          Button {
+            requestPreviewZoom(.zoomIn)
+          } label: {
+            Image(systemName: "plus.magnifyingglass")
+              .frame(width: 18)
+          }
+          .help("Zoom in (Command-plus)")
+        }
 
         HStack(spacing: 4) {
           Button(action: model.rotateCounterclockwise) {
@@ -405,6 +449,80 @@ struct ContentView: View {
               .font(.caption2)
               .foregroundStyle(.secondary)
             }
+          }
+        }
+
+        if model.parameters.filmType == .colourNegative {
+          let mixing = model.parameters.filmDyeMixing
+          DisclosureGroup("Dye crossover") {
+            VStack(alignment: .leading, spacing: 10) {
+              Text(
+                "Correct cross-channel dye contamination before tone and color grading. Positive values blend the named source channel in; negative values subtract it. Neutral gray stays neutral."
+              )
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+
+              AdjustmentSlider(
+                "Red from Green",
+                value: Binding(
+                  get: { model.parameters.filmDyeMixing.redFromGreen * 100 },
+                  set: { model.setFilmDyeMixing(\.redFromGreen, to: $0 / 100) }
+                ),
+                range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+                responseExponent: 1.7
+              )
+              AdjustmentSlider(
+                "Red from Blue",
+                value: Binding(
+                  get: { model.parameters.filmDyeMixing.redFromBlue * 100 },
+                  set: { model.setFilmDyeMixing(\.redFromBlue, to: $0 / 100) }
+                ),
+                range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+                responseExponent: 1.7
+              )
+              AdjustmentSlider(
+                "Green from Red",
+                value: Binding(
+                  get: { model.parameters.filmDyeMixing.greenFromRed * 100 },
+                  set: { model.setFilmDyeMixing(\.greenFromRed, to: $0 / 100) }
+                ),
+                range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+                responseExponent: 1.7
+              )
+              AdjustmentSlider(
+                "Green from Blue",
+                value: Binding(
+                  get: { model.parameters.filmDyeMixing.greenFromBlue * 100 },
+                  set: { model.setFilmDyeMixing(\.greenFromBlue, to: $0 / 100) }
+                ),
+                range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+                responseExponent: 1.7
+              )
+              AdjustmentSlider(
+                "Blue from Red",
+                value: Binding(
+                  get: { model.parameters.filmDyeMixing.blueFromRed * 100 },
+                  set: { model.setFilmDyeMixing(\.blueFromRed, to: $0 / 100) }
+                ),
+                range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+                responseExponent: 1.7
+              )
+              AdjustmentSlider(
+                "Blue from Green",
+                value: Binding(
+                  get: { model.parameters.filmDyeMixing.blueFromGreen * 100 },
+                  set: { model.setFilmDyeMixing(\.blueFromGreen, to: $0 / 100) }
+                ),
+                range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+                responseExponent: 1.7
+              )
+
+              Button("Reset Dye Crossover", action: model.resetFilmDyeMixing)
+                .controlSize(.small)
+                .disabled(mixing.isNeutral)
+            }
+            .padding(.top, 8)
           }
         }
       }
@@ -907,6 +1025,13 @@ struct ContentView: View {
               )
               .font(.caption2)
               .foregroundStyle(.secondary)
+              Text(
+                model.parameters.densityCorrection == .identity
+                  ? "Capture matrix: Identity"
+                  : "Capture matrix: Custom fitted correction"
+              )
+              .font(.caption2)
+              .foregroundStyle(.secondary)
             }
 
             if model.parameters.densityPipelineEnabled {
@@ -1146,18 +1271,27 @@ struct ContentView: View {
         Color.black
 
         if let image = model.previewImage {
-          Image(nsImage: image)
-            .resizable()
-            .scaledToFit()
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-          if let dustMask = model.dustMaskImage {
-            Image(nsImage: dustMask)
-              .resizable()
-              .scaledToFit()
-              .blendMode(.screen)
-              .opacity(0.85)
-              .allowsHitTesting(false)
+          PreviewViewport(
+            imageSize: image.size,
+            request: previewZoomRequest,
+            onZoomChanged: { percent, isFit in
+              previewZoomPercent = percent
+              previewIsFit = isFit
+            }
+          ) {
+            previewDocument(image: image)
           }
+          .accessibilityLabel("Still image preview")
+
+          VStack {
+            HStack {
+              previewSourceBadge
+              Spacer()
+            }
+            Spacer()
+          }
+          .padding(10)
+          .allowsHitTesting(false)
         } else {
           VStack(spacing: 16) {
             Text(model.selection?.lastPathComponent ?? "")
@@ -1169,49 +1303,6 @@ struct ContentView: View {
           }
         }
 
-        RebateRegionSelectionOverlay(
-          isActive: isPickingRebateRegion,
-          imageSize: model.previewImage?.size ?? .zero,
-          dragStart: $rebateDragStart,
-          dragEnd: $rebateDragEnd
-        ) { x, y, width, height in
-          model.measureRebateRegion(
-            normalizedX: x,
-            normalizedY: y,
-            normalizedWidth: width,
-            normalizedHeight: height
-          )
-          endRebateSelection()
-        }
-
-        PerspectiveCropOverlay(
-          isActive: isPerspectiveEditing,
-          crop: model.perspectiveCrop,
-          image: model.previewImage,
-          imageSize: model.previewImage?.size ?? .zero,
-          rotation: model.parameters.rotation,
-          flipHorizontally: model.parameters.flip,
-          usesParallelAssist: usesPerspectiveParallelAssist,
-          onCropChanged: model.setPerspectiveCrop
-        )
-
-        StraightenLineOverlay(
-          isActive: isStraightening,
-          imageSize: model.previewImage?.size ?? .zero,
-          onGuideCompleted: { deviation in
-            endStraightening()
-            model.straighten(usingGuideDeviation: deviation)
-          }
-        )
-
-        ManualCropOverlay(
-          isActive: isCropping,
-          imageSize: model.previewImage?.size ?? .zero,
-          onCropCompleted: { crop in
-            endCropping()
-            model.setManualCrop(crop)
-          }
-        )
       }
     } else {
       ContentUnavailableView {
@@ -1223,6 +1314,115 @@ struct ContentView: View {
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+  }
+
+  private func previewDocument(image: NSImage) -> some View {
+    ZStack {
+      Image(nsImage: image)
+        .resizable()
+        .interpolation(.high)
+        .frame(width: image.size.width, height: image.size.height)
+
+      if let dustMask = model.dustMaskImage {
+        Image(nsImage: dustMask)
+          .resizable()
+          .interpolation(.none)
+          .frame(width: image.size.width, height: image.size.height)
+          .blendMode(.screen)
+          .opacity(0.85)
+          .allowsHitTesting(false)
+      }
+
+      RebateRegionSelectionOverlay(
+        isActive: isPickingRebateRegion,
+        imageSize: image.size,
+        dragStart: $rebateDragStart,
+        dragEnd: $rebateDragEnd
+      ) { x, y, width, height in
+        model.measureRebateRegion(
+          normalizedX: x,
+          normalizedY: y,
+          normalizedWidth: width,
+          normalizedHeight: height
+        )
+        endRebateSelection()
+      }
+
+      PerspectiveCropOverlay(
+        isActive: isPerspectiveEditing,
+        crop: model.perspectiveCrop,
+        image: image,
+        imageSize: image.size,
+        rotation: model.parameters.rotation,
+        flipHorizontally: model.parameters.flip,
+        usesParallelAssist: usesPerspectiveParallelAssist,
+        onCropChanged: model.setPerspectiveCrop
+      )
+
+      StraightenLineOverlay(
+        isActive: isStraightening,
+        imageSize: image.size,
+        onGuideCompleted: { deviation in
+          endStraightening()
+          model.straighten(usingGuideDeviation: deviation)
+        }
+      )
+
+      ManualCropOverlay(
+        isActive: isCropping,
+        imageSize: image.size,
+        onCropCompleted: { crop in
+          endCropping()
+          model.setManualCrop(crop)
+        }
+      )
+    }
+    .frame(width: image.size.width, height: image.size.height)
+  }
+
+  private var previewSourceBadge: some View {
+    let dimensions = model.previewImage.map {
+      "\(Int($0.size.width.rounded()))×\(Int($0.size.height.rounded()))"
+    } ?? ""
+    let label: String
+    let icon: String
+    let tint: Color
+    let help: String
+
+    switch model.previewSourceKind {
+    case .embeddedRAW:
+      label = "Embedded RAW preview · \(dimensions)"
+      icon = "exclamationmark.triangle.fill"
+      tint = .yellow
+      help = "A fast embedded camera preview, not full-resolution export evidence. Use Load RAW Preview for a demosaiced judging preview."
+    case .rawDetail:
+      label = "Demosaiced RAW preview · \(dimensions)"
+      icon = "viewfinder"
+      tint = .white
+      help = "A bounded high-detail RAW preview. Export re-decodes the full-resolution RAW."
+    case .standardThumbnail:
+      label = "Bounded image preview · \(dimensions)"
+      icon = "viewfinder"
+      tint = .white
+      help = "A bounded preview used for interaction. Export uses the full-resolution source image."
+    case nil:
+      label = "Preview · \(dimensions)"
+      icon = "viewfinder"
+      tint = .white
+      help = "The pixels currently used for interactive preview."
+    }
+
+    return Label(label, systemImage: icon)
+      .font(.caption2.weight(.medium))
+      .foregroundStyle(tint)
+      .padding(.horizontal, 8)
+      .padding(.vertical, 5)
+      .background(.black.opacity(0.72), in: Capsule())
+      .help(help)
+  }
+
+  private func requestPreviewZoom(_ action: PreviewZoomAction) {
+    previewZoomRequest.request(action)
   }
 
   private func exportAspectRatioID(_ ratio: AspectRatio?) -> String {
