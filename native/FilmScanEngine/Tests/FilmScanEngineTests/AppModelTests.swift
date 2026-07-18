@@ -13,9 +13,11 @@ private let appModelRepositoryRoot = URL(fileURLWithPath: #filePath)
   .deletingLastPathComponent()
 
 private var appModelRawCorpusAvailable: Bool {
-  FileManager.default.fileExists(
-    atPath: appModelRepositoryRoot.appending(path: "sample-raw/DSCF2819.RAF").path
-  )
+  !SampleRawCorpus.rawURLs().isEmpty
+}
+
+private var appModelRepresentativeRawURL: URL? {
+  SampleRawCorpus.rawURLs().first
 }
 
 private final class TestCorrectionSettingsPasteboard: CorrectionSettingsPasteboard {
@@ -375,7 +377,9 @@ struct AppModelTests {
   func exportRecalibratesFilmBaseMedians(filmType: FilmType) throws {
     var parameters = ProcessingParameters()
     parameters.filmType = filmType
-    parameters.filmNegativeParams = .colourNegative
+    parameters.filmNegativeParams = filmType == .colourNegative
+      ? .legacyColourNegative
+      : .legacyBlackAndWhite
     parameters.filmNegativeParams.measuredMedians = BGRChannelValues(
       blue: 60_000, green: 8_000, red: 60_000)
     let decoded = UInt16Image(
@@ -469,7 +473,7 @@ struct AppModelTests {
 
     var stale = ProcessingParameters()
     stale.filmType = .colourNegative
-    stale.filmNegativeParams = .colourNegative
+    stale.filmNegativeParams = .legacyColourNegative
     stale.filmNegativeParams.measuredMedians = BGRChannelValues(
       blue: 60_000, green: 8_000, red: 60_000)
     let settingsStore = PerFileSettingsStore(baseDirectory: workDirectory)
@@ -774,7 +778,7 @@ struct AppModelTests {
     .enabled(if: appModelRawCorpusAvailable, "sample-raw corpus unavailable; AppModel RAW preview test skipped")
   )
   func rawImportUsesFastEmbeddedPreview() async throws {
-    let raw = repositoryRoot.appending(path: "sample-raw/DSCF2819.RAF")
+    let raw = try #require(appModelRepresentativeRawURL)
 
     let model = AppModel()
     model.importFiles([raw])
@@ -790,7 +794,7 @@ struct AppModelTests {
     .enabled(if: appModelRawCorpusAvailable, "sample-raw corpus unavailable; RAW detail preview test skipped")
   )
   func rawDetailPreviewUsesCameraScanDecode() async throws {
-    let raw = repositoryRoot.appending(path: "sample-raw/DSCF2819.RAF")
+    let raw = try #require(appModelRepresentativeRawURL)
     let model = AppModel()
     model.importFiles([raw])
 
@@ -1421,12 +1425,54 @@ struct AppModelTests {
     model.setFilmNegativeRedRatio(1.6)
     model.resetFilmDyeMixing()
     model.applySelectedPipelineProfiles()
-    #expect(model.parameters.densityPipelineEnabled)
+    #expect(!model.parameters.densityPipelineEnabled)
     #expect(model.parameters.filmNegativeParams.enabled)
     #expect(model.parameters.filmNegativeParams.measuredMedians != nil)
     #expect(model.parameters.filmNegativeParams.redRatio == 1.18)
     #expect(model.parameters.filmDyeMixing.redFromGreen == -0.14)
-    #expect(model.profileStatus.contains("Density pipeline active"))
+    #expect(model.profileStatus.contains("Calibrated negative profile active"))
+  }
+
+  @Test("Black-and-white presets expose calibrated and legacy renderers")
+  func blackAndWhitePresetsExposeCalibratedAndLegacyRenderers() {
+    let model = AppModel()
+    model.setFilmType(.blackAndWhiteNegative)
+    #expect(model.selectedFilmStockProfileID == FilmStockProfile.genericBW.id)
+
+    model.setFilmNegativePreset(.blackAndWhite)
+    #expect(model.parameters.filmNegativeParams.rendering == .calibratedMonochrome)
+    model.setCalibratedNegativeExposure(1.25)
+    #expect(model.parameters.filmNegativeParams.monochromeExposureEV == 1.25)
+
+    model.setFilmNegativePreset(.legacyBlackAndWhite)
+    #expect(model.parameters.filmNegativeParams == .legacyBlackAndWhite)
+
+    model.selectedFilmStockProfileID = FilmStockProfile.genericBW.id
+    model.applySelectedPipelineProfiles()
+    #expect(model.parameters.filmNegativeParams.rendering == .calibratedMonochrome)
+    #expect(!model.parameters.densityPipelineEnabled)
+    #expect(model.profileStatus.contains("Calibrated negative profile active"))
+  }
+
+  @Test("Color presets expose calibrated and legacy renderers")
+  func colorPresetsExposeCalibratedAndLegacyRenderers() {
+    let model = AppModel()
+    model.setFilmType(.colourNegative)
+    #expect(model.selectedFilmStockProfileID == FilmStockProfile.genericColorNegative.id)
+    #expect(model.parameters.filmNegativeParams.rendering == .calibratedColor)
+
+    model.setFilmNegativePreset(.legacyColourNegative)
+    #expect(model.parameters.filmNegativeParams == .legacyColourNegative)
+
+    model.setFilmNegativePreset(.colourNegative)
+    model.setCalibratedNegativeExposure(0.75)
+    #expect(model.parameters.filmNegativeParams.rendering == .calibratedColor)
+    #expect(model.parameters.filmNegativeParams.monochromeExposureEV == 0.75)
+
+    model.selectedFilmStockProfileID = FilmStockProfile.genericColorNegative.id
+    model.applySelectedPipelineProfiles()
+    #expect(model.parameters.filmNegativeParams.rendering == .calibratedColor)
+    #expect(!model.parameters.densityPipelineEnabled)
   }
 
   @Test("App applies calibrated density correction from the capture profile")

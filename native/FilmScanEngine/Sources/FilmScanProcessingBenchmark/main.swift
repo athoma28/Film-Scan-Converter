@@ -4,12 +4,28 @@ import Foundation
 
 // MARK: - Corpus
 
-let corpus: [(stem: String, filmType: FilmType, rotation: Int, scene: String)] = [
-  ("DSCF0669", .blackAndWhiteNegative, 3, "black-and-white night exterior"),
-  ("DSCF0718", .colourNegative, 1, "color negative outdoor daylight"),
-  ("DSCF0729", .colourNegative, 1, "color negative mixed indoor lighting"),
-  ("DSCF2417", .blackAndWhiteNegative, 0, "black-and-white daylight portrait"),
-  ("DSCF2422", .colourNegative, 3, "color negative indoor portrait"),
+private struct CorpusMetadata {
+  let filmType: FilmType
+  let rotation: Int
+  let scene: String
+}
+
+private let legacyCorpus: [String: CorpusMetadata] = [
+  "DSCF0669": CorpusMetadata(
+    filmType: .blackAndWhiteNegative, rotation: 3,
+    scene: "black-and-white night exterior"),
+  "DSCF0718": CorpusMetadata(
+    filmType: .colourNegative, rotation: 1,
+    scene: "color negative outdoor daylight"),
+  "DSCF0729": CorpusMetadata(
+    filmType: .colourNegative, rotation: 1,
+    scene: "color negative mixed indoor lighting"),
+  "DSCF2417": CorpusMetadata(
+    filmType: .blackAndWhiteNegative, rotation: 0,
+    scene: "black-and-white daylight portrait"),
+  "DSCF2422": CorpusMetadata(
+    filmType: .colourNegative, rotation: 3,
+    scene: "color negative indoor portrait"),
 ]
 
 // MARK: - Presets
@@ -280,35 +296,72 @@ let outputURL = URL(fileURLWithPath: arguments[2])
 let repetitions = arguments.dropFirst(3).compactMap(Int.init).first ?? 3
 let fullResolution = arguments.contains("--full-resolution")
 
-let rafFiles = try FileManager.default.contentsOfDirectory(
-  at: rawDirectory,
-  includingPropertiesForKeys: nil
-).filter { $0.pathExtension.lowercased() == "raf" }
+let rafFiles = try RecursiveFileDiscovery.files(under: rawDirectory, extensions: ["raf"])
 
 guard !rafFiles.isEmpty else {
   FileHandle.standardError.write(Data("No RAF files found in \(rawDirectory.path)\n".utf8))
   exit(2)
 }
 
-let rafMap = Dictionary(uniqueKeysWithValues: rafFiles.map { ($0.deletingPathExtension().lastPathComponent, $0) })
-
-var reportResults = [String: StemResult]()
-let corpusJSON: [[String: String]] = corpus.map {
-  ["stem": $0.stem, "scene": $0.scene, "rotation": String($0.rotation)]
+func relativePath(for url: URL) -> String {
+  String(url.path.dropFirst(rawDirectory.path.count + 1))
 }
 
-for entry in corpus {
-  guard let fileURL = rafMap[entry.stem] else {
-    print("\(entry.stem): RAF not found in \(rawDirectory.path), skipping")
-    continue
-  }
+func stockID(for url: URL) -> String {
+  let relative = relativePath(for: url)
+  return relative.split(separator: "/").dropLast().first.map(String.init)
+    ?? rawDirectory.lastPathComponent
+}
 
+struct CorpusEntry {
+  let identifier: String
+  let stem: String
+  let fileURL: URL
+  let filmType: FilmType
+  let rotation: Int
+  let scene: String
+}
+
+// Keep the processing benchmark compact while making every stock visible:
+// choose the first root-relative RAF in each top-level stock directory.
+let representatives = Dictionary(grouping: rafFiles, by: stockID(for:))
+  .compactMap { stockID, files -> CorpusEntry? in
+    guard let fileURL = files.first else { return nil }
+    let stem = fileURL.deletingPathExtension().lastPathComponent
+    let xmpURL = fileURL.deletingPathExtension().appendingPathExtension("xmp")
+    let xmp = (try? String(contentsOf: xmpURL, encoding: .utf8)) ?? ""
+    let inferredType: FilmType = xmp.contains("ConvertToGrayscale=\"True\"")
+      ? .blackAndWhiteNegative
+      : .colourNegative
+    let metadata = legacyCorpus[stem]
+    return CorpusEntry(
+      identifier: relativePath(for: fileURL),
+      stem: stem,
+      fileURL: fileURL,
+      filmType: metadata?.filmType ?? inferredType,
+      rotation: metadata?.rotation ?? 0,
+      scene: metadata?.scene ?? "\(stockID) representative"
+    )
+  }
+  .sorted { $0.identifier < $1.identifier }
+
+var reportResults = [String: StemResult]()
+let corpusJSON: [[String: String]] = representatives.map {
+  [
+    "file": $0.identifier,
+    "scene": $0.scene,
+    "rotation": String($0.rotation),
+    "filmType": String($0.filmType.rawValue),
+  ]
+}
+
+for entry in representatives {
   // --- Decode ---
   var decodeSamples = [Double]()
   var decoded: UInt16Image?
   for _ in 0..<repetitions {
     let start = ContinuousClock.now
-    let result = try RawImageDecoder.decode(fileURL, fullResolution: fullResolution)
+    let result = try RawImageDecoder.decode(entry.fileURL, fullResolution: fullResolution)
     decodeSamples.append(seconds(start.duration(to: .now)))
     decoded = result.image
   }
@@ -322,7 +375,7 @@ for entry in corpus {
   let decodeMedian = median(decodeSamples)
 
   print(
-    "\(entry.stem): decode best=\(String(format: "%.4f", decodeBest))s "
+    "\(entry.identifier): decode best=\(String(format: "%.4f", decodeBest))s "
       + "median=\(String(format: "%.4f", decodeMedian))s "
       + "[\(image.height)x\(image.width)x\(image.channels)]"
   )
@@ -371,7 +424,7 @@ for entry in corpus {
     )
   }
 
-  reportResults[entry.stem] = StemResult(
+  reportResults[entry.identifier] = StemResult(
     scene: entry.scene,
     decodedShape: [image.height, image.width, image.channels],
     decodedBytes: image.pixels.count * MemoryLayout<UInt16>.size,

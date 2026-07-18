@@ -231,7 +231,7 @@ struct StillPreviewBenchmarkTests {
   func productionRendererNeutralizesZeroLight() {
     let image = UInt16Image(
       width: 2, height: 1, channels: 3,
-      pixels: [0, 512, 1024, 1025, 1025, 1025]
+      pixels: [0, 512, 1024, 10_000, 10_000, 10_000]
     )
     guard let renderer = StillPreviewRenderer(image: image) else {
       #expect(Bool(false), "Could not create production still preview renderer")

@@ -22,7 +22,11 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
     results = []
 
-    for path in sorted(args.raw_dir.glob('*.RAF')):
+    for path in sorted(
+        candidate
+        for candidate in args.raw_dir.rglob('*')
+        if candidate.is_file() and candidate.suffix.lower() == '.raf'
+    ):
         samples = []
         for _ in range(args.repetitions):
             start = time.perf_counter()
@@ -44,9 +48,12 @@ def main():
                 )
             image = np.ascontiguousarray(image[:, :, ::-1])
             samples.append(time.perf_counter() - start)
-        np.save(args.output_dir / f'{path.stem}.npy', image)
+        relative_path = path.relative_to(args.raw_dir)
+        decoded_path = (args.output_dir / relative_path).with_suffix('.npy')
+        decoded_path.parent.mkdir(parents=True, exist_ok=True)
+        np.save(decoded_path, image)
         result = {
-            'file': path.name,
+            'file': relative_path.as_posix(),
             'decoder': f'rawpy {rawpy.__version__} / LibRaw {rawpy.libraw_version}',
             'fullResolution': args.full_resolution,
             'shape': list(image.shape),
@@ -63,7 +70,7 @@ def main():
         }
         results.append(result)
         print(
-            f'{path.name}: best={result["bestSeconds"]:.4f}s '
+            f'{relative_path.as_posix()}: best={result["bestSeconds"]:.4f}s '
             f'median={result["medianSeconds"]:.4f}s {image.shape} {image.nbytes:,} bytes'
         )
 

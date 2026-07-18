@@ -66,23 +66,56 @@ public final class StillPreviewRenderer: @unchecked Sendable {
 
       let fnp = parameters.filmNegativeParams
       let dyeMixing = parameters.filmDyeMixing.clamped()
+      let usesCalibratedMonochrome = parameters.filmType == .blackAndWhiteNegative
+        && fnp.rendering == .calibratedMonochrome
+      let usesCalibratedColor = parameters.filmType == .colourNegative
+        && fnp.rendering == .calibratedColor
       let fnEnabled = parameters.filmNegativeParams.enabled
         && (parameters.filmType == .colourNegative || parameters.filmType == .blackAndWhiteNegative)
-        && fnp.measuredMedians != nil
+        && (usesCalibratedMonochrome || usesCalibratedColor || fnp.measuredMedians != nil)
+      let renderingMode: Float = switch fnp.rendering {
+      case .powerLaw: 0
+      case .calibratedMonochrome: 1
+      case .calibratedColor: 2
+      }
       let (fnRExp, fnGExp, fnBExp): (Float, Float, Float)
       let (fnRMult, fnGMult, fnBMult): (Float, Float, Float)
 
-      if fnEnabled, let medians = fnp.measuredMedians {
-        fnRExp = Float(-(fnp.greenExp * fnp.redRatio))
-        fnGExp = Float(-fnp.greenExp)
-        fnBExp = Float(-(fnp.greenExp * fnp.blueRatio))
-        let multipliers = FilmNegativeProcessing.computeMultipliers(
-          medians: medians,
-          params: fnp
-        )
-        fnRMult = Float(multipliers.r)
-        fnGMult = Float(multipliers.g)
-        fnBMult = Float(multipliers.b)
+      if fnEnabled {
+        switch fnp.rendering {
+        case .powerLaw:
+          if let medians = fnp.measuredMedians {
+            fnRExp = Float(-(fnp.greenExp * fnp.redRatio))
+            fnGExp = Float(-fnp.greenExp)
+            fnBExp = Float(-(fnp.greenExp * fnp.blueRatio))
+            let multipliers = FilmNegativeProcessing.computeMultipliers(
+              medians: medians,
+              params: fnp
+            )
+            fnRMult = Float(multipliers.r)
+            fnGMult = Float(multipliers.g)
+            fnBMult = Float(multipliers.b)
+          } else {
+            fnRExp = 0; fnGExp = 0; fnBExp = 0
+            fnRMult = 1; fnGMult = 1; fnBMult = 1
+          }
+        case .calibratedColor:
+          let gains = FilmNegativeProcessing.calibratedColorInputGains(
+            measuredMedians: fnp.measuredMedians
+          )
+          fnRExp = 0; fnGExp = 0; fnBExp = 0
+          fnRMult = Float(gains.red)
+          fnGMult = Float(gains.green)
+          fnBMult = Float(gains.blue)
+        case .calibratedMonochrome:
+          let gain = Float(
+            FilmNegativeProcessing.calibratedMonochromeInputGain(
+              measuredMedians: fnp.measuredMedians
+            )
+          )
+          fnRExp = 0; fnGExp = 0; fnBExp = 0
+          fnRMult = gain; fnGMult = gain; fnBMult = gain
+        }
       } else {
         fnRExp = 0; fnGExp = 0; fnBExp = 0
         fnRMult = 1; fnGMult = 1; fnBMult = 1
@@ -109,7 +142,11 @@ public final class StillPreviewRenderer: @unchecked Sendable {
             Float(parameters.photoAdjustments.contrast),
             Float(parameters.photoAdjustments.highlights),
             Float(parameters.photoAdjustments.shadows),
-            Float(fnEnabled ? FilmNegativeProcessing.calibrationTargetFraction : 0.18),
+            Float(
+              fnEnabled && fnp.rendering == .powerLaw
+                ? FilmNegativeProcessing.calibrationTargetFraction
+                : 0.18
+            ),
             Float(parameters.photoAdjustments.temperatureShiftMired),
             Float(parameters.photoAdjustments.tint),
             Float(parameters.photoAdjustments.saturation),
@@ -127,6 +164,8 @@ public final class StillPreviewRenderer: @unchecked Sendable {
             Float(parameters.shadowWheel.hue),
             Float(parameters.shadowWheel.strength),
             Float(fnEnabled ? 1 : 0),
+            renderingMode,
+            Float(fnp.monochromeExposureEV),
             fnRExp,
             fnGExp,
             fnBExp,
@@ -351,6 +390,89 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       float result = a * y0 + b * y1
         + ((a * a * a - a) * ypp0 + (b * b * b - b) * ypp1) * h * h / 6.0;
       return clamp(result, 0.0, 1.0);
+    }
+
+    float calibratedMonochromeCurve(
+      float value, float inputGain, float negativeExposureEV
+    ) {
+      float exposed = clamp(
+        value * inputGain * pow(2.0, negativeExposureEV), 0.0, 1.0);
+      float x0, y0, y1;
+      if (exposed < 0.10) {
+        x0 = 0.00; y0 = 0.989069; y1 = 0.912663;
+      } else if (exposed < 0.20) {
+        x0 = 0.10; y0 = 0.912663; y1 = 0.668040;
+      } else if (exposed < 0.30) {
+        x0 = 0.20; y0 = 0.668040; y1 = 0.603132;
+      } else if (exposed < 0.40) {
+        x0 = 0.30; y0 = 0.603132; y1 = 0.488223;
+      } else if (exposed < 0.50) {
+        x0 = 0.40; y0 = 0.488223; y1 = 0.330530;
+      } else if (exposed < 0.60) {
+        x0 = 0.50; y0 = 0.330530; y1 = 0.157710;
+      } else if (exposed < 0.70) {
+        x0 = 0.60; y0 = 0.157710; y1 = 0.105823;
+      } else if (exposed < 0.80) {
+        x0 = 0.70; y0 = 0.105823; y1 = 0.105823;
+      } else if (exposed < 0.90) {
+        x0 = 0.80; y0 = 0.105823; y1 = 0.105823;
+      } else {
+        x0 = 0.90; y0 = 0.105823; y1 = 0.067593;
+      }
+      return mix(y0, y1, (exposed - x0) * 10.0);
+    }
+
+    float calibratedColorChannel(
+      float value, float inputGain, float channel, float negativeExposureEV
+    ) {
+      float exposed = clamp(
+        value * inputGain * pow(2.0, negativeExposureEV), 0.0, 1.0);
+      vec3 y0;
+      vec3 y1;
+      float x0;
+      if (exposed < 0.1) {
+        x0 = 0.0; y0 = vec3(0.988782, 0.981603, 0.985590);
+        y1 = vec3(0.906913, 0.862303, 0.928206);
+      } else if (exposed < 0.2) {
+        x0 = 0.1; y0 = vec3(0.906913, 0.862303, 0.928206);
+        y1 = vec3(0.741342, 0.575805, 0.733601);
+      } else if (exposed < 0.3) {
+        x0 = 0.2; y0 = vec3(0.741342, 0.575805, 0.733601);
+        y1 = vec3(0.529294, 0.393775, 0.590298);
+      } else if (exposed < 0.4) {
+        x0 = 0.3; y0 = vec3(0.529294, 0.393775, 0.590298);
+        y1 = vec3(0.377395, 0.241577, 0.308451);
+      } else if (exposed < 0.5) {
+        x0 = 0.4; y0 = vec3(0.377395, 0.241577, 0.308451);
+        y1 = vec3(0.246425, 0.190320, 0.273508);
+      } else if (exposed < 0.6) {
+        x0 = 0.5; y0 = vec3(0.246425, 0.190320, 0.273508);
+        y1 = vec3(0.174431, 0.091074, 0.231637);
+      } else if (exposed < 0.7) {
+        x0 = 0.6; y0 = vec3(0.174431, 0.091074, 0.231637);
+        y1 = vec3(0.096998, 0.043509, 0.057239);
+      } else if (exposed < 0.8) {
+        x0 = 0.7; y0 = vec3(0.096998, 0.043509, 0.057239);
+        y1 = vec3(0.063358, 0.037671, 0.057239);
+      } else if (exposed < 0.9) {
+        x0 = 0.8; y0 = vec3(0.063358, 0.037671, 0.057239);
+        y1 = vec3(0.025520, 0.029825, 0.057239);
+      } else {
+        x0 = 0.9; y0 = vec3(0.025520, 0.029825, 0.057239);
+        y1 = vec3(0.025520, 0.025845, 0.057239);
+      }
+      float fraction = (exposed - x0) * 10.0;
+      vec3 result = mix(y0, y1, fraction);
+      return channel == 0.0 ? result.r : (channel == 1.0 ? result.g : result.b);
+    }
+
+    vec3 calibratedColorCurve(
+      vec3 value, vec3 inputGain, float negativeExposureEV
+    ) {
+      return vec3(
+        calibratedColorChannel(value.r, inputGain.r, 0.0, negativeExposureEV),
+        calibratedColorChannel(value.g, inputGain.g, 1.0, negativeExposureEV),
+        calibratedColorChannel(value.b, inputGain.b, 2.0, negativeExposureEV));
     }
 
     vec3 filmNegativeLinearValue(vec3 value, vec3 exponent, vec3 multiplier) {
@@ -593,6 +715,8 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       float shadowHue,
       float shadowStrength,
       float filmNegativeEnabled,
+      float filmNegativeRendering,
+      float monochromeExposureEV,
       float fnRExp,
       float fnGExp,
       float fnBExp,
@@ -617,7 +741,44 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         || abs(photoBrightness) > 0.0 || abs(photoContrast) > 0.0
         || abs(photoHighlights) > 0.0 || abs(photoShadows) > 0.0;
 
-      if (filmNegativeEnabled == 1.0) {
+      bool useCalibratedMonochrome = isBW && filmNegativeRendering == 1.0;
+      bool useCalibratedColor = !isBW && filmType == 1.0
+        && filmNegativeRendering == 2.0;
+      if (filmNegativeEnabled == 1.0 && useCalibratedMonochrome) {
+        float gray = dot(rgb, vec3(0.299, 0.587, 0.114));
+        rgb = vec3(
+          calibratedMonochromeCurve(gray, fnGMult, monochromeExposureEV));
+        if (useLinearTone) {
+          vec3 linear = displayLinearValue(rgb);
+          linear = linearToneAdjustments(
+            linear, photoExposureEV, photoBrightness, photoContrast,
+            photoHighlights, photoShadows, photoToneReference);
+          rgb = displayFromLinear(linear);
+        }
+      } else if (filmNegativeEnabled == 1.0 && useCalibratedColor) {
+        rgb = calibratedColorCurve(
+          rgb, vec3(fnRMult, fnGMult, fnBMult), monochromeExposureEV);
+        if (useDyeMixing || useLinearTone || useProtectedColor) {
+          vec3 linear = displayLinearValue(rgb);
+          if (useDyeMixing) {
+            linear = filmDyeMixing(
+              linear,
+              dyeRedFromGreen, dyeRedFromBlue,
+              dyeGreenFromRed, dyeGreenFromBlue,
+              dyeBlueFromRed, dyeBlueFromGreen);
+          }
+          if (useLinearTone) {
+            linear = linearToneAdjustments(
+              linear, photoExposureEV, photoBrightness, photoContrast,
+              photoHighlights, photoShadows, photoToneReference);
+          }
+          if (useProtectedColor) {
+            linear = protectedColor(
+              linear, photoTemperatureMired, photoTint, photoSaturation, photoVibrance);
+          }
+          rgb = displayFromLinear(linear);
+        }
+      } else if (filmNegativeEnabled == 1.0) {
         vec3 filmLinear = filmNegativeLinearValue(
           rgb, vec3(fnRExp, fnGExp, fnBExp), vec3(fnRMult, fnGMult, fnBMult));
         if (useDyeMixing) {

@@ -59,7 +59,7 @@ struct FilmDyeMixingTests {
       channels: 3,
       pixels: [8_000, 18_000, 42_000, 30_000, 34_000, 38_000]
     )
-    var filmNegative = FilmNegativeParams.colourNegative
+    var filmNegative = FilmNegativeParams.legacyColourNegative
     filmNegative.measuredMedians = BGRChannelValues(
       blue: 20_000, green: 26_000, red: 32_000)
     let mixing = FilmDyeMixingParameters(

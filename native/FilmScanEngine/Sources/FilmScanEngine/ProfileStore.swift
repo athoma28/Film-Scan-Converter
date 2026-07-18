@@ -84,7 +84,7 @@ public struct CaptureProfile: Codable, Equatable, Sendable {
 }
 
 public struct FilmStockProfile: Codable, Equatable, Sendable {
-  public static let currentSchemaVersion = 2
+  public static let currentSchemaVersion = 4
 
   public var schemaVersion: Int
   public var id: FilmStockProfileID
@@ -143,7 +143,13 @@ public struct FilmStockProfile: Codable, Equatable, Sendable {
     filmNegativeParams = try container.decodeIfPresent(
       FilmNegativeParams.self,
       forKey: .filmNegativeParams
-    ) ?? Self.defaultFilmNegativeParams(for: filmType)
+    ) ?? (
+      schemaVersion < 4 && filmType == .colourNegative
+        ? .legacyColourNegative
+        : schemaVersion < 3 && filmType == .blackAndWhiteNegative
+          ? .legacyBlackAndWhite
+          : Self.defaultFilmNegativeParams(for: filmType)
+    )
     filmNegativeParams.measuredMedians = nil
     dyeMixing = try container.decodeIfPresent(
       FilmDyeMixingParameters.self,
@@ -164,15 +170,33 @@ public struct FilmStockProfile: Codable, Equatable, Sendable {
   }
 
   public static let genericColorNegative = FilmStockProfile(
-    id: FilmStockProfileID(rawValue: "generic_colour_negative"),
+    id: FilmStockProfileID(rawValue: "generic_colour_negative_camera_raw"),
     displayName: "Generic Color Negative",
-    filmType: .colourNegative
+    filmType: .colourNegative,
+    filmNegativeParams: .colourNegative,
+    notes: "Paired Camera Raw curves with partial exposure and channel-ratio adaptation"
+  )
+
+  public static let legacyColorNegative = FilmStockProfile(
+    id: FilmStockProfileID(rawValue: "generic_colour_negative"),
+    displayName: "Generic Color Negative (Legacy)",
+    filmType: .colourNegative,
+    filmNegativeParams: .legacyColourNegative
   )
 
   public static let genericBW = FilmStockProfile(
-    id: FilmStockProfileID(rawValue: "generic_bw_negative"),
+    id: FilmStockProfileID(rawValue: "generic_bw_negative_camera_raw"),
     displayName: "Generic B&W Negative",
-    filmType: .blackAndWhiteNegative
+    filmType: .blackAndWhiteNegative,
+    filmNegativeParams: .blackAndWhite,
+    notes: "Paired Camera Raw monochrome curve with adaptive exposure anchoring"
+  )
+
+  public static let legacyBW = FilmStockProfile(
+    id: FilmStockProfileID(rawValue: "generic_bw_negative"),
+    displayName: "Generic B&W Negative (Legacy)",
+    filmType: .blackAndWhiteNegative,
+    filmNegativeParams: .legacyBlackAndWhite
   )
 }
 
@@ -377,7 +401,7 @@ public final class ProfileStore: Sendable {
   }
 
   public func builtInFilmStockProfiles() -> [FilmStockProfile] {
-    [.genericColorNegative, .genericBW]
+    [.genericColorNegative, .legacyColorNegative, .genericBW, .legacyBW]
   }
 
   // MARK: - Resolution

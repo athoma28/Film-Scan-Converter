@@ -12,7 +12,7 @@ struct RenderReadyLinearImageTests {
       channels: 3,
       pixels: [500, 750, 1_000, 32_000, 33_000, 34_000]
     )
-    var parameters = FilmNegativeParams.colourNegative
+    var parameters = FilmNegativeParams.legacyColourNegative
     parameters.measuredMedians = BGRChannelValues(blue: 32_000, green: 33_000, red: 34_000)
 
     let linear = FilmNegativeProcessing.powerLawRenderReadyLinear(
@@ -38,7 +38,7 @@ struct RenderReadyLinearImageTests {
       channels: 3,
       pixels: [12_000, 18_000, 24_000, 30_000, 36_000, 42_000]
     )
-    var parameters = FilmNegativeParams.colourNegative
+    var parameters = FilmNegativeParams.legacyColourNegative
     parameters.measuredMedians = BGRChannelValues(blue: 21_000, green: 27_000, red: 33_000)
 
     let linear = FilmNegativeProcessing.powerLawRenderReadyLinear(

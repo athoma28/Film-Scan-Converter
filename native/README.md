@@ -98,7 +98,8 @@ swift build -c release --package-path native/FilmScanEngine \
   --product FilmScanExportBenchmark
 
 native/FilmScanEngine/.build/release/FilmScanExportBenchmark \
-  sample-raw /tmp/film-scan-export.json 3 --file=DSCF0669.RAF
+  sample-raw /tmp/film-scan-export.json 3 \
+  --file=fuji400-fresh/DSCF2833.RAF
 ```
 
 The default format set is TIFF, JPEG, PNG, and DNG. Use
@@ -181,6 +182,9 @@ verify five RawPy-compatible half-size RAF decodes and one full-resolution
 decode against recorded hashes. The X-T5 regression trio additionally guards
 camera-scan previews against leaked X-Trans mosaic pixels. Each corpus-dependent
 test is explicitly disabled unless all files it needs are present.
+The corpus may be organized recursively by film stock. See
+[Reference Negative Calibration](../docs/development/reference-negative-calibration.md)
+for paired-triplet naming, fitting, and held-out stock-profile gates.
 
 Refresh compatibility fixtures only when intentionally changing a shared
 legacy contract:

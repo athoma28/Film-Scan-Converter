@@ -1,43 +1,44 @@
 # Film Scan Converter
 
-A standalone application used for processing RAW film scans from a digital camera into final images  
-![image](./docs/images/ed4f2e61-0fa0-404f-bdea-c34ea1925662.png)
+Film Scan Converter is a free, open-source macOS application for turning
+camera-scanned film negatives and slides into finished images. The current app
+is a native Swift/SwiftUI workflow with responsive previews, non-destructive
+editing, roll-wide settings, and full-resolution export.
 
-## macOS Beta
+## Current Status
 
-The native Swift application is ready for public beta use on Apple Silicon Macs
-running macOS 14 or later. Download the newest prerelease from
+**Film Scan Converter 0.1.0 Beta 1** is available for Apple Silicon Macs running
+macOS 14 or later. The native macOS app is the primary product and the only
+target for new features.
+
+The beta currently includes:
+
+- Camera RAW, TIFF, PNG, JPEG, and BMP import with fast bounded previews and an
+  optional higher-detail demosaiced RAW preview.
+- Color-negative, black-and-white-negative, slide, and crop-only workflows with
+  film-base measurement, inversion, tone and color controls, curves, and color
+  wheels.
+- Automatic frame detection, straighten, crop, four-corner perspective
+  correction, original/corrected comparison, and pan/zoom inspection.
+- Per-file settings, presets, copy/paste, apply-to-all, ordered batch export,
+  and full-resolution TIFF, JPEG, PNG, and processed-RGB DNG output.
+
+This is an ad-hoc-signed technical beta, not yet an Apple-notarized general
+release. Undo/redo and applied dust removal are not yet available; native dust
+detection is currently a diagnostic overlay only. See the
+[beta release notes](RELEASE_NOTES.md) and
+[native macOS development status](docs/development/native-macos.md) for the
+verified release position and known limitations.
+
+Download the newest prerelease from
 [GitHub Releases](https://github.com/athoma28/Film-Scan-Converter/releases),
 verify the included SHA-256 checksum, unzip it, and move **Film Scan Converter**
-to Applications.
+to Applications. On first launch, Control-click the app, choose **Open**, then
+confirm **Open**. See [Installation](docs/installation.md) for details.
 
-The first beta is ad-hoc signed because the project does not yet have an Apple
-Developer ID certificate. On first launch, Control-click the app, choose
-**Open**, then confirm **Open**. This is a transparent beta limitation, not a
-request to disable Gatekeeper. See [Installation](docs/installation.md) and the
-[beta release notes](RELEASE_NOTES.md) before using it.
-
-## Project Direction
-
-The native Swift/macOS application is the primary product and the only target
-for new features and new processing functionality. Its current capabilities,
-evidence, limitations, and release position are tracked in the
-[native macOS development status](docs/development/native-macos.md).
-The [native product roadmap](docs/improvements/MacOS-Native-Roadmap.md)
-separates first-release requirements from optional later work. Current priority
-is learning from real beta use while improving the fast, flexible photographer
-workflow—image judgment, reversible edits, roll consistency, and trustworthy
-output. Stock-look learning and calibration experiments are parked until
-explicitly resumed.
-
-The Python/Tkinter application remains available as a maintenance-only legacy
-workflow because dust removal remains Python-only and fixture tools still use
-legacy modules. Python retirement is not itself a blocker for the first native
-release. Native
-crop/perspective correction, self-contained app/ZIP assembly, and
-TIFF/JPEG/PNG/processed-RGB-DNG export are implemented. See
-[Legacy Python Application](docs/legacy-python.md) for the legacy app's limited
-role and retirement gates.
+The former Python/Tkinter application remains available as a maintenance-only
+legacy workflow, primarily for applied dust removal and existing cross-platform
+users. See [Legacy Python Application](docs/legacy-python.md).
 
 ## Documentation
 

@@ -4,7 +4,9 @@ Decode the RAFs with the application's RawPy settings, then run this script with
 
     python3 tests/benchmark_sample_raw.py --decoded-dir /tmp/film_scan_corpus
 
-The decoded directory must contain one ``<RAF stem>.npy`` file per manifest entry.
+The decoded directory mirrors the stock-relative RAF paths produced by
+``decode_sample_raw.py``. One deterministic representative is benchmarked per
+top-level stock folder.
 """
 
 import argparse
@@ -24,7 +26,7 @@ from tests.support import import_raw_processing, make_processor
 
 RawProcessing = import_raw_processing()
 
-CORPUS = {
+LEGACY_CORPUS = {
     'DSCF0669': {'film_type': 0, 'rotation': 3, 'scene': 'black-and-white night exterior'},
     'DSCF0718': {'film_type': 1, 'rotation': 1, 'scene': 'color negative outdoor daylight'},
     'DSCF0729': {'film_type': 1, 'rotation': 1, 'scene': 'color negative mixed indoor lighting'},
@@ -89,7 +91,10 @@ def presets_for(stem, film_type):
         presets['tonal_recovery_dust'] = {**BW_PRESETS['tonal_recovery'], 'remove_dust': True}
         return presets
 
-    tuned = {'base_detect': 1, **COLOR_PRESETS[stem]}
+    base = COLOR_PRESETS.get(stem)
+    if base is None:
+        return {'neutral_auto': {}}
+    tuned = {'base_detect': 1, **base}
     return {
         'neutral_auto': {},
         'manual_base': {'base_detect': 1, 'base_rgb': tuned['base_rgb']},
@@ -187,6 +192,7 @@ def benchmark_edit(raw_image, metadata, settings, repetitions):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--decoded-dir', type=Path, required=True)
+    parser.add_argument('--raw-dir', type=Path, default=Path('sample-raw'))
     parser.add_argument('--output-dir', type=Path, default=Path('/tmp/film_scan_benchmark'))
     parser.add_argument('--repetitions', type=int, default=3)
     args = parser.parse_args()
@@ -194,11 +200,36 @@ def main():
     args.output_dir.mkdir(parents=True, exist_ok=True)
     preview_dir = args.output_dir / 'previews'
     preview_dir.mkdir(exist_ok=True)
-    report = {'corpus': CORPUS, 'results': {}}
+    report = {'corpus': {}, 'results': {}}
+    decoded_files = sorted(args.decoded_dir.rglob('*.npy'))
+    representatives = {}
+    for decoded_path in decoded_files:
+        relative_path = decoded_path.relative_to(args.decoded_dir)
+        stock_id = relative_path.parts[0] if len(relative_path.parts) > 1 else '.'
+        representatives.setdefault(stock_id, decoded_path)
+    if not representatives:
+        raise SystemExit(f'No decoded .npy files found below {args.decoded_dir}')
 
-    for stem, metadata in CORPUS.items():
-        raw_image = np.load(args.decoded_dir / f'{stem}.npy')
-        report['results'][stem] = {
+    corpus = {}
+    for stock_id, decoded_path in sorted(representatives.items()):
+        relative_path = decoded_path.relative_to(args.decoded_dir)
+        identifier = relative_path.with_suffix('').as_posix()
+        stem = decoded_path.stem
+        legacy = LEGACY_CORPUS.get(stem, {})
+        xmp_path = (args.raw_dir / relative_path).with_suffix('.xmp')
+        xmp = xmp_path.read_text(errors='replace') if xmp_path.is_file() else ''
+        metadata = {
+            'film_type': legacy.get(
+                'film_type',
+                0 if 'ConvertToGrayscale="True"' in xmp else 1,
+            ),
+            'rotation': legacy.get('rotation', 0),
+            'scene': legacy.get('scene', f'{stock_id} representative'),
+        }
+        corpus[identifier] = metadata
+        raw_image = np.load(decoded_path)
+        report_key = identifier
+        report['results'][report_key] = {
             'scene': metadata['scene'],
             'decoded_shape': list(raw_image.shape),
             'decoded_bytes': raw_image.nbytes,
@@ -207,13 +238,16 @@ def main():
         for name, settings in presets_for(stem, metadata['film_type']).items():
             result, output = benchmark_edit(raw_image, metadata, settings, args.repetitions)
             result['settings'] = settings
-            report['results'][stem]['edits'][name] = result
-            render_preview(output, preview_dir / f'{stem}_{name}.jpg')
+            report['results'][report_key]['edits'][name] = result
+            preview_name = f'{identifier.replace("/", "__")}_{name}.jpg'
+            render_preview(output, preview_dir / preview_name)
             print(
-                f'{stem} {name}: '
+                f'{identifier} {name}: '
                 f'cold={result["cold_process"]["best_seconds"]:.4f}s '
                 f'warm={result["warm_process"]["best_seconds"]:.4f}s'
             )
+
+    report['corpus'] = corpus
 
     report_path = args.output_dir / 'results.json'
     report_path.write_text(json.dumps(report, indent=2))

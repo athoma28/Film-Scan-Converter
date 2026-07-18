@@ -48,11 +48,26 @@ public enum NormalizedCropCoordinateSpace: String, Codable, Equatable, Sendable 
   case legacyTransposedAxes
 }
 
+public enum FilmNegativeRendering: String, Codable, Equatable, Sendable {
+  /// The original RawTherapee-derived per-channel power-law rendering.
+  case powerLaw
+
+  /// A colour curve calibrated from manually inverted Camera Raw pairs.
+  case calibratedColor
+
+  /// A monochrome-only curve calibrated from manually inverted Camera Raw pairs.
+  case calibratedMonochrome
+}
+
 public struct FilmNegativeParams: Codable, Equatable, Sendable {
   public var enabled: Bool
   public var redRatio: Double
   public var greenExp: Double
   public var blueRatio: Double
+  public var rendering: FilmNegativeRendering
+  /// Exposure applied to the scan before a calibrated decreasing curve.
+  /// Positive values therefore produce a darker positive image.
+  public var monochromeExposureEV: Double
 
   public var measuredMedians: BGRChannelValues?
 
@@ -61,6 +76,8 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     case redRatio
     case greenExp
     case blueRatio
+    case rendering
+    case monochromeExposureEV
   }
 
   public init(
@@ -68,33 +85,83 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     redRatio: Double = 1.360,
     greenExp: Double = 1.5,
     blueRatio: Double = 0.86,
+    rendering: FilmNegativeRendering = .powerLaw,
+    monochromeExposureEV: Double = 0,
     measuredMedians: BGRChannelValues? = nil
   ) {
+    precondition(monochromeExposureEV.isFinite, "Monochrome exposure must be finite")
     self.enabled = enabled
     self.redRatio = redRatio
     self.greenExp = greenExp
     self.blueRatio = blueRatio
+    self.rendering = rendering
+    self.monochromeExposureEV = monochromeExposureEV
     self.measuredMedians = measuredMedians
   }
 
-  public static let colourNegative = FilmNegativeParams(
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+    redRatio = try container.decodeIfPresent(Double.self, forKey: .redRatio) ?? 1.360
+    greenExp = try container.decodeIfPresent(Double.self, forKey: .greenExp) ?? 1.5
+    blueRatio = try container.decodeIfPresent(Double.self, forKey: .blueRatio) ?? 0.86
+    // Profiles and per-file settings written before this field existed used
+    // the power-law renderer. Preserve that appearance during migration.
+    rendering = try container.decodeIfPresent(
+      FilmNegativeRendering.self, forKey: .rendering
+    ) ?? .powerLaw
+    monochromeExposureEV = try container.decodeIfPresent(
+      Double.self, forKey: .monochromeExposureEV
+    ) ?? 0
+    measuredMedians = nil
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(enabled, forKey: .enabled)
+    try container.encode(redRatio, forKey: .redRatio)
+    try container.encode(greenExp, forKey: .greenExp)
+    try container.encode(blueRatio, forKey: .blueRatio)
+    try container.encode(rendering, forKey: .rendering)
+    try container.encode(monochromeExposureEV, forKey: .monochromeExposureEV)
+  }
+
+  public static let legacyColourNegative = FilmNegativeParams(
     enabled: true, redRatio: 1.360, greenExp: 1.5, blueRatio: 0.86
   )
-  public static let blackAndWhite = FilmNegativeParams(
+  public static let colourNegative = FilmNegativeParams(
+    enabled: true,
+    redRatio: 1.360,
+    greenExp: 1.5,
+    blueRatio: 0.86,
+    rendering: .calibratedColor
+  )
+  public static let legacyBlackAndWhite = FilmNegativeParams(
     enabled: true, redRatio: 1.0, greenExp: 1.5, blueRatio: 1.0
+  )
+  public static let blackAndWhite = FilmNegativeParams(
+    enabled: true,
+    redRatio: 1.0,
+    greenExp: 1.5,
+    blueRatio: 1.0,
+    rendering: .calibratedMonochrome
   )
 }
 
 public enum FilmNegativePreset: Int, CaseIterable, Hashable, Sendable {
   case off
   case colourNegative
+  case legacyColourNegative
   case blackAndWhite
+  case legacyBlackAndWhite
 
   public var displayName: String {
     switch self {
     case .off: "Off"
     case .colourNegative: "Color Negative"
+    case .legacyColourNegative: "Color Negative (Legacy)"
     case .blackAndWhite: "Black & White"
+    case .legacyBlackAndWhite: "Black & White (Legacy)"
     }
   }
 }

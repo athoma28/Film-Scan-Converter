@@ -7,7 +7,7 @@ The native application is the primary product. It provides:
 
 - Drag-and-drop import of RAW and standard image files.
 - Per-file correction controls: film mode (color negative, B&W negative, slide),
-  film-negative inversion using RawTherapee's exponent model and presets,
+  paired-scan-calibrated color and monochrome inversion plus legacy exponent presets,
   orientation, white balance, exposure, shadows, highlights, saturation,
   RGB tone curves, highlight/midtone/shadow color wheels.
 - Camera-scan RAW processing with ISO-tier noise/detail filtering. Browsing
@@ -46,6 +46,16 @@ The native application is the primary product. It provides:
    magnification in steps.
 3. New files are automatically classified as color negative, B&W negative, or
    slide. Review and adjust the film mode and film negative preset as needed.
+   **Color Negative** uses paired RAF/JPEG/XMP Camera Raw curves with partial
+   exposure and channel-ratio adaptation. It stabilizes tone across negative
+   densities while retaining more scene color than full median balancing;
+   **Color Negative (Legacy)** retains the former exponent renderer.
+   **Black & White** uses a paired-scan calibrated monochrome curve with full
+   exposure anchoring so frames from one roll do not sit on an overexposed
+   highlight plateau. **Black & White (Legacy)** preserves the old rendering.
+   Under **Advanced profile tuning**, **Negative Exposure** moves a calibrated
+   color or B&W scan before inversion; positive values make the resulting
+   positive darker.
 4. Adjust corrections in the inspector panel: orientation, white balance,
    semantic exposure/brightness/contrast/highlights/shadows, temperature/tint,
    saturation, vibrance, curves, and color wheels.
@@ -63,7 +73,7 @@ The native application is the primary product. It provides:
    subtract an unwanted crossover cast, or a positive value to add that source
    channel. The matrix operates before tone and grading and preserves neutral
    gray, so it can correct relationships that Temperature/Tint or the three
-   exponent controls cannot. **Reset Dye Crossover** returns to the exact
+   legacy exponent controls cannot. **Reset Dye Crossover** returns to the exact
    neutral matrix.
 6. Use the Settings section to copy or paste a look, or save, apply, and delete
    named presets. After applying a named preset or **Kodachrome-like Auto**, use
@@ -72,11 +82,14 @@ The native application is the primary product. It provides:
    destination scan's rotation, crop, and measured film-base state.
 7. In **Processing Profiles**, a saved Film-Stock Profile captures the current
    negative exponents, dye-crossover matrix, density response, and display
-   rendering settings. These are user-created priors; the app does not yet
-   claim calibrated built-in profiles for individual stocks.
+   rendering settings. The generic color and B&W profiles are calibrated from
+   paired RAW/JPEG/XMP references, while user-created profiles remain the route
+   for individual stocks and capture setups. The app does not claim calibrated
+   built-in profiles for individual color stocks.
 8. In Film Base, optionally load a matching flat field and measure a clear,
    unexposed film edge automatically or by dragging over it. This enables the
-   measured density pipeline for negative conversion.
+   measured density pipeline for negative conversion and replaces the generic
+   paired-scan curve for that file.
 9. In Film Frame, choose **Straighten**, click two points along a horizon or
    vertical edge, and the app rotates the canvas to make that guide horizontal
    or vertical. Choose **Crop** and drag a box over the area to keep; the preview

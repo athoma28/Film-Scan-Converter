@@ -11,11 +11,13 @@ The [native product roadmap](../improvements/MacOS-Native-Roadmap.md) is the
 single ordered plan. It separates work required before the first public release
 from evidence-driven post-release candidates and explicitly unplanned ideas.
 
-The [film-processing research](../film-processing-research.md) and
-[density-matrix calibration contract](density-matrix-calibration.md) are parked
-reference material. They preserve the capture-aware color-science work already
-done, but corpus preparation, named-stock fitting, residual LUTs, and ML work
-are not active priorities unless the project owner explicitly resumes them.
+The [film-processing research](../film-processing-research.md) remains parked
+reference material. The opt-in
+[density-matrix calibration contract](density-matrix-calibration.md) and
+[reference negative calibrator](reference-negative-calibration.md) preserve the
+repeatable offline fitting and held-out gates used by current profiles. Named
+stock profiles are still evidence-driven rather than an automatic consequence
+of adding a stock folder; residual LUTs and ML work are not active priorities.
 
 The [native RAW decode and quality benchmark](native-raw-benchmark.md) records
 the eight-file `rawPyCompatibility` decode snapshot. The local regression

@@ -40,12 +40,7 @@ let rawDirectory = URL(fileURLWithPath: arguments[1], isDirectory: true)
 let outputURL = URL(fileURLWithPath: arguments[2])
 let repetitions = arguments.dropFirst(3).compactMap(Int.init).first ?? 3
 let fullResolution = arguments.contains("--full-resolution")
-let files = try FileManager.default.contentsOfDirectory(
-  at: rawDirectory,
-  includingPropertiesForKeys: nil
-).filter { $0.pathExtension.lowercased() == "raf" }.sorted {
-  $0.lastPathComponent < $1.lastPathComponent
-}
+let files = try RecursiveFileDiscovery.files(under: rawDirectory, extensions: ["raf"])
 
 guard !files.isEmpty else {
   FileHandle.standardError.write(Data("No RAF files found in \(rawDirectory.path)\n".utf8))
@@ -64,7 +59,7 @@ for file in files {
   let decoded = result!.image
   let metrics = metrics(for: decoded)
   let benchmark = BenchmarkResult(
-    file: file.lastPathComponent,
+    file: file.path.replacingOccurrences(of: rawDirectory.path + "/", with: ""),
     decoder: result!.decoderVersion,
     fullResolution: fullResolution,
     shape: [decoded.height, decoded.width, decoded.channels],

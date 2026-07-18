@@ -303,6 +303,27 @@ public enum FilmNegativeProcessing {
     return lut
   }()
 
+  private static let calibratedColorReferenceMedians = BGRChannelValues(
+    blue: 20_441,
+    green: 18_792,
+    red: 27_054.5
+  )
+  private static let calibratedColorExposureNormalization = 0.5
+  private static let calibratedColorRatioNormalization = 0.25
+  private static let calibratedColorCurves = [
+    [0.985590, 0.928206, 0.733601, 0.590298, 0.308451, 0.273508,
+      0.231637, 0.057239, 0.057239, 0.057239, 0.057239],
+    [0.981603, 0.862303, 0.575805, 0.393775, 0.241577, 0.190320,
+      0.091074, 0.043509, 0.037671, 0.029825, 0.025845],
+    [0.988782, 0.906913, 0.741342, 0.529294, 0.377395, 0.246425,
+      0.174431, 0.096998, 0.063358, 0.025520, 0.025520],
+  ]
+  private static let calibratedMonochromeReferenceGreenMedian = 28_685.0
+  private static let calibratedMonochromeCurve = [
+    0.989069, 0.912663, 0.668040, 0.603132, 0.488223, 0.330530,
+    0.157710, 0.105823, 0.105823, 0.105823, 0.067593,
+  ]
+
   // ── Fused power-law inversion (UInt16 → UInt16, single pass) ──
 
   /// Applies power-law film negative inversion and display encoding in a single
@@ -481,6 +502,249 @@ public enum FilmNegativeProcessing {
       output[base + 2] = displayEncodedFilmNegativeValue(srgbR)
     }
     return UInt16Image(width: image.width, height: image.height, channels: 3, pixels: output)
+  }
+
+  /// Camera Raw-inspired colour inversion calibrated from recursively
+  /// discovered RAF/JPEG/XMP triplets. A half-strength exposure anchor keeps
+  /// different negative densities in a usable tonal range, while quarter-
+  /// strength channel-ratio anchoring retains more scene colour than the
+  /// legacy renderer's full per-channel median normalization.
+  public static func calibratedColorToneCurve(
+    _ value: Double,
+    channel: Int,
+    negativeExposureEV: Double = 0,
+    measuredMedians: BGRChannelValues? = nil
+  ) -> Double {
+    precondition((0..<3).contains(channel), "Calibrated colour channel must be BGR 0...2")
+    let gains = calibratedColorInputGains(measuredMedians: measuredMedians)
+    let channelGains = [gains.blue, gains.green, gains.red]
+    return calibratedCurveValue(
+      value,
+      curve: calibratedColorCurves[channel],
+      inputGain: channelGains[channel],
+      negativeExposureEV: negativeExposureEV
+    )
+  }
+
+  /// Per-frame gains used by both CPU and GPU renderers. Exposure adaptation
+  /// uses only the green median; channel ratios are corrected more gently so
+  /// mixed light and dusk colour are not forced to neutral.
+  public static func calibratedColorInputGains(
+    measuredMedians: BGRChannelValues?
+  ) -> BGRChannelValues {
+    guard let medians = measuredMedians else {
+      return BGRChannelValues(blue: 1, green: 1, red: 1)
+    }
+    let exposure = pow(
+      calibratedColorReferenceMedians.green / max(medians.green, 1),
+      calibratedColorExposureNormalization
+    )
+    func channelGain(frame: Double, reference: Double) -> Double {
+      let frameRatio = max(frame, 1) / max(medians.green, 1)
+      let referenceRatio = reference / calibratedColorReferenceMedians.green
+      return exposure * pow(
+        referenceRatio / frameRatio,
+        calibratedColorRatioNormalization
+      )
+    }
+    return BGRChannelValues(
+      blue: channelGain(
+        frame: medians.blue,
+        reference: calibratedColorReferenceMedians.blue
+      ),
+      green: exposure,
+      red: channelGain(
+        frame: medians.red,
+        reference: calibratedColorReferenceMedians.red
+      )
+    )
+  }
+
+  public static func calibratedMonochromeInputGain(
+    measuredMedians: BGRChannelValues?
+  ) -> Double {
+    guard let medians = measuredMedians else { return 1 }
+    return calibratedMonochromeReferenceGreenMedian / max(medians.green, 1)
+  }
+
+  public static func applyCalibratedColorInversion(
+    image: UInt16Image,
+    params: FilmNegativeParams
+  ) -> UInt16Image {
+    precondition(image.channels == 3, "Calibrated colour inversion requires BGR input")
+    let pixelCount = image.width * image.height
+    var output = [UInt16](repeating: 0, count: image.pixels.count)
+    let adaptiveGains = calibratedColorInputGains(
+      measuredMedians: params.measuredMedians
+    )
+    let channelGains = [adaptiveGains.blue, adaptiveGains.green, adaptiveGains.red]
+    let luts: [[UInt16]] = (0..<3).map { channel in
+      (0...65_535).map { codeValue in
+        UInt16(
+          min(
+            max(
+              calibratedCurveValue(
+                Double(codeValue) / maxOutput,
+                curve: calibratedColorCurves[channel],
+                inputGain: channelGains[channel],
+                negativeExposureEV: params.monochromeExposureEV
+              ) * maxOutput,
+              0
+            ),
+            maxOutput
+          )
+        )
+      }
+    }
+
+    @Sendable func processPixel(_ pixelIndex: Int, output: UnsafeMutablePointer<UInt16>) {
+      let base = pixelIndex * 3
+      output[base] = luts[0][Int(image.pixels[base])]
+      output[base + 1] = luts[1][Int(image.pixels[base + 1])]
+      output[base + 2] = luts[2][Int(image.pixels[base + 2])]
+    }
+
+    let workerCount = min(8, ProcessInfo.processInfo.activeProcessorCount)
+    output.withUnsafeMutableBufferPointer { buffer in
+      guard let baseAddress = buffer.baseAddress else { return }
+      if pixelCount >= fusedPowerLawParallelPixelThreshold, workerCount > 1 {
+        let sendableBuffer = SendableMutableBuffer(baseAddress)
+        let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
+        DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
+          let start = worker * pixelsPerWorker
+          let end = min(start + pixelsPerWorker, pixelCount)
+          guard start < end else { return }
+          for pixelIndex in start..<end {
+            processPixel(pixelIndex, output: sendableBuffer.baseAddress)
+          }
+        }
+      } else {
+        for pixelIndex in 0..<pixelCount {
+          processPixel(pixelIndex, output: baseAddress)
+        }
+      }
+    }
+    return UInt16Image(width: image.width, height: image.height, channels: 3, pixels: output)
+  }
+
+  public static func applyCalibratedColorInversion(
+    image: UInt16Image,
+    negativeExposureEV: Double = 0
+  ) -> UInt16Image {
+    var params = FilmNegativeParams.colourNegative
+    params.monochromeExposureEV = negativeExposureEV
+    return applyCalibratedColorInversion(image: image, params: params)
+  }
+
+  /// Camera Raw-inspired monochrome inversion calibrated from paired scans.
+  /// Full green-median exposure anchoring is intentional: the fixed predecessor
+  /// left most scan values on an almost-white plateau, producing severe and
+  /// frame-dependent overexposure even within one Shanghai GP3 roll.
+  public static func calibratedMonochromeToneCurve(
+    _ value: Double,
+    negativeExposureEV: Double = 0,
+    measuredMedians: BGRChannelValues? = nil
+  ) -> Double {
+    return calibratedCurveValue(
+      value,
+      curve: calibratedMonochromeCurve,
+      inputGain: calibratedMonochromeInputGain(measuredMedians: measuredMedians),
+      negativeExposureEV: negativeExposureEV
+    )
+  }
+
+  /// Applies the calibrated monochrome curve in display-encoded scan space.
+  /// A per-render LUT keeps full-resolution exports inexpensive and ensures
+  /// every source value maps monotonically without early black clipping.
+  public static func applyCalibratedMonochromeInversion(
+    image: UInt16Image,
+    params: FilmNegativeParams
+  ) -> UInt16Image {
+    precondition(image.channels == 3, "Monochrome inversion requires 3-channel BGR image")
+
+    let inputGain = calibratedMonochromeInputGain(
+      measuredMedians: params.measuredMedians
+    )
+    let lut = (0...65_535).map { input in
+      UInt16(
+        min(
+          max(
+            calibratedCurveValue(
+              Double(input) / maxOutput,
+              curve: calibratedMonochromeCurve,
+              inputGain: inputGain,
+              negativeExposureEV: params.monochromeExposureEV
+            ) * maxOutput,
+            0
+          ),
+          maxOutput
+        ).rounded()
+      )
+    }
+    let pixelCount = image.width * image.height
+    var output = [UInt16](repeating: 0, count: image.pixels.count)
+
+    @Sendable func processPixel(_ pixelIndex: Int, output: UnsafeMutablePointer<UInt16>) {
+      let base = pixelIndex * 3
+      let blue = Double(image.pixels[base])
+      let green = Double(image.pixels[base + 1])
+      let red = Double(image.pixels[base + 2])
+      let gray = Int(min(max(0.114 * blue + 0.587 * green + 0.299 * red, 0), maxOutput))
+      let rendered = lut[gray]
+      output[base] = rendered
+      output[base + 1] = rendered
+      output[base + 2] = rendered
+    }
+
+    let workerCount = min(8, ProcessInfo.processInfo.activeProcessorCount)
+    output.withUnsafeMutableBufferPointer { buffer in
+      guard let baseAddress = buffer.baseAddress else { return }
+      if pixelCount >= fusedPowerLawParallelPixelThreshold, workerCount > 1 {
+        let sendableBuffer = SendableMutableBuffer(baseAddress)
+        let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
+        DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
+          let start = worker * pixelsPerWorker
+          let end = min(start + pixelsPerWorker, pixelCount)
+          guard start < end else { return }
+          for pixelIndex in start..<end {
+            processPixel(pixelIndex, output: sendableBuffer.baseAddress)
+          }
+        }
+      } else {
+        for pixelIndex in 0..<pixelCount {
+          processPixel(pixelIndex, output: baseAddress)
+        }
+      }
+    }
+
+    return UInt16Image(
+      width: image.width,
+      height: image.height,
+      channels: image.channels,
+      pixels: output
+    )
+  }
+
+  public static func applyCalibratedMonochromeInversion(
+    image: UInt16Image,
+    negativeExposureEV: Double = 0
+  ) -> UInt16Image {
+    var params = FilmNegativeParams.blackAndWhite
+    params.monochromeExposureEV = negativeExposureEV
+    return applyCalibratedMonochromeInversion(image: image, params: params)
+  }
+
+  private static func calibratedCurveValue(
+    _ value: Double,
+    curve: [Double],
+    inputGain: Double,
+    negativeExposureEV: Double
+  ) -> Double {
+    let exposed = min(max(value * inputGain * exp2(negativeExposureEV), 0), 1)
+    let position = exposed * Double(curve.count - 1)
+    let lower = min(Int(position), curve.count - 2)
+    let fraction = position - Double(lower)
+    return curve[lower] + (curve[lower + 1] - curve[lower]) * fraction
   }
 
   public static func normalizedTransmittance(

@@ -32,7 +32,19 @@ def decode(path, full_resolution):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--raw-dir', type=Path, default=Path('sample-raw'))
-    parser.add_argument('--full-resolution-file', default='DSCF0718.RAF')
+    parser.add_argument(
+        '--file',
+        action='append',
+        dest='files',
+        help=(
+            'Relative RAF path to include; repeat for a compact representative '
+            'corpus. Defaults to every RAF below --raw-dir.'
+        ),
+    )
+    parser.add_argument(
+        '--full-resolution-file',
+        help='Relative path or unambiguous basename; defaults to the first selected RAF.',
+    )
     parser.add_argument(
         '--output',
         type=Path,
@@ -43,28 +55,52 @@ def main():
     )
     args = parser.parse_args()
 
+    all_raws = sorted(
+        candidate
+        for candidate in args.raw_dir.rglob('*')
+        if candidate.is_file() and candidate.suffix.lower() == '.raf'
+    )
+
+    def resolve_file(filename):
+        relative = args.raw_dir / filename
+        if relative.is_file():
+            return relative
+        matches = [path for path in all_raws if path.name == filename]
+        if len(matches) != 1:
+            description = 'not found' if not matches else 'ambiguous'
+            raise SystemExit(f'RAF {filename} is {description} below {args.raw_dir}')
+        return matches[0]
+
+    selected_raws = (
+        [resolve_file(filename) for filename in args.files]
+        if args.files
+        else all_raws
+    )
     entries = []
-    for path in sorted(args.raw_dir.glob('*.RAF')):
+    for path in selected_raws:
         image, color_description = decode(path, full_resolution=False)
+        relative_path = path.relative_to(args.raw_dir).as_posix()
         entries.append(
             {
-                'file': path.name,
+                'file': relative_path,
                 'shape': list(image.shape),
                 'sha256': hashlib.sha256(image.tobytes(order='C')).hexdigest(),
                 'colorDescription': color_description,
             }
         )
-        print(f'{path.name}: {image.shape} {entries[-1]["sha256"]}')
+        print(f'{relative_path}: {image.shape} {entries[-1]["sha256"]}')
 
     if not entries:
         raise SystemExit(f'No RAF files found in {args.raw_dir}')
 
-    full_path = args.raw_dir / args.full_resolution_file
-    if not full_path.exists():
-        raise SystemExit(f'Full-resolution reference file not found: {full_path}')
+    full_path = (
+        resolve_file(args.full_resolution_file)
+        if args.full_resolution_file
+        else selected_raws[0]
+    )
     full_image, full_color_description = decode(full_path, full_resolution=True)
     full_resolution = {
-        'file': full_path.name,
+        'file': full_path.relative_to(args.raw_dir).as_posix(),
         'shape': list(full_image.shape),
         'sha256': hashlib.sha256(full_image.tobytes(order='C')).hexdigest(),
         'colorDescription': full_color_description,

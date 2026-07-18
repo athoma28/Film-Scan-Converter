@@ -29,7 +29,9 @@ half-size RAF decodes plus one full-resolution decode. The Swift LibRaw tests
 consume that manifest and require exact RawPy equality when `sample-raw/` is
 present. When the untracked RAF corpus is absent, corpus-specific Swift tests
 are reported as disabled with an explicit reason rather than silently passing.
-The RAF files remain outside version control.
+The RAF files remain outside version control. Discovery is recursive so the
+corpus can be organized by film stock; manifests and benchmark reports store
+root-relative paths, and ambiguous historical basenames are rejected.
 
 Performance benchmarks are opt-in so normal test runs remain stable:
 
@@ -47,10 +49,18 @@ swift run -c release --package-path native/FilmScanEngine \
 
 Benchmarks report best-of-several timings and do not enforce hardware-specific timing thresholds.
 
-The representative RAF corpus benchmark uses decoded 16-bit BGR arrays:
+The representative RAF corpus benchmark uses decoded 16-bit BGR arrays and
+automatically selects the first root-relative frame in each top-level stock
+folder. XMP grayscale metadata selects the B&W processing path.
 
 ```sh
-.venv/bin/python tests/generate_raw_decode_reference.py
+.venv/bin/python tests/generate_raw_decode_reference.py \
+  --file misc/DSCF2819.RAF \
+  --file fuji400-fresh/DSCF2833.RAF \
+  --file fuji200-expired/DSCF3160.RAF \
+  --file shanghaigp3/DSCF3200.RAF \
+  --file cinestill800t/DSCF3247.RAF \
+  --full-resolution-file fuji400-fresh/DSCF2833.RAF
 
 .venv/bin/python tests/decode_sample_raw.py \
   --raw-dir sample-raw \

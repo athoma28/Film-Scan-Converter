@@ -37,7 +37,12 @@ features.
 
 - Automatic initial classification as color negative, B&W negative, or slide,
   without overwriting saved per-file choices.
-- RawTherapee-compatible power-law film-negative inversion.
+- A default color-negative inversion calibrated from paired RAF/JPEG/XMP
+  Camera Raw edits. It uses a half-strength per-frame exposure anchor and a
+  quarter-strength channel-ratio anchor: enough adaptation to keep differently
+  exposed negatives usable without forcing mixed-light and dusk frames fully
+  neutral. The former RawTherapee-compatible exponent rendering remains
+  available as **Color Negative (Legacy)**.
 - An optional capture-aware density pipeline with film-base measurement,
   flat-field calibration, capture/stock/roll profiles, and a 3x3-plus-offset
   density-correction slot stored in capture profiles. An offline
@@ -75,9 +80,16 @@ features.
 ### Batch And Settings Workflow
 
 - Per-file correction settings persisted across launches.
-- User film-stock profiles preserve the current negative exponents, dye-
+- User film-stock profiles preserve the current negative rendering, exponents, dye-
   crossover correction, density response, and display rendering settings.
   The app does not ship unvalidated stock-specific color matrices.
+- The generic B&W profile uses a paired RAW/JPEG/XMP-calibrated decreasing
+  curve, full per-frame exposure anchoring, and a negative-side exposure
+  control. The former B&W power-law rendering remains selectable as
+  **Generic B&W Negative (Legacy)**.
+- The generic color profile likewise uses paired Camera Raw color curves and a
+  negative-side exposure control. Its legacy profile retains the former
+  scene-median-normalized exponent rendering for existing looks.
 - Named presets and versioned system-clipboard copy/paste, with a one-step
   remove action that restores the adjustments from before the last applied
   preset while retaining frame-specific geometry.

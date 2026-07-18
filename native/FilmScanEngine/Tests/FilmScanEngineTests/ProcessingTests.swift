@@ -235,7 +235,7 @@ struct ProcessingTests {
       width: 2,
       height: 1,
       channels: 3,
-      pixels: [0, 512, 1024, 1025, 1025, 1025]
+      pixels: [0, 512, 1024, 10_000, 10_000, 10_000]
     )
     var filmNegative = FilmNegativeParams.colourNegative
     filmNegative.measuredMedians = BGRChannelValues(blue: 20_000, green: 20_000, red: 20_000)
@@ -828,6 +828,131 @@ struct ProcessingTests {
     #expect(lastPixel < firstPixel, "Dense (dark) areas should become bright, clear (bright) areas should become dark")
   }
 
+  @Test("Calibrated monochrome curve follows paired Camera Raw reference tonality")
+  func calibratedMonochromeReferenceCurve() {
+    let expected: [Double] = [
+      0.989069, 0.912663, 0.668040, 0.603132, 0.488223, 0.330530,
+      0.157710, 0.105823, 0.105823, 0.105823, 0.067593,
+    ]
+    let actual = (0...10).map {
+      FilmNegativeProcessing.calibratedMonochromeToneCurve(Double($0) / 10)
+    }
+
+    for (value, reference) in zip(actual, expected) {
+      #expect(abs(value - reference) < 0.001)
+    }
+    #expect(actual == actual.sorted(by: >))
+    #expect(actual.last! > 0.06)
+  }
+
+  @Test("Calibrated color curves retain density-dependent channel separation")
+  func calibratedColorReferenceCurves() {
+    let blue = (0...10).map {
+      FilmNegativeProcessing.calibratedColorToneCurve(Double($0) / 10, channel: 0)
+    }
+    let green = (0...10).map {
+      FilmNegativeProcessing.calibratedColorToneCurve(Double($0) / 10, channel: 1)
+    }
+    let red = (0...10).map {
+      FilmNegativeProcessing.calibratedColorToneCurve(Double($0) / 10, channel: 2)
+    }
+
+    #expect(blue == blue.sorted(by: >))
+    #expect(green == green.sorted(by: >))
+    #expect(red == red.sorted(by: >))
+    #expect(red[8] > blue[8])
+    #expect(blue[8] > green[8])
+    #expect(red[0] > blue[0] && blue[0] > green[0])
+    #expect(green[0] > 0.98)
+  }
+
+  @Test("Calibrated color negative exposure acts before inversion")
+  func calibratedColorNegativeExposure() {
+    for channel in 0..<3 {
+      let neutral = FilmNegativeProcessing.calibratedColorToneCurve(0.5, channel: channel)
+      let denser = FilmNegativeProcessing.calibratedColorToneCurve(
+        0.5, channel: channel, negativeExposureEV: 1)
+      let thinner = FilmNegativeProcessing.calibratedColorToneCurve(
+        0.5, channel: channel, negativeExposureEV: -1)
+      #expect(denser < neutral)
+      #expect(thinner > neutral)
+    }
+  }
+
+  @Test("Calibrated monochrome negative exposure acts before inversion")
+  func calibratedMonochromeNegativeExposure() {
+    let neutral = FilmNegativeProcessing.calibratedMonochromeToneCurve(0.5)
+    let denser = FilmNegativeProcessing.calibratedMonochromeToneCurve(
+      0.5, negativeExposureEV: 1)
+    let thinner = FilmNegativeProcessing.calibratedMonochromeToneCurve(
+      0.5, negativeExposureEV: -1)
+
+    #expect(denser < neutral)
+    #expect(thinner > neutral)
+  }
+
+  @Test("Calibrated profiles adapt exposure without fully neutralizing color ratios")
+  func calibratedProfileMedianAdaptation() {
+    let reference = BGRChannelValues(blue: 20_441, green: 18_792, red: 27_054.5)
+    let referenceGains = FilmNegativeProcessing.calibratedColorInputGains(
+      measuredMedians: reference
+    )
+    #expect(abs(referenceGains.blue - 1) < 1e-12)
+    #expect(abs(referenceGains.green - 1) < 1e-12)
+    #expect(abs(referenceGains.red - 1) < 1e-12)
+
+    let denserScan = BGRChannelValues(
+      blue: reference.blue * 2,
+      green: reference.green * 2,
+      red: reference.red * 2
+    )
+    let adapted = FilmNegativeProcessing.calibratedColorInputGains(
+      measuredMedians: denserScan
+    )
+    let expectedHalfStrength = 1 / sqrt(2.0)
+    #expect(abs(adapted.blue - expectedHalfStrength) < 1e-12)
+    #expect(abs(adapted.green - expectedHalfStrength) < 1e-12)
+    #expect(abs(adapted.red - expectedHalfStrength) < 1e-12)
+
+    let monochromeGain = FilmNegativeProcessing.calibratedMonochromeInputGain(
+      measuredMedians: BGRChannelValues(blue: 40_000, green: 57_370, red: 22_000)
+    )
+    #expect(abs(monochromeGain - 0.5) < 1e-12)
+  }
+
+  @Test("Calibrated monochrome renderer stays neutral and avoids black clipping")
+  func calibratedMonochromeRendererRetainsTonality() {
+    let samples: [UInt16] = [0, 6_554, 13_107, 26_214, 39_321, 52_428, 65_535]
+    let image = UInt16Image(
+      width: samples.count,
+      height: 1,
+      channels: 3,
+      pixels: samples.flatMap { [$0, $0, $0] }
+    )
+    let output = FilmNegativeProcessing.applyCalibratedMonochromeInversion(image: image)
+    let values = stride(from: 0, to: output.pixels.count, by: 3).map { output.pixels[$0] }
+
+    #expect(values == values.sorted(by: >))
+    #expect(values.last! > 4_000)
+    #expect(values.first! > 64_000)
+    for pixelIndex in 0..<samples.count {
+      let base = pixelIndex * 3
+      #expect(output.pixels[base] == output.pixels[base + 1])
+      #expect(output.pixels[base + 1] == output.pixels[base + 2])
+    }
+  }
+
+  @Test("Pre-calibration film-negative settings migrate to the legacy renderer")
+  func legacyBlackAndWhiteRenderingMigration() throws {
+    let json = Data(
+      #"{"enabled":true,"redRatio":1,"greenExp":1.5,"blueRatio":1}"#.utf8)
+    let decoded = try JSONDecoder().decode(FilmNegativeParams.self, from: json)
+
+    #expect(decoded.rendering == .powerLaw)
+    #expect(decoded.monochromeExposureEV == 0)
+    #expect(decoded == .legacyBlackAndWhite)
+  }
+
   @Test("Power-law film negative maps the median through RawTherapee display output")
   func filmNegativeMultiplierCalibration() {
     var pixels = [UInt16](repeating: 10000, count: 32 * 32 * 3)
@@ -1062,7 +1187,7 @@ struct ProcessingTests {
       channels: 3,
       pixels: [8_000, 18_000, 42_000, 30_000, 34_000, 38_000]
     )
-    var filmNegative = FilmNegativeParams.colourNegative
+    var filmNegative = FilmNegativeParams.legacyColourNegative
     filmNegative.measuredMedians = BGRChannelValues(blue: 20_000, green: 26_000, red: 32_000)
     let adjustments = PhotoAdjustmentParameters(
       temperatureShiftMired: 35,
@@ -1094,7 +1219,7 @@ struct ProcessingTests {
       UInt16(truncatingIfNeeded: index &* 7_919 &+ 12_347)
     }
     let image = UInt16Image(width: width, height: height, channels: 3, pixels: pixels)
-    var parameters = FilmNegativeParams.colourNegative
+    var parameters = FilmNegativeParams.legacyColourNegative
     parameters.measuredMedians = BGRChannelValues(
       blue: 21_000,
       green: 28_000,
@@ -1217,7 +1342,7 @@ struct ProcessingTests {
     })
   }
 
-  @Test("Semantic light controls affect power-law black-and-white negatives")
+  @Test("Semantic light controls affect calibrated black-and-white negatives")
   func semanticToneControlsAffectBlackAndWhiteNegatives() {
     let image = UInt16Image(
       width: 2, height: 1, channels: 3,

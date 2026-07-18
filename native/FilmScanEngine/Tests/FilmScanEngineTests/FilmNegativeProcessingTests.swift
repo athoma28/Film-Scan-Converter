@@ -967,8 +967,28 @@ struct FilmNegativeProcessingTests {
       from: Data(oldDocument.utf8)
     )
 
-    #expect(decoded.filmNegativeParams == .colourNegative)
+    #expect(decoded.filmNegativeParams == .legacyColourNegative)
     #expect(decoded.dyeMixing == .neutral)
+  }
+
+  @Test("Older B&W film-stock profiles retain legacy tonality")
+  func blackAndWhiteFilmStockProfileMigration() throws {
+    let oldDocument = """
+      {
+        "schemaVersion": 2,
+        "id": "older-bw-stock",
+        "displayName": "Older B&W Stock",
+        "filmType": 0
+      }
+      """
+
+    let decoded = try JSONDecoder().decode(
+      FilmStockProfile.self,
+      from: Data(oldDocument.utf8)
+    )
+
+    #expect(decoded.filmNegativeParams == .legacyBlackAndWhite)
+    #expect(decoded.schemaVersion == 2)
   }
 
   @Test("RollProfile codable round-trip uses type-safe profile IDs")
@@ -1240,14 +1260,20 @@ struct FilmNegativeProcessingTests {
     #expect(builtIns.contains(CaptureProfile.default))
   }
 
-  @Test("FilmStockProfile built-in list includes both generics")
-  func builtInFilmStockProfilesIncludesBothGenerics() {
+  @Test("FilmStockProfile built-ins include calibrated and legacy negative profiles")
+  func builtInFilmStockProfilesIncludeCalibratedAndLegacyProfiles() {
     let dir = temporaryProfileDirectory()
     defer { try? FileManager.default.removeItem(at: dir) }
     let store = ProfileStore(baseDirectory: dir)
     let builtIns = store.builtInFilmStockProfiles()
     #expect(builtIns.contains(FilmStockProfile.genericColorNegative))
+    #expect(builtIns.contains(FilmStockProfile.legacyColorNegative))
     #expect(builtIns.contains(FilmStockProfile.genericBW))
+    #expect(builtIns.contains(FilmStockProfile.legacyBW))
+    #expect(FilmStockProfile.genericBW.filmNegativeParams.rendering == .calibratedMonochrome)
+    #expect(FilmStockProfile.legacyBW.filmNegativeParams.rendering == .powerLaw)
+    #expect(FilmStockProfile.genericColorNegative.filmNegativeParams.rendering == .calibratedColor)
+    #expect(FilmStockProfile.legacyColorNegative.filmNegativeParams.rendering == .powerLaw)
   }
 
   @Test("ProfileStore lists saved capture profile IDs")

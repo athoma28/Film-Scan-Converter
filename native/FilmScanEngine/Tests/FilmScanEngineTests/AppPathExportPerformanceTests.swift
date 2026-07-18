@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import FilmScanEngine
 import Testing
 
 @testable import FilmScanConverterMac
@@ -110,12 +111,10 @@ struct AppPathExportPerformanceTests {
   )
   func measureSequentialExportAndCancellation() async throws {
     let rawDirectory = appPathExportBenchmarkRepositoryRoot.appending(path: "sample-raw")
-    let rawFiles = try FileManager.default.contentsOfDirectory(
-      at: rawDirectory,
-      includingPropertiesForKeys: nil
+    let rawFiles = try RecursiveFileDiscovery.files(
+      under: rawDirectory,
+      extensions: ["raf"]
     )
-    .filter { $0.pathExtension.lowercased() == "raf" }
-    .sorted { $0.lastPathComponent < $1.lastPathComponent }
 
     #expect(rawFiles.count >= 4, "The app export benchmark needs at least four local RAF files")
     guard rawFiles.count >= 4 else { return }

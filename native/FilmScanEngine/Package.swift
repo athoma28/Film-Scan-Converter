@@ -18,6 +18,10 @@ let package = Package(
     .executable(name: "FilmScanReleaseValidator", targets: ["FilmScanReleaseValidator"]),
     .executable(name: "FilmScanProcessingBenchmark", targets: ["FilmScanProcessingBenchmark"]),
     .executable(name: "FilmScanProfileCalibrator", targets: ["FilmScanProfileCalibrator"]),
+    .executable(
+      name: "FilmScanReferenceCalibrator",
+      targets: ["FilmScanReferenceCalibrator"]
+    ),
   ],
   targets: [
     .systemLibrary(
@@ -70,6 +74,10 @@ let package = Package(
     ),
     .executableTarget(
       name: "FilmScanProfileCalibrator",
+      dependencies: ["FilmScanEngine"]
+    ),
+    .executableTarget(
+      name: "FilmScanReferenceCalibrator",
       dependencies: ["FilmScanEngine"]
     ),
     .executableTarget(

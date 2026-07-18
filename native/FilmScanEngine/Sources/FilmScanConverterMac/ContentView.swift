@@ -404,50 +404,81 @@ struct ContentView: View {
           let bexp = -(fn.greenExp * fn.blueRatio)
 
           DisclosureGroup("Advanced profile tuning") {
-            VStack(spacing: 10) {
-              AdjustmentSlider(
-                "Red Ratio",
-                value: Binding(
-                  get: { fn.redRatio },
-                  set: { model.setFilmNegativeRedRatio($0) }
-                ),
-                range: 0.8...1.8, neutral: FilmNegativeParams.colourNegative.redRatio,
-                valueFormat: "%.3f", responseExponent: 1.5
-              )
-              AdjustmentSlider(
-                "Green Exponent",
-                value: Binding(
-                  get: { fn.greenExp },
-                  set: { model.setFilmNegativeGreenExp($0) }
-                ),
-                range: 1.0...2.0, neutral: 1.5, valueFormat: "%.3f",
-                responseExponent: 1.5
-              )
-              AdjustmentSlider(
-                "Blue Ratio",
-                value: Binding(
-                  get: { fn.blueRatio },
-                  set: { model.setFilmNegativeBlueRatio($0) }
-                ),
-                range: 0.6...1.4, neutral: FilmNegativeParams.colourNegative.blueRatio,
-                valueFormat: "%.3f", responseExponent: 1.5
-              )
+            if fn.rendering != .powerLaw {
+              VStack(alignment: .leading, spacing: 10) {
+                Text(
+                  "Adjust the scan before inversion. Positive values make the resulting positive darker, matching Camera Raw's pre-curve exposure behavior."
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                AdjustmentSlider(
+                  "Negative Exposure",
+                  value: Binding(
+                    get: { fn.monochromeExposureEV },
+                    set: { model.setCalibratedNegativeExposure($0) }
+                  ),
+                  range: -4...4, neutral: 0, valueFormat: "%+.2f", unitSuffix: " EV",
+                  responseExponent: 1.5
+                )
+              }
+              .padding(.top, 8)
+            } else {
+              VStack(spacing: 10) {
+                AdjustmentSlider(
+                  "Red Ratio",
+                  value: Binding(
+                    get: { fn.redRatio },
+                    set: { model.setFilmNegativeRedRatio($0) }
+                  ),
+                  range: 0.8...1.8, neutral: FilmNegativeParams.colourNegative.redRatio,
+                  valueFormat: "%.3f", responseExponent: 1.5
+                )
+                AdjustmentSlider(
+                  "Green Exponent",
+                  value: Binding(
+                    get: { fn.greenExp },
+                    set: { model.setFilmNegativeGreenExp($0) }
+                  ),
+                  range: 1.0...2.0, neutral: 1.5, valueFormat: "%.3f",
+                  responseExponent: 1.5
+                )
+                AdjustmentSlider(
+                  "Blue Ratio",
+                  value: Binding(
+                    get: { fn.blueRatio },
+                    set: { model.setFilmNegativeBlueRatio($0) }
+                  ),
+                  range: 0.6...1.4, neutral: FilmNegativeParams.colourNegative.blueRatio,
+                  valueFormat: "%.3f", responseExponent: 1.5
+                )
+              }
+              .padding(.top, 8)
             }
-            .padding(.top, 8)
           }
 
-          VStack(alignment: .leading, spacing: 2) {
+          if fn.rendering != .powerLaw {
             Text(
-              "Exponents: R \(String(format: "%.2f", rexp))  G \(String(format: "%.2f", gexp))  B \(String(format: "%.2f", bexp))"
+              fn.rendering == .calibratedColor
+                ? "Paired-scan calibrated adaptive Camera Raw colour curves"
+                : "Paired-scan calibrated monochrome curve"
             )
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            if let medians = fn.measuredMedians {
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+          } else {
+            VStack(alignment: .leading, spacing: 2) {
               Text(
-                "Medians: R \(Int(medians.red))  G \(Int(medians.green))  B \(Int(medians.blue))"
+                "Exponents: R \(String(format: "%.2f", rexp))  G \(String(format: "%.2f", gexp))  B \(String(format: "%.2f", bexp))"
               )
               .font(.caption2)
               .foregroundStyle(.secondary)
+              if let medians = fn.measuredMedians {
+                Text(
+                  "Medians: R \(Int(medians.red))  G \(Int(medians.green))  B \(Int(medians.blue))"
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+              }
             }
           }
         }
@@ -1443,17 +1474,31 @@ struct ContentView: View {
   private func filmNegativePreset(for params: ProcessingParameters) -> FilmNegativePreset {
     guard params.filmNegativeParams.enabled else { return .off }
     let fn = params.filmNegativeParams
-    if fn.redRatio == FilmNegativeParams.colourNegative.redRatio
+    if fn.rendering == FilmNegativeParams.colourNegative.rendering
+      && fn.redRatio == FilmNegativeParams.colourNegative.redRatio
       && fn.greenExp == FilmNegativeParams.colourNegative.greenExp
       && fn.blueRatio == FilmNegativeParams.colourNegative.blueRatio
     {
       return .colourNegative
     }
-    if fn.redRatio == FilmNegativeParams.blackAndWhite.redRatio
-      && fn.greenExp == FilmNegativeParams.blackAndWhite.greenExp
-      && fn.blueRatio == FilmNegativeParams.blackAndWhite.blueRatio
+    if fn.rendering == FilmNegativeParams.legacyColourNegative.rendering
+      && fn.redRatio == FilmNegativeParams.legacyColourNegative.redRatio
+      && fn.greenExp == FilmNegativeParams.legacyColourNegative.greenExp
+      && fn.blueRatio == FilmNegativeParams.legacyColourNegative.blueRatio
+    {
+      return .legacyColourNegative
+    }
+    if fn.rendering == FilmNegativeParams.blackAndWhite.rendering
+      && fn.monochromeExposureEV == FilmNegativeParams.blackAndWhite.monochromeExposureEV
     {
       return .blackAndWhite
+    }
+    if fn.rendering == FilmNegativeParams.legacyBlackAndWhite.rendering
+      && fn.redRatio == FilmNegativeParams.legacyBlackAndWhite.redRatio
+      && fn.greenExp == FilmNegativeParams.legacyBlackAndWhite.greenExp
+      && fn.blueRatio == FilmNegativeParams.legacyBlackAndWhite.blueRatio
+    {
+      return .legacyBlackAndWhite
     }
     return .off
   }

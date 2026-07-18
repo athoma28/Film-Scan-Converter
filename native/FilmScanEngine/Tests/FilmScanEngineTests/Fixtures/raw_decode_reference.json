@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "decoder": "rawpy 0.24.0 / LibRaw (0, 21, 3)",
+  "decoder": "rawpy 0.25.1 / LibRaw (0, 21, 4)",
   "settings": {
     "output_bps": 16,
     "use_camera_wb": true,
@@ -26,64 +26,64 @@
   },
   "entries": [
     {
-      "file": "DSCF0669.RAF",
+      "file": "misc/DSCF2819.RAF",
       "shape": [
         2592,
         3876,
         3
       ],
-      "sha256": "e270fa995ecf8f39ce242cb470b1a84dee959418391c852185f3eb59a7be4880",
+      "sha256": "d54c15449d59aa80e5d95959a9131650f2bd01fdc46102c1e1baf5f747846f9d",
       "colorDescription": "RGBG"
     },
     {
-      "file": "DSCF0718.RAF",
+      "file": "fuji400-fresh/DSCF2833.RAF",
       "shape": [
         2592,
         3876,
         3
       ],
-      "sha256": "68d38090b8896169e64292efef0d0b6ff36934dc66142390eded619f7fd728b3",
+      "sha256": "6ebf9abd3f7eec87585a8ab447606568c7579d37f5e1fbe9475a29330671082a",
       "colorDescription": "RGBG"
     },
     {
-      "file": "DSCF0729.RAF",
+      "file": "fuji200-expired/DSCF3160.RAF",
       "shape": [
         2592,
         3876,
         3
       ],
-      "sha256": "3a8ccd567c20085c23f2f001482f009c43732431b012d706e04ede52ca4b092d",
+      "sha256": "5fa6690b3dda065a2d2cadb91500f6f481a0f32e3ba9845f1d41daa057f4e1f1",
       "colorDescription": "RGBG"
     },
     {
-      "file": "DSCF2417.RAF",
+      "file": "shanghaigp3/DSCF3200.RAF",
       "shape": [
         2592,
         3876,
         3
       ],
-      "sha256": "8866235b8222139cb496e2f328ddfccf6bad72d1837726b838f3919a062ccd82",
+      "sha256": "571b2f22c437402de60e0bb636949669e57fb7959d5ae84103166380f149a786",
       "colorDescription": "RGBG"
     },
     {
-      "file": "DSCF2422.RAF",
+      "file": "cinestill800t/DSCF3247.RAF",
       "shape": [
         2592,
         3876,
         3
       ],
-      "sha256": "9bf8a12cc6fc1c99c2232218f7e1c20c7a9168a53b962972fb24a3010fe7abfe",
+      "sha256": "c20d7f5b2b65a2e3a17c60654c60d68210282b41f8566c233bbaab0478f26e9c",
       "colorDescription": "RGBG"
     }
   ],
   "fullResolution": {
-    "file": "DSCF0718.RAF",
+    "file": "fuji400-fresh/DSCF2833.RAF",
     "shape": [
       5184,
       7752,
       3
     ],
-    "sha256": "7869531d9d82fb75793b14111c4d1f1cd99b17d4750f3e811cab202939f799a0",
+    "sha256": "87dbdad825db5bd13a6bb9cdfe84c40e2398cbf28c173de02a8802db29087684",
     "colorDescription": "RGBG"
   }
 }

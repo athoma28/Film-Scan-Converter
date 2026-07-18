@@ -162,16 +162,18 @@ guard let options = parseOptions() else {
   exit(2)
 }
 
-let availableFiles = try FileManager.default.contentsOfDirectory(
-  at: options.rawDirectory,
-  includingPropertiesForKeys: nil
-).filter { $0.pathExtension.lowercased() == "raf" }.sorted {
-  $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending
-}
+let availableFiles = try RecursiveFileDiscovery.files(
+  under: options.rawDirectory,
+  extensions: ["raf"]
+)
 
 let selectedFiles: [URL]
 if let selectedFilename = options.selectedFilename {
-  selectedFiles = availableFiles.filter { $0.lastPathComponent == selectedFilename }
+  selectedFiles = availableFiles.filter {
+    $0.lastPathComponent == selectedFilename
+      || $0.path.replacingOccurrences(of: options.rawDirectory.path + "/", with: "")
+        == selectedFilename
+  }
 } else if options.allFiles {
   selectedFiles = availableFiles
 } else {
@@ -179,6 +181,15 @@ if let selectedFilename = options.selectedFilename {
 }
 let files = options.fileLimit.map { Array(selectedFiles.prefix($0)) } ?? selectedFiles
 
+if options.selectedFilename != nil, selectedFiles.count > 1 {
+  FileHandle.standardError.write(
+    Data(
+      "The requested basename is present in more than one stock folder; pass its root-relative path.\n"
+        .utf8
+    )
+  )
+  exit(2)
+}
 guard !files.isEmpty else {
   FileHandle.standardError.write(Data("No matching RAF files found.\n".utf8))
   exit(2)
@@ -281,7 +292,10 @@ for sourceURL in files {
 
   fileResults.append(
     FileResult(
-      file: sourceURL.lastPathComponent,
+      file: sourceURL.path.replacingOccurrences(
+        of: options.rawDirectory.path + "/",
+        with: ""
+      ),
       megapixels: megapixels,
       decoder: decoderVersion,
       formats: formatResults

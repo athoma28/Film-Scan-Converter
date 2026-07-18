@@ -11,19 +11,17 @@ private let rawDecoderRepositoryRoot = URL(fileURLWithPath: #filePath)
   .deletingLastPathComponent()
   .deletingLastPathComponent()
 
-private var rawCorpusAvailable: Bool {
-  ["DSCF0669.RAF", "DSCF0718.RAF", "DSCF0729.RAF", "DSCF2417.RAF", "DSCF2422.RAF"]
-    .allSatisfy { filename in
-      FileManager.default.fileExists(
-        atPath: rawDecoderRepositoryRoot.appending(path: "sample-raw/\(filename)").path)
-    }
+private var xT5RegressionSamplesAvailable: Bool {
+  ["DSCF2819.RAF", "DSCF2820.RAF", "DSCF2823.RAF"]
+    .allSatisfy { SampleRawCorpus.uniqueURL(named: $0) != nil }
 }
 
-private var xT5RegressionSamplesAvailable: Bool {
-  ["DSCF2819.RAF", "DSCF2820.RAF", "DSCF2823.RAF"].allSatisfy { filename in
-    FileManager.default.fileExists(
-      atPath: rawDecoderRepositoryRoot.appending(path: "sample-raw/\(filename)").path)
-  }
+private var pairedBlackAndWhiteSamplesAvailable: Bool {
+  SampleRawCorpus.triplets().filter(\.isMonochrome).count >= 3
+}
+
+private var pairedColorSamplesAvailable: Bool {
+  SampleRawCorpus.triplets().filter { !$0.isMonochrome }.count >= 3
 }
 
 private struct RawDecodeReference: Decodable {
@@ -38,8 +36,116 @@ private struct RawDecodeReference: Decodable {
   let fullResolution: Entry
 }
 
+private var rawReferenceCorpusAvailable: Bool {
+  guard
+    let data = try? Data(
+      contentsOf: FixtureLoader.fixtureURL("", file: "raw_decode_reference.json")
+    ),
+    let reference = try? JSONDecoder().decode(RawDecodeReference.self, from: data)
+  else { return false }
+  return (reference.entries + [reference.fullResolution]).allSatisfy {
+    SampleRawCorpus.uniqueURL(named: $0.file) != nil
+  }
+}
+
+private var representativeRawURL: URL? {
+  SampleRawCorpus.triplets().first(where: { !$0.isMonochrome })?.rawURL
+    ?? SampleRawCorpus.rawURLs().first
+}
+
+private var representativeRawAvailable: Bool {
+  representativeRawURL != nil
+}
+
 @Suite("LibRaw decoding")
 struct RawImageDecoderTests {
+  @Test(
+    "Calibrated color profile tracks paired Camera Raw references",
+    .enabled(
+      if: pairedColorSamplesAvailable,
+      "paired color RAW/JPEG/XMP samples unavailable; calibration guard skipped")
+  )
+  func calibratedColorProfileTracksCameraRawReferences() throws {
+    let triplets = SampleRawCorpus.triplets().filter { !$0.isMonochrome }
+    var calibratedErrors: [Double] = []
+    var legacyErrors: [Double] = []
+    for triplet in triplets {
+      let reference = try SampleRawCorpus.loadAlignedReference(triplet)
+      let medians = FilmNegativeProcessing.computeMedians(
+        image: reference.raw,
+        borderPercent: 20
+      )
+      var calibratedParams = FilmNegativeParams.colourNegative
+      calibratedParams.measuredMedians = medians
+      let rendered = FilmProcessing.correctedPreview(
+        image: reference.raw,
+        parameters: ProcessingParameters(
+          filmType: .colourNegative,
+          filmNegativeParams: calibratedParams
+        )
+      )
+      var legacyParams = FilmNegativeParams.legacyColourNegative
+      legacyParams.measuredMedians = medians
+      let legacy = FilmProcessing.correctedPreview(
+        image: reference.raw,
+        parameters: ProcessingParameters(
+          filmType: .colourNegative,
+          filmNegativeParams: legacyParams
+        )
+      )
+      let calibratedError = referenceMAE(rendered, against: reference)
+      let legacyError = referenceMAE(legacy, against: reference)
+      calibratedErrors.append(calibratedError)
+      legacyErrors.append(legacyError)
+      #expect(
+        calibratedError < 0.23,
+        "\(triplet.stockID)/\(triplet.stem) mean absolute colour error \(calibratedError)"
+      )
+    }
+    let calibratedMean = calibratedErrors.reduce(0, +) / Double(calibratedErrors.count)
+    let legacyMean = legacyErrors.reduce(0, +) / Double(legacyErrors.count)
+    #expect(
+      calibratedMean < 0.15,
+      "generic calibrated colour mean absolute error \(calibratedMean)"
+    )
+    #expect(calibratedMean < legacyMean)
+  }
+
+  @Test(
+    "Calibrated B&W profile tracks paired Camera Raw references",
+    .enabled(
+      if: pairedBlackAndWhiteSamplesAvailable,
+      "paired B&W RAW/JPEG/XMP samples unavailable; calibration guard skipped")
+  )
+  func calibratedBlackAndWhiteProfileTracksCameraRawReferences() throws {
+    let triplets = SampleRawCorpus.triplets().filter(\.isMonochrome)
+    var meanAbsoluteErrors: [Double] = []
+    for triplet in triplets {
+      let reference = try SampleRawCorpus.loadAlignedReference(triplet)
+      var filmNegative = FilmNegativeParams.blackAndWhite
+      filmNegative.measuredMedians = FilmNegativeProcessing.computeMedians(
+        image: reference.raw,
+        borderPercent: 20
+      )
+      let rendered = FilmProcessing.correctedPreview(
+        image: reference.raw,
+        parameters: ProcessingParameters(
+          filmType: .blackAndWhiteNegative,
+          filmNegativeParams: filmNegative
+        )
+      )
+      let meanAbsoluteError = referenceMAE(rendered, against: reference)
+      meanAbsoluteErrors.append(meanAbsoluteError)
+      #expect(
+        meanAbsoluteError < 0.25,
+        "\(triplet.stockID)/\(triplet.stem) mean absolute tone error \(meanAbsoluteError)")
+    }
+
+    #expect(
+      meanAbsoluteErrors.reduce(0, +) / Double(meanAbsoluteErrors.count) < 0.18
+    )
+  }
+
   @Test(
     "Half-resolution X-T5 decode fully interpolates bright X-Trans frames",
     .enabled(
@@ -48,7 +154,7 @@ struct RawImageDecoderTests {
   )
   func halfResolutionXT5DecodeHasNoMosaicGrid() throws {
     for filename in ["DSCF2819.RAF", "DSCF2820.RAF", "DSCF2823.RAF"] {
-      let rawURL = repositoryRoot.appending(path: "sample-raw/\(filename)")
+      let rawURL = try #require(SampleRawCorpus.uniqueURL(named: filename))
       let image = try RawImageDecoder.decode(
         rawURL, profile: .rawTherapeeCameraScan).image
       let proxy = image.resizedToFit(maxDimension: 640)
@@ -101,17 +207,18 @@ struct RawImageDecoderTests {
 
   @Test(
     "Representative RAF corpus matches RawPy reference pixels",
-    .enabled(if: rawCorpusAvailable, "sample-raw corpus unavailable; RAW parity test skipped")
+    .enabled(
+      if: rawReferenceCorpusAvailable,
+      "referenced sample-raw corpus unavailable; RAW parity test skipped")
   )
   func representativeRAFCorpus() throws {
     let reference = try JSONDecoder().decode(
       RawDecodeReference.self,
       from: Data(contentsOf: FixtureLoader.fixtureURL("", file: "raw_decode_reference.json"))
     )
-    let rawDirectory = repositoryRoot.appending(path: "sample-raw")
-
     for entry in reference.entries {
-      let result = try RawImageDecoder.decode(rawDirectory.appending(path: entry.file))
+      let rawURL = try #require(SampleRawCorpus.uniqueURL(named: entry.file))
+      let result = try RawImageDecoder.decode(rawURL)
 
       #expect([result.image.height, result.image.width, result.image.channels] == entry.shape)
       #expect(sha256(result.image.pixels) == entry.sha256)
@@ -121,14 +228,14 @@ struct RawImageDecoderTests {
 
   @Test(
     "Full-resolution RAF decode matches RawPy reference pixels",
-    .enabled(if: rawCorpusAvailable, "sample-raw corpus unavailable; full-resolution RAW parity test skipped")
+    .enabled(
+      if: rawReferenceCorpusAvailable,
+      "referenced sample-raw corpus unavailable; full-resolution RAW parity test skipped")
   )
   func fullResolutionRAF() throws {
     let reference = try loadReference()
-    let rawDirectory = repositoryRoot.appending(path: "sample-raw")
-
     let entry = reference.fullResolution
-    let rawURL = rawDirectory.appending(path: entry.file)
+    let rawURL = try #require(SampleRawCorpus.uniqueURL(named: entry.file))
     let dimensions = try RawImageDecoder.fullResolutionDimensions(rawURL)
     let result = try RawImageDecoder.decode(
       rawURL,
@@ -144,10 +251,12 @@ struct RawImageDecoderTests {
 
   @Test(
     "Representative RAF completes the interactive correction preview pipeline",
-    .enabled(if: rawCorpusAvailable, "sample-raw corpus unavailable; RAW preview-pipeline test skipped")
+    .enabled(
+      if: representativeRawAvailable,
+      "sample-raw corpus unavailable; RAW preview-pipeline test skipped")
   )
   func interactiveCorrectionPreview() throws {
-    let rawURL = repositoryRoot.appending(path: "sample-raw/DSCF2422.RAF")
+    let rawURL = try #require(representativeRawURL)
 
     let decoded = try RawImageDecoder.decode(rawURL).image
     let proxy = decoded.resizedToFit(maxDimension: 720)
@@ -172,10 +281,12 @@ struct RawImageDecoderTests {
 
   @Test(
     "RawTherapee camera-scan preset preserves representative RAF tone and chroma",
-    .enabled(if: rawCorpusAvailable, "sample-raw corpus unavailable; camera-scan quality guard skipped")
+    .enabled(
+      if: representativeRawAvailable,
+      "sample-raw corpus unavailable; camera-scan quality guard skipped")
   )
   func rawTherapeeCameraScanQualityGuard() throws {
-    let rawURL = repositoryRoot.appending(path: "sample-raw/DSCF2422.RAF")
+    let rawURL = try #require(representativeRawURL)
     let result = try RawImageDecoder.decode(rawURL, profile: .rawTherapeeCameraScan)
     #expect(result.isoSpeed > 0)
     #expect(result.processing.contains(.isoSharpen) || result.processing.contains(.isoDenoise))
@@ -191,18 +302,23 @@ struct RawImageDecoderTests {
       )
     )
 
-    let pixelCount = corrected.width * corrected.height
+    // Exclude the film-holder border: its zero-light pixels deliberately map to
+    // display white and are not evidence of scene-tone clipping.
+    let inset = max(1, min(corrected.width, corrected.height) / 10)
+    let pixelCount = (corrected.width - inset * 2) * (corrected.height - inset * 2)
     var clippedPixels = 0
     var chromaSum = 0.0
-    for pixelIndex in 0..<pixelCount {
-      let base = pixelIndex * 3
-      let channels = corrected.pixels[base..<(base + 3)]
-      let minimum = Double(channels.min() ?? 0)
-      let maximum = Double(channels.max() ?? 0)
-      if minimum == 0 || maximum == 65_535 {
-        clippedPixels += 1
+    for y in inset..<(corrected.height - inset) {
+      for x in inset..<(corrected.width - inset) {
+        let base = (y * corrected.width + x) * 3
+        let channels = corrected.pixels[base..<(base + 3)]
+        let minimum = Double(channels.min() ?? 0)
+        let maximum = Double(channels.max() ?? 0)
+        if minimum == 0 || maximum == 65_535 {
+          clippedPixels += 1
+        }
+        chromaSum += maximum > 0 ? (maximum - minimum) / maximum : 0
       }
-      chromaSum += maximum > 0 ? (maximum - minimum) / maximum : 0
     }
 
     let clippedFraction = Double(clippedPixels) / Double(pixelCount)
@@ -213,10 +329,12 @@ struct RawImageDecoderTests {
 
   @Test(
     "Full-resolution X-Trans camera-scan decode uses three-pass interpolation",
-    .enabled(if: rawCorpusAvailable, "sample-raw corpus unavailable; X-Trans demosaic test skipped")
+    .enabled(
+      if: representativeRawAvailable,
+      "sample-raw corpus unavailable; X-Trans demosaic test skipped")
   )
   func fullResolutionXTransUsesThreePassInterpolation() throws {
-    let rawURL = repositoryRoot.appending(path: "sample-raw/DSCF2422.RAF")
+    let rawURL = try #require(representativeRawURL)
 
     let result = try RawImageDecoder.decode(
       rawURL,
@@ -241,10 +359,12 @@ struct RawImageDecoderTests {
 
   @Test(
     "Representative RAF embedded thumbnail decodes into a 3-channel preview image",
-    .enabled(if: rawCorpusAvailable, "sample-raw corpus unavailable; embedded thumbnail test skipped")
+    .enabled(
+      if: representativeRawAvailable,
+      "sample-raw corpus unavailable; embedded thumbnail test skipped")
   )
   func embeddedThumbnailDecode() throws {
-    let rawURL = repositoryRoot.appending(path: "sample-raw/DSCF2422.RAF")
+    let rawURL = try #require(representativeRawURL)
 
     let thumbnail = try RawImageDecoder.extractThumbnail(rawURL)
 
@@ -259,10 +379,12 @@ struct RawImageDecoderTests {
 
   @Test(
     "Representative RAF embedded thumbnail decodes directly to the requested preview bound",
-    .enabled(if: rawCorpusAvailable, "sample-raw corpus unavailable; bounded thumbnail test skipped")
+    .enabled(
+      if: representativeRawAvailable,
+      "sample-raw corpus unavailable; bounded thumbnail test skipped")
   )
   func embeddedThumbnailDecodeRespectsPreviewBound() throws {
-    let rawURL = repositoryRoot.appending(path: "sample-raw/DSCF2422.RAF")
+    let rawURL = try #require(representativeRawURL)
 
     let thumbnail = try RawImageDecoder.extractThumbnail(rawURL, maxDimension: 640)
 
@@ -292,6 +414,35 @@ struct RawImageDecoderTests {
     #expect(throws: RawImageDecoderError.self) {
       try RawImageDecoder.decode(URL(fileURLWithPath: "/tmp/missing-film-scan.raf"))
     }
+  }
+
+  private func referenceMAE(
+    _ rendered: UInt16Image,
+    against reference: SampleRawAlignedReference,
+    sampleStride: Int = 16
+  ) -> Double {
+    var error = 0.0
+    var componentCount = 0
+    for y in stride(from: 0, to: reference.target.height, by: sampleStride) {
+      for x in stride(from: 0, to: reference.target.width, by: sampleStride) {
+        let renderedBase = (
+          (reference.targetOriginY + y) * rendered.width
+            + reference.targetOriginX + x
+        ) * rendered.channels
+        let targetBase = (y * reference.target.width + x) * reference.target.channels
+        for channel in 0..<3 {
+          let renderedValue = rendered.pixels[
+            renderedBase + (rendered.channels == 1 ? 0 : channel)
+          ]
+          let targetValue = reference.target.pixels[
+            targetBase + (reference.target.channels == 1 ? 0 : channel)
+          ]
+          error += abs(Double(renderedValue) - Double(targetValue)) / 65_535
+          componentCount += 1
+        }
+      }
+    }
+    return error / Double(componentCount)
   }
 
   private var repositoryRoot: URL {

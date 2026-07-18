@@ -46,14 +46,16 @@ swift build -c release --package-path native/FilmScanEngine \
   --product FilmScanExportBenchmark
 
 native/FilmScanEngine/.build/release/FilmScanExportBenchmark \
-  sample-raw /tmp/film-scan-export.json 3 --file=DSCF0669.RAF
+  sample-raw /tmp/film-scan-export.json 3 \
+  --file=fuji400-fresh/DSCF2833.RAF
 ```
 
 Options:
 
 - `--formats=tiff,jpeg,png,dng` selects formats; all four are the default.
-- `--file=NAME.raf` selects one representative source; otherwise the first RAF
-  in lexical order is used.
+- `--file=STOCK/NAME.raf` selects one representative source; an unambiguous
+  basename is also accepted. Otherwise the first root-relative RAF path in
+  lexical order is used.
 - `--all` runs every RAF sequentially.
 - `--limit=N` caps the selected corpus to its first `N` lexical RAFs. Use
   `--all --limit=10` for the bounded sequential-memory run.

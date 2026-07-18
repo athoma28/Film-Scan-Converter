@@ -12,7 +12,8 @@ public enum FilmProcessing {
     if parameters.densityPipelineEnabled,
       parameters.densityBaseDensity != nil,
       (parameters.filmType == .colourNegative
-        || parameters.filmType == .blackAndWhiteNegative)
+        || parameters.filmType == .blackAndWhiteNegative),
+      parameters.filmNegativeParams.rendering == .powerLaw
     {
       return correctedPreviewDensity(
         image: image,
@@ -46,21 +47,36 @@ public enum FilmProcessing {
     var usedLinearToneSeam = false
     if parameters.filmType == .blackAndWhiteNegative {
       if parameters.filmNegativeParams.enabled {
-        if parameters.photoAdjustments.hasToneAdjustment {
-          let renderReady = FilmNegativeProcessing.powerLawRenderReadyLinear(
-            image: working, params: parameters.filmNegativeParams
-          ).applyingLinearToneAdjustments(
-            parameters.photoAdjustments,
-            referenceLuminance: FilmNegativeProcessing.calibrationTargetFraction
+        switch parameters.filmNegativeParams.rendering {
+        case .calibratedMonochrome:
+          working = FilmNegativeProcessing.applyCalibratedMonochromeInversion(
+            image: working,
+            params: parameters.filmNegativeParams
           )
-          working = FilmNegativeProcessing.renderPowerLawDisplay(renderReady)
-          usedLinearToneSeam = true
-        } else {
-          working = FilmNegativeProcessing.applyFusedPowerLawInversion(
-            image: working, params: parameters.filmNegativeParams
-          )
+          if parameters.photoAdjustments.hasToneAdjustment {
+            working = applySemanticLinearAdjustmentsToDisplayImage(
+              working,
+              parameters: parameters.photoAdjustments
+            )
+            usedLinearToneSeam = true
+          }
+        case .powerLaw, .calibratedColor:
+          if parameters.photoAdjustments.hasToneAdjustment {
+            let renderReady = FilmNegativeProcessing.powerLawRenderReadyLinear(
+              image: working, params: parameters.filmNegativeParams
+            ).applyingLinearToneAdjustments(
+              parameters.photoAdjustments,
+              referenceLuminance: FilmNegativeProcessing.calibrationTargetFraction
+            )
+            working = FilmNegativeProcessing.renderPowerLawDisplay(renderReady)
+            usedLinearToneSeam = true
+          } else {
+            working = FilmNegativeProcessing.applyFusedPowerLawInversion(
+              image: working, params: parameters.filmNegativeParams
+            )
+          }
+          working = grayscale(working, inverted: false)
         }
-        working = grayscale(working, inverted: false)
       } else {
         working = grayscale(working, inverted: true)
       }
@@ -70,31 +86,49 @@ public enum FilmProcessing {
         let needsLinearSeam = needsDyeMixing
           || parameters.photoAdjustments.hasColorAdjustment
           || parameters.photoAdjustments.hasToneAdjustment
-        if needsLinearSeam {
-          var renderReady = FilmNegativeProcessing.powerLawRenderReadyLinear(
+        switch parameters.filmNegativeParams.rendering {
+        case .calibratedColor:
+          working = FilmNegativeProcessing.applyCalibratedColorInversion(
             image: working,
             params: parameters.filmNegativeParams
           )
-          if needsDyeMixing {
-            renderReady.applyFilmDyeMixing(parameters.filmDyeMixing)
-          }
-          if parameters.photoAdjustments.hasToneAdjustment {
-            renderReady = renderReady.applyingLinearToneAdjustments(
-              parameters.photoAdjustments,
-              referenceLuminance: FilmNegativeProcessing.calibrationTargetFraction
+          if needsLinearSeam {
+            working = applySemanticLinearAdjustmentsToDisplayImage(
+              working,
+              parameters: parameters.photoAdjustments,
+              dyeMixing: needsDyeMixing ? parameters.filmDyeMixing : nil,
+              applyColorAdjustments: parameters.photoAdjustments.hasColorAdjustment
             )
-            usedLinearToneSeam = true
+            usedLinearToneSeam = parameters.photoAdjustments.hasToneAdjustment
+            usedLinearColorSeam = parameters.photoAdjustments.hasColorAdjustment
           }
-          if parameters.photoAdjustments.hasColorAdjustment {
-            renderReady = renderReady.applyingProtectedColorAdjustments(
-              parameters.photoAdjustments)
-            usedLinearColorSeam = true
+        case .powerLaw, .calibratedMonochrome:
+          if needsLinearSeam {
+            var renderReady = FilmNegativeProcessing.powerLawRenderReadyLinear(
+              image: working,
+              params: parameters.filmNegativeParams
+            )
+            if needsDyeMixing {
+              renderReady.applyFilmDyeMixing(parameters.filmDyeMixing)
+            }
+            if parameters.photoAdjustments.hasToneAdjustment {
+              renderReady = renderReady.applyingLinearToneAdjustments(
+                parameters.photoAdjustments,
+                referenceLuminance: FilmNegativeProcessing.calibrationTargetFraction
+              )
+              usedLinearToneSeam = true
+            }
+            if parameters.photoAdjustments.hasColorAdjustment {
+              renderReady = renderReady.applyingProtectedColorAdjustments(
+                parameters.photoAdjustments)
+              usedLinearColorSeam = true
+            }
+            working = FilmNegativeProcessing.renderPowerLawDisplay(renderReady)
+          } else {
+            working = FilmNegativeProcessing.applyFusedPowerLawInversion(
+              image: working, params: parameters.filmNegativeParams
+            )
           }
-          working = FilmNegativeProcessing.renderPowerLawDisplay(renderReady)
-        } else {
-          working = FilmNegativeProcessing.applyFusedPowerLawInversion(
-            image: working, params: parameters.filmNegativeParams
-          )
         }
       } else {
         working = inverted(working)
@@ -552,7 +586,8 @@ public enum FilmProcessing {
   private static func applySemanticLinearAdjustmentsToDisplayImage(
     _ image: UInt16Image,
     parameters: PhotoAdjustmentParameters,
-    dyeMixing: FilmDyeMixingParameters? = nil
+    dyeMixing: FilmDyeMixingParameters? = nil,
+    applyColorAdjustments: Bool = false
   ) -> UInt16Image {
     guard image.channels == 3 else { return image }
     var linearPixels = [Double](repeating: 0, count: image.pixels.count)
@@ -575,6 +610,9 @@ public enum FilmProcessing {
     }
     if parameters.hasToneAdjustment {
       adjusted = adjusted.applyingLinearToneAdjustments(parameters)
+    }
+    if applyColorAdjustments {
+      adjusted = adjusted.applyingProtectedColorAdjustments(parameters)
     }
     var output = [UInt16](repeating: 0, count: image.pixels.count)
     for pixelIndex in 0..<(image.width * image.height) {

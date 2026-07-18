@@ -515,7 +515,27 @@ final class AppModel: ObservableObject {
       sameRollFilmTypeHint = value
       reclassifyAutomaticBatchGuesses()
     }
-    updateParameters { $0.filmType = value }
+    let medians = value == .blackAndWhiteNegative || value == .colourNegative
+      ? computeFilmNegativeMedians()
+      : nil
+    if value == .blackAndWhiteNegative {
+      selectedFilmStockProfileID = FilmStockProfile.genericBW.id
+    } else if value == .colourNegative {
+      selectedFilmStockProfileID = FilmStockProfile.genericColorNegative.id
+    }
+    updateParameters {
+      $0.filmType = value
+      switch value {
+      case .blackAndWhiteNegative:
+        $0.filmNegativeParams = .blackAndWhite
+        $0.filmNegativeParams.measuredMedians = medians
+      case .colourNegative:
+        $0.filmNegativeParams = .colourNegative
+        $0.filmNegativeParams.measuredMedians = medians
+      case .slide, .cropOnly:
+        $0.filmNegativeParams.enabled = false
+      }
+    }
   }
 
   func setTemperature(_ value: Int) {
@@ -689,6 +709,10 @@ final class AppModel: ObservableObject {
     updateParameters { $0.filmNegativeParams.blueRatio = value }
   }
 
+  func setCalibratedNegativeExposure(_ value: Double) {
+    updateParameters { $0.filmNegativeParams.monochromeExposureEV = value }
+  }
+
   func setFilmNegativePreset(_ preset: FilmNegativePreset) {
     let medians = preset != .off ? computeFilmNegativeMedians() : nil
     updateParameters {
@@ -697,8 +721,12 @@ final class AppModel: ObservableObject {
         $0.filmNegativeParams.enabled = false
       case .colourNegative:
         $0.filmNegativeParams = FilmNegativeParams.colourNegative
+      case .legacyColourNegative:
+        $0.filmNegativeParams = FilmNegativeParams.legacyColourNegative
       case .blackAndWhite:
         $0.filmNegativeParams = FilmNegativeParams.blackAndWhite
+      case .legacyBlackAndWhite:
+        $0.filmNegativeParams = FilmNegativeParams.legacyBlackAndWhite
       }
       if let medians {
         $0.filmNegativeParams.measuredMedians = medians
@@ -720,6 +748,9 @@ final class AppModel: ObservableObject {
   func setDensityPipelineEnabled(_ value: Bool) {
     updateParameters {
       $0.densityPipelineEnabled = value
+      if value {
+        $0.filmNegativeParams.rendering = .powerLaw
+      }
       if value, let measurement = selectedRebateMeasurement {
         $0.densityBaseDensity = measurement.baseDensity
       } else if value, let rollBase = rollProfile?.measuredBaseDensity {
@@ -741,9 +772,10 @@ final class AppModel: ObservableObject {
       )
       let currentMedians = computeFilmNegativeMedians()
         ?? parameters.filmNegativeParams.measuredMedians
+      let usesDensityPipeline = resolved.stockProfile.filmNegativeParams.rendering == .powerLaw
       updateParameters {
         $0.filmType = resolved.stockProfile.filmType
-        $0.densityPipelineEnabled = true
+        $0.densityPipelineEnabled = usesDensityPipeline
         if let baseDensity = resolved.resolvedBaseDensity?.baseDensity {
           $0.densityBaseDensity = baseDensity
         }
@@ -755,8 +787,13 @@ final class AppModel: ObservableObject {
         $0.filmDyeMixing = resolved.stockProfile.dyeMixing
       }
       let baseMessage = rebateStatus.isEmpty ? "" : rebateStatus + " "
-      rebateStatus = baseMessage
-        + "Density pipeline active (stock: \(resolved.stockProfile.displayName))."
+      if usesDensityPipeline {
+        rebateStatus = baseMessage
+          + "Density pipeline active (stock: \(resolved.stockProfile.displayName))."
+      } else {
+        rebateStatus = baseMessage
+          + "Calibrated negative profile active (stock: \(resolved.stockProfile.displayName))."
+      }
     } catch {
       rebateStatus = "Pipeline resolution failed: \(error.localizedDescription)"
     }
@@ -1182,6 +1219,7 @@ final class AppModel: ObservableObject {
         selectedRebateRegion = region
         updateParameters {
           $0.densityPipelineEnabled = true
+          $0.filmNegativeParams.rendering = .powerLaw
           $0.densityBaseDensity = measurement.baseDensity
         }
         rebateStatus = String(
@@ -1269,6 +1307,7 @@ final class AppModel: ObservableObject {
     )
     updateParameters {
       $0.densityPipelineEnabled = true
+      $0.filmNegativeParams.rendering = .powerLaw
       $0.densityBaseDensity = candidate.measurement.baseDensity
     }
   }
@@ -1970,12 +2009,12 @@ final class AppModel: ObservableObject {
     _ parameters: ProcessingParameters,
     decodedImage: UInt16Image
   ) -> ProcessingParameters {
-    let usesPowerLawFilmBase =
+    let usesAdaptiveNegativeReference =
       !parameters.densityPipelineEnabled
       && (parameters.filmType == .colourNegative
         || parameters.filmType == .blackAndWhiteNegative)
       && parameters.filmNegativeParams.enabled
-    guard usesPowerLawFilmBase, decodedImage.channels == 3 else {
+    guard usesAdaptiveNegativeReference, decodedImage.channels == 3 else {
       return parameters
     }
     var exportParameters = parameters
@@ -2035,8 +2074,14 @@ final class AppModel: ObservableObject {
     case .colourNegative:
       next.filmNegativeParams = FilmNegativeParams.colourNegative
       next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
+    case .legacyColourNegative:
+      next.filmNegativeParams = FilmNegativeParams.legacyColourNegative
+      next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
     case .blackAndWhite:
       next.filmNegativeParams = FilmNegativeParams.blackAndWhite
+      next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
+    case .legacyBlackAndWhite:
+      next.filmNegativeParams = FilmNegativeParams.legacyBlackAndWhite
       next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
     }
     return next

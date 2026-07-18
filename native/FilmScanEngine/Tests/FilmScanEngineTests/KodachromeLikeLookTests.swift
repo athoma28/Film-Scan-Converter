@@ -11,8 +11,7 @@ private let kodachromeLookRepositoryRoot = URL(fileURLWithPath: #filePath)
   .deletingLastPathComponent()
 
 private var kodachromeReferencePairAvailable: Bool {
-  FileManager.default.fileExists(
-    atPath: kodachromeLookRepositoryRoot.appending(path: "sample-raw/DSCF2879.JPG").path)
+  SampleRawCorpus.uniqueURL(named: "DSCF2879.JPG") != nil
 }
 
 @Suite("Kodachrome-like adaptive look")
@@ -101,7 +100,7 @@ struct KodachromeLikeLookTests {
       "DSCF2879 reference sample unavailable; adaptive look regression skipped")
   )
   func adaptsDSCF2879() throws {
-    let url = kodachromeLookRepositoryRoot.appending(path: "sample-raw/DSCF2879.JPG")
+    let url = try #require(SampleRawCorpus.uniqueURL(named: "DSCF2879.JPG"))
     let image = try StandardImageDecoder.decodePreview(url, maxDimension: 1_200)
     let result = KodachromeLikeLook.parameters(
       for: image,
