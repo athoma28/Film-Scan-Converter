@@ -57,6 +57,17 @@ private var representativeRawAvailable: Bool {
   representativeRawURL != nil
 }
 
+/// Exact frames used to fit the built-in alternate curves. Later corpus
+/// additions remain validation data and must not silently redefine the fit set.
+private let calibratedAlternateFitStems: [String: Set<String>] = [
+  "fuji400-fresh": [
+    "DSCF2555", "DSCF2833", "DSCF2865", "DSCF2873",
+    "DSCF2888", "DSCF2892", "DSCF3115", "DSCF3127",
+  ],
+  "fuji200-expired": ["DSCF3160"],
+  "cinestill800t": ["DSCF3247"],
+]
+
 @Suite("LibRaw decoding")
 struct RawImageDecoderTests {
   @Test(
@@ -69,7 +80,7 @@ struct RawImageDecoderTests {
     let triplets = SampleRawCorpus.triplets().filter { !$0.isMonochrome }
     var calibratedErrors: [Double] = []
     var legacyErrors: [Double] = []
-    var genericErrorsByStock: [String: [Double]] = [:]
+    var genericFitErrorsByStock: [String: [Double]] = [:]
     var alternateErrorsByStock: [String: [Double]] = [:]
     for triplet in triplets {
       let reference = try SampleRawCorpus.loadAlignedReference(triplet)
@@ -99,7 +110,6 @@ struct RawImageDecoderTests {
       let legacyError = referenceMAE(legacy, against: reference)
       calibratedErrors.append(calibratedError)
       legacyErrors.append(legacyError)
-      genericErrorsByStock[triplet.stockID, default: []].append(calibratedError)
 
       let alternateParams: FilmNegativeParams? = switch triplet.stockID {
       case "fuji400-fresh": .fuji400FreshAlternate
@@ -107,7 +117,10 @@ struct RawImageDecoderTests {
       case "cinestill800t": .cinestill800TAlternate
       default: nil
       }
-      if var alternateParams {
+      let belongsToAlternateFit = calibratedAlternateFitStems[triplet.stockID]?
+        .contains(triplet.stem) == true
+      if var alternateParams, belongsToAlternateFit {
+        genericFitErrorsByStock[triplet.stockID, default: []].append(calibratedError)
         alternateParams.measuredMedians = medians
         let alternate = FilmProcessing.correctedPreview(
           image: reference.raw,
@@ -133,7 +146,7 @@ struct RawImageDecoderTests {
     )
     #expect(calibratedMean < legacyMean)
     for stockID in ["fuji400-fresh", "fuji200-expired", "cinestill800t"] {
-      let generic = try #require(genericErrorsByStock[stockID])
+      let generic = try #require(genericFitErrorsByStock[stockID])
       let alternate = try #require(alternateErrorsByStock[stockID])
       let genericMean = generic.reduce(0, +) / Double(generic.count)
       let alternateMean = alternate.reduce(0, +) / Double(alternate.count)
