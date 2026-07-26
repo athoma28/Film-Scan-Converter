@@ -940,6 +940,30 @@ struct FilmNegativeProcessingTests {
     #expect(decoded == profile)
   }
 
+  @Test("Alternate calibrated color profile round-trips and older settings default to generic")
+  func alternateCalibratedColorProfileCodableMigration() throws {
+    let alternate = FilmStockProfile.cinestill800TAlternate
+    let encoded = try JSONEncoder().encode(alternate)
+    let decoded = try JSONDecoder().decode(FilmStockProfile.self, from: encoded)
+    #expect(decoded == alternate)
+
+    let oldParams = """
+      {
+        "enabled": true,
+        "redRatio": 1.36,
+        "greenExp": 1.5,
+        "blueRatio": 0.86,
+        "rendering": "calibratedColor",
+        "monochromeExposureEV": 0
+      }
+      """
+    let migrated = try JSONDecoder().decode(
+      FilmNegativeParams.self,
+      from: Data(oldParams.utf8)
+    )
+    #expect(migrated.calibratedColorProfile == .generic)
+  }
+
   @Test("Version-one FilmStockProfile migrates neutral dye mixing")
   func filmStockProfileVersionOneMigration() throws {
     let oldDocument = """
@@ -1267,12 +1291,24 @@ struct FilmNegativeProcessingTests {
     let store = ProfileStore(baseDirectory: dir)
     let builtIns = store.builtInFilmStockProfiles()
     #expect(builtIns.contains(FilmStockProfile.genericColorNegative))
+    #expect(builtIns.contains(FilmStockProfile.fuji400FreshAlternate))
+    #expect(builtIns.contains(FilmStockProfile.fuji200ExpiredAlternate))
+    #expect(builtIns.contains(FilmStockProfile.cinestill800TAlternate))
     #expect(builtIns.contains(FilmStockProfile.legacyColorNegative))
     #expect(builtIns.contains(FilmStockProfile.genericBW))
     #expect(builtIns.contains(FilmStockProfile.legacyBW))
     #expect(FilmStockProfile.genericBW.filmNegativeParams.rendering == .calibratedMonochrome)
     #expect(FilmStockProfile.legacyBW.filmNegativeParams.rendering == .powerLaw)
     #expect(FilmStockProfile.genericColorNegative.filmNegativeParams.rendering == .calibratedColor)
+    #expect(
+      FilmStockProfile.fuji400FreshAlternate.filmNegativeParams.calibratedColorProfile
+        == .fuji400Fresh)
+    #expect(
+      FilmStockProfile.fuji200ExpiredAlternate.filmNegativeParams.calibratedColorProfile
+        == .fuji200Expired)
+    #expect(
+      FilmStockProfile.cinestill800TAlternate.filmNegativeParams.calibratedColorProfile
+        == .cinestill800T)
     #expect(FilmStockProfile.legacyColorNegative.filmNegativeParams.rendering == .powerLaw)
   }
 

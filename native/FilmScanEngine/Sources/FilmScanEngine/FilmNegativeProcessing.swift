@@ -303,21 +303,79 @@ public enum FilmNegativeProcessing {
     return lut
   }()
 
-  private static let calibratedColorReferenceMedians = BGRChannelValues(
-    blue: 20_441,
-    green: 18_792,
-    red: 27_054.5
+  private struct CalibratedColorDefinition {
+    let referenceMedians: BGRChannelValues
+    let exposureNormalization: Double
+    let ratioNormalization: Double
+    let curves: [[Double]]
+  }
+
+  private static let genericCalibratedColor = CalibratedColorDefinition(
+    referenceMedians: BGRChannelValues(blue: 20_441, green: 18_792, red: 27_054.5),
+    exposureNormalization: 0.5,
+    ratioNormalization: 0.25,
+    curves: [
+      [0.985590, 0.928206, 0.733601, 0.590298, 0.308451, 0.273508,
+        0.231637, 0.057239, 0.057239, 0.057239, 0.057239],
+      [0.981603, 0.862303, 0.575805, 0.393775, 0.241577, 0.190320,
+        0.091074, 0.043509, 0.037671, 0.029825, 0.025845],
+      [0.988782, 0.906913, 0.741342, 0.529294, 0.377395, 0.246425,
+        0.174431, 0.096998, 0.063358, 0.025520, 0.025520],
+    ]
   )
-  private static let calibratedColorExposureNormalization = 0.5
-  private static let calibratedColorRatioNormalization = 0.25
-  private static let calibratedColorCurves = [
-    [0.985590, 0.928206, 0.733601, 0.590298, 0.308451, 0.273508,
-      0.231637, 0.057239, 0.057239, 0.057239, 0.057239],
-    [0.981603, 0.862303, 0.575805, 0.393775, 0.241577, 0.190320,
-      0.091074, 0.043509, 0.037671, 0.029825, 0.025845],
-    [0.988782, 0.906913, 0.741342, 0.529294, 0.377395, 0.246425,
-      0.174431, 0.096998, 0.063358, 0.025520, 0.025520],
-  ]
+
+  private static let fuji400FreshCalibratedColor = CalibratedColorDefinition(
+    referenceMedians: BGRChannelValues(blue: 20_441, green: 18_792, red: 27_054.5),
+    exposureNormalization: 0.25,
+    ratioNormalization: 0.25,
+    curves: [
+      [0.984934, 0.932758, 0.768483, 0.549015, 0.313488, 0.255865,
+        0.255865, 0.134999, 0.061323, 0.052189, 0.042113],
+      [0.982016, 0.868660, 0.595692, 0.381230, 0.234961, 0.213014,
+        0.114352, 0.041374, 0.028878, 0.028878, 0.019974],
+      [0.988695, 0.899821, 0.757199, 0.506845, 0.313549, 0.253077,
+        0.167284, 0.110408, 0.041514, 0.029620, 0.018251],
+    ]
+  )
+
+  private static let fuji200ExpiredCalibratedColor = CalibratedColorDefinition(
+    referenceMedians: BGRChannelValues(blue: 41_143, green: 32_428, red: 38_592),
+    exposureNormalization: 0.5,
+    ratioNormalization: 0.25,
+    curves: [
+      [0.992886, 0.959548, 0.809359, 0.807061, 0.745133, 0.609145,
+        0.401956, 0.256013, 0.208724, 0.094601, 0.037899],
+      [0.989718, 0.929469, 0.776278, 0.717912, 0.584919, 0.377581,
+        0.216584, 0.172346, 0.075729, 0.060105, 0.030462],
+      [0.992840, 0.964433, 0.772915, 0.772915, 0.650805, 0.581862,
+        0.445023, 0.300384, 0.122844, 0.087376, 0.049887],
+    ]
+  )
+
+  private static let cinestill800TCalibratedColor = CalibratedColorDefinition(
+    referenceMedians: BGRChannelValues(blue: 13_880, green: 14_918, red: 22_381),
+    exposureNormalization: 0.5,
+    ratioNormalization: 0.25,
+    curves: [
+      [0.983431, 0.816706, 0.645829, 0.592476, 0.277493, 0.277493,
+        0.261991, 0.261991, 0.261991, 0.126500, 0.126500],
+      [0.971552, 0.668719, 0.387681, 0.322584, 0.192716, 0.192716,
+        0.180829, 0.069637, 0.068378, 0.068378, 0.068378],
+      [0.985135, 0.865963, 0.656051, 0.555563, 0.326772, 0.257059,
+        0.179266, 0.151201, 0.145899, 0.145899, 0.145899],
+    ]
+  )
+
+  private static func calibratedColorDefinition(
+    for profile: CalibratedColorNegativeProfile
+  ) -> CalibratedColorDefinition {
+    switch profile {
+    case .generic: genericCalibratedColor
+    case .fuji400Fresh: fuji400FreshCalibratedColor
+    case .fuji200Expired: fuji200ExpiredCalibratedColor
+    case .cinestill800T: cinestill800TCalibratedColor
+    }
+  }
   private static let calibratedMonochromeReferenceGreenMedian = 28_685.0
   private static let calibratedMonochromeCurve = [
     0.989069, 0.912663, 0.668040, 0.603132, 0.488223, 0.330530,
@@ -513,14 +571,19 @@ public enum FilmNegativeProcessing {
     _ value: Double,
     channel: Int,
     negativeExposureEV: Double = 0,
-    measuredMedians: BGRChannelValues? = nil
+    measuredMedians: BGRChannelValues? = nil,
+    profile: CalibratedColorNegativeProfile = .generic
   ) -> Double {
     precondition((0..<3).contains(channel), "Calibrated colour channel must be BGR 0...2")
-    let gains = calibratedColorInputGains(measuredMedians: measuredMedians)
+    let definition = calibratedColorDefinition(for: profile)
+    let gains = calibratedColorInputGains(
+      measuredMedians: measuredMedians,
+      profile: profile
+    )
     let channelGains = [gains.blue, gains.green, gains.red]
     return calibratedCurveValue(
       value,
-      curve: calibratedColorCurves[channel],
+      curve: definition.curves[channel],
       inputGain: channelGains[channel],
       negativeExposureEV: negativeExposureEV
     )
@@ -530,32 +593,34 @@ public enum FilmNegativeProcessing {
   /// uses only the green median; channel ratios are corrected more gently so
   /// mixed light and dusk colour are not forced to neutral.
   public static func calibratedColorInputGains(
-    measuredMedians: BGRChannelValues?
+    measuredMedians: BGRChannelValues?,
+    profile: CalibratedColorNegativeProfile = .generic
   ) -> BGRChannelValues {
     guard let medians = measuredMedians else {
       return BGRChannelValues(blue: 1, green: 1, red: 1)
     }
+    let definition = calibratedColorDefinition(for: profile)
     let exposure = pow(
-      calibratedColorReferenceMedians.green / max(medians.green, 1),
-      calibratedColorExposureNormalization
+      definition.referenceMedians.green / max(medians.green, 1),
+      definition.exposureNormalization
     )
     func channelGain(frame: Double, reference: Double) -> Double {
       let frameRatio = max(frame, 1) / max(medians.green, 1)
-      let referenceRatio = reference / calibratedColorReferenceMedians.green
+      let referenceRatio = reference / definition.referenceMedians.green
       return exposure * pow(
         referenceRatio / frameRatio,
-        calibratedColorRatioNormalization
+        definition.ratioNormalization
       )
     }
     return BGRChannelValues(
       blue: channelGain(
         frame: medians.blue,
-        reference: calibratedColorReferenceMedians.blue
+        reference: definition.referenceMedians.blue
       ),
       green: exposure,
       red: channelGain(
         frame: medians.red,
-        reference: calibratedColorReferenceMedians.red
+        reference: definition.referenceMedians.red
       )
     )
   }
@@ -574,8 +639,10 @@ public enum FilmNegativeProcessing {
     precondition(image.channels == 3, "Calibrated colour inversion requires BGR input")
     let pixelCount = image.width * image.height
     var output = [UInt16](repeating: 0, count: image.pixels.count)
+    let definition = calibratedColorDefinition(for: params.calibratedColorProfile)
     let adaptiveGains = calibratedColorInputGains(
-      measuredMedians: params.measuredMedians
+      measuredMedians: params.measuredMedians,
+      profile: params.calibratedColorProfile
     )
     let channelGains = [adaptiveGains.blue, adaptiveGains.green, adaptiveGains.red]
     let luts: [[UInt16]] = (0..<3).map { channel in
@@ -585,7 +652,7 @@ public enum FilmNegativeProcessing {
             max(
               calibratedCurveValue(
                 Double(codeValue) / maxOutput,
-                curve: calibratedColorCurves[channel],
+                curve: definition.curves[channel],
                 inputGain: channelGains[channel],
                 negativeExposureEV: params.monochromeExposureEV
               ) * maxOutput,

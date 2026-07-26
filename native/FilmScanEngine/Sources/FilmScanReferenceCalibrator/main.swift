@@ -59,10 +59,11 @@ private struct FrameScore: Codable {
   let stockID: String
   let stem: String
   let xmpExposure: Double
+  let measuredMediansBGR: [Double]
   let currentMAE: Double
   let legacyMAE: Double
   let candidateMAE: Double
-  let leaveOneOutMAE: Double
+  let leaveOneOutMAE: Double?
 }
 
 private struct CandidateReport: Codable {
@@ -74,7 +75,7 @@ private struct CandidateReport: Codable {
   let currentMeanAbsoluteError: Double
   let legacyMeanAbsoluteError: Double
   let fittedMeanAbsoluteError: Double
-  let leaveOneOutMeanAbsoluteError: Double
+  let leaveOneOutMeanAbsoluteError: Double?
   let frames: [FrameScore]
 }
 
@@ -143,17 +144,16 @@ private func run(options: Options) throws {
 
   var stockProfiles: [String: CandidateReport] = [:]
   for (stockID, stockFrames) in Dictionary(grouping: frames, by: \.stockID) {
-    guard stockFrames.count >= 3 else { continue }
     let modes = Set(stockFrames.map(\.monochrome))
     guard modes.count == 1 else { continue }
-    stockProfiles[stockID] = calibrate(
-      stockFrames,
-      monochrome: modes.first == true
-    )
+    let monochrome = modes.first == true
+    stockProfiles[stockID] = stockFrames.count >= 3
+      ? calibrate(stockFrames, monochrome: monochrome)
+      : fitUnvalidatedStockCandidate(stockFrames, monochrome: monochrome)
   }
 
   let report = CalibrationReport(
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt: ISO8601DateFormatter().string(from: Date()),
     sampleRoot: options.root.path,
     decodeProfile: "rawTherapeeCameraScan half-resolution",
@@ -452,6 +452,11 @@ private func calibrate(_ frames: [ReferenceFrame], monochrome: Bool) -> Candidat
         stockID: frame.stockID,
         stem: frame.stem,
         xmpExposure: frame.xmpExposure,
+        measuredMediansBGR: [
+          frame.medians.blue,
+          frame.medians.green,
+          frame.medians.red,
+        ],
         currentMAE: frame.currentMAE,
         legacyMAE: frame.legacyMAE,
         candidateMAE: scored.errorSum / Double(scored.componentCount),
@@ -474,6 +479,61 @@ private func calibrate(_ frames: [ReferenceFrame], monochrome: Bool) -> Candidat
     legacyMeanAbsoluteError: frames.map(\.legacyMAE).reduce(0, +) / count,
     fittedMeanAbsoluteError: fittedError / Double(fittedComponents),
     leaveOneOutMeanAbsoluteError: bestHeldOutError,
+    frames: frameScores
+  )
+}
+
+private func fitUnvalidatedStockCandidate(
+  _ frames: [ReferenceFrame],
+  monochrome: Bool
+) -> CandidateReport {
+  let exposureNormalization = monochrome ? 1.0 : 0.5
+  let colorNormalization = monochrome ? 0.0 : 0.25
+  let candidate = fitCandidate(
+    frames,
+    monochrome: monochrome,
+    exposureNormalization: exposureNormalization,
+    colorNormalization: colorNormalization
+  )
+  var frameScores: [FrameScore] = []
+  var fittedError = 0.0
+  var fittedComponents = 0
+  for frame in frames {
+    let scored = score(frame: frame, candidate: candidate, monochrome: monochrome)
+    fittedError += scored.errorSum
+    fittedComponents += scored.componentCount
+    frameScores.append(
+      FrameScore(
+        stockID: frame.stockID,
+        stem: frame.stem,
+        xmpExposure: frame.xmpExposure,
+        measuredMediansBGR: [
+          frame.medians.blue,
+          frame.medians.green,
+          frame.medians.red,
+        ],
+        currentMAE: frame.currentMAE,
+        legacyMAE: frame.legacyMAE,
+        candidateMAE: scored.errorSum / Double(scored.componentCount),
+        leaveOneOutMAE: nil
+      )
+    )
+  }
+  let count = Double(frames.count)
+  return CandidateReport(
+    frameCount: frames.count,
+    referenceMediansBGR: [
+      candidate.referenceMedians.blue,
+      candidate.referenceMedians.green,
+      candidate.referenceMedians.red,
+    ],
+    exposureNormalization: candidate.exposureNormalization,
+    colorNormalization: candidate.colorNormalization,
+    curvesBGR: candidate.curves,
+    currentMeanAbsoluteError: frames.map(\.currentMAE).reduce(0, +) / count,
+    legacyMeanAbsoluteError: frames.map(\.legacyMAE).reduce(0, +) / count,
+    fittedMeanAbsoluteError: fittedError / Double(fittedComponents),
+    leaveOneOutMeanAbsoluteError: nil,
     frames: frameScores
   )
 }

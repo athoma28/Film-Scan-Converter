@@ -866,6 +866,52 @@ struct ProcessingTests {
     #expect(green[0] > 0.98)
   }
 
+  @Test("Alternate color profiles use distinct fitted base curves and anchors")
+  func alternateCalibratedColorProfiles() {
+    let cases: [(
+      profile: CalibratedColorNegativeProfile,
+      reference: BGRChannelValues,
+      expectedRedMidpoint: Double
+    )] = [
+      (.fuji400Fresh, BGRChannelValues(blue: 20_441, green: 18_792, red: 27_054.5),
+        0.253077),
+      (.fuji200Expired, BGRChannelValues(blue: 41_143, green: 32_428, red: 38_592),
+        0.581862),
+      (.cinestill800T, BGRChannelValues(blue: 13_880, green: 14_918, red: 22_381),
+        0.257059),
+    ]
+
+    for item in cases {
+      let red = (0...10).map {
+        FilmNegativeProcessing.calibratedColorToneCurve(
+          Double($0) / 10,
+          channel: 2,
+          profile: item.profile
+        )
+      }
+      #expect(red == red.sorted(by: >))
+      #expect(abs(red[5] - item.expectedRedMidpoint) < 0.000_001)
+
+      let gains = FilmNegativeProcessing.calibratedColorInputGains(
+        measuredMedians: item.reference,
+        profile: item.profile
+      )
+      #expect(abs(gains.blue - 1) < 1e-12)
+      #expect(abs(gains.green - 1) < 1e-12)
+      #expect(abs(gains.red - 1) < 1e-12)
+    }
+
+    let input = 0.5
+    let outputs = cases.map {
+      FilmNegativeProcessing.calibratedColorToneCurve(
+        input,
+        channel: 2,
+        profile: $0.profile
+      )
+    }
+    #expect(Set(outputs.map { Int(($0 * 1_000_000).rounded()) }).count == cases.count)
+  }
+
   @Test("Calibrated color negative exposure acts before inversion")
   func calibratedColorNegativeExposure() {
     for channel in 0..<3 {

@@ -1461,6 +1461,17 @@ struct AppModelTests {
     #expect(model.selectedFilmStockProfileID == FilmStockProfile.genericColorNegative.id)
     #expect(model.parameters.filmNegativeParams.rendering == .calibratedColor)
 
+    model.setFilmNegativePreset(.fuji400FreshAlternate)
+    #expect(model.parameters.filmNegativeParams.calibratedColorProfile == .fuji400Fresh)
+    model.setFilmNegativePreset(.fuji200ExpiredAlternate)
+    #expect(model.parameters.filmNegativeParams.calibratedColorProfile == .fuji200Expired)
+    model.setFilmNegativePreset(.cinestill800TAlternate)
+    #expect(model.parameters.filmNegativeParams.calibratedColorProfile == .cinestill800T)
+
+    model.selectedFilmStockProfileID = FilmStockProfile.fuji400FreshAlternate.id
+    model.applySelectedPipelineProfiles()
+    #expect(model.parameters.filmNegativeParams.calibratedColorProfile == .fuji400Fresh)
+
     model.setFilmNegativePreset(.legacyColourNegative)
     #expect(model.parameters.filmNegativeParams == .legacyColourNegative)
 

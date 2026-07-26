@@ -78,6 +78,12 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       case .calibratedMonochrome: 1
       case .calibratedColor: 2
       }
+      let calibratedColorProfile: Float = switch fnp.calibratedColorProfile {
+      case .generic: 0
+      case .fuji400Fresh: 1
+      case .fuji200Expired: 2
+      case .cinestill800T: 3
+      }
       let (fnRExp, fnGExp, fnBExp): (Float, Float, Float)
       let (fnRMult, fnGMult, fnBMult): (Float, Float, Float)
 
@@ -101,7 +107,8 @@ public final class StillPreviewRenderer: @unchecked Sendable {
           }
         case .calibratedColor:
           let gains = FilmNegativeProcessing.calibratedColorInputGains(
-            measuredMedians: fnp.measuredMedians
+            measuredMedians: fnp.measuredMedians,
+            profile: fnp.calibratedColorProfile
           )
           fnRExp = 0; fnGExp = 0; fnBExp = 0
           fnRMult = Float(gains.red)
@@ -165,6 +172,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
             Float(parameters.shadowWheel.strength),
             Float(fnEnabled ? 1 : 0),
             renderingMode,
+            calibratedColorProfile,
             Float(fnp.monochromeExposureEV),
             fnRExp,
             fnGExp,
@@ -422,57 +430,84 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       return mix(y0, y1, (exposed - x0) * 10.0);
     }
 
+    vec3 calibratedColorKnot(float profile, float knot) {
+      if (profile < 0.5) {
+        if (knot < 0.5) return vec3(0.988782, 0.981603, 0.985590);
+        if (knot < 1.5) return vec3(0.906913, 0.862303, 0.928206);
+        if (knot < 2.5) return vec3(0.741342, 0.575805, 0.733601);
+        if (knot < 3.5) return vec3(0.529294, 0.393775, 0.590298);
+        if (knot < 4.5) return vec3(0.377395, 0.241577, 0.308451);
+        if (knot < 5.5) return vec3(0.246425, 0.190320, 0.273508);
+        if (knot < 6.5) return vec3(0.174431, 0.091074, 0.231637);
+        if (knot < 7.5) return vec3(0.096998, 0.043509, 0.057239);
+        if (knot < 8.5) return vec3(0.063358, 0.037671, 0.057239);
+        if (knot < 9.5) return vec3(0.025520, 0.029825, 0.057239);
+        return vec3(0.025520, 0.025845, 0.057239);
+      }
+      if (profile < 1.5) {
+        if (knot < 0.5) return vec3(0.988695, 0.982016, 0.984934);
+        if (knot < 1.5) return vec3(0.899821, 0.868660, 0.932758);
+        if (knot < 2.5) return vec3(0.757199, 0.595692, 0.768483);
+        if (knot < 3.5) return vec3(0.506845, 0.381230, 0.549015);
+        if (knot < 4.5) return vec3(0.313549, 0.234961, 0.313488);
+        if (knot < 5.5) return vec3(0.253077, 0.213014, 0.255865);
+        if (knot < 6.5) return vec3(0.167284, 0.114352, 0.255865);
+        if (knot < 7.5) return vec3(0.110408, 0.041374, 0.134999);
+        if (knot < 8.5) return vec3(0.041514, 0.028878, 0.061323);
+        if (knot < 9.5) return vec3(0.029620, 0.028878, 0.052189);
+        return vec3(0.018251, 0.019974, 0.042113);
+      }
+      if (profile < 2.5) {
+        if (knot < 0.5) return vec3(0.992840, 0.989718, 0.992886);
+        if (knot < 1.5) return vec3(0.964433, 0.929469, 0.959548);
+        if (knot < 2.5) return vec3(0.772915, 0.776278, 0.809359);
+        if (knot < 3.5) return vec3(0.772915, 0.717912, 0.807061);
+        if (knot < 4.5) return vec3(0.650805, 0.584919, 0.745133);
+        if (knot < 5.5) return vec3(0.581862, 0.377581, 0.609145);
+        if (knot < 6.5) return vec3(0.445023, 0.216584, 0.401956);
+        if (knot < 7.5) return vec3(0.300384, 0.172346, 0.256013);
+        if (knot < 8.5) return vec3(0.122844, 0.075729, 0.208724);
+        if (knot < 9.5) return vec3(0.087376, 0.060105, 0.094601);
+        return vec3(0.049887, 0.030462, 0.037899);
+      }
+      if (knot < 0.5) return vec3(0.985135, 0.971552, 0.983431);
+      if (knot < 1.5) return vec3(0.865963, 0.668719, 0.816706);
+      if (knot < 2.5) return vec3(0.656051, 0.387681, 0.645829);
+      if (knot < 3.5) return vec3(0.555563, 0.322584, 0.592476);
+      if (knot < 4.5) return vec3(0.326772, 0.192716, 0.277493);
+      if (knot < 5.5) return vec3(0.257059, 0.192716, 0.277493);
+      if (knot < 6.5) return vec3(0.179266, 0.180829, 0.261991);
+      if (knot < 7.5) return vec3(0.151201, 0.069637, 0.261991);
+      if (knot < 8.5) return vec3(0.145899, 0.068378, 0.261991);
+      if (knot < 9.5) return vec3(0.145899, 0.068378, 0.126500);
+      return vec3(0.145899, 0.068378, 0.126500);
+    }
+
     float calibratedColorChannel(
-      float value, float inputGain, float channel, float negativeExposureEV
+      float value, float inputGain, float channel, float negativeExposureEV,
+      float profile
     ) {
       float exposed = clamp(
         value * inputGain * pow(2.0, negativeExposureEV), 0.0, 1.0);
-      vec3 y0;
-      vec3 y1;
-      float x0;
-      if (exposed < 0.1) {
-        x0 = 0.0; y0 = vec3(0.988782, 0.981603, 0.985590);
-        y1 = vec3(0.906913, 0.862303, 0.928206);
-      } else if (exposed < 0.2) {
-        x0 = 0.1; y0 = vec3(0.906913, 0.862303, 0.928206);
-        y1 = vec3(0.741342, 0.575805, 0.733601);
-      } else if (exposed < 0.3) {
-        x0 = 0.2; y0 = vec3(0.741342, 0.575805, 0.733601);
-        y1 = vec3(0.529294, 0.393775, 0.590298);
-      } else if (exposed < 0.4) {
-        x0 = 0.3; y0 = vec3(0.529294, 0.393775, 0.590298);
-        y1 = vec3(0.377395, 0.241577, 0.308451);
-      } else if (exposed < 0.5) {
-        x0 = 0.4; y0 = vec3(0.377395, 0.241577, 0.308451);
-        y1 = vec3(0.246425, 0.190320, 0.273508);
-      } else if (exposed < 0.6) {
-        x0 = 0.5; y0 = vec3(0.246425, 0.190320, 0.273508);
-        y1 = vec3(0.174431, 0.091074, 0.231637);
-      } else if (exposed < 0.7) {
-        x0 = 0.6; y0 = vec3(0.174431, 0.091074, 0.231637);
-        y1 = vec3(0.096998, 0.043509, 0.057239);
-      } else if (exposed < 0.8) {
-        x0 = 0.7; y0 = vec3(0.096998, 0.043509, 0.057239);
-        y1 = vec3(0.063358, 0.037671, 0.057239);
-      } else if (exposed < 0.9) {
-        x0 = 0.8; y0 = vec3(0.063358, 0.037671, 0.057239);
-        y1 = vec3(0.025520, 0.029825, 0.057239);
-      } else {
-        x0 = 0.9; y0 = vec3(0.025520, 0.029825, 0.057239);
-        y1 = vec3(0.025520, 0.025845, 0.057239);
-      }
-      float fraction = (exposed - x0) * 10.0;
-      vec3 result = mix(y0, y1, fraction);
+      float position = exposed * 10.0;
+      float lower = min(floor(position), 9.0);
+      vec3 result = mix(
+        calibratedColorKnot(profile, lower),
+        calibratedColorKnot(profile, lower + 1.0),
+        position - lower);
       return channel == 0.0 ? result.r : (channel == 1.0 ? result.g : result.b);
     }
 
     vec3 calibratedColorCurve(
-      vec3 value, vec3 inputGain, float negativeExposureEV
+      vec3 value, vec3 inputGain, float negativeExposureEV, float profile
     ) {
       return vec3(
-        calibratedColorChannel(value.r, inputGain.r, 0.0, negativeExposureEV),
-        calibratedColorChannel(value.g, inputGain.g, 1.0, negativeExposureEV),
-        calibratedColorChannel(value.b, inputGain.b, 2.0, negativeExposureEV));
+        calibratedColorChannel(
+          value.r, inputGain.r, 0.0, negativeExposureEV, profile),
+        calibratedColorChannel(
+          value.g, inputGain.g, 1.0, negativeExposureEV, profile),
+        calibratedColorChannel(
+          value.b, inputGain.b, 2.0, negativeExposureEV, profile));
     }
 
     vec3 filmNegativeLinearValue(vec3 value, vec3 exponent, vec3 multiplier) {
@@ -716,6 +751,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       float shadowStrength,
       float filmNegativeEnabled,
       float filmNegativeRendering,
+      float calibratedColorProfile,
       float monochromeExposureEV,
       float fnRExp,
       float fnGExp,
@@ -757,7 +793,8 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         }
       } else if (filmNegativeEnabled == 1.0 && useCalibratedColor) {
         rgb = calibratedColorCurve(
-          rgb, vec3(fnRMult, fnGMult, fnBMult), monochromeExposureEV);
+          rgb, vec3(fnRMult, fnGMult, fnBMult), monochromeExposureEV,
+          calibratedColorProfile);
         if (useDyeMixing || useLinearTone || useProtectedColor) {
           vec3 linear = displayLinearValue(rgb);
           if (useDyeMixing) {

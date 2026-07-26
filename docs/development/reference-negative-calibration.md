@@ -31,7 +31,9 @@ The tool:
 3. maps the XMP crop back into the decoder's active RAW rectangle;
 4. scores current and Legacy neutral renders against the manual JPEG;
 5. fits monotone 11-point curves plus exposure and channel-ratio normalization;
-6. reports leave-one-frame-out error for generic and per-stock candidates.
+6. reports leave-one-frame-out error for candidates with at least three frames;
+   smaller stock folders still emit explicitly unvalidated fitted curves and
+   base medians for experimental alternate looks.
 
 The July 2026 13-triplet fit selected half-strength exposure normalization and
 quarter-strength channel-ratio normalization for the generic color profile.
@@ -43,9 +45,17 @@ green-median exposure anchoring and a steeper curve; Legacy remains available
 because it still has the strongest held-out result on the small three-frame B&W
 set.
 
-A stock directory is not enough evidence to ship a named built-in profile. Add
-one only when it has at least three varied frames and its held-out result beats
-the generic candidate on the same frames by a material margin (currently 5%
-relative). The eight-frame Fuji 400 candidate reached `0.137` held out versus
-`0.139` for the generic fit on those frames, only about a 2% reduction. It
-therefore remains a reported candidate rather than a product preset.
+A stock directory is not enough evidence to replace the generic default or
+drive automatic stock selection. Require at least three varied frames and a
+material held-out improvement (currently 5% relative) for that. The eight-frame
+Fuji 400 candidate reached `0.137` held out versus `0.139` for the generic fit
+on those frames, only about a 2% reduction. It is therefore exposed as an
+explicit alternate, not a promoted default. The Fuji 200 Expired and CineStill
+800T alternates each have one reference; their reports omit held-out error and
+their UI descriptions call them experimental.
+
+On each alternate's own fit set, neutral mean absolute error moves from
+`0.129` to `0.125` for Fuji 400 Fresh, `0.107` to `0.071` for Fuji 200 Expired,
+and `0.078` to `0.068` for CineStill 800T. Only the first comparison has enough
+frames for held-out evidence; the other two numbers measure direction and
+target matching, not generalization.

@@ -184,6 +184,30 @@ public struct FilmStockProfile: Codable, Equatable, Sendable {
     filmNegativeParams: .legacyColourNegative
   )
 
+  public static let fuji400FreshAlternate = FilmStockProfile(
+    id: FilmStockProfileID(rawValue: "alternate_fuji_400_fresh"),
+    displayName: "Alternate — Fuji 400 Fresh",
+    filmType: .colourNegative,
+    filmNegativeParams: .fuji400FreshAlternate,
+    notes: "Eight-frame fresh-base held-out fit; intentionally offered as an alternate"
+  )
+
+  public static let fuji200ExpiredAlternate = FilmStockProfile(
+    id: FilmStockProfileID(rawValue: "alternate_fuji_200_expired"),
+    displayName: "Alternate — Fuji 200 Expired",
+    filmType: .colourNegative,
+    filmNegativeParams: .fuji200ExpiredAlternate,
+    notes: "Experimental warm expired-base direction fitted from one paired reference"
+  )
+
+  public static let cinestill800TAlternate = FilmStockProfile(
+    id: FilmStockProfileID(rawValue: "alternate_cinestill_800t"),
+    displayName: "Alternate — CineStill 800T",
+    filmType: .colourNegative,
+    filmNegativeParams: .cinestill800TAlternate,
+    notes: "Experimental tungsten-base direction fitted from one paired reference"
+  )
+
   public static let genericBW = FilmStockProfile(
     id: FilmStockProfileID(rawValue: "generic_bw_negative_camera_raw"),
     displayName: "Generic B&W Negative",
@@ -401,7 +425,15 @@ public final class ProfileStore: Sendable {
   }
 
   public func builtInFilmStockProfiles() -> [FilmStockProfile] {
-    [.genericColorNegative, .legacyColorNegative, .genericBW, .legacyBW]
+    [
+      .genericColorNegative,
+      .fuji400FreshAlternate,
+      .fuji200ExpiredAlternate,
+      .cinestill800TAlternate,
+      .legacyColorNegative,
+      .genericBW,
+      .legacyBW,
+    ]
   }
 
   // MARK: - Resolution

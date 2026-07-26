@@ -721,6 +721,12 @@ final class AppModel: ObservableObject {
         $0.filmNegativeParams.enabled = false
       case .colourNegative:
         $0.filmNegativeParams = FilmNegativeParams.colourNegative
+      case .fuji400FreshAlternate:
+        $0.filmNegativeParams = FilmNegativeParams.fuji400FreshAlternate
+      case .fuji200ExpiredAlternate:
+        $0.filmNegativeParams = FilmNegativeParams.fuji200ExpiredAlternate
+      case .cinestill800TAlternate:
+        $0.filmNegativeParams = FilmNegativeParams.cinestill800TAlternate
       case .legacyColourNegative:
         $0.filmNegativeParams = FilmNegativeParams.legacyColourNegative
       case .blackAndWhite:
@@ -2073,6 +2079,15 @@ final class AppModel: ObservableObject {
       next.filmNegativeParams = FilmNegativeParams(enabled: false)
     case .colourNegative:
       next.filmNegativeParams = FilmNegativeParams.colourNegative
+      next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
+    case .fuji400FreshAlternate:
+      next.filmNegativeParams = FilmNegativeParams.fuji400FreshAlternate
+      next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
+    case .fuji200ExpiredAlternate:
+      next.filmNegativeParams = FilmNegativeParams.fuji200ExpiredAlternate
+      next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
+    case .cinestill800TAlternate:
+      next.filmNegativeParams = FilmNegativeParams.cinestill800TAlternate
       next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
     case .legacyColourNegative:
       next.filmNegativeParams = FilmNegativeParams.legacyColourNegative

@@ -389,7 +389,7 @@ struct ContentView: View {
             set: { model.setFilmNegativePreset($0) }
           )
         ) {
-          ForEach(FilmNegativePreset.allCases, id: \.self) { preset in
+          ForEach(filmNegativePresets(for: model.parameters.filmType), id: \.self) { preset in
             Text(preset.displayName).tag(preset)
           }
         }
@@ -460,7 +460,7 @@ struct ContentView: View {
           if fn.rendering != .powerLaw {
             Text(
               fn.rendering == .calibratedColor
-                ? "Paired-scan calibrated adaptive Camera Raw colour curves"
+                ? calibratedColorProfileDescription(fn.calibratedColorProfile)
                 : "Paired-scan calibrated monochrome curve"
             )
               .font(.caption2)
@@ -1474,12 +1474,13 @@ struct ContentView: View {
   private func filmNegativePreset(for params: ProcessingParameters) -> FilmNegativePreset {
     guard params.filmNegativeParams.enabled else { return .off }
     let fn = params.filmNegativeParams
-    if fn.rendering == FilmNegativeParams.colourNegative.rendering
-      && fn.redRatio == FilmNegativeParams.colourNegative.redRatio
-      && fn.greenExp == FilmNegativeParams.colourNegative.greenExp
-      && fn.blueRatio == FilmNegativeParams.colourNegative.blueRatio
-    {
-      return .colourNegative
+    if fn.rendering == .calibratedColor {
+      switch fn.calibratedColorProfile {
+      case .generic: return .colourNegative
+      case .fuji400Fresh: return .fuji400FreshAlternate
+      case .fuji200Expired: return .fuji200ExpiredAlternate
+      case .cinestill800T: return .cinestill800TAlternate
+      }
     }
     if fn.rendering == FilmNegativeParams.legacyColourNegative.rendering
       && fn.redRatio == FilmNegativeParams.legacyColourNegative.redRatio
@@ -1503,8 +1504,41 @@ struct ContentView: View {
     return .off
   }
 
+  private func calibratedColorProfileDescription(
+    _ profile: CalibratedColorNegativeProfile
+  ) -> String {
+    switch profile {
+    case .generic:
+      "Paired-scan adaptive Camera Raw colour curves"
+    case .fuji400Fresh:
+      "Alternate fresh-base curve fitted from eight Fuji 400 references"
+    case .fuji200Expired:
+      "Experimental warm expired-base curve fitted from one Fuji 200 reference"
+    case .cinestill800T:
+      "Experimental tungsten-base curve fitted from one CineStill 800T reference"
+    }
+  }
+
   private func supportsFilmNegative(filmType: FilmType) -> Bool {
     filmType == .colourNegative || filmType == .blackAndWhiteNegative
+  }
+
+  private func filmNegativePresets(for filmType: FilmType) -> [FilmNegativePreset] {
+    switch filmType {
+    case .colourNegative:
+      [
+        .off,
+        .colourNegative,
+        .fuji400FreshAlternate,
+        .fuji200ExpiredAlternate,
+        .cinestill800TAlternate,
+        .legacyColourNegative,
+      ]
+    case .blackAndWhiteNegative:
+      [.off, .blackAndWhite, .legacyBlackAndWhite]
+    case .slide, .cropOnly:
+      [.off]
+    }
   }
 
   private func densityRow(_ label: String, _ value: Double) -> some View {

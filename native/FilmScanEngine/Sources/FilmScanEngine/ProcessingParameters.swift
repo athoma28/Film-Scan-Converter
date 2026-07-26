@@ -59,12 +59,23 @@ public enum FilmNegativeRendering: String, Codable, Equatable, Sendable {
   case calibratedMonochrome
 }
 
+/// Selects the paired-reference curve and film-base anchor used by the
+/// calibrated colour-negative renderer. Alternate cases are intentionally
+/// explicit so saved edits remain stable as more stocks are added later.
+public enum CalibratedColorNegativeProfile: String, Codable, Equatable, Sendable {
+  case generic
+  case fuji400Fresh
+  case fuji200Expired
+  case cinestill800T
+}
+
 public struct FilmNegativeParams: Codable, Equatable, Sendable {
   public var enabled: Bool
   public var redRatio: Double
   public var greenExp: Double
   public var blueRatio: Double
   public var rendering: FilmNegativeRendering
+  public var calibratedColorProfile: CalibratedColorNegativeProfile
   /// Exposure applied to the scan before a calibrated decreasing curve.
   /// Positive values therefore produce a darker positive image.
   public var monochromeExposureEV: Double
@@ -77,6 +88,7 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     case greenExp
     case blueRatio
     case rendering
+    case calibratedColorProfile
     case monochromeExposureEV
   }
 
@@ -86,6 +98,7 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     greenExp: Double = 1.5,
     blueRatio: Double = 0.86,
     rendering: FilmNegativeRendering = .powerLaw,
+    calibratedColorProfile: CalibratedColorNegativeProfile = .generic,
     monochromeExposureEV: Double = 0,
     measuredMedians: BGRChannelValues? = nil
   ) {
@@ -95,6 +108,7 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     self.greenExp = greenExp
     self.blueRatio = blueRatio
     self.rendering = rendering
+    self.calibratedColorProfile = calibratedColorProfile
     self.monochromeExposureEV = monochromeExposureEV
     self.measuredMedians = measuredMedians
   }
@@ -110,6 +124,9 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     rendering = try container.decodeIfPresent(
       FilmNegativeRendering.self, forKey: .rendering
     ) ?? .powerLaw
+    calibratedColorProfile = try container.decodeIfPresent(
+      CalibratedColorNegativeProfile.self, forKey: .calibratedColorProfile
+    ) ?? .generic
     monochromeExposureEV = try container.decodeIfPresent(
       Double.self, forKey: .monochromeExposureEV
     ) ?? 0
@@ -123,6 +140,7 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     try container.encode(greenExp, forKey: .greenExp)
     try container.encode(blueRatio, forKey: .blueRatio)
     try container.encode(rendering, forKey: .rendering)
+    try container.encode(calibratedColorProfile, forKey: .calibratedColorProfile)
     try container.encode(monochromeExposureEV, forKey: .monochromeExposureEV)
   }
 
@@ -135,6 +153,21 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     greenExp: 1.5,
     blueRatio: 0.86,
     rendering: .calibratedColor
+  )
+  public static let fuji400FreshAlternate = FilmNegativeParams(
+    enabled: true,
+    rendering: .calibratedColor,
+    calibratedColorProfile: .fuji400Fresh
+  )
+  public static let fuji200ExpiredAlternate = FilmNegativeParams(
+    enabled: true,
+    rendering: .calibratedColor,
+    calibratedColorProfile: .fuji200Expired
+  )
+  public static let cinestill800TAlternate = FilmNegativeParams(
+    enabled: true,
+    rendering: .calibratedColor,
+    calibratedColorProfile: .cinestill800T
   )
   public static let legacyBlackAndWhite = FilmNegativeParams(
     enabled: true, redRatio: 1.0, greenExp: 1.5, blueRatio: 1.0
@@ -151,6 +184,9 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
 public enum FilmNegativePreset: Int, CaseIterable, Hashable, Sendable {
   case off
   case colourNegative
+  case fuji400FreshAlternate
+  case fuji200ExpiredAlternate
+  case cinestill800TAlternate
   case legacyColourNegative
   case blackAndWhite
   case legacyBlackAndWhite
@@ -159,6 +195,9 @@ public enum FilmNegativePreset: Int, CaseIterable, Hashable, Sendable {
     switch self {
     case .off: "Off"
     case .colourNegative: "Color Negative"
+    case .fuji400FreshAlternate: "Alternate — Fuji 400 Fresh"
+    case .fuji200ExpiredAlternate: "Alternate — Fuji 200 Expired"
+    case .cinestill800TAlternate: "Alternate — CineStill 800T"
     case .legacyColourNegative: "Color Negative (Legacy)"
     case .blackAndWhite: "Black & White"
     case .legacyBlackAndWhite: "Black & White (Legacy)"

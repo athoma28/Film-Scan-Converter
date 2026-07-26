@@ -69,6 +69,8 @@ struct RawImageDecoderTests {
     let triplets = SampleRawCorpus.triplets().filter { !$0.isMonochrome }
     var calibratedErrors: [Double] = []
     var legacyErrors: [Double] = []
+    var genericErrorsByStock: [String: [Double]] = [:]
+    var alternateErrorsByStock: [String: [Double]] = [:]
     for triplet in triplets {
       let reference = try SampleRawCorpus.loadAlignedReference(triplet)
       let medians = FilmNegativeProcessing.computeMedians(
@@ -97,6 +99,27 @@ struct RawImageDecoderTests {
       let legacyError = referenceMAE(legacy, against: reference)
       calibratedErrors.append(calibratedError)
       legacyErrors.append(legacyError)
+      genericErrorsByStock[triplet.stockID, default: []].append(calibratedError)
+
+      let alternateParams: FilmNegativeParams? = switch triplet.stockID {
+      case "fuji400-fresh": .fuji400FreshAlternate
+      case "fuji200-expired": .fuji200ExpiredAlternate
+      case "cinestill800t": .cinestill800TAlternate
+      default: nil
+      }
+      if var alternateParams {
+        alternateParams.measuredMedians = medians
+        let alternate = FilmProcessing.correctedPreview(
+          image: reference.raw,
+          parameters: ProcessingParameters(
+            filmType: .colourNegative,
+            filmNegativeParams: alternateParams
+          )
+        )
+        alternateErrorsByStock[triplet.stockID, default: []].append(
+          referenceMAE(alternate, against: reference)
+        )
+      }
       #expect(
         calibratedError < 0.23,
         "\(triplet.stockID)/\(triplet.stem) mean absolute colour error \(calibratedError)"
@@ -109,6 +132,16 @@ struct RawImageDecoderTests {
       "generic calibrated colour mean absolute error \(calibratedMean)"
     )
     #expect(calibratedMean < legacyMean)
+    for stockID in ["fuji400-fresh", "fuji200-expired", "cinestill800t"] {
+      let generic = try #require(genericErrorsByStock[stockID])
+      let alternate = try #require(alternateErrorsByStock[stockID])
+      let genericMean = generic.reduce(0, +) / Double(generic.count)
+      let alternateMean = alternate.reduce(0, +) / Double(alternate.count)
+      #expect(
+        alternateMean < genericMean,
+        "\(stockID) alternate \(alternateMean) should beat generic \(genericMean) on its fit set"
+      )
+    }
   }
 
   @Test(

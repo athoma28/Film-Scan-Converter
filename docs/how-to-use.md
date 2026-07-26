@@ -50,6 +50,12 @@ The native application is the primary product. It provides:
    exposure and channel-ratio adaptation. It stabilizes tone across negative
    densities while retaining more scene color than full median balancing;
    **Color Negative (Legacy)** retains the former exponent renderer.
+   Three deliberately non-default alternatives explore the measured base
+   families: **Alternate — Fuji 400 Fresh** uses the eight-frame fresh C-41
+   fit, **Alternate — Fuji 200 Expired** takes a warm expired-base direction,
+   and **Alternate — CineStill 800T** takes the tungsten-base direction. The
+   latter two are experimental one-frame fits, so treat them as starting looks
+   rather than general stock characterizations.
    **Black & White** uses a paired-scan calibrated monochrome curve with full
    exposure anchoring so frames from one roll do not sit on an overexposed
    highlight plateau. **Black & White (Legacy)** preserves the old rendering.

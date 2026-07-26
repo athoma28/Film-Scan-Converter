@@ -299,7 +299,16 @@ struct StillPreviewBenchmarkTests {
       CurvePoint(input: 1, output: 1),
     ]
     var protectedFilmNegative = FilmNegativeParams.colourNegative
-    protectedFilmNegative.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
+    let measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
+    protectedFilmNegative.measuredMedians = measuredMedians
+    func alternateParameters(_ profile: FilmNegativeParams) -> ProcessingParameters {
+      var filmNegative = profile
+      filmNegative.measuredMedians = measuredMedians
+      return ProcessingParameters(
+        filmType: .colourNegative,
+        filmNegativeParams: filmNegative
+      )
+    }
     let protectedWarmVibrance = ProcessingParameters(
       filmType: .colourNegative,
       filmNegativeParams: protectedFilmNegative,
@@ -354,6 +363,9 @@ struct StillPreviewBenchmarkTests {
 
     let configs: [(String, ProcessingParameters)] = [
       ("neutral-neg", ProcessingParameters(filmType: .colourNegative)),
+      ("alternate-fuji-400", alternateParameters(.fuji400FreshAlternate)),
+      ("alternate-fuji-200-expired", alternateParameters(.fuji200ExpiredAlternate)),
+      ("alternate-cinestill-800t", alternateParameters(.cinestill800TAlternate)),
       ("neutral-slide", ProcessingParameters(filmType: .slide)),
       ("warm", ProcessingParameters(filmType: .colourNegative, temperature: 50, tint: -30)),
       ("cool", ProcessingParameters(filmType: .colourNegative, temperature: -50, tint: 30)),

@@ -43,6 +43,10 @@ features.
   exposed negatives usable without forcing mixed-light and dusk frames fully
   neutral. The former RawTherapee-compatible exponent rendering remains
   available as **Color Negative (Legacy)**.
+- Three selectable alternate color-negative profiles use separate measured
+  base anchors and curves: fresh Fuji 400 (eight references), expired Fuji 200
+  (one reference), and CineStill 800T (one reference). The single-frame fits
+  are labeled experimental and do not replace the generic default.
 - An optional capture-aware density pipeline with film-base measurement,
   flat-field calibration, capture/stock/roll profiles, and a 3x3-plus-offset
   density-correction slot stored in capture profiles. An offline
@@ -80,9 +84,11 @@ features.
 ### Batch And Settings Workflow
 
 - Per-file correction settings persisted across launches.
-- User film-stock profiles preserve the current negative rendering, exponents, dye-
-  crossover correction, density response, and display rendering settings.
-  The app does not ship unvalidated stock-specific color matrices.
+- User film-stock profiles preserve the current negative rendering, calibrated
+  color variant, exponents, dye-crossover correction, density response, and
+  display rendering settings.
+  The app does not use the alternate base fits as automatic stock detection or
+  as validated density-correction matrices.
 - The generic B&W profile uses a paired RAW/JPEG/XMP-calibrated decreasing
   curve, full per-frame exposure anchoring, and a negative-side exposure
   control. The former B&W power-law rendering remains selectable as
