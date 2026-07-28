@@ -46,6 +46,7 @@ private struct ReferenceFrame {
   let pairs: [PixelPair]
   let currentMAE: Double
   let legacyMAE: Double
+  let builtInStockProfileMAE: Double?
 }
 
 private struct CurveCandidate {
@@ -55,6 +56,11 @@ private struct CurveCandidate {
   let curves: [[Double]]
 }
 
+private enum ValidationMethod: String, Codable {
+  case leaveOneFrameOut
+  case leaveOneStockOut
+}
+
 private struct FrameScore: Codable {
   let stockID: String
   let stem: String
@@ -62,8 +68,10 @@ private struct FrameScore: Codable {
   let measuredMediansBGR: [Double]
   let currentMAE: Double
   let legacyMAE: Double
+  let builtInStockProfileMAE: Double?
   let candidateMAE: Double
   let leaveOneOutMAE: Double?
+  let leaveOneStockOutMAE: Double?
 }
 
 private struct CandidateReport: Codable {
@@ -74,8 +82,12 @@ private struct CandidateReport: Codable {
   let curvesBGR: [[Double]]
   let currentMeanAbsoluteError: Double
   let legacyMeanAbsoluteError: Double
+  let builtInStockMeanAbsoluteError: Double?
   let fittedMeanAbsoluteError: Double
+  let validationMethod: ValidationMethod
+  let selectedValidationMeanAbsoluteError: Double?
   let leaveOneOutMeanAbsoluteError: Double?
+  let leaveOneStockOutMeanAbsoluteError: Double?
   let frames: [FrameScore]
 }
 
@@ -136,10 +148,20 @@ private func run(options: Options) throws {
   let colorFrames = frames.filter { !$0.monochrome }
   let monochromeFrames = frames.filter(\.monochrome)
   let genericColor = colorFrames.count >= 3
-    ? calibrate(colorFrames, monochrome: false)
+    ? calibrate(
+      colorFrames,
+      monochrome: false,
+      validationMethod: Set(colorFrames.map(\.stockID)).count > 1
+        ? .leaveOneStockOut
+        : .leaveOneFrameOut
+    )
     : nil
   let genericMonochrome = monochromeFrames.count >= 3
-    ? calibrate(monochromeFrames, monochrome: true)
+    ? calibrate(
+      monochromeFrames,
+      monochrome: true,
+      validationMethod: .leaveOneFrameOut
+    )
     : nil
 
   var stockProfiles: [String: CandidateReport] = [:]
@@ -148,12 +170,16 @@ private func run(options: Options) throws {
     guard modes.count == 1 else { continue }
     let monochrome = modes.first == true
     stockProfiles[stockID] = stockFrames.count >= 3
-      ? calibrate(stockFrames, monochrome: monochrome)
+      ? calibrate(
+        stockFrames,
+        monochrome: monochrome,
+        validationMethod: .leaveOneFrameOut
+      )
       : fitUnvalidatedStockCandidate(stockFrames, monochrome: monochrome)
   }
 
   let report = CalibrationReport(
-    schemaVersion: 3,
+    schemaVersion: 4,
     generatedAt: ISO8601DateFormatter().string(from: Date()),
     sampleRoot: options.root.path,
     decodeProfile: "rawTherapeeCameraScan half-resolution",
@@ -333,11 +359,23 @@ private func loadFrame(_ triplet: ReferenceTriplet, stride: Int) throws -> Refer
       filmNegativeParams: legacyParams
     )
   )
+  let builtInStock = builtInStockParameters(for: triplet.stockID).map { stockParams in
+    var params = stockParams
+    params.measuredMedians = medians
+    return FilmProcessing.correctedPreview(
+      image: decoded,
+      parameters: ProcessingParameters(
+        filmType: filmType,
+        filmNegativeParams: params
+      )
+    )
+  }
 
   var pairs: [PixelPair] = []
   pairs.reserveCapacity((target.width / stride + 1) * (target.height / stride + 1))
   var currentError = 0.0
   var legacyError = 0.0
+  var builtInStockError = 0.0
   var componentCount = 0
   for y in Swift.stride(from: 0, to: target.height, by: stride) {
     for x in Swift.stride(from: 0, to: target.width, by: stride) {
@@ -358,6 +396,9 @@ private func loadFrame(_ triplet: ReferenceTriplet, stride: Int) throws -> Refer
       let targetChannels = [targetB, targetG, targetR]
       let currentBase = ((originY + y) * current.width + originX + x) * current.channels
       let legacyBase = ((originY + y) * legacy.width + originX + x) * legacy.channels
+      let builtInStockBase = builtInStock.map {
+        ((originY + y) * $0.width + originX + x) * $0.channels
+      }
       for channel in 0..<3 {
         let currentValue = current.pixels[
           currentBase + (current.channels == 1 ? 0 : channel)
@@ -371,6 +412,14 @@ private func loadFrame(_ triplet: ReferenceTriplet, stride: Int) throws -> Refer
         legacyError += abs(
           Double(legacyValue) - Double(targetChannels[channel])
         ) / 65_535
+        if let builtInStock, let builtInStockBase {
+          let builtInStockValue = builtInStock.pixels[
+            builtInStockBase + (builtInStock.channels == 1 ? 0 : channel)
+          ]
+          builtInStockError += abs(
+            Double(builtInStockValue) - Double(targetChannels[channel])
+          ) / 65_535
+        }
         componentCount += 1
       }
     }
@@ -383,11 +432,28 @@ private func loadFrame(_ triplet: ReferenceTriplet, stride: Int) throws -> Refer
     medians: medians,
     pairs: pairs,
     currentMAE: currentError / Double(componentCount),
-    legacyMAE: legacyError / Double(componentCount)
+    legacyMAE: legacyError / Double(componentCount),
+    builtInStockProfileMAE: builtInStock.map {
+      _ in builtInStockError / Double(componentCount)
+    }
   )
 }
 
-private func calibrate(_ frames: [ReferenceFrame], monochrome: Bool) -> CandidateReport {
+private func builtInStockParameters(for stockID: String) -> FilmNegativeParams? {
+  switch stockID {
+  case "fuji400-fresh": .fuji400FreshAlternate
+  case "fuji200-expired": .fuji200ExpiredAlternate
+  case "cinestill800t": .cinestill800TAlternate
+  case "harmanphoenixii": .harmanPhoenixIIAlternate
+  default: nil
+  }
+}
+
+private func calibrate(
+  _ frames: [ReferenceFrame],
+  monochrome: Bool,
+  validationMethod: ValidationMethod
+) -> CandidateReport {
   let exposureGrid = [0.0, 0.25, 0.5, 0.75, 1.0]
   let colorGrid = monochrome ? [0.0] : [0.0, 0.25, 0.5, 0.75, 1.0]
   var bestStrengths = (exposure: 0.0, color: 0.0)
@@ -395,22 +461,13 @@ private func calibrate(_ frames: [ReferenceFrame], monochrome: Bool) -> Candidat
 
   for exposure in exposureGrid {
     for color in colorGrid {
-      var totalError = 0.0
-      var totalComponents = 0
-      for heldOutIndex in frames.indices {
-        let training = frames.indices.filter { $0 != heldOutIndex }.map { frames[$0] }
-        guard !training.isEmpty else { continue }
-        let candidate = fitCandidate(
-          training,
-          monochrome: monochrome,
-          exposureNormalization: exposure,
-          colorNormalization: color
-        )
-        let score = score(frame: frames[heldOutIndex], candidate: candidate, monochrome: monochrome)
-        totalError += score.errorSum
-        totalComponents += score.componentCount
-      }
-      let error = totalError / Double(max(totalComponents, 1))
+      let error = crossValidatedScores(
+        frames,
+        monochrome: monochrome,
+        exposureNormalization: exposure,
+        colorNormalization: color,
+        method: validationMethod
+      ).mean
       if error < bestHeldOutError {
         bestHeldOutError = error
         bestStrengths = (exposure, color)
@@ -424,22 +481,22 @@ private func calibrate(_ frames: [ReferenceFrame], monochrome: Bool) -> Candidat
     exposureNormalization: bestStrengths.exposure,
     colorNormalization: bestStrengths.color
   )
-  let leaveOneOutScores = frames.indices.map { heldOutIndex -> Double in
-    let training = frames.indices.filter { $0 != heldOutIndex }.map { frames[$0] }
-    guard !training.isEmpty else { return .nan }
-    let heldOutCandidate = fitCandidate(
-      training,
+  let leaveOneOut = crossValidatedScores(
+    frames,
+    monochrome: monochrome,
+    exposureNormalization: bestStrengths.exposure,
+    colorNormalization: bestStrengths.color,
+    method: .leaveOneFrameOut
+  )
+  let leaveOneStockOut = Set(frames.map(\.stockID)).count > 1
+    ? crossValidatedScores(
+      frames,
       monochrome: monochrome,
       exposureNormalization: bestStrengths.exposure,
-      colorNormalization: bestStrengths.color
+      colorNormalization: bestStrengths.color,
+      method: .leaveOneStockOut
     )
-    let scored = score(
-      frame: frames[heldOutIndex],
-      candidate: heldOutCandidate,
-      monochrome: monochrome
-    )
-    return scored.errorSum / Double(scored.componentCount)
-  }
+    : nil
   var frameScores: [FrameScore] = []
   var fittedError = 0.0
   var fittedComponents = 0
@@ -459,8 +516,10 @@ private func calibrate(_ frames: [ReferenceFrame], monochrome: Bool) -> Candidat
         ],
         currentMAE: frame.currentMAE,
         legacyMAE: frame.legacyMAE,
+        builtInStockProfileMAE: frame.builtInStockProfileMAE,
         candidateMAE: scored.errorSum / Double(scored.componentCount),
-        leaveOneOutMAE: leaveOneOutScores[frameIndex]
+        leaveOneOutMAE: leaveOneOut.perFrame[frameIndex],
+        leaveOneStockOutMAE: leaveOneStockOut?.perFrame[frameIndex]
       )
     )
   }
@@ -477,9 +536,64 @@ private func calibrate(_ frames: [ReferenceFrame], monochrome: Bool) -> Candidat
     curvesBGR: candidate.curves,
     currentMeanAbsoluteError: frames.map(\.currentMAE).reduce(0, +) / count,
     legacyMeanAbsoluteError: frames.map(\.legacyMAE).reduce(0, +) / count,
+    builtInStockMeanAbsoluteError: completeBuiltInStockMean(frames),
     fittedMeanAbsoluteError: fittedError / Double(fittedComponents),
-    leaveOneOutMeanAbsoluteError: bestHeldOutError,
+    validationMethod: validationMethod,
+    selectedValidationMeanAbsoluteError: bestHeldOutError,
+    leaveOneOutMeanAbsoluteError: leaveOneOut.mean,
+    leaveOneStockOutMeanAbsoluteError: leaveOneStockOut?.mean,
     frames: frameScores
+  )
+}
+
+private func crossValidatedScores(
+  _ frames: [ReferenceFrame],
+  monochrome: Bool,
+  exposureNormalization: Double,
+  colorNormalization: Double,
+  method: ValidationMethod
+) -> (mean: Double, perFrame: [Double]) {
+  let groups: [[Int]]
+  switch method {
+  case .leaveOneFrameOut:
+    groups = frames.indices.map { [$0] }
+  case .leaveOneStockOut:
+    groups = Dictionary(grouping: frames.indices, by: { frames[$0].stockID })
+      .sorted { $0.key < $1.key }
+      .map(\.value)
+  }
+
+  var perFrame = Array(repeating: Double.nan, count: frames.count)
+  var groupErrors: [Double] = []
+  for heldOutIndices in groups {
+    let heldOut = Set(heldOutIndices)
+    let training = frames.indices
+      .filter { !heldOut.contains($0) }
+      .map { frames[$0] }
+    guard !training.isEmpty else { continue }
+    let candidate = fitCandidate(
+      training,
+      monochrome: monochrome,
+      exposureNormalization: exposureNormalization,
+      colorNormalization: colorNormalization
+    )
+    var groupError = 0.0
+    var groupComponents = 0
+    for heldOutIndex in heldOutIndices {
+      let scored = score(
+        frame: frames[heldOutIndex],
+        candidate: candidate,
+        monochrome: monochrome
+      )
+      perFrame[heldOutIndex] = scored.errorSum / Double(scored.componentCount)
+      groupError += scored.errorSum
+      groupComponents += scored.componentCount
+    }
+    groupErrors.append(groupError / Double(max(groupComponents, 1)))
+  }
+  return (
+    groupErrors.reduce(0, +) / Double(max(groupErrors.count, 1)),
+    perFrame
   )
 }
 
@@ -514,8 +628,10 @@ private func fitUnvalidatedStockCandidate(
         ],
         currentMAE: frame.currentMAE,
         legacyMAE: frame.legacyMAE,
+        builtInStockProfileMAE: frame.builtInStockProfileMAE,
         candidateMAE: scored.errorSum / Double(scored.componentCount),
-        leaveOneOutMAE: nil
+        leaveOneOutMAE: nil,
+        leaveOneStockOutMAE: nil
       )
     )
   }
@@ -532,10 +648,20 @@ private func fitUnvalidatedStockCandidate(
     curvesBGR: candidate.curves,
     currentMeanAbsoluteError: frames.map(\.currentMAE).reduce(0, +) / count,
     legacyMeanAbsoluteError: frames.map(\.legacyMAE).reduce(0, +) / count,
+    builtInStockMeanAbsoluteError: completeBuiltInStockMean(frames),
     fittedMeanAbsoluteError: fittedError / Double(fittedComponents),
+    validationMethod: .leaveOneFrameOut,
+    selectedValidationMeanAbsoluteError: nil,
     leaveOneOutMeanAbsoluteError: nil,
+    leaveOneStockOutMeanAbsoluteError: nil,
     frames: frameScores
   )
+}
+
+private func completeBuiltInStockMean(_ frames: [ReferenceFrame]) -> Double? {
+  let errors = frames.compactMap(\.builtInStockProfileMAE)
+  guard errors.count == frames.count, !errors.isEmpty else { return nil }
+  return errors.reduce(0, +) / Double(errors.count)
 }
 
 private func fitCandidate(

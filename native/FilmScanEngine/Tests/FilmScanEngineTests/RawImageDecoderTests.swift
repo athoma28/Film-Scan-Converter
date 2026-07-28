@@ -65,7 +65,12 @@ private let calibratedAlternateFitStems: [String: Set<String>] = [
     "DSCF2888", "DSCF2892", "DSCF3115", "DSCF3127",
   ],
   "fuji200-expired": ["DSCF3160"],
-  "cinestill800t": ["DSCF3247"],
+  "cinestill800t": ["DSCF3247", "DSCF3277"],
+  "harmanphoenixii": [
+    "DSCF3077", "DSCF3079", "DSCF3082", "DSCF3083",
+    "DSCF3084", "DSCF3085", "DSCF3086", "DSCF3087",
+    "DSCF3088", "DSCF3089", "DSCF3091", "DSCF3092",
+  ],
 ]
 
 @Suite("LibRaw decoding")
@@ -115,6 +120,7 @@ struct RawImageDecoderTests {
       case "fuji400-fresh": .fuji400FreshAlternate
       case "fuji200-expired": .fuji200ExpiredAlternate
       case "cinestill800t": .cinestill800TAlternate
+      case "harmanphoenixii": .harmanPhoenixIIAlternate
       default: nil
       }
       let belongsToAlternateFit = calibratedAlternateFitStems[triplet.stockID]?
@@ -145,7 +151,9 @@ struct RawImageDecoderTests {
       "generic calibrated colour mean absolute error \(calibratedMean)"
     )
     #expect(calibratedMean < legacyMean)
-    for stockID in ["fuji400-fresh", "fuji200-expired", "cinestill800t"] {
+    for stockID in [
+      "fuji400-fresh", "fuji200-expired", "cinestill800t", "harmanphoenixii",
+    ] {
       let generic = try #require(genericFitErrorsByStock[stockID])
       let alternate = try #require(alternateErrorsByStock[stockID])
       let genericMean = generic.reduce(0, +) / Double(generic.count)

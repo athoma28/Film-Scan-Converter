@@ -366,6 +366,7 @@ struct StillPreviewBenchmarkTests {
       ("alternate-fuji-400", alternateParameters(.fuji400FreshAlternate)),
       ("alternate-fuji-200-expired", alternateParameters(.fuji200ExpiredAlternate)),
       ("alternate-cinestill-800t", alternateParameters(.cinestill800TAlternate)),
+      ("alternate-harman-phoenix-ii", alternateParameters(.harmanPhoenixIIAlternate)),
       ("neutral-slide", ProcessingParameters(filmType: .slide)),
       ("warm", ProcessingParameters(filmType: .colourNegative, temperature: 50, tint: -30)),
       ("cool", ProcessingParameters(filmType: .colourNegative, temperature: -50, tint: 30)),

@@ -6,6 +6,7 @@ struct ColorWheelControl: View {
   let strength: Double
   let setHue: (Double) -> Void
   let setStrength: (Double) -> Void
+  @Environment(\.editingGestureAction) private var editingGestureAction
 
   var body: some View {
     VStack(spacing: 5) {
@@ -51,7 +52,13 @@ struct ColorWheelControl: View {
         .contentShape(Circle())
         .gesture(
           DragGesture(minimumDistance: 0)
-            .onChanged { update(from: $0.location, center: center, radius: radius) }
+            .onChanged {
+              editingGestureAction("\(title) Color Wheel", true)
+              update(from: $0.location, center: center, radius: radius)
+            }
+            .onEnded { _ in
+              editingGestureAction("\(title) Color Wheel", false)
+            }
         )
         .onTapGesture(count: 2) {
           setStrength(0)

@@ -205,7 +205,15 @@ public struct FilmStockProfile: Codable, Equatable, Sendable {
     displayName: "Alternate — CineStill 800T",
     filmType: .colourNegative,
     filmNegativeParams: .cinestill800TAlternate,
-    notes: "Experimental tungsten-base direction fitted from one paired reference"
+    notes: "Experimental tungsten-base direction fitted from two paired references"
+  )
+
+  public static let harmanPhoenixIIAlternate = FilmStockProfile(
+    id: FilmStockProfileID(rawValue: "alternate_harman_phoenix_ii"),
+    displayName: "Alternate — Harman Phoenix II",
+    filmType: .colourNegative,
+    filmNegativeParams: .harmanPhoenixIIAlternate,
+    notes: "Twelve-frame stock-specific fit with leave-one-frame-out validation"
   )
 
   public static let genericBW = FilmStockProfile(
@@ -430,6 +438,7 @@ public final class ProfileStore: Sendable {
       .fuji400FreshAlternate,
       .fuji200ExpiredAlternate,
       .cinestill800TAlternate,
+      .harmanPhoenixIIAlternate,
       .legacyColorNegative,
       .genericBW,
       .legacyBW,

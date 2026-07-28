@@ -30,32 +30,38 @@ The tool:
 2. decodes each RAF through `rawTherapeeCameraScan`, never its embedded preview;
 3. maps the XMP crop back into the decoder's active RAW rectangle;
 4. scores current and Legacy neutral renders against the manual JPEG;
-5. fits monotone 11-point curves plus exposure and channel-ratio normalization;
-6. reports leave-one-frame-out error for candidates with at least three frames;
+5. scores any matching shipped stock profile as a separate baseline;
+6. fits monotone 11-point curves plus exposure and channel-ratio normalization;
+7. selects a generic color candidate with stock-balanced leave-one-stock-out
+   validation, rather than allowing a large stock folder to dominate;
+8. reports leave-one-frame-out error for candidates with at least three frames;
    smaller stock folders still emit explicitly unvalidated fitted curves and
    base medians for experimental alternate looks.
 
-The July 2026 13-triplet fit selected half-strength exposure normalization and
-quarter-strength channel-ratio normalization for the generic color profile.
-Its leave-one-frame-out mean absolute error was about `0.130`, versus `0.221`
-for the previous fixed profile and `0.206` for Legacy on the ten color frames.
-The Shanghai GP3 frames exposed the previous B&W profile's near-white midtone
-plateau: its neutral error was about `0.407`. The replacement uses full
-green-median exposure anchoring and a steeper curve; Legacy remains available
-because it still has the strongest held-out result on the small three-frame B&W
-set.
+The July 27, 2026 corpus contains 31 triplets: 26 color and five monochrome.
+The expanded generic-color candidate reached `0.120` stock-balanced
+leave-one-stock-out MAE. It was not promoted: its roughly 4.4% macro-average
+improvement missed the 5% threshold, and it regressed the current rendering on
+both Fuji 400 Fresh and Fuji 200 Expired. The current generic profile therefore
+remains the safer default.
 
 A stock directory is not enough evidence to replace the generic default or
 drive automatic stock selection. Require at least three varied frames and a
-material held-out improvement (currently 5% relative) for that. The eight-frame
-Fuji 400 candidate reached `0.137` held out versus `0.139` for the generic fit
-on those frames, only about a 2% reduction. It is therefore exposed as an
-explicit alternate, not a promoted default. The Fuji 200 Expired and CineStill
-800T alternates each have one reference; their reports omit held-out error and
-their UI descriptions call them experimental.
+material held-out improvement (currently 5% relative) for that.
 
-On each alternate's own fit set, neutral mean absolute error moves from
-`0.129` to `0.125` for Fuji 400 Fresh, `0.107` to `0.071` for Fuji 200 Expired,
-and `0.078` to `0.068` for CineStill 800T. Only the first comparison has enough
-frames for held-out evidence; the other two numbers measure direction and
-target matching, not generalization.
+- Harman Phoenix II now has 12 varied references. Its stock fit reaches `0.090`
+  leave-one-frame-out MAE versus `0.159` for the current generic rendering, a
+  roughly 43% reduction. It ships as an explicit alternate, without automatic
+  stock detection.
+- CineStill 800T now has two references. Refitting both moves its matching-set
+  MAE from `0.116` to `0.093`; it remains labeled experimental because two
+  frames cannot provide an independent held-out result.
+- Fuji 400 Fresh now has 11 references. A refit moves matching-set MAE only
+  from `0.123` to `0.122`, while leave-one-frame-out MAE is `0.128`. The
+  existing eight-frame alternate is retained rather than churned for a
+  sub-percent in-sample change.
+- Fuji 200 Expired still has one reference, and its existing alternate
+  (`0.0711`) already matches or slightly beats the new candidate (`0.0712`).
+- Shanghai GP3 now has five references. The proposed B&W refit has `0.157`
+  leave-one-frame-out MAE, worse than the current calibrated curve's `0.140`
+  fixed-profile score, so the shipped B&W profile remains unchanged.

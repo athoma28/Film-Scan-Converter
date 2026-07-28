@@ -83,6 +83,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       case .fuji400Fresh: 1
       case .fuji200Expired: 2
       case .cinestill800T: 3
+      case .harmanPhoenixII: 4
       }
       let (fnRExp, fnGExp, fnBExp): (Float, Float, Float)
       let (fnRMult, fnGMult, fnBMult): (Float, Float, Float)
@@ -470,17 +471,30 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         if (knot < 9.5) return vec3(0.087376, 0.060105, 0.094601);
         return vec3(0.049887, 0.030462, 0.037899);
       }
-      if (knot < 0.5) return vec3(0.985135, 0.971552, 0.983431);
-      if (knot < 1.5) return vec3(0.865963, 0.668719, 0.816706);
-      if (knot < 2.5) return vec3(0.656051, 0.387681, 0.645829);
-      if (knot < 3.5) return vec3(0.555563, 0.322584, 0.592476);
-      if (knot < 4.5) return vec3(0.326772, 0.192716, 0.277493);
-      if (knot < 5.5) return vec3(0.257059, 0.192716, 0.277493);
-      if (knot < 6.5) return vec3(0.179266, 0.180829, 0.261991);
-      if (knot < 7.5) return vec3(0.151201, 0.069637, 0.261991);
-      if (knot < 8.5) return vec3(0.145899, 0.068378, 0.261991);
-      if (knot < 9.5) return vec3(0.145899, 0.068378, 0.126500);
-      return vec3(0.145899, 0.068378, 0.126500);
+      if (profile < 3.5) {
+        if (knot < 0.5) return vec3(0.889071, 0.976831, 0.983561);
+        if (knot < 1.5) return vec3(0.800569, 0.778123, 0.873425);
+        if (knot < 2.5) return vec3(0.675436, 0.466709, 0.583469);
+        if (knot < 3.5) return vec3(0.619374, 0.292708, 0.399432);
+        if (knot < 4.5) return vec3(0.417016, 0.192789, 0.242909);
+        if (knot < 5.5) return vec3(0.216966, 0.150298, 0.242909);
+        if (knot < 6.5) return vec3(0.117165, 0.150298, 0.242909);
+        if (knot < 7.5) return vec3(0.117165, 0.150298, 0.185946);
+        if (knot < 8.5) return vec3(0.117165, 0.068440, 0.094080);
+        if (knot < 9.5) return vec3(0.078848, 0.053849, 0.094080);
+        return vec3(0.078848, 0.053849, 0.094080);
+      }
+      if (knot < 0.5) return vec3(0.952454, 0.974144, 0.972354);
+      if (knot < 1.5) return vec3(0.754535, 0.846462, 0.909126);
+      if (knot < 2.5) return vec3(0.458264, 0.543931, 0.688301);
+      if (knot < 3.5) return vec3(0.317229, 0.524965, 0.688301);
+      if (knot < 4.5) return vec3(0.161046, 0.296099, 0.551931);
+      if (knot < 5.5) return vec3(0.108709, 0.140592, 0.326745);
+      if (knot < 6.5) return vec3(0.056521, 0.090988, 0.144854);
+      if (knot < 7.5) return vec3(0.037348, 0.087881, 0.095234);
+      if (knot < 8.5) return vec3(0.021589, 0.013066, 0.095234);
+      if (knot < 9.5) return vec3(0.017122, 0.011410, 0.092993);
+      return vec3(0.012818, 0.010492, 0.071834);
     }
 
     float calibratedColorChannel(

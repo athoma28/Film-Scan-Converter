@@ -1,5 +1,18 @@
 import SwiftUI
 
+typealias EditingGestureAction = @MainActor @Sendable (String, Bool) -> Void
+
+private struct EditingGestureActionKey: EnvironmentKey {
+  static let defaultValue: EditingGestureAction = { _, _ in }
+}
+
+extension EnvironmentValues {
+  var editingGestureAction: EditingGestureAction {
+    get { self[EditingGestureActionKey.self] }
+    set { self[EditingGestureActionKey.self] = newValue }
+  }
+}
+
 struct AdjustmentSlider: View {
   let title: String
   @Binding var value: Double
@@ -31,6 +44,7 @@ struct AdjustmentSlider: View {
   }
 
   @FocusState private var isFocused: Bool
+  @Environment(\.editingGestureAction) private var editingGestureAction
 
   private var isAtNeutral: Bool {
     abs(value - neutral) < max(step > 0 ? step * 0.5 : 0.0005, 0.000_001)
@@ -77,9 +91,18 @@ struct AdjustmentSlider: View {
   @ViewBuilder
   private var slider: some View {
     if step > 0 && responseExponent == 1 {
-      Slider(value: $value, in: range, step: step)
+      Slider(
+        value: $value,
+        in: range,
+        step: step,
+        onEditingChanged: { editingGestureAction(title, $0) }
+      )
     } else {
-      Slider(value: responseBinding, in: range)
+      Slider(
+        value: responseBinding,
+        in: range,
+        onEditingChanged: { editingGestureAction(title, $0) }
+      )
     }
   }
 

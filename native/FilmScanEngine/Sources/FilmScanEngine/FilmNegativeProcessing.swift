@@ -353,16 +353,30 @@ public enum FilmNegativeProcessing {
   )
 
   private static let cinestill800TCalibratedColor = CalibratedColorDefinition(
-    referenceMedians: BGRChannelValues(blue: 13_880, green: 14_918, red: 22_381),
+    referenceMedians: BGRChannelValues(blue: 18_248.5, green: 18_741, red: 26_588.5),
     exposureNormalization: 0.5,
     ratioNormalization: 0.25,
     curves: [
-      [0.983431, 0.816706, 0.645829, 0.592476, 0.277493, 0.277493,
-        0.261991, 0.261991, 0.261991, 0.126500, 0.126500],
-      [0.971552, 0.668719, 0.387681, 0.322584, 0.192716, 0.192716,
-        0.180829, 0.069637, 0.068378, 0.068378, 0.068378],
-      [0.985135, 0.865963, 0.656051, 0.555563, 0.326772, 0.257059,
-        0.179266, 0.151201, 0.145899, 0.145899, 0.145899],
+      [0.983561, 0.873425, 0.583469, 0.399432, 0.242909, 0.242909,
+        0.242909, 0.185946, 0.094080, 0.094080, 0.094080],
+      [0.976831, 0.778123, 0.466709, 0.292708, 0.192789, 0.150298,
+        0.150298, 0.150298, 0.068440, 0.053849, 0.053849],
+      [0.889071, 0.800569, 0.675436, 0.619374, 0.417016, 0.216966,
+        0.117165, 0.117165, 0.117165, 0.078848, 0.078848],
+    ]
+  )
+
+  private static let harmanPhoenixIICalibratedColor = CalibratedColorDefinition(
+    referenceMedians: BGRChannelValues(blue: 33_887.5, green: 30_313.5, red: 24_727),
+    exposureNormalization: 0.75,
+    ratioNormalization: 0,
+    curves: [
+      [0.972354, 0.909126, 0.688301, 0.688301, 0.551931, 0.326745,
+        0.144854, 0.095234, 0.095234, 0.092993, 0.071834],
+      [0.974144, 0.846462, 0.543931, 0.524965, 0.296099, 0.140592,
+        0.090988, 0.087881, 0.013066, 0.011410, 0.010492],
+      [0.952454, 0.754535, 0.458264, 0.317229, 0.161046, 0.108709,
+        0.056521, 0.037348, 0.021589, 0.017122, 0.012818],
     ]
   )
 
@@ -374,6 +388,7 @@ public enum FilmNegativeProcessing {
     case .fuji400Fresh: fuji400FreshCalibratedColor
     case .fuji200Expired: fuji200ExpiredCalibratedColor
     case .cinestill800T: cinestill800TCalibratedColor
+    case .harmanPhoenixII: harmanPhoenixIICalibratedColor
     }
   }
   private static let calibratedMonochromeReferenceGreenMedian = 28_685.0

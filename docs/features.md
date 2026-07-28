@@ -43,10 +43,13 @@ features.
   exposed negatives usable without forcing mixed-light and dusk frames fully
   neutral. The former RawTherapee-compatible exponent rendering remains
   available as **Color Negative (Legacy)**.
-- Three selectable alternate color-negative profiles use separate measured
-  base anchors and curves: fresh Fuji 400 (eight references), expired Fuji 200
-  (one reference), and CineStill 800T (one reference). The single-frame fits
-  are labeled experimental and do not replace the generic default.
+- Four selectable alternate color-negative profiles use separate measured
+  base anchors and curves: fresh Fuji 400 (eight fit references plus three
+  validation additions), expired Fuji 200 (one reference), CineStill 800T
+  (two references), and Harman Phoenix II (twelve references). The Fuji 200
+  and CineStill fits remain experimental; Harman is leave-one-frame-out
+  validated, but remains an explicit choice and does not replace the generic
+  default.
 - An optional capture-aware density pipeline with film-base measurement,
   flat-field calibration, capture/stock/roll profiles, and a 3x3-plus-offset
   density-correction slot stored in capture profiles. An offline
@@ -84,6 +87,12 @@ features.
 ### Batch And Settings Workflow
 
 - Per-file correction settings persisted across launches.
+- Standard macOS Edit-menu Undo/Redo for tone, color, inversion, curves,
+  grading wheels, crop, straighten, perspective, rotation, flip, output frame,
+  reset, paste, and profile/preset application. Histories are isolated per
+  file, slider/curve/wheel/perspective drags coalesce to one step, and the
+  currently restored state is saved even though transient history starts empty
+  after relaunch.
 - User film-stock profiles preserve the current negative rendering, calibrated
   color variant, exponents, dye-crossover correction, density response, and
   display rendering settings.
@@ -106,8 +115,9 @@ features.
 - Manual crop updates the preview canvas immediately. Re-entering Crop reveals
   the whole straightened canvas for a replacement selection, and Reset Crop
   removes the committed crop.
-- Apply the current look to all open files while preserving each target's crop,
-  orientation, and measured film-base state.
+- Apply the current look to the import-ordered multi-selection or to all open
+  files while preserving each target's crop, orientation, perspective, and
+  measured film-base state.
 - Edited and preview-ready indicators in the browser.
 - Configurable 2/4/8/16/32-session preview cache and forward lookahead.
 - Immediate Edit/Grade/Export inspector switching.
@@ -145,7 +155,6 @@ features.
 ## Native Limitations
 
 - No applied dust removal or Telea inpainting.
-- No undo/redo.
 - Sidebar order remains import order. Manual reordering is unavailable and is
   not a first-release gate unless the roll workflow demonstrates a need.
 - No lens-distortion model or calibrated correction for film-plane/sensor-plane

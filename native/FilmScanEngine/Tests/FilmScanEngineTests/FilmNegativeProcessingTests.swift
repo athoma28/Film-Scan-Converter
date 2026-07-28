@@ -1294,6 +1294,7 @@ struct FilmNegativeProcessingTests {
     #expect(builtIns.contains(FilmStockProfile.fuji400FreshAlternate))
     #expect(builtIns.contains(FilmStockProfile.fuji200ExpiredAlternate))
     #expect(builtIns.contains(FilmStockProfile.cinestill800TAlternate))
+    #expect(builtIns.contains(FilmStockProfile.harmanPhoenixIIAlternate))
     #expect(builtIns.contains(FilmStockProfile.legacyColorNegative))
     #expect(builtIns.contains(FilmStockProfile.genericBW))
     #expect(builtIns.contains(FilmStockProfile.legacyBW))
@@ -1309,6 +1310,9 @@ struct FilmNegativeProcessingTests {
     #expect(
       FilmStockProfile.cinestill800TAlternate.filmNegativeParams.calibratedColorProfile
         == .cinestill800T)
+    #expect(
+      FilmStockProfile.harmanPhoenixIIAlternate.filmNegativeParams.calibratedColorProfile
+        == .harmanPhoenixII)
     #expect(FilmStockProfile.legacyColorNegative.filmNegativeParams.rendering == .powerLaw)
   }
 

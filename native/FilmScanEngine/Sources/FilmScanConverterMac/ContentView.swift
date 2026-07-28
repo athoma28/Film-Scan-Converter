@@ -119,6 +119,9 @@ struct ContentView: View {
           zoomIn: { requestPreviewZoom(.zoomIn) },
           zoomOut: { requestPreviewZoom(.zoomOut) })
     )
+    .environment(\.editingGestureAction) { actionName, isEditing in
+      model.editingGestureChanged(actionName, isEditing: isEditing)
+    }
   }
 
   private var toolbar: some View {
@@ -302,7 +305,21 @@ struct ContentView: View {
           .disabled(!model.canPasteCorrectionSettings)
         }
 
+        Button(
+          model.selectedFileCount > 1
+            ? "Apply Look to Selected (\(model.selectedFileCount))"
+            : "Apply Look to Selected",
+          action: model.applyCurrentLookToSelectedFiles
+        )
+        .disabled(model.selectedFileCount < 2)
+        .help(
+          "Apply the active frame's look to the selected files while preserving each frame's geometry and measured film base."
+        )
+
         Button("Apply Settings to All Open Files", action: model.applyCurrentSettingsToAllOpenFiles)
+          .help(
+            "Apply the active frame's look to every open file while preserving each frame's geometry and measured film base."
+          )
 
         Button(action: model.applyKodachromeLikeLook) {
           Label("Kodachrome-like Auto", systemImage: "wand.and.stars")
@@ -1480,6 +1497,7 @@ struct ContentView: View {
       case .fuji400Fresh: return .fuji400FreshAlternate
       case .fuji200Expired: return .fuji200ExpiredAlternate
       case .cinestill800T: return .cinestill800TAlternate
+      case .harmanPhoenixII: return .harmanPhoenixIIAlternate
       }
     }
     if fn.rendering == FilmNegativeParams.legacyColourNegative.rendering
@@ -1515,7 +1533,9 @@ struct ContentView: View {
     case .fuji200Expired:
       "Experimental warm expired-base curve fitted from one Fuji 200 reference"
     case .cinestill800T:
-      "Experimental tungsten-base curve fitted from one CineStill 800T reference"
+      "Experimental tungsten-base curve fitted from two CineStill 800T references"
+    case .harmanPhoenixII:
+      "Stock-specific curve validated across twelve Harman Phoenix II references"
     }
   }
 
@@ -1532,6 +1552,7 @@ struct ContentView: View {
         .fuji400FreshAlternate,
         .fuji200ExpiredAlternate,
         .cinestill800TAlternate,
+        .harmanPhoenixIIAlternate,
         .legacyColourNegative,
       ]
     case .blackAndWhiteNegative:
@@ -1840,6 +1861,7 @@ private struct PerspectiveCropOverlay: View {
   let onCropChanged: (PerspectiveCrop) -> Void
 
   @State private var draggedCorner: Int?
+  @Environment(\.editingGestureAction) private var editingGestureAction
 
   var body: some View {
     GeometryReader { geometry in
@@ -1883,6 +1905,7 @@ private struct PerspectiveCropOverlay: View {
               .gesture(
                 DragGesture(minimumDistance: 0)
                   .onChanged { value in
+                    editingGestureAction("Perspective", true)
                     draggedCorner = index
                     let clamped = clamped(value.location, to: imageRect)
                     let displayed = PerspectiveCrop.Point(
@@ -1896,7 +1919,10 @@ private struct PerspectiveCropOverlay: View {
                       ? crop.replacing(index, with: source, parallelismAssistThreshold: threshold)
                       : crop.replacing(index, with: source))
                   }
-                  .onEnded { _ in draggedCorner = nil }
+                  .onEnded { _ in
+                    draggedCorner = nil
+                    editingGestureAction("Perspective", false)
+                  }
               )
               .help(["Top left", "Top right", "Bottom right", "Bottom left"][index])
           }

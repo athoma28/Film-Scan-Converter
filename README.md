@@ -20,12 +20,13 @@ The beta currently includes:
   wheels.
 - Automatic frame detection, straighten, crop, four-corner perspective
   correction, original/corrected comparison, and pan/zoom inspection.
-- Per-file settings, presets, copy/paste, apply-to-all, ordered batch export,
-  and full-resolution TIFF, JPEG, PNG, and processed-RGB DNG output.
+- Per-file settings and session-local undo/redo, presets, copy/paste,
+  apply-to-selected/all, ordered batch export, and full-resolution TIFF, JPEG,
+  PNG, and processed-RGB DNG output.
 
 This is an ad-hoc-signed technical beta, not yet an Apple-notarized general
-release. Undo/redo and applied dust removal are not yet available; native dust
-detection is currently a diagnostic overlay only. See the
+release. Applied dust removal is not yet available; native dust detection is
+currently a diagnostic overlay only. See the
 [beta release notes](RELEASE_NOTES.md) and
 [native macOS development status](docs/development/native-macos.md) for the
 verified release position and known limitations.

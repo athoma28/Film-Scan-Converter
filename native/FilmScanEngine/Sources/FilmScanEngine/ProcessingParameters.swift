@@ -67,6 +67,7 @@ public enum CalibratedColorNegativeProfile: String, Codable, Equatable, Sendable
   case fuji400Fresh
   case fuji200Expired
   case cinestill800T
+  case harmanPhoenixII
 }
 
 public struct FilmNegativeParams: Codable, Equatable, Sendable {
@@ -169,6 +170,11 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     rendering: .calibratedColor,
     calibratedColorProfile: .cinestill800T
   )
+  public static let harmanPhoenixIIAlternate = FilmNegativeParams(
+    enabled: true,
+    rendering: .calibratedColor,
+    calibratedColorProfile: .harmanPhoenixII
+  )
   public static let legacyBlackAndWhite = FilmNegativeParams(
     enabled: true, redRatio: 1.0, greenExp: 1.5, blueRatio: 1.0
   )
@@ -187,6 +193,7 @@ public enum FilmNegativePreset: Int, CaseIterable, Hashable, Sendable {
   case fuji400FreshAlternate
   case fuji200ExpiredAlternate
   case cinestill800TAlternate
+  case harmanPhoenixIIAlternate
   case legacyColourNegative
   case blackAndWhite
   case legacyBlackAndWhite
@@ -198,6 +205,7 @@ public enum FilmNegativePreset: Int, CaseIterable, Hashable, Sendable {
     case .fuji400FreshAlternate: "Alternate — Fuji 400 Fresh"
     case .fuji200ExpiredAlternate: "Alternate — Fuji 200 Expired"
     case .cinestill800TAlternate: "Alternate — CineStill 800T"
+    case .harmanPhoenixIIAlternate: "Alternate — Harman Phoenix II"
     case .legacyColourNegative: "Color Negative (Legacy)"
     case .blackAndWhite: "Black & White"
     case .legacyBlackAndWhite: "Black & White (Legacy)"

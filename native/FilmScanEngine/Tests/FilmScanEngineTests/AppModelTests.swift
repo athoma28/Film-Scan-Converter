@@ -940,6 +940,225 @@ struct AppModelTests {
     #expect(restored.parameters.photoAdjustments.vibrance == 0.4)
   }
 
+  @Test("A slider gesture is one reversible history step")
+  func sliderGestureCoalescesIntoOneHistoryStep() async throws {
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input",
+        withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"
+      )
+    )
+    let model = AppModel()
+    model.importFiles([input])
+    try await waitUntil { model.previewImage != nil && !model.isRendering }
+    let baseline = model.parameters
+
+    model.beginEditingGesture(named: "Exposure")
+    model.setExposureEV(0.25)
+    model.setExposureEV(0.75)
+    model.setExposureEV(1.5)
+    model.endEditingGesture()
+
+    #expect(model.canUndo)
+    #expect(model.undoActionName == "Exposure")
+    #expect(model.parameters.photoAdjustments.exposureEV == 1.5)
+
+    model.undo()
+
+    #expect(model.parameters == baseline)
+    #expect(!model.canUndo)
+    #expect(model.canRedo)
+    #expect(model.redoActionName == "Exposure")
+
+    model.redo()
+
+    #expect(model.parameters.photoAdjustments.exposureEV == 1.5)
+    #expect(model.canUndo)
+    #expect(!model.canRedo)
+  }
+
+  @Test("Undo and redo histories stay isolated by selected file")
+  func undoRedoHistoriesStayPerFile() async throws {
+    let fixture = try #require(
+      Bundle.module.url(
+        forResource: "input",
+        withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"
+      )
+    )
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-undo-isolation-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let first = workDir.appendingPathComponent("first.png")
+    let second = workDir.appendingPathComponent("second.png")
+    try FileManager.default.copyItem(at: fixture, to: first)
+    try FileManager.default.copyItem(at: fixture, to: second)
+
+    let model = AppModel()
+    model.importFiles([first, second])
+    try await waitUntil { model.previewImage != nil && !model.isRendering }
+    let firstBaseline = model.parameters.photoAdjustments.exposureEV
+    model.setExportFramePercent(8)
+    model.setExposureEV(1.25)
+
+    model.selection = second
+    model.loadSelection()
+    try await waitUntil { model.selection == second && model.previewImage != nil && !model.isRendering }
+    let secondBaseline = model.parameters.photoAdjustments.exposureEV
+    #expect(!model.canUndo)
+    model.setExposureEV(-1.5)
+
+    model.selection = first
+    model.loadSelection()
+    model.setExportFramePercent(0)
+    model.selection = second
+    model.loadSelection()
+    model.undo()
+    #expect(model.parameters.photoAdjustments.exposureEV == secondBaseline)
+    #expect(model.exportParameters.framePercent == 0)
+    #expect(model.canRedo)
+
+    model.selection = first
+    model.loadSelection()
+    #expect(model.parameters.photoAdjustments.exposureEV == 1.25)
+    #expect(model.undoActionName == "Border")
+    model.undo()
+    #expect(model.undoActionName == "Exposure")
+    model.undo()
+    #expect(model.parameters.photoAdjustments.exposureEV == firstBaseline)
+
+    model.selection = second
+    model.loadSelection()
+    #expect(model.parameters.photoAdjustments.exposureEV == secondBaseline)
+    #expect(model.redoActionName == "Exposure")
+    model.redo()
+    #expect(model.parameters.photoAdjustments.exposureEV == -1.5)
+  }
+
+  @Test("A new edit clears redo only for the current file")
+  func newEditClearsCurrentRedo() async throws {
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input",
+        withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"
+      )
+    )
+    let model = AppModel()
+    model.importFiles([input])
+    try await waitUntil { model.previewImage != nil && !model.isRendering }
+
+    model.setExposureEV(1)
+    model.undo()
+    #expect(model.canRedo)
+
+    model.setContrast(0.4)
+
+    #expect(!model.canRedo)
+    #expect(model.undoActionName == "Contrast")
+  }
+
+  @Test("Output framing participates in edit history")
+  func outputFramingParticipatesInHistory() async throws {
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input",
+        withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"
+      )
+    )
+    let model = AppModel()
+    model.importFiles([input])
+    try await waitUntil { model.previewImage != nil && !model.isRendering }
+
+    model.setExportFramePercent(8)
+    model.setExportAspectRatio(AspectRatio(width: 1, height: 1))
+    #expect(model.exportParameters.framePercent == 8)
+    #expect(model.exportParameters.aspectRatio == AspectRatio(width: 1, height: 1))
+
+    model.undo()
+    #expect(model.exportParameters.framePercent == 8)
+    #expect(model.exportParameters.aspectRatio == nil)
+    model.undo()
+    #expect(model.exportParameters.framePercent == 0)
+    model.redo()
+    model.redo()
+    #expect(model.exportParameters.framePercent == 8)
+    #expect(model.exportParameters.aspectRatio == AspectRatio(width: 1, height: 1))
+  }
+
+  @Test("Geometry undo restores exact parameter snapshots without drift")
+  func geometryUndoRestoresExactSnapshots() async throws {
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input",
+        withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"
+      )
+    )
+    let model = AppModel()
+    model.importFiles([input])
+    try await waitUntil { model.previewImage != nil && !model.isRendering }
+    let baseline = model.parameters
+    let perspective = PerspectiveCrop(
+      topLeft: .init(x: 0.08, y: 0.10),
+      topRight: .init(x: 0.91, y: 0.07),
+      bottomRight: .init(x: 0.88, y: 0.92),
+      bottomLeft: .init(x: 0.11, y: 0.89)
+    )
+    let manual = NormalizedCropRect(x: 0.1, y: 0.2, width: 0.7, height: 0.6)
+
+    model.setPerspectiveCrop(perspective)
+    let perspectiveState = model.parameters
+    model.setManualCrop(manual)
+    let croppedState = model.parameters
+    model.setStraightenAngle(4.5)
+    #expect(model.parameters.manualCrop == nil)
+
+    model.undo()
+    #expect(model.parameters == croppedState)
+    #expect(model.manualCrop == manual)
+    model.undo()
+    #expect(model.parameters == perspectiveState)
+    #expect(model.perspectiveCrop == perspective)
+    model.undo()
+    #expect(model.parameters == baseline)
+    #expect(model.perspectiveCrop == nil)
+  }
+
+  @Test("Undo persists current state while relaunch starts with empty history")
+  func undoPersistsCurrentStateWithoutPersistingHistory() async throws {
+    let fixture = try #require(
+      Bundle.module.url(
+        forResource: "input",
+        withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"
+      )
+    )
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-undo-persistence-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let input = workDir.appendingPathComponent("scan.png")
+    try FileManager.default.copyItem(at: fixture, to: input)
+    let store = PerFileSettingsStore(baseDirectory: workDir)
+
+    let first = AppModel(settingsStore: store)
+    first.importFiles([input])
+    try await waitUntil { first.previewImage != nil && !first.isRendering }
+    let baseline = first.parameters.photoAdjustments.exposureEV
+    first.setExposureEV(1.75)
+    first.undo()
+
+    let restored = AppModel(settingsStore: store)
+    restored.importFiles([input])
+    #expect(restored.parameters.photoAdjustments.exposureEV == baseline)
+    #expect(!restored.canUndo)
+    #expect(!restored.canRedo)
+  }
+
   @Test("Persisted corrections remain isolated by standardized file path")
   func persistedCorrectionsRemainPerFile() throws {
     let workDir = FileManager.default.temporaryDirectory
@@ -1101,6 +1320,16 @@ struct AppModelTests {
     #expect(model.parameters.photoAdjustments.exposureEV == 1.25)
     #expect(model.parameters.rotation == 1)
     #expect(model.renderStats.submittedSnapshots == submissionsBeforeApply + 1)
+    #expect(model.appliedPresetName == "Projection")
+
+    model.undo()
+    #expect(model.parameters.photoAdjustments.exposureEV == -2)
+    #expect(model.parameters.rotation == 1)
+    #expect(model.appliedPresetName == nil)
+    model.redo()
+    #expect(model.parameters.photoAdjustments.exposureEV == 1.25)
+    #expect(model.parameters.rotation == 1)
+    #expect(model.appliedPresetName == "Projection")
 
     model.deleteCorrectionPreset(preset)
     #expect(model.namedCorrectionPresets.isEmpty)
@@ -1198,6 +1427,107 @@ struct AppModelTests {
     model.selection = second
     model.loadSelection()
     #expect(model.parameters.photoAdjustments.exposureEV == 1.5)
+    #expect(model.undoActionName == "Apply Settings to All")
+    model.undo()
+    #expect(model.parameters.photoAdjustments.exposureEV == 0)
+    model.selection = first
+    model.loadSelection()
+    #expect(model.parameters.photoAdjustments.exposureEV == 1.5)
+  }
+
+  @Test("Apply look to selected changes only the selection and preserves per-frame state")
+  func applyLookToSelectedFiles() async throws {
+    let fixture = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"))
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-apply-selected-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let first = workDir.appendingPathComponent("first.png")
+    let second = workDir.appendingPathComponent("second.png")
+    let third = workDir.appendingPathComponent("third.png")
+    for destination in [first, second, third] {
+      try FileManager.default.copyItem(at: fixture, to: destination)
+    }
+
+    var anchor = ProcessingParameters()
+    anchor.photoAdjustments.exposureEV = 1.75
+    anchor.photoAdjustments.vibrance = 0.4
+
+    let secondPerspective = PerspectiveCrop(
+      topLeft: .init(x: 0.08, y: 0.10),
+      topRight: .init(x: 0.91, y: 0.07),
+      bottomRight: .init(x: 0.88, y: 0.92),
+      bottomLeft: .init(x: 0.11, y: 0.89)
+    )
+    let secondManualCrop = NormalizedCropRect(
+      x: 0.1, y: 0.2, width: 0.7, height: 0.6
+    )
+    let secondBase = BGRChannelValues(blue: 0.2, green: 0.3, red: 0.4)
+    var secondSettings = ProcessingParameters()
+    secondSettings.photoAdjustments.exposureEV = -0.5
+    secondSettings.rotation = 3
+    secondSettings.flip = true
+    secondSettings.straightenAngle = 2.5
+    secondSettings.perspectiveCrop = secondPerspective
+    secondSettings.manualCrop = secondManualCrop
+    secondSettings.densityPipelineEnabled = true
+    secondSettings.densityBaseDensity = secondBase
+
+    var thirdSettings = ProcessingParameters()
+    thirdSettings.photoAdjustments.exposureEV = -1.25
+
+    let store = PerFileSettingsStore(baseDirectory: workDir)
+    try store.save(.init(
+      settingsByPath: [
+        first.standardizedFileURL.path: anchor,
+        second.standardizedFileURL.path: secondSettings,
+        third.standardizedFileURL.path: thirdSettings,
+      ],
+      editedPaths: []
+    ))
+
+    let model = AppModel(settingsStore: store)
+    model.importFiles([first, second, third])
+    try await waitUntil { model.previewImage != nil && !model.isRendering }
+    model.selectedFiles = [first, second]
+    model.applyCurrentLookToSelectedFiles()
+
+    let applied = try store.loadState()
+    let appliedSecond = try #require(
+      applied.settingsByPath[second.standardizedFileURL.path])
+    let untouchedThird = try #require(
+      applied.settingsByPath[third.standardizedFileURL.path])
+    #expect(appliedSecond.photoAdjustments.exposureEV == 1.75)
+    #expect(appliedSecond.photoAdjustments.vibrance == 0.4)
+    #expect(appliedSecond.rotation == 3)
+    #expect(appliedSecond.flip)
+    #expect(appliedSecond.straightenAngle == 2.5)
+    #expect(appliedSecond.perspectiveCrop == secondPerspective)
+    #expect(appliedSecond.manualCrop == secondManualCrop)
+    #expect(appliedSecond.densityPipelineEnabled)
+    #expect(appliedSecond.densityBaseDensity == secondBase)
+    #expect(untouchedThird.photoAdjustments.exposureEV == -1.25)
+    #expect(model.hasEdits(for: first))
+    #expect(model.hasEdits(for: second))
+    #expect(!model.hasEdits(for: third))
+
+    model.selection = second
+    model.loadSelection()
+    #expect(model.parameters.photoAdjustments.exposureEV == 1.75)
+    #expect(model.undoActionName == "Apply Look to Selected")
+    model.undo()
+    #expect(model.parameters.photoAdjustments.exposureEV == -0.5)
+    #expect(model.parameters.rotation == 3)
+    #expect(model.parameters.perspectiveCrop == secondPerspective)
+    #expect(model.parameters.densityBaseDensity == secondBase)
+
+    model.selection = third
+    model.loadSelection()
+    #expect(model.parameters.photoAdjustments.exposureEV == -1.25)
+    #expect(model.undoActionName == nil)
   }
 
   @Test("Files added during export snapshot the current format and destination")
@@ -1424,6 +1754,7 @@ struct AppModelTests {
     model.setFilmNegativePreset(.off)
     model.setFilmNegativeRedRatio(1.6)
     model.resetFilmDyeMixing()
+    let beforeProfileApplication = model.parameters
     model.applySelectedPipelineProfiles()
     #expect(!model.parameters.densityPipelineEnabled)
     #expect(model.parameters.filmNegativeParams.enabled)
@@ -1431,6 +1762,11 @@ struct AppModelTests {
     #expect(model.parameters.filmNegativeParams.redRatio == 1.18)
     #expect(model.parameters.filmDyeMixing.redFromGreen == -0.14)
     #expect(model.profileStatus.contains("Calibrated negative profile active"))
+    model.undo()
+    #expect(model.parameters == beforeProfileApplication)
+    model.redo()
+    #expect(model.parameters.filmNegativeParams.redRatio == 1.18)
+    #expect(model.parameters.filmDyeMixing.redFromGreen == -0.14)
   }
 
   @Test("Black-and-white presets expose calibrated and legacy renderers")
@@ -1467,10 +1803,12 @@ struct AppModelTests {
     #expect(model.parameters.filmNegativeParams.calibratedColorProfile == .fuji200Expired)
     model.setFilmNegativePreset(.cinestill800TAlternate)
     #expect(model.parameters.filmNegativeParams.calibratedColorProfile == .cinestill800T)
+    model.setFilmNegativePreset(.harmanPhoenixIIAlternate)
+    #expect(model.parameters.filmNegativeParams.calibratedColorProfile == .harmanPhoenixII)
 
-    model.selectedFilmStockProfileID = FilmStockProfile.fuji400FreshAlternate.id
+    model.selectedFilmStockProfileID = FilmStockProfile.harmanPhoenixIIAlternate.id
     model.applySelectedPipelineProfiles()
-    #expect(model.parameters.filmNegativeParams.calibratedColorProfile == .fuji400Fresh)
+    #expect(model.parameters.filmNegativeParams.calibratedColorProfile == .harmanPhoenixII)
 
     model.setFilmNegativePreset(.legacyColourNegative)
     #expect(model.parameters.filmNegativeParams == .legacyColourNegative)

@@ -97,7 +97,7 @@ Acceptance:
 Optimize again only when profiling exposes a user-visible latency or
 resource-safety problem.
 
-### 1. Make The Still Preview A Reliable Judging Surface — Active
+### 1. Make The Still Preview A Reliable Judging Surface — Implementation Complete; Direct Check Pending
 
 Implement zoom and pan before adding more processing ideas. A photographer must
 be able to inspect focus, grain, dust, crop edges, and fine tonal transitions,
@@ -121,9 +121,9 @@ Acceptance:
 - selection changes and resets leave the viewport in a predictable state;
 - preview/export geometry remains shared and pixel dimensions remain truthful.
 
-### 2. Make Editing Safely Reversible
+### 2. Make Editing Safely Reversible — Completed 2026-07-26
 
-Add native undo/redo for the adjustments photographers actually make.
+Native undo/redo now covers the adjustments photographers actually make.
 
 Deliver:
 
@@ -143,15 +143,15 @@ Acceptance:
 - relaunch behavior remains explicit: saved current state is restored, while
   transient undo history need not be.
 
-### 3. Tune The Roll And Batch Workflow
+### 3. Tune The Roll And Batch Workflow — Active
 
 Run a realistic photographer workflow rather than designing batch features in
 isolation: import a roll, establish an anchor look, apply it, correct outliers,
 select intended frames, and export them.
 
-Expected first improvement:
+First improvement implemented:
 
-- add **Apply Look to Selected** alongside the existing explicit
+- **Apply Look to Selected** now sits alongside the existing explicit
   **Apply Settings to All Open Files**, preserving each frame's crop, orientation,
   perspective, and measured film base.
 
@@ -217,7 +217,8 @@ After the editing and output contracts stabilize:
 
 1. Closed: app-path ten-file performance, memory, and cancellation measurement.
 2. Zoom/pan makes the preview useful for photographic inspection.
-3. Editing-state changes have reliable undo/redo.
+3. Closed: editing-state changes have reliable per-file undo/redo with
+   gesture coalescing and transient relaunch semantics.
 4. A real roll workflow validates anchor-look, selected/all application,
    per-frame exceptions, selection, and export.
 5. Packaged outputs pass correctness, color-space, reopen, failure, and cleanup
@@ -309,6 +310,8 @@ Maintain this foundation rather than repeatedly replanning it:
 - bounded latest-value-wins GPU preview with CPU/GPU regression coverage;
 - per-file settings, presets, clipboard transfer, apply-to-all, edit markers,
   multi-selection, and adjustable preview lookahead;
+- per-file, session-local undo/redo with gesture coalescing, standard Mac
+  commands, persisted current state, and exact parameter restoration;
 - collision-safe TIFF/JPEG/PNG/processed-RGB-DNG individual and sequential
   batch export with cancellation, cleanup, progress, and per-file errors;
 - native dust candidate detection and aligned diagnostic overlay;

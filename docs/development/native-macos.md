@@ -6,8 +6,8 @@ blocks a high-quality public release, and what is being worked on now. Use the
 [feature inventory](../features.md) for user-visible behavior, and the
 [40 MP benchmark](../performance/40mp-export.md) for detailed measurements.
 
-**Last verified:** 2026-07-17 against the current working tree. The native test
-suite contains 395 tests across 28 files. Some representative-RAW tests require
+**Last verified:** 2026-07-27 against the current working tree. The native test
+suite contains 416 tests across 29 files. Some representative-RAW tests require
 the untracked local `sample-raw/` corpus and are explicitly disabled when it is
 absent.
 
@@ -19,10 +19,10 @@ Apple Silicon technical beta on macOS 14 or later. It is not yet an
 Apple-notarized general release.
 
 The technical beta boundary is intentionally smaller than the high-quality
-first-release standard below. Undo/redo, a deeper representative roll pass,
-Developer ID notarization, and independent-Mac validation remain important,
-but are disclosed beta limitations rather than reasons to withhold useful
-open-source software.
+first-release standard below. A deeper representative roll pass, Developer ID
+notarization, and independent-Mac validation remain important, but are
+disclosed beta limitations rather than reasons to withhold useful open-source
+software.
 
 Stock-specific look learning and calibration are not part of the active plan.
 The existing generic controls, profile seams, fitter, and research notes remain
@@ -34,10 +34,15 @@ should begin until the project owner explicitly reactivates that track.
 The bounded 40 MP measurement cycle and beta packaging/output correctness work
 are complete. The still-preview viewport has native pan/pinch navigation,
 Fit/step/100% commands, shared image and editing-overlay transforms,
-viewport-stable comparison, and explicit preview-source status. Next, use beta
-feedback and representative images to prioritize undo/redo, roll workflow, and
-performance work. Do not start another broad performance rewrite or divert
-into stock-look calibration without measured evidence.
+viewport-stable comparison, and explicit preview-source status. Per-file
+undo/redo now covers processing, geometry, framing, reset, paste, and
+profile/preset application, with one history step per continuous editing
+gesture and transient history restored independently for each selected scan.
+**Apply Look to Selected** now transfers the active frame's look to the
+import-ordered multi-selection while preserving each target's geometry and
+measured film base. Next, complete the representative-image viewport check and
+run the real roll workflow. Do not start another broad performance rewrite or
+divert into stock-look calibration without measured evidence.
 
 The current measurement evidence is:
 
@@ -127,7 +132,7 @@ and the one-full-resolution-RAW-at-a-time bound.
 | First paint | RAW embedded thumbnails and ImageIO standard-image thumbnails decode directly to at most 1000px off the main actor. A separate 256px proxy drives classification and median calibration before the first filtered render. |
 | Processing | Color/B&W negative and slide startup classification, RawTherapee-compatible power-law inversion, a reference-derived Kodachrome-like adaptive look, an optional density pipeline, film-base measurement, flat field, capture-profile 3x3-plus-offset density correction before curve inversion, a neutral-preserving six-control dye-crossover matrix shared by basic/power-law/density color-negative paths, protected color and tone controls with center-weighted UI response and pipeline-calibrated tone references, shape-preserving overall/per-channel curves, color wheels, neutral-white handling for clipped near-zero holder pixels, automatic frame detection, a centered two-click horizontal/vertical straighten guide, an immediately visible post-straighten drag-box crop with full-canvas replacement and reset, an independent four-corner perspective warp with targeting reticles, a 100×100-pixel drag loupe, soft parallel-edge assistance, and a visible grid, live full-resolution output dimensions, frame, and aspect ratio. |
 | Preview | First paint uses a bounded 16-bit 1000px display source plus a 256px analysis source. Embedded RAW pixels are fast previews, not authoritative RAW output. **Load RAW Preview** explicitly decodes the selected RAW through the app-facing camera-scan profile, builds an up-to-2400px display source, and recalibrates from those RAW pixels. A native scroll viewport supplies momentum pan, cursor-centered pinch zoom, Fit/step/100% commands, viewport-stable Original comparison, shared editing-overlay transforms, and an explicit source/dimension badge. The Core Image/Metal renderer uses latest-value-wins scheduling; CPU remains the reference and fallback. |
-| Editing state | Per-file settings, named presets, a built-in Kodachrome-like Auto action, one-step removal of the last applied preset without resetting geometry, system-clipboard copy/paste, reset, edited markers, apply-to-all-open-files, and configurable 2/4/8/16/32-file lookahead. Lookahead caches preview sessions only and is bounded by count and 256 MiB. |
+| Editing state | Per-file settings plus session-local per-file Undo/Redo for processing, geometry, output framing, reset, paste, and profile/preset application. Continuous slider, curve, color-wheel, and perspective gestures coalesce to one step; the restored current state persists while history starts empty after relaunch. Named presets, a built-in Kodachrome-like Auto action, one-step preset removal, system-clipboard copy/paste, edited markers, apply-to-selected/all with per-frame geometry and measured-base preservation, and configurable 2/4/8/16/32-file lookahead are also implemented. Lookahead caches preview sessions only and is bounded by count and 256 MiB. |
 | Export | Named-sRGB TIFF, JPEG, and PNG plus output-referred linear-sRGB processed DNG; individual, ordered multi-selection, and lazy memory-bounded batch-all workflows; collision-safe names; partial-file cleanup; progress, per-file errors, queued cancellation, and duplicate-friendly append-selected jobs with per-addition export-setting snapshots during an active sequential run. |
 | Dust | Native parity-tested candidate-mask detection and a non-destructive aligned overlay. Dust removal is not applied to preview or export. |
 | Packaging | Self-contained app/ZIP/checksum assembly, embedded non-system libraries, bundle-relative load paths, licenses/notices/library manifest, icon/document registration, ad-hoc beta signing, gated Developer ID/notary support, local bundle validation, archive extraction/revalidation, and local packaged launch. |
@@ -159,13 +164,13 @@ Implemented in the current working tree:
 - original/corrected comparison at the same viewport and magnification;
 - a shared transform for image, dust, crop, straighten, and perspective layers;
 - an explicit preview-source and displayed-dimensions badge.
+- native Undo/Redo with exact parameter snapshots, one history step per
+  continuous gesture, and safe per-file boundaries.
 
 Still required before calling the application high quality:
 
 - complete a direct representative-image workflow check for focus, grain,
   dust, crop-edge, overlay-drag, comparison, and clipping-diagnostic behavior;
-- add undo/redo with one history step per slider gesture and safe per-file
-  boundaries;
 - preserve the explicit bounded-preview versus full-resolution-export contract.
 
 ### 3. Roll And Batch Workflow
@@ -215,7 +220,6 @@ fail-closed `public` path. The following remain for the notarized build:
 
 - Telea dust inpainting and applying dust removal to preview/export are not
   implemented natively.
-- Undo/redo is not implemented.
 - Sidebar order remains import order. Manual reordering is unavailable and is
   not a release gate unless the roll workflow demonstrates a need.
 - Lens-distortion correction and calibrated film-plane/sensor-plane
@@ -250,7 +254,7 @@ fail-closed `public` path. The following remain for the notarized build:
 
 ## Verification Summary
 
-- 395 native tests across 28 files in the current working tree.
+- 416 native tests across 29 files in the current working tree.
 - Frozen Python-generated fixtures cover shared numerical behavior.
 - Production CPU/GPU correction comparisons cover 2,725 channel comparisons
   with zero failures and a maximum difference of 2/255.

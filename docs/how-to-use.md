@@ -50,12 +50,13 @@ The native application is the primary product. It provides:
    exposure and channel-ratio adaptation. It stabilizes tone across negative
    densities while retaining more scene color than full median balancing;
    **Color Negative (Legacy)** retains the former exponent renderer.
-   Three deliberately non-default alternatives explore the measured base
+   Four deliberately non-default alternatives explore the measured base
    families: **Alternate — Fuji 400 Fresh** uses the eight-frame fresh C-41
    fit, **Alternate — Fuji 200 Expired** takes a warm expired-base direction,
-   and **Alternate — CineStill 800T** takes the tungsten-base direction. The
-   latter two are experimental one-frame fits, so treat them as starting looks
-   rather than general stock characterizations.
+   **Alternate — CineStill 800T** takes an experimental two-frame
+   tungsten-base direction, and **Alternate — Harman Phoenix II** uses a
+   twelve-frame held-out-validated stock curve. The Fuji 200 and CineStill
+   profiles remain starting looks rather than general stock characterizations.
    **Black & White** uses a paired-scan calibrated monochrome curve with full
    exposure anchoring so frames from one roll do not sit on an overexposed
    highlight plateau. **Black & White (Legacy)** preserves the old rendering.
@@ -90,8 +91,9 @@ The native application is the primary product. It provides:
    negative exponents, dye-crossover matrix, density response, and display
    rendering settings. The generic color and B&W profiles are calibrated from
    paired RAW/JPEG/XMP references, while user-created profiles remain the route
-   for individual stocks and capture setups. The app does not claim calibrated
-   built-in profiles for individual color stocks.
+   for individual capture setups and stocks without a measured built-in
+   alternate. Harman Phoenix II is the only built-in stock curve with a
+   material improvement on a varied held-out set.
 8. In Film Base, optionally load a matching flat field and measure a clear,
    unexposed film edge automatically or by dragging over it. This enables the
    measured density pipeline for negative conversion and replaces the generic

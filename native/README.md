@@ -222,9 +222,11 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
 - User film-stock profiles persist exponent, dye-mixing, density-response, and
   display-rendering priors. Do not add named stock matrices until held-out
   measured data validates them.
-- Keep a session-local rollback snapshot when applying a named preset or
-  Kodachrome-like Auto so the look can be removed without resetting crop or
-  orientation.
+- Keep edit history session-local and isolated by standardized source path.
+  Coalesce each slider, curve, color-wheel, and perspective drag into one
+  history entry; persist the restored current state but start with empty
+  transient history after relaunch. Named-preset and Kodachrome-like removal
+  must remain reversible without resetting crop or orientation.
 - Treat manual film-frame geometry as a persisted, validated clockwise
   four-corner quadrilateral. Its reticle/loupe editor may softly snap either
   incident edge parallel to its opposite edge, but must preserve an explicit

@@ -877,8 +877,10 @@ struct ProcessingTests {
         0.253077),
       (.fuji200Expired, BGRChannelValues(blue: 41_143, green: 32_428, red: 38_592),
         0.581862),
-      (.cinestill800T, BGRChannelValues(blue: 13_880, green: 14_918, red: 22_381),
-        0.257059),
+      (.cinestill800T, BGRChannelValues(blue: 18_248.5, green: 18_741, red: 26_588.5),
+        0.216966),
+      (.harmanPhoenixII, BGRChannelValues(blue: 33_887.5, green: 30_313.5, red: 24_727),
+        0.108709),
     ]
 
     for item in cases {

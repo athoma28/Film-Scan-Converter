@@ -60,6 +60,8 @@ final class AppModel: ObservableObject {
   @Published var selectedFilmStockProfileID = FilmStockProfile.genericColorNegative.id
   @Published var selectedRollProfileID: String?
   @Published private(set) var profileStatus: String = ""
+  @Published private(set) var undoActionName: String?
+  @Published private(set) var redoActionName: String?
 
   let profileStore: ProfileStore
   private let settingsStore: PerFileSettingsStore?
@@ -120,6 +122,22 @@ final class AppModel: ObservableObject {
     public var totalSubmissionLatencyMs: Double = 0
   }
 
+  private struct EditingSnapshot: Equatable {
+    let parameters: ProcessingParameters
+    let framePercent: Int
+    let aspectRatio: AspectRatio?
+    let wasEdited: Bool
+    let wasAutomaticallyClassified: Bool
+    let appliedPresetName: String?
+    let presetRollback: CorrectionSettings?
+  }
+
+  private struct EditTransaction {
+    let key: String
+    let actionName: String
+    let before: EditingSnapshot
+  }
+
   private var settingsByPath: [String: ProcessingParameters] = [:]
   private var automaticallyClassifiedKeys: Set<String> = []
   private var editedKeys: Set<String> = []
@@ -132,6 +150,8 @@ final class AppModel: ObservableObject {
   private var isPreviewingUncroppedCanvas = false
   private var presetRollbacks: [String: CorrectionSettings] = [:]
   private var appliedPresetNames: [String: String] = [:]
+  private var editHistories: [String: EditHistory<EditingSnapshot>] = [:]
+  private var editTransaction: EditTransaction?
   private var loadTask: Task<Void, Never>?
   private var authoritativeDecodeTask: Task<Void, Never>?
   private var predecodeTask: Task<Void, Never>?
@@ -199,6 +219,17 @@ final class AppModel: ObservableObject {
       && !isExporting
   }
 
+  var canUndo: Bool { undoActionName != nil }
+  var canRedo: Bool { redoActionName != nil }
+
+  var undoMenuTitle: String {
+    undoActionName.map { "Undo \($0)" } ?? "Undo"
+  }
+
+  var redoMenuTitle: String {
+    redoActionName.map { "Redo \($0)" } ?? "Redo"
+  }
+
   private var orderedSelectedFiles: [URL] {
     guard let selection else { return [] }
     guard selectedFiles.contains(selection) else { return [selection] }
@@ -252,6 +283,7 @@ final class AppModel: ObservableObject {
     if let selection, selectedFiles.contains(selection) {
       return false
     }
+    endEditingGesture()
     selection = files.first { selectedFiles.contains($0) }
     return selection != previous
   }
@@ -315,6 +347,8 @@ final class AppModel: ObservableObject {
   private var rebateGeneration = 0
 
   func loadSelection() {
+    endEditingGesture()
+    refreshHistoryAvailability()
     if let interval = pendingFirstPreviewInterval {
       AppPerformanceSignposts.end(interval)
       pendingFirstPreviewInterval = nil
@@ -340,6 +374,7 @@ final class AppModel: ObservableObject {
       sourcePixelDimensions = nil
       cancelPredecode()
       status = "Drop film scans into the window to begin."
+      refreshHistoryAvailability()
       return
     }
 
@@ -372,6 +407,7 @@ final class AppModel: ObservableObject {
     manualCrop = parameters.manualCrop
     straightenAngle = parameters.straightenAngle
     showOriginal = false
+    refreshHistoryAvailability()
 
     if let cached = previewCache[key] {
       ImportLog.loadSelectionCacheHit(path: selection.lastPathComponent)
@@ -523,7 +559,7 @@ final class AppModel: ObservableObject {
     } else if value == .colourNegative {
       selectedFilmStockProfileID = FilmStockProfile.genericColorNegative.id
     }
-    updateParameters {
+    updateParameters(actionName: "Film Type") {
       $0.filmType = value
       switch value {
       case .blackAndWhiteNegative:
@@ -539,7 +575,7 @@ final class AppModel: ObservableObject {
   }
 
   func setTemperature(_ value: Int) {
-    updateParameters {
+    updateParameters(actionName: "Temperature") {
       $0.temperature = value
       $0.photoAdjustments.updateColorIntentFromLegacy(
         temperature: value,
@@ -550,7 +586,7 @@ final class AppModel: ObservableObject {
   }
 
   func setTint(_ value: Int) {
-    updateParameters {
+    updateParameters(actionName: "Tint") {
       $0.tint = value
       $0.photoAdjustments.updateColorIntentFromLegacy(
         temperature: $0.temperature,
@@ -561,7 +597,7 @@ final class AppModel: ObservableObject {
   }
 
   func setSaturation(_ value: Int) {
-    updateParameters {
+    updateParameters(actionName: "Saturation") {
       $0.saturation = value
       $0.photoAdjustments.updateColorIntentFromLegacy(
         temperature: $0.temperature,
@@ -572,45 +608,47 @@ final class AppModel: ObservableObject {
   }
 
   func setVibrance(_ value: Double) {
-    updateParameters { $0.photoAdjustments.vibrance = min(max(value, -1), 1) }
+    updateParameters(actionName: "Vibrance") {
+      $0.photoAdjustments.vibrance = min(max(value, -1), 1)
+    }
   }
 
   func setFilmDyeMixing(
     _ keyPath: WritableKeyPath<FilmDyeMixingParameters, Double>,
     to value: Double
   ) {
-    updateParameters {
+    updateParameters(actionName: "Dye Crossover") {
       $0.filmDyeMixing[keyPath: keyPath] = value
       $0.filmDyeMixing = $0.filmDyeMixing.clamped()
     }
   }
 
   func resetFilmDyeMixing() {
-    updateParameters { $0.filmDyeMixing = .neutral }
+    updateParameters(actionName: "Dye Crossover") { $0.filmDyeMixing = .neutral }
   }
 
   func setExposureEV(_ value: Double) {
-    updateParameters { $0.photoAdjustments.exposureEV = value }
+    updateParameters(actionName: "Exposure") { $0.photoAdjustments.exposureEV = value }
   }
 
   func setBrightness(_ value: Double) {
-    updateParameters { $0.photoAdjustments.brightness = value }
+    updateParameters(actionName: "Brightness") { $0.photoAdjustments.brightness = value }
   }
 
   func setContrast(_ value: Double) {
-    updateParameters { $0.photoAdjustments.contrast = value }
+    updateParameters(actionName: "Contrast") { $0.photoAdjustments.contrast = value }
   }
 
   func setSemanticHighlights(_ value: Double) {
-    updateParameters { $0.photoAdjustments.highlights = value }
+    updateParameters(actionName: "Highlights") { $0.photoAdjustments.highlights = value }
   }
 
   func setSemanticShadows(_ value: Double) {
-    updateParameters { $0.photoAdjustments.shadows = value }
+    updateParameters(actionName: "Shadows") { $0.photoAdjustments.shadows = value }
   }
 
   func setCurveEnabled(_ value: Bool) {
-    updateParameters {
+    updateParameters(actionName: "Tone Curve") {
       $0.curveEnabled = value
       if value && $0.curveControlPoints.isEmpty {
         $0.curveControlPoints = [
@@ -622,60 +660,60 @@ final class AppModel: ObservableObject {
   }
 
   func setCurveControlPoints(_ points: [CurvePoint]) {
-    updateParameters {
+    updateParameters(actionName: "Tone Curve") {
       $0.curveEnabled = true
       $0.curveControlPoints = points
     }
   }
 
   func setRedCurveControlPoints(_ points: [CurvePoint]) {
-    updateParameters {
+    updateParameters(actionName: "Red Curve") {
       $0.redCurveEnabled = true
       $0.redCurveControlPoints = points
     }
   }
 
   func setGreenCurveControlPoints(_ points: [CurvePoint]) {
-    updateParameters {
+    updateParameters(actionName: "Green Curve") {
       $0.greenCurveEnabled = true
       $0.greenCurveControlPoints = points
     }
   }
 
   func setBlueCurveControlPoints(_ points: [CurvePoint]) {
-    updateParameters {
+    updateParameters(actionName: "Blue Curve") {
       $0.blueCurveEnabled = true
       $0.blueCurveControlPoints = points
     }
   }
 
   func setHighlightWheelHue(_ value: Double) {
-    updateParameters { $0.highlightWheel.hue = value }
+    updateParameters(actionName: "Highlights Color Wheel") { $0.highlightWheel.hue = value }
   }
 
   func setHighlightWheelStrength(_ value: Double) {
-    updateParameters { $0.highlightWheel.strength = value }
+    updateParameters(actionName: "Highlights Color Wheel") { $0.highlightWheel.strength = value }
   }
 
   func setMidtoneWheelHue(_ value: Double) {
-    updateParameters { $0.midtoneWheel.hue = value }
+    updateParameters(actionName: "Midtones Color Wheel") { $0.midtoneWheel.hue = value }
   }
 
   func setMidtoneWheelStrength(_ value: Double) {
-    updateParameters { $0.midtoneWheel.strength = value }
+    updateParameters(actionName: "Midtones Color Wheel") { $0.midtoneWheel.strength = value }
   }
 
   func setShadowWheelHue(_ value: Double) {
-    updateParameters { $0.shadowWheel.hue = value }
+    updateParameters(actionName: "Shadows Color Wheel") { $0.shadowWheel.hue = value }
   }
 
   func setShadowWheelStrength(_ value: Double) {
-    updateParameters { $0.shadowWheel.strength = value }
+    updateParameters(actionName: "Shadows Color Wheel") { $0.shadowWheel.strength = value }
   }
 
   func rotateCounterclockwise() {
     manualCrop = nil
-    updateParameters {
+    updateParameters(actionName: "Rotate") {
       $0.manualCrop = nil
       $0.rotation = ($0.rotation + ($0.flip ? 1 : 3)) % 4
     }
@@ -683,7 +721,7 @@ final class AppModel: ObservableObject {
 
   func rotateClockwise() {
     manualCrop = nil
-    updateParameters {
+    updateParameters(actionName: "Rotate") {
       $0.manualCrop = nil
       $0.rotation = ($0.rotation + ($0.flip ? 3 : 1)) % 4
     }
@@ -691,31 +729,33 @@ final class AppModel: ObservableObject {
 
   func toggleFlip() {
     manualCrop = nil
-    updateParameters {
+    updateParameters(actionName: "Flip") {
       $0.manualCrop = nil
       $0.flip.toggle()
     }
   }
 
   func setFilmNegativeRedRatio(_ value: Double) {
-    updateParameters { $0.filmNegativeParams.redRatio = value }
+    updateParameters(actionName: "Negative Profile") { $0.filmNegativeParams.redRatio = value }
   }
 
   func setFilmNegativeGreenExp(_ value: Double) {
-    updateParameters { $0.filmNegativeParams.greenExp = value }
+    updateParameters(actionName: "Negative Profile") { $0.filmNegativeParams.greenExp = value }
   }
 
   func setFilmNegativeBlueRatio(_ value: Double) {
-    updateParameters { $0.filmNegativeParams.blueRatio = value }
+    updateParameters(actionName: "Negative Profile") { $0.filmNegativeParams.blueRatio = value }
   }
 
   func setCalibratedNegativeExposure(_ value: Double) {
-    updateParameters { $0.filmNegativeParams.monochromeExposureEV = value }
+    updateParameters(actionName: "Negative Exposure") {
+      $0.filmNegativeParams.monochromeExposureEV = value
+    }
   }
 
   func setFilmNegativePreset(_ preset: FilmNegativePreset) {
     let medians = preset != .off ? computeFilmNegativeMedians() : nil
-    updateParameters {
+    updateParameters(actionName: "Negative Profile") {
       switch preset {
       case .off:
         $0.filmNegativeParams.enabled = false
@@ -727,6 +767,8 @@ final class AppModel: ObservableObject {
         $0.filmNegativeParams = FilmNegativeParams.fuji200ExpiredAlternate
       case .cinestill800TAlternate:
         $0.filmNegativeParams = FilmNegativeParams.cinestill800TAlternate
+      case .harmanPhoenixIIAlternate:
+        $0.filmNegativeParams = FilmNegativeParams.harmanPhoenixIIAlternate
       case .legacyColourNegative:
         $0.filmNegativeParams = FilmNegativeParams.legacyColourNegative
       case .blackAndWhite:
@@ -745,14 +787,16 @@ final class AppModel: ObservableObject {
       settingsStatus = "The Kodachrome-like look needs a loaded color scan."
       return
     }
+    beginEditingGesture(named: "Kodachrome-like Auto")
     capturePresetRollback(named: "Kodachrome-like Auto")
     let look = KodachromeLikeLook.parameters(for: source, preserving: parameters)
-    updateParameters { $0 = look }
+    updateParameters(actionName: "Kodachrome-like Auto") { $0 = look }
+    endEditingGesture()
     settingsStatus = "Applied Kodachrome-like Auto."
   }
 
   func setDensityPipelineEnabled(_ value: Bool) {
-    updateParameters {
+    updateParameters(actionName: "Density Pipeline") {
       $0.densityPipelineEnabled = value
       if value {
         $0.filmNegativeParams.rendering = .powerLaw
@@ -779,7 +823,7 @@ final class AppModel: ObservableObject {
       let currentMedians = computeFilmNegativeMedians()
         ?? parameters.filmNegativeParams.measuredMedians
       let usesDensityPipeline = resolved.stockProfile.filmNegativeParams.rendering == .powerLaw
-      updateParameters {
+      updateParameters(actionName: "Processing Profile") {
         $0.filmType = resolved.stockProfile.filmType
         $0.densityPipelineEnabled = usesDensityPipeline
         if let baseDensity = resolved.resolvedBaseDensity?.baseDensity {
@@ -921,6 +965,7 @@ final class AppModel: ObservableObject {
   }
 
   func resetCorrections() {
+    let historyBefore = currentEditingSnapshot()
     resetDustState(cancelTask: true)
     parameters = ProcessingParameters()
     clearPresetRollback()
@@ -933,6 +978,7 @@ final class AppModel: ObservableObject {
     } else {
       scheduleRender(immediate: true)
     }
+    recordCurrentEdit(actionName: "Reset Corrections", before: historyBefore)
   }
 
   var canPasteCorrectionSettings: Bool {
@@ -954,7 +1000,7 @@ final class AppModel: ObservableObject {
         settingsStatus = "The clipboard does not contain correction settings."
         return
       }
-      applyCorrectionSettings(settings)
+      applyCorrectionSettings(settings, actionName: "Paste Corrections")
       settingsStatus = "Correction settings pasted."
     } catch {
       settingsStatus = "Clipboard correction settings are not valid."
@@ -980,18 +1026,23 @@ final class AppModel: ObservableObject {
   }
 
   func applyCorrectionPreset(_ preset: NamedCorrectionPreset) {
+    beginEditingGesture(named: "Apply \(preset.name)")
     capturePresetRollback(named: preset.name)
-    applyCorrectionSettings(preset.settings)
+    applyCorrectionSettings(preset.settings, actionName: "Apply \(preset.name)")
+    endEditingGesture()
     settingsStatus = "Applied preset “\(preset.name)”."
   }
 
   func removeAppliedPreset() {
     guard let selection else { return }
     let key = settingsKey(selection)
-    guard let rollback = presetRollbacks.removeValue(forKey: key) else { return }
+    guard let rollback = presetRollbacks[key] else { return }
+    beginEditingGesture(named: "Remove \(appliedPresetNames[key] ?? "Preset")")
+    presetRollbacks.removeValue(forKey: key)
     let name = appliedPresetNames.removeValue(forKey: key) ?? "preset"
     appliedPresetName = nil
-    applyCorrectionSettings(rollback)
+    applyCorrectionSettings(rollback, actionName: "Remove \(name)")
+    endEditingGesture()
     settingsStatus = "Removed “\(name)” and restored the previous adjustments."
   }
 
@@ -1008,7 +1059,11 @@ final class AppModel: ObservableObject {
     }
   }
 
-  private func applyCorrectionSettings(_ settings: CorrectionSettings) {
+  private func applyCorrectionSettings(
+    _ settings: CorrectionSettings,
+    actionName: String
+  ) {
+    let historyBefore = currentEditingSnapshot()
     resetDustState(cancelTask: true)
     if let selection {
       automaticallyClassifiedKeys.remove(settingsKey(selection))
@@ -1026,21 +1081,54 @@ final class AppModel: ObservableObject {
     } else {
       scheduleRender(immediate: true)
     }
+    recordCurrentEdit(actionName: actionName, before: historyBefore)
   }
 
   func applyCurrentSettingsToAllOpenFiles() {
-    guard !files.isEmpty else { return }
+    guard selection != nil, !files.isEmpty else { return }
+    applyCurrentLook(
+      to: files,
+      actionName: "Apply Settings to All"
+    )
+    settingsStatus = "Applied settings to all \(files.count) open files."
+  }
+
+  func applyCurrentLookToSelectedFiles() {
+    let targets = orderedSelectedFiles
+    guard targets.count > 1 else {
+      settingsStatus = "Select two or more files to apply the current look."
+      return
+    }
+    applyCurrentLook(
+      to: targets,
+      actionName: "Apply Look to Selected"
+    )
+    settingsStatus = "Applied the current look to \(targets.count) selected files."
+  }
+
+  private func applyCurrentLook(
+    to targets: [URL],
+    actionName: String
+  ) {
+    endEditingGesture()
     let settings = CorrectionSettings(capturing: parameters)
-    for url in files {
+    for url in targets {
       let key = settingsKey(url)
+      let historyBefore = editingSnapshot(for: key)
       let destination = settingsByPath[key] ?? ProcessingParameters()
       var applied = settings.applying(to: destination)
       applied.filmNegativeParams.measuredMedians = nil
       settingsByPath[key] = applied
       editedKeys.insert(key)
+      recordEdit(
+        for: key,
+        actionName: actionName,
+        before: historyBefore,
+        after: editingSnapshot(for: key)
+      )
     }
     persistSettings()
-    settingsStatus = "Applied settings to all \(files.count) open files."
+    refreshHistoryAvailability()
   }
 
   func showImportPanel() {
@@ -1076,11 +1164,15 @@ final class AppModel: ObservableObject {
   }
 
   func setExportFramePercent(_ percent: Int) {
+    let historyBefore = currentEditingSnapshot()
     exportParameters.framePercent = percent
+    recordCurrentEdit(actionName: "Border", before: historyBefore)
   }
 
   func setExportAspectRatio(_ ratio: AspectRatio?) {
+    let historyBefore = currentEditingSnapshot()
     exportParameters.aspectRatio = ratio
+    recordCurrentEdit(actionName: "Aspect Ratio", before: historyBefore)
   }
 
   func setJpegQuality(_ quality: Double) {
@@ -1223,7 +1315,7 @@ final class AppModel: ObservableObject {
       case .success(let measurement):
         selectedRebateMeasurement = measurement
         selectedRebateRegion = region
-        updateParameters {
+        updateParameters(actionName: "Film Base Measurement") {
           $0.densityPipelineEnabled = true
           $0.filmNegativeParams.rendering = .powerLaw
           $0.densityBaseDensity = measurement.baseDensity
@@ -1311,7 +1403,7 @@ final class AppModel: ObservableObject {
       candidate.measurement.baseDensity.red,
       candidate.measurement.confidence * 100
     )
-    updateParameters {
+    updateParameters(actionName: "Film Base Measurement") {
       $0.densityPipelineEnabled = true
       $0.filmNegativeParams.rendering = .powerLaw
       $0.densityBaseDensity = candidate.measurement.baseDensity
@@ -1352,7 +1444,7 @@ final class AppModel: ObservableObject {
 
   func clearRebateMeasurement() {
     resetRebateState(cancelTask: true)
-    updateParameters {
+    updateParameters(actionName: "Clear Film Base") {
       $0.densityPipelineEnabled = false
       $0.densityBaseDensity = nil
     }
@@ -1518,12 +1610,14 @@ final class AppModel: ObservableObject {
   }
 
   func clearCrop() {
+    let historyBefore = currentEditingSnapshot()
     resetCropState(cancelTask: true)
     parameters.cropRect = nil
     parameters.perspectiveCrop = nil
     parameters.manualCrop = nil
     saveParameters()
     scheduleRender(immediate: true)
+    recordCurrentEdit(actionName: "Clear Crop", before: historyBefore)
   }
 
   func setCropRect(_ rect: RotatedRect?) {
@@ -1553,6 +1647,7 @@ final class AppModel: ObservableObject {
       cropStatus = "Keep the four corners in clockwise order."
       return
     }
+    let historyBefore = currentEditingSnapshot()
     resetDustState(cancelTask: true)
     cropRect = nil
     perspectiveCrop = crop
@@ -1562,10 +1657,12 @@ final class AppModel: ObservableObject {
     if let selection { editedKeys.insert(settingsKey(selection)) }
     saveParameters()
     scheduleRender(immediate: true)
+    recordCurrentEdit(actionName: "Perspective", before: historyBefore)
   }
 
   func clearPerspectiveCrop() {
     guard perspectiveCrop != nil || parameters.perspectiveCrop != nil else { return }
+    let historyBefore = currentEditingSnapshot()
     resetDustState(cancelTask: true)
     perspectiveCrop = nil
     parameters.perspectiveCrop = nil
@@ -1573,6 +1670,7 @@ final class AppModel: ObservableObject {
     if let selection { editedKeys.insert(settingsKey(selection)) }
     saveParameters()
     scheduleRender(immediate: true)
+    recordCurrentEdit(actionName: "Clear Perspective", before: historyBefore)
   }
 
   func setManualCrop(_ crop: NormalizedCropRect?) {
@@ -1584,6 +1682,7 @@ final class AppModel: ObservableObject {
       cropStatus = "Drag a crop box inside the image."
       return
     }
+    let historyBefore = currentEditingSnapshot()
     resetDustState(cancelTask: true)
     manualCrop = crop
     parameters.manualCrop = crop
@@ -1591,6 +1690,7 @@ final class AppModel: ObservableObject {
     if let selection { editedKeys.insert(settingsKey(selection)) }
     saveParameters()
     scheduleRender(immediate: true)
+    recordCurrentEdit(actionName: "Crop", before: historyBefore)
   }
 
   func beginManualCropEditing() {
@@ -1619,6 +1719,7 @@ final class AppModel: ObservableObject {
 
   func clearManualCrop() {
     guard manualCrop != nil || parameters.manualCrop != nil else { return }
+    let historyBefore = currentEditingSnapshot()
     resetDustState(cancelTask: true)
     manualCrop = nil
     parameters.manualCrop = nil
@@ -1626,12 +1727,14 @@ final class AppModel: ObservableObject {
     if let selection { editedKeys.insert(settingsKey(selection)) }
     saveParameters()
     scheduleRender(immediate: true)
+    recordCurrentEdit(actionName: "Clear Crop", before: historyBefore)
   }
 
   func setStraightenAngle(_ angle: Double) {
     guard angle.isFinite else { return }
     let clamped = min(max(angle, -45), 45)
     guard abs(parameters.straightenAngle - clamped) > 0.000_001 else { return }
+    let historyBefore = currentEditingSnapshot()
     resetDustState(cancelTask: true)
     manualCrop = nil
     parameters.manualCrop = nil
@@ -1640,6 +1743,7 @@ final class AppModel: ObservableObject {
     if let selection { editedKeys.insert(settingsKey(selection)) }
     saveParameters()
     scheduleRender(immediate: true)
+    recordCurrentEdit(actionName: "Straighten", before: historyBefore)
   }
 
   func clearStraightening() {
@@ -1652,11 +1756,11 @@ final class AppModel: ObservableObject {
   }
 
   func setDarkThreshold(_ value: Int) {
-    updateParameters { $0.darkThreshold = value }
+    updateParameters(actionName: "Dark Threshold") { $0.darkThreshold = value }
   }
 
   func setLightThreshold(_ value: Int) {
-    updateParameters { $0.lightThreshold = value }
+    updateParameters(actionName: "Light Threshold") { $0.lightThreshold = value }
   }
 
   private func resetRebateState(cancelTask: Bool) {
@@ -1697,6 +1801,7 @@ final class AppModel: ObservableObject {
   }
 
   private func applyCrop(_ rect: RotatedRect, render: Bool) {
+    let historyBefore = currentEditingSnapshot()
     resetDustState(cancelTask: true)
     cropRect = rect
     perspectiveCrop = nil
@@ -1710,6 +1815,7 @@ final class AppModel: ObservableObject {
     if render {
       scheduleRender(immediate: true)
     }
+    recordCurrentEdit(actionName: "Detect Frame", before: historyBefore)
   }
 
   nonisolated private static func unityFlatField(for image: UInt16Image) -> UInt16Image {
@@ -2089,6 +2195,9 @@ final class AppModel: ObservableObject {
     case .cinestill800TAlternate:
       next.filmNegativeParams = FilmNegativeParams.cinestill800TAlternate
       next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
+    case .harmanPhoenixIIAlternate:
+      next.filmNegativeParams = FilmNegativeParams.harmanPhoenixIIAlternate
+      next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
     case .legacyColourNegative:
       next.filmNegativeParams = FilmNegativeParams.legacyColourNegative
       next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
@@ -2102,7 +2211,188 @@ final class AppModel: ObservableObject {
     return next
   }
 
-  private func updateParameters(_ update: (inout ProcessingParameters) -> Void) {
+  func editingGestureChanged(_ actionName: String, isEditing: Bool) {
+    if isEditing {
+      beginEditingGesture(named: actionName)
+    } else {
+      endEditingGesture()
+    }
+  }
+
+  func beginEditingGesture(named actionName: String) {
+    guard let selection else { return }
+    let key = settingsKey(selection)
+    if let transaction = editTransaction {
+      guard transaction.key != key || transaction.actionName != actionName else { return }
+      endEditingGesture()
+    }
+    editTransaction = EditTransaction(
+      key: key,
+      actionName: actionName,
+      before: editingSnapshot(for: key)
+    )
+  }
+
+  func endEditingGesture() {
+    guard let transaction = editTransaction else { return }
+    editTransaction = nil
+    recordEdit(
+      for: transaction.key,
+      actionName: transaction.actionName,
+      before: transaction.before,
+      after: editingSnapshot(for: transaction.key)
+    )
+    refreshHistoryAvailability()
+  }
+
+  func undo() {
+    endEditingGesture()
+    guard let selection else { return }
+    let key = settingsKey(selection)
+    guard var history = editHistories[key], let entry = history.undo() else { return }
+    editHistories[key] = history
+    applyEditingSnapshot(
+      entry.before,
+      for: key,
+      restoresOutputFraming: Self.isOutputFramingAction(entry.actionName)
+    )
+    settingsStatus = "Undid \(entry.actionName)."
+    refreshHistoryAvailability()
+  }
+
+  func redo() {
+    endEditingGesture()
+    guard let selection else { return }
+    let key = settingsKey(selection)
+    guard var history = editHistories[key], let entry = history.redo() else { return }
+    editHistories[key] = history
+    applyEditingSnapshot(
+      entry.after,
+      for: key,
+      restoresOutputFraming: Self.isOutputFramingAction(entry.actionName)
+    )
+    settingsStatus = "Redid \(entry.actionName)."
+    refreshHistoryAvailability()
+  }
+
+  private func currentEditingSnapshot() -> EditingSnapshot? {
+    guard let selection else { return nil }
+    return editingSnapshot(for: settingsKey(selection))
+  }
+
+  private func editingSnapshot(for key: String) -> EditingSnapshot {
+    let snapshotParameters: ProcessingParameters
+    if selection.map(settingsKey) == key {
+      snapshotParameters = parameters
+    } else {
+      snapshotParameters = settingsByPath[key] ?? ProcessingParameters()
+    }
+    return EditingSnapshot(
+      parameters: snapshotParameters,
+      framePercent: exportParameters.framePercent,
+      aspectRatio: exportParameters.aspectRatio,
+      wasEdited: editedKeys.contains(key),
+      wasAutomaticallyClassified: automaticallyClassifiedKeys.contains(key),
+      appliedPresetName: appliedPresetNames[key],
+      presetRollback: presetRollbacks[key]
+    )
+  }
+
+  private func recordCurrentEdit(
+    actionName: String,
+    before: EditingSnapshot?
+  ) {
+    guard let selection, let before else { return }
+    let key = settingsKey(selection)
+    guard editTransaction?.key != key else { return }
+    recordEdit(
+      for: key,
+      actionName: actionName,
+      before: before,
+      after: editingSnapshot(for: key)
+    )
+    refreshHistoryAvailability()
+  }
+
+  private func recordEdit(
+    for key: String,
+    actionName: String,
+    before: EditingSnapshot,
+    after: EditingSnapshot
+  ) {
+    var history = editHistories[key] ?? EditHistory(limit: 100)
+    history.record(actionName: actionName, before: before, after: after)
+    editHistories[key] = history
+  }
+
+  private func applyEditingSnapshot(
+    _ snapshot: EditingSnapshot,
+    for key: String,
+    restoresOutputFraming: Bool
+  ) {
+    guard selection.map(settingsKey) == key else { return }
+    resetDustState(cancelTask: true)
+    isPreviewingUncroppedCanvas = false
+    parameters = snapshot.parameters
+    cropRect = snapshot.parameters.cropRect
+    perspectiveCrop = snapshot.parameters.perspectiveCrop
+    manualCrop = snapshot.parameters.manualCrop
+    straightenAngle = snapshot.parameters.straightenAngle
+    if restoresOutputFraming {
+      exportParameters.framePercent = snapshot.framePercent
+      exportParameters.aspectRatio = snapshot.aspectRatio
+    }
+
+    if snapshot.wasEdited {
+      editedKeys.insert(key)
+    } else {
+      editedKeys.remove(key)
+    }
+    if snapshot.wasAutomaticallyClassified {
+      automaticallyClassifiedKeys.insert(key)
+    } else {
+      automaticallyClassifiedKeys.remove(key)
+    }
+    if let name = snapshot.appliedPresetName {
+      appliedPresetNames[key] = name
+    } else {
+      appliedPresetNames.removeValue(forKey: key)
+    }
+    if let rollback = snapshot.presetRollback {
+      presetRollbacks[key] = rollback
+    } else {
+      presetRollbacks.removeValue(forKey: key)
+    }
+    appliedPresetName = snapshot.appliedPresetName
+
+    saveParameters()
+    if showOriginal {
+      showOriginal = false
+    } else {
+      scheduleRender(immediate: true)
+    }
+  }
+
+  private func refreshHistoryAvailability() {
+    guard let selection else {
+      undoActionName = nil
+      redoActionName = nil
+      return
+    }
+    let history = editHistories[settingsKey(selection)]
+    undoActionName = history?.undoActionName
+    redoActionName = history?.redoActionName
+  }
+
+  nonisolated private static func isOutputFramingAction(_ actionName: String) -> Bool {
+    actionName == "Border" || actionName == "Aspect Ratio"
+  }
+
+  private func updateParameters(
+    actionName: String,
+    _ update: (inout ProcessingParameters) -> Void
+  ) {
+    let historyBefore = currentEditingSnapshot()
     resetDustState(cancelTask: true)
     if let selection {
       automaticallyClassifiedKeys.remove(settingsKey(selection))
@@ -2115,6 +2405,7 @@ final class AppModel: ObservableObject {
     } else {
       scheduleRender()
     }
+    recordCurrentEdit(actionName: actionName, before: historyBefore)
   }
 
   private func saveParameters() {

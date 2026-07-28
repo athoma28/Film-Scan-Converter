@@ -36,6 +36,20 @@ struct FilmScanConverterMacApp: App {
     .commands {
       PreviewViewCommands()
 
+      CommandGroup(replacing: .undoRedo) {
+        Button(model.undoMenuTitle) {
+          model.undo()
+        }
+        .keyboardShortcut("z")
+        .disabled(!model.canUndo)
+
+        Button(model.redoMenuTitle) {
+          model.redo()
+        }
+        .keyboardShortcut("z", modifiers: [.command, .shift])
+        .disabled(!model.canRedo)
+      }
+
       CommandGroup(after: .appInfo) {
         Button("Open Source Licenses…") {
           guard let noticesURL = Bundle.main.url(
