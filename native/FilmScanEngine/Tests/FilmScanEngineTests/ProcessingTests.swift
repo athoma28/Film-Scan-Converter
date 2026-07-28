@@ -5,6 +5,28 @@ import Testing
 
 @Suite("Film processing stages")
 struct ProcessingTests {
+  @Test("Large neutral correction preserves pixels across parallel ranges")
+  func largeNeutralCorrectionParity() {
+    let width = 1_001
+    let height = 1_000
+    let pixelCount = width * height
+    var pixels = [UInt16](repeating: 0, count: pixelCount * 3)
+    for pixelIndex in 0..<pixelCount {
+      let component = pixelIndex * 3
+      pixels[component] = UInt16(truncatingIfNeeded: pixelIndex * 3)
+      pixels[component + 1] = UInt16(truncatingIfNeeded: pixelIndex * 5)
+      pixels[component + 2] = UInt16(truncatingIfNeeded: pixelIndex * 7)
+    }
+    let image = UInt16Image(
+      width: width, height: height, channels: 3, pixels: pixels)
+
+    let actual = FilmProcessing.correctedPreview(
+      image: image,
+      parameters: ProcessingParameters(filmType: .slide))
+
+    #expect(actual == image)
+  }
+
   @Test("Neutral white balance (temp=0, tint=0) returns the same image")
   func whiteBalanceNeutral() throws {
     let (input, expected, shape, metadata) = try FixtureLoader.loadFloat64Case("wb_t0_tint0")

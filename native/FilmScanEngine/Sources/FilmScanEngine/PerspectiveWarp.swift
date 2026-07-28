@@ -1,4 +1,5 @@
 import Accelerate
+import Dispatch
 import Foundation
 
 /// A source-space quadrilateral for an interactive perspective crop.
@@ -124,6 +125,8 @@ public struct PerspectiveCrop: Codable, Equatable, Sendable {
 }
 
 public enum PerspectiveTransform {
+  static let warpParallelPixelThreshold = 1_000_000
+
 
   /// Applies a simple axis-aligned crop in the current canvas coordinate
   /// system. Unlike film-frame and perspective crops, this is intended to run
@@ -393,7 +396,10 @@ public enum PerspectiveTransform {
 
     var output = [UInt16](repeating: 0, count: outputWidth * outputHeight * channels)
 
-    for outY in 0..<outputHeight {
+    @Sendable func processRow(
+      _ outY: Int,
+      output: UnsafeMutablePointer<UInt16>
+    ) {
       for outX in 0..<outputWidth {
         let fx = Double(outX)
         let fy = Double(outY)
@@ -444,6 +450,28 @@ public enum PerspectiveTransform {
 
           let interp = iwx * iwy * v00 + wx * iwy * v10 + iwx * wy * v01 + wx * wy * v11
           output[outStart + c] = UInt16(max(0, min(65535, interp.rounded())))
+        }
+      }
+    }
+
+    let pixelCount = outputWidth * outputHeight
+    let workerCount = min(8, ProcessInfo.processInfo.activeProcessorCount)
+    output.withUnsafeMutableBufferPointer { buffer in
+      guard let baseAddress = buffer.baseAddress else { return }
+      if pixelCount >= warpParallelPixelThreshold, workerCount > 1 {
+        let sendableBuffer = SendableMutableBuffer(baseAddress)
+        let rowsPerWorker = (outputHeight + workerCount - 1) / workerCount
+        DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
+          let start = worker * rowsPerWorker
+          let end = min(start + rowsPerWorker, outputHeight)
+          guard start < end else { return }
+          for row in start..<end {
+            processRow(row, output: sendableBuffer.baseAddress)
+          }
+        }
+      } else {
+        for row in 0..<outputHeight {
+          processRow(row, output: baseAddress)
         }
       }
     }

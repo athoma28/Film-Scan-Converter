@@ -1,14 +1,6 @@
 import Dispatch
 import Foundation
 
-private final class ExportMutableBuffer<Element>: @unchecked Sendable {
-  let baseAddress: UnsafeMutablePointer<Element>
-
-  init(_ baseAddress: UnsafeMutablePointer<Element>) {
-    self.baseAddress = baseAddress
-  }
-}
-
 public struct UInt16Image: Equatable, Sendable {
   public let width: Int
   public let height: Int
@@ -223,7 +215,7 @@ public struct UInt16Image: Equatable, Sendable {
       guard let baseAddress = rbp.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
         return
       }
-      let output = ExportMutableBuffer(baseAddress)
+      let output = SendableMutableBuffer(baseAddress)
       let workerCount = exportPackingWorkerCount(pixelCount: pixelCount)
       let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
       DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
@@ -264,7 +256,7 @@ public struct UInt16Image: Equatable, Sendable {
       guard let baseAddress = rbp.baseAddress?.assumingMemoryBound(to: UInt16.self) else {
         return
       }
-      let output = ExportMutableBuffer(baseAddress)
+      let output = SendableMutableBuffer(baseAddress)
       let workerCount = exportPackingWorkerCount(pixelCount: pixelCount)
       let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
       DispatchQueue.concurrentPerform(iterations: workerCount) { worker in

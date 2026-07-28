@@ -208,18 +208,6 @@ public actor ExportManager {
         signpostID: writeID,
         "file=%{public}s correlation=%{public}s",
         request.sourceURL.lastPathComponent, request.correlationID)
-      let cleanupID = OSSignpostID(log: signpostLog)
-      os_signpost(
-        .begin, log: signpostLog, name: "Cleanup",
-        signpostID: cleanupID,
-        "file=%{public}s correlation=%{public}s",
-        request.sourceURL.lastPathComponent, request.correlationID)
-      try? FileManager.default.removeItem(at: request.destinationURL)
-      os_signpost(
-        .end, log: signpostLog, name: "Cleanup",
-        signpostID: cleanupID,
-        "file=%{public}s correlation=%{public}s",
-        request.sourceURL.lastPathComponent, request.correlationID)
       return ExportResult(
         sourceURL: request.sourceURL,
         destinationURL: request.destinationURL,

@@ -239,34 +239,31 @@ struct IntegratedCurvesView: View {
     }
   }
 
+  @ViewBuilder
   private var pointInfoRow: some View {
     let points = currentControlPoints
     if let idx = selectedPointIndex, idx < points.count {
       let pt = points[idx]
-      return AnyView(
-        HStack(spacing: 6) {
-          labeledField(
-            "In",
-            value: Binding(
-              get: { Int((pt.input * 255).rounded()) },
-              set: { updatePointInput(at: idx, value: Double($0) / 255.0) }
-            )
+      HStack(spacing: 6) {
+        labeledField(
+          "In",
+          value: Binding(
+            get: { Int((pt.input * 255).rounded()) },
+            set: { updatePointInput(at: idx, value: Double($0) / 255.0) }
           )
-          labeledField(
-            "Out",
-            value: Binding(
-              get: { Int((pt.output * 255).rounded()) },
-              set: { updatePointOutput(at: idx, value: Double($0) / 255.0) }
-            )
+        )
+        labeledField(
+          "Out",
+          value: Binding(
+            get: { Int((pt.output * 255).rounded()) },
+            set: { updatePointOutput(at: idx, value: Double($0) / 255.0) }
           )
-        }
-      )
+        )
+      }
     } else {
-      return AnyView(
-        Text("Click point to edit values")
-          .font(.caption2)
-          .foregroundStyle(.tertiary)
-      )
+      Text("Click point to edit values")
+        .font(.caption2)
+        .foregroundStyle(.tertiary)
     }
   }
 

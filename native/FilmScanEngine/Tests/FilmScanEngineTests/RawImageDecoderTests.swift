@@ -470,6 +470,23 @@ struct RawImageDecoderTests {
     }
   }
 
+  @Test("Truncated RAW files report a LibRaw decode failure")
+  func truncatedRAWFile() throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-truncated-raw-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let url = directory.appendingPathComponent("truncated.raf")
+    try Data("FUJIFILMCCD-RAW".utf8).write(to: url)
+
+    #expect(throws: RawImageDecoderError.self) {
+      try RawImageDecoder.decode(url)
+    }
+    #expect(throws: RawImageDecoderError.self) {
+      try RawImageDecoder.extractThumbnail(url)
+    }
+  }
+
   private func referenceMAE(
     _ rendered: UInt16Image,
     against reference: SampleRawAlignedReference,

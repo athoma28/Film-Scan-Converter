@@ -8,20 +8,28 @@ struct ContentView: View {
   @State private var dropTargeted = false
   @State private var showLivePreview = false
   @State private var inspectorPage: InspectorPage = .edit
-  @State private var isPickingRebateRegion = false
+  @State private var activeOverlay: PreviewOverlay?
   @State private var rebateDragStart: CGPoint?
   @State private var rebateDragEnd: CGPoint?
-  @State private var rebateSelectionPreviousShowOriginal = false
-  @State private var isPerspectiveEditing = false
-  @State private var perspectiveEditingPreviousShowOriginal = false
+  @State private var overlayPreviousShowOriginal: Bool?
   @State private var usesPerspectiveParallelAssist = true
-  @State private var isStraightening = false
-  @State private var isCropping = false
   @State private var presetName = ""
   @State private var profileName = ""
   @State private var previewZoomRequest = PreviewZoomRequest()
   @State private var previewZoomPercent = 100
   @State private var previewIsFit = true
+
+  private enum PreviewOverlay {
+    case rebate
+    case perspective
+    case straighten
+    case crop
+  }
+
+  private var isPickingRebateRegion: Bool { activeOverlay == .rebate }
+  private var isPerspectiveEditing: Bool { activeOverlay == .perspective }
+  private var isStraightening: Bool { activeOverlay == .straighten }
+  private var isCropping: Bool { activeOverlay == .crop }
 
   private enum InspectorPage: String, CaseIterable, Identifiable {
     case edit = "Edit"
@@ -72,10 +80,7 @@ struct ContentView: View {
       .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
       .onChange(of: model.selectedFiles) {
         guard model.sidebarSelectionDidChange() else { return }
-        endRebateSelection()
-        endPerspectiveEditing()
-        endStraightening()
-        endCropping()
+        endActiveOverlay()
         requestPreviewZoom(.fit)
         model.loadSelection()
       }
@@ -94,7 +99,9 @@ struct ContentView: View {
         Divider()
         HStack(spacing: 6) {
           Text(showLivePreview ? camera.status : model.status)
-            .foregroundStyle(model.status.contains("Unable") ? .red : model.status.contains("error") ? .red : .secondary)
+            .foregroundStyle(
+              (showLivePreview ? camera.statusKind : model.statusKind) == .error
+                ? Color.red : Color.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
@@ -752,11 +759,7 @@ struct ContentView: View {
           if isPickingRebateRegion {
             endRebateSelection()
           } else {
-            rebateSelectionPreviousShowOriginal = model.showOriginal
-            model.showOriginal = true
-            isPickingRebateRegion = true
-            rebateDragStart = nil
-            rebateDragEnd = nil
+            beginRebateSelection()
           }
         } label: {
           Label(
@@ -1586,10 +1589,16 @@ struct ContentView: View {
 
   private func endRebateSelection() {
     guard isPickingRebateRegion else { return }
-    isPickingRebateRegion = false
+    endActiveOverlay()
+  }
+
+  private func beginRebateSelection() {
+    endActiveOverlay()
     rebateDragStart = nil
     rebateDragEnd = nil
-    model.showOriginal = rebateSelectionPreviousShowOriginal
+    overlayPreviousShowOriginal = model.showOriginal
+    activeOverlay = .rebate
+    model.showOriginal = true
   }
 
   private func togglePerspectiveEditing() {
@@ -1597,18 +1606,16 @@ struct ContentView: View {
       endPerspectiveEditing()
       return
     }
-    endStraightening()
-    endCropping()
-    perspectiveEditingPreviousShowOriginal = model.showOriginal
+    endActiveOverlay()
+    overlayPreviousShowOriginal = model.showOriginal
     model.beginPerspectiveCrop()
-    isPerspectiveEditing = true
+    activeOverlay = .perspective
     model.showOriginal = true
   }
 
   private func endPerspectiveEditing() {
     guard isPerspectiveEditing else { return }
-    isPerspectiveEditing = false
-    model.showOriginal = perspectiveEditingPreviousShowOriginal
+    endActiveOverlay()
   }
 
   private func toggleStraightening() {
@@ -1616,16 +1623,14 @@ struct ContentView: View {
       endStraightening()
       return
     }
-    endPerspectiveEditing()
-    endCropping()
+    endActiveOverlay()
     model.beginManualCropEditing()
-    isStraightening = true
+    activeOverlay = .straighten
   }
 
   private func endStraightening() {
     guard isStraightening else { return }
-    isStraightening = false
-    model.endManualCropEditing()
+    endActiveOverlay()
   }
 
   private func toggleCropping() {
@@ -1633,21 +1638,61 @@ struct ContentView: View {
       endCropping()
       return
     }
-    endPerspectiveEditing()
-    endStraightening()
+    endActiveOverlay()
     model.beginManualCropEditing()
-    isCropping = true
+    activeOverlay = .crop
   }
 
   private func endCropping() {
     guard isCropping else { return }
-    isCropping = false
-    model.endManualCropEditing()
+    endActiveOverlay()
+  }
+
+  private func endActiveOverlay() {
+    guard let overlay = activeOverlay else { return }
+    activeOverlay = nil
+
+    switch overlay {
+    case .rebate:
+      rebateDragStart = nil
+      rebateDragEnd = nil
+      restoreShowOriginalAfterOverlay()
+    case .perspective:
+      restoreShowOriginalAfterOverlay()
+    case .straighten, .crop:
+      model.endManualCropEditing()
+    }
+  }
+
+  private func restoreShowOriginalAfterOverlay() {
+    guard let previousValue = overlayPreviousShowOriginal else { return }
+    overlayPreviousShowOriginal = nil
+    model.showOriginal = previousValue
   }
 
   private func pointText(_ point: PerspectiveCrop.Point) -> String {
     String(format: "%.2f, %.2f", point.x, point.y)
   }
+}
+
+private func overlayAspectFitRect(
+  imageSize: CGSize,
+  containerSize: CGSize
+) -> CGRect {
+  guard imageSize.width > 0, imageSize.height > 0 else { return .zero }
+  let scale = min(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
+  let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
+  return CGRect(
+    x: (containerSize.width - size.width) / 2,
+    y: (containerSize.height - size.height) / 2,
+    width: size.width,
+    height: size.height)
+}
+
+private func clampedOverlayPoint(_ point: CGPoint, to rect: CGRect) -> CGPoint {
+  CGPoint(
+    x: min(max(point.x, rect.minX), rect.maxX),
+    y: min(max(point.y, rect.minY), rect.maxY))
 }
 
 private struct StraightenLineOverlay: View {
@@ -1660,7 +1705,7 @@ private struct StraightenLineOverlay: View {
 
   var body: some View {
     GeometryReader { geometry in
-      let imageRect = aspectFitRect(imageSize: imageSize, containerSize: geometry.size)
+      let imageRect = overlayAspectFitRect(imageSize: imageSize, containerSize: geometry.size)
       if isActive, imageRect.width > 0, imageRect.height > 0 {
         ZStack {
           Color.clear
@@ -1700,7 +1745,7 @@ private struct StraightenLineOverlay: View {
           switch phase {
           case .active(let location):
             if startPoint != nil {
-              hoverPoint = clamped(location, to: imageRect)
+              hoverPoint = clampedOverlayPoint(location, to: imageRect)
             }
           case .ended:
             hoverPoint = nil
@@ -1710,7 +1755,7 @@ private struct StraightenLineOverlay: View {
           DragGesture(minimumDistance: 0)
             .onEnded { value in
               guard imageRect.contains(value.location) else { return }
-              let point = clamped(value.location, to: imageRect)
+              let point = clampedOverlayPoint(value.location, to: imageRect)
               guard let startPoint else {
                 self.startPoint = point
                 hoverPoint = point
@@ -1726,6 +1771,17 @@ private struct StraightenLineOverlay: View {
       }
     }
     .allowsHitTesting(isActive)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("Straighten image")
+    .accessibilityHint(
+      "Choose two points along an edge that should be horizontal or vertical.")
+    .accessibilityAction(named: Text("Rotate clockwise by a quarter degree")) {
+      onGuideCompleted(0.25)
+    }
+    .accessibilityAction(named: Text("Rotate counterclockwise by a quarter degree")) {
+      onGuideCompleted(-0.25)
+    }
+    .accessibilityHidden(!isActive)
     .onChange(of: isActive) {
       if !isActive {
         startPoint = nil
@@ -1743,24 +1799,6 @@ private struct StraightenLineOverlay: View {
       deltaY: end.y - start.y)
   }
 
-  private func aspectFitRect(imageSize: CGSize, containerSize: CGSize) -> CGRect {
-    guard imageSize.width > 0, imageSize.height > 0 else { return .zero }
-    let scale = min(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
-    let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
-    return CGRect(
-      x: (containerSize.width - size.width) / 2,
-      y: (containerSize.height - size.height) / 2,
-      width: size.width,
-      height: size.height
-    )
-  }
-
-  private func clamped(_ point: CGPoint, to rect: CGRect) -> CGPoint {
-    CGPoint(
-      x: min(max(point.x, rect.minX), rect.maxX),
-      y: min(max(point.y, rect.minY), rect.maxY)
-    )
-  }
 }
 
 private struct ManualCropOverlay: View {
@@ -1773,7 +1811,7 @@ private struct ManualCropOverlay: View {
 
   var body: some View {
     GeometryReader { geometry in
-      let imageRect = aspectFitRect(imageSize: imageSize, containerSize: geometry.size)
+      let imageRect = overlayAspectFitRect(imageSize: imageSize, containerSize: geometry.size)
       if isActive, imageRect.width > 0, imageRect.height > 0 {
         ZStack {
           Color.clear
@@ -1800,9 +1838,9 @@ private struct ManualCropOverlay: View {
             .onChanged { value in
               guard imageRect.contains(value.startLocation) else { return }
               if startPoint == nil {
-                startPoint = clamped(value.startLocation, to: imageRect)
+                startPoint = clampedOverlayPoint(value.startLocation, to: imageRect)
               }
-              endPoint = clamped(value.location, to: imageRect)
+              endPoint = clampedOverlayPoint(value.location, to: imageRect)
             }
             .onEnded { value in
               defer {
@@ -1810,7 +1848,7 @@ private struct ManualCropOverlay: View {
                 endPoint = nil
               }
               guard let startPoint else { return }
-              let endPoint = clamped(value.location, to: imageRect)
+              let endPoint = clampedOverlayPoint(value.location, to: imageRect)
               let width = abs(endPoint.x - startPoint.x)
               let height = abs(endPoint.y - startPoint.y)
               guard width >= 4, height >= 4 else { return }
@@ -1824,6 +1862,16 @@ private struct ManualCropOverlay: View {
       }
     }
     .allowsHitTesting(isActive)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("Crop image")
+    .accessibilityHint("Drag over the part of the image to keep.")
+    .accessibilityAction(named: Text("Crop five percent from each edge")) {
+      onCropCompleted(.init(x: 0.05, y: 0.05, width: 0.9, height: 0.9))
+    }
+    .accessibilityAction(named: Text("Crop ten percent from each edge")) {
+      onCropCompleted(.init(x: 0.1, y: 0.1, width: 0.8, height: 0.8))
+    }
+    .accessibilityHidden(!isActive)
     .onChange(of: isActive) {
       if !isActive {
         startPoint = nil
@@ -1832,22 +1880,6 @@ private struct ManualCropOverlay: View {
     }
   }
 
-  private func aspectFitRect(imageSize: CGSize, containerSize: CGSize) -> CGRect {
-    guard imageSize.width > 0, imageSize.height > 0 else { return .zero }
-    let scale = min(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
-    let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
-    return CGRect(
-      x: (containerSize.width - size.width) / 2,
-      y: (containerSize.height - size.height) / 2,
-      width: size.width,
-      height: size.height)
-  }
-
-  private func clamped(_ point: CGPoint, to rect: CGRect) -> CGPoint {
-    CGPoint(
-      x: min(max(point.x, rect.minX), rect.maxX),
-      y: min(max(point.y, rect.minY), rect.maxY))
-  }
 }
 
 private struct PerspectiveCropOverlay: View {
@@ -1865,7 +1897,7 @@ private struct PerspectiveCropOverlay: View {
 
   var body: some View {
     GeometryReader { geometry in
-      let imageRect = aspectFitRect(imageSize: imageSize, containerSize: geometry.size)
+      let imageRect = overlayAspectFitRect(imageSize: imageSize, containerSize: geometry.size)
       if isActive, let crop, imageRect.width > 0, imageRect.height > 0 {
         let displayedPoints = crop.points.map(displayedPoint)
         let points = displayedPoints.map { point in
@@ -1907,7 +1939,7 @@ private struct PerspectiveCropOverlay: View {
                   .onChanged { value in
                     editingGestureAction("Perspective", true)
                     draggedCorner = index
-                    let clamped = clamped(value.location, to: imageRect)
+                    let clamped = clampedOverlayPoint(value.location, to: imageRect)
                     let displayed = PerspectiveCrop.Point(
                       x: (clamped.x - imageRect.minX) / imageRect.width,
                       y: (clamped.y - imageRect.minY) / imageRect.height
@@ -1925,6 +1957,32 @@ private struct PerspectiveCropOverlay: View {
                   }
               )
               .help(["Top left", "Top right", "Bottom right", "Bottom left"][index])
+              .accessibilityElement()
+              .accessibilityLabel(
+                [
+                  "Top left perspective corner",
+                  "Top right perspective corner",
+                  "Bottom right perspective corner",
+                  "Bottom left perspective corner",
+                ][index])
+              .accessibilityValue(
+                String(
+                  format: "%.0f percent horizontal, %.0f percent vertical",
+                  displayedPoints[index].x * 100,
+                  displayedPoints[index].y * 100))
+              .accessibilityHint("Drag the corner, or use the move actions.")
+              .accessibilityAction(named: Text("Move left")) {
+                nudgeCorner(index, in: crop, displayedX: -0.01, displayedY: 0)
+              }
+              .accessibilityAction(named: Text("Move right")) {
+                nudgeCorner(index, in: crop, displayedX: 0.01, displayedY: 0)
+              }
+              .accessibilityAction(named: Text("Move up")) {
+                nudgeCorner(index, in: crop, displayedX: 0, displayedY: -0.01)
+              }
+              .accessibilityAction(named: Text("Move down")) {
+                nudgeCorner(index, in: crop, displayedX: 0, displayedY: 0.01)
+              }
           }
 
           if let draggedCorner, let image {
@@ -1940,6 +1998,7 @@ private struct PerspectiveCropOverlay: View {
       }
     }
     .allowsHitTesting(isActive)
+    .accessibilityHidden(!isActive)
   }
 
   private var cornerReticle: some View {
@@ -1982,6 +2041,19 @@ private struct PerspectiveCropOverlay: View {
     }
   }
 
+  private func nudgeCorner(
+    _ index: Int,
+    in crop: PerspectiveCrop,
+    displayedX: Double,
+    displayedY: Double
+  ) {
+    let current = displayedPoint(crop.points[index])
+    let displayed = PerspectiveCrop.Point(
+      x: min(max(Double(current.x) + displayedX, 0), 1),
+      y: min(max(Double(current.y) + displayedY, 0), 1))
+    onCropChanged(crop.replacing(index, with: sourcePoint(fromDisplayed: displayed)))
+  }
+
   private func interpolate(_ start: CGPoint, _ end: CGPoint, fraction: CGFloat) -> CGPoint {
     CGPoint(
       x: start.x + (end.x - start.x) * fraction,
@@ -1989,24 +2061,6 @@ private struct PerspectiveCropOverlay: View {
     )
   }
 
-  private func aspectFitRect(imageSize: CGSize, containerSize: CGSize) -> CGRect {
-    guard imageSize.width > 0, imageSize.height > 0 else { return .zero }
-    let scale = min(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
-    let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
-    return CGRect(
-      x: (containerSize.width - size.width) / 2,
-      y: (containerSize.height - size.height) / 2,
-      width: size.width,
-      height: size.height
-    )
-  }
-
-  private func clamped(_ point: CGPoint, to rect: CGRect) -> CGPoint {
-    CGPoint(
-      x: min(max(point.x, rect.minX), rect.maxX),
-      y: min(max(point.y, rect.minY), rect.maxY)
-    )
-  }
 }
 
 private struct CornerLoupe: View {
@@ -2040,6 +2094,7 @@ private struct CornerLoupe: View {
       .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.accentColor, lineWidth: 2).padding(-3))
       .shadow(color: .black.opacity(0.8), radius: 5)
     }
+    .accessibilityHidden(true)
   }
 }
 
@@ -2052,7 +2107,7 @@ private struct RebateRegionSelectionOverlay: View {
 
   var body: some View {
     GeometryReader { geometry in
-      let imageRect = aspectFitRect(imageSize: imageSize, containerSize: geometry.size)
+      let imageRect = overlayAspectFitRect(imageSize: imageSize, containerSize: geometry.size)
       ZStack {
         Color.clear
           .contentShape(Rectangle())
@@ -2073,7 +2128,7 @@ private struct RebateRegionSelectionOverlay: View {
       .gesture(
         DragGesture(minimumDistance: 0)
           .onChanged { value in
-            let point = clamped(value.location, to: imageRect)
+            let point = clampedOverlayPoint(value.location, to: imageRect)
             if dragStart == nil {
               dragStart = point
             }
@@ -2081,7 +2136,7 @@ private struct RebateRegionSelectionOverlay: View {
           }
           .onEnded { value in
             guard let start = dragStart else { return }
-            let end = clamped(value.location, to: imageRect)
+            let end = clampedOverlayPoint(value.location, to: imageRect)
             dragEnd = end
             let selection = CGRect(
               x: min(start.x, end.x),
@@ -2101,27 +2156,25 @@ private struct RebateRegionSelectionOverlay: View {
           }
       )
       .allowsHitTesting(isActive)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel("Select unexposed film base")
+      .accessibilityHint("Drag over a clear film edge, or choose one of the edge actions.")
+      .accessibilityAction(named: Text("Select top edge")) {
+        onSelection(0, 0, 1, 0.1)
+      }
+      .accessibilityAction(named: Text("Select bottom edge")) {
+        onSelection(0, 0.9, 1, 0.1)
+      }
+      .accessibilityAction(named: Text("Select left edge")) {
+        onSelection(0, 0, 0.1, 1)
+      }
+      .accessibilityAction(named: Text("Select right edge")) {
+        onSelection(0.9, 0, 0.1, 1)
+      }
+      .accessibilityHidden(!isActive)
     }
   }
 
-  private func aspectFitRect(imageSize: CGSize, containerSize: CGSize) -> CGRect {
-    guard imageSize.width > 0, imageSize.height > 0 else { return .zero }
-    let scale = min(containerSize.width / imageSize.width, containerSize.height / imageSize.height)
-    let size = CGSize(width: imageSize.width * scale, height: imageSize.height * scale)
-    return CGRect(
-      x: (containerSize.width - size.width) / 2,
-      y: (containerSize.height - size.height) / 2,
-      width: size.width,
-      height: size.height
-    )
-  }
-
-  private func clamped(_ point: CGPoint, to rect: CGRect) -> CGPoint {
-    CGPoint(
-      x: min(max(point.x, rect.minX), rect.maxX),
-      y: min(max(point.y, rect.minY), rect.maxY)
-    )
-  }
 }
 
 private struct InspectorSection<Content: View>: View {

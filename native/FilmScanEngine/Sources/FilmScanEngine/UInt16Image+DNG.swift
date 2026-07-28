@@ -2,14 +2,6 @@ import CoreGraphics
 import Dispatch
 import Foundation
 
-private final class DNGMutableBuffer<Element>: @unchecked Sendable {
-  let baseAddress: UnsafeMutablePointer<Element>
-
-  init(_ baseAddress: UnsafeMutablePointer<Element>) {
-    self.baseAddress = baseAddress
-  }
-}
-
 extension UInt16Image {
   func writeDNG(to url: URL) throws {
     _ = try writeDNGMeasured(to: url)
@@ -119,7 +111,7 @@ private final class DNGWriter {
       guard let baseAddress = rawBuffer.baseAddress?.assumingMemoryBound(to: UInt16.self) else {
         return
       }
-      let output = DNGMutableBuffer(baseAddress)
+      let output = SendableMutableBuffer(baseAddress)
       let workerCount = pixelCount >= 1_000_000
         ? max(1, min(8, ProcessInfo.processInfo.activeProcessorCount))
         : 1

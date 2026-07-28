@@ -130,6 +130,23 @@ struct StandardImageDecoderTests {
     }
   }
 
+  @Test("Truncated standard images fail cleanly in full and preview decoders")
+  func rejectTruncatedImage() throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-truncated-standard-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let url = directory.appendingPathComponent("truncated.png")
+    try Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]).write(to: url)
+
+    #expect(throws: StandardImageDecoderError.self) {
+      try StandardImageDecoder.decode(url)
+    }
+    #expect(throws: StandardImageDecoderError.self) {
+      try StandardImageDecoder.decodePreview(url, maxDimension: 256)
+    }
+  }
+
   @Test("Engine buffers create preview images without changing dimensions")
   func previewImage() throws {
     let decoded = try StandardImageDecoder.decode(

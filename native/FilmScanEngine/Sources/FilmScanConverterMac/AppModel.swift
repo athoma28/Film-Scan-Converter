@@ -20,6 +20,7 @@ final class AppModel: ObservableObject {
     }
   }
   @Published private(set) var status = "Drop film scans into the window to begin."
+  @Published private(set) var statusKind: StatusKind = .info
   @Published private(set) var renderStats = RenderStats()
   @Published private(set) var previewStatistics = RenderReadyImageStatistics.empty
   @Published private(set) var previewSourceKind: PreviewSourceKind?
@@ -97,7 +98,9 @@ final class AppModel: ObservableObject {
         settingsByPath = state.settingsByPath
         editedKeys = state.editedPaths
       } catch {
-        status = "Saved corrections could not be loaded; defaults are being used."
+        setStatus(
+          "Saved corrections could not be loaded; defaults are being used.",
+          kind: .error)
       }
     }
     if let presetStore {
@@ -120,6 +123,11 @@ final class AppModel: ObservableObject {
     public var lastLatencyMs: Double = 0
     public var peakLatencyMs: Double = 0
     public var totalSubmissionLatencyMs: Double = 0
+  }
+
+  private func setStatus(_ message: String, kind: StatusKind = .info) {
+    status = message
+    statusKind = kind
   }
 
   private struct EditingSnapshot: Equatable {
@@ -260,7 +268,7 @@ final class AppModel: ObservableObject {
     let supported = FileDropPolicy.supportedFiles(from: urls)
     guard !supported.isEmpty else {
       ImportLog.error("No supported files in import batch")
-      status = "No supported image or RAW files were dropped."
+      setStatus("No supported image or RAW files were dropped.", kind: .error)
       return
     }
 
@@ -292,11 +300,11 @@ final class AppModel: ObservableObject {
     guard let selection,
       FileDropPolicy.rawExtensions.contains(selection.pathExtension.lowercased())
     else {
-      status = "RAW preview detail is only available for camera RAW files."
+      setStatus("RAW preview detail is only available for camera RAW files.")
       return
     }
     guard previewSourceKind != .rawDetail else {
-      status = "The high-detail RAW preview is already loaded."
+      setStatus("The high-detail RAW preview is already loaded.")
       return
     }
 
@@ -305,7 +313,7 @@ final class AppModel: ObservableObject {
     let generation = loadGeneration
     let hasStoredSettings = settingsByPath[settingsKey(selection)] != nil
     isLoading = true
-    status = "Loading high-detail RAW preview for \(selection.lastPathComponent)..."
+    setStatus("Loading high-detail RAW preview for \(selection.lastPathComponent)...")
 
     authoritativeDecodeTask = Task { [weak self] in
       guard let self else { return }
@@ -332,13 +340,15 @@ final class AppModel: ObservableObject {
           session, selection: selection, hasStoredSettings: hasStoredSettings)
         self.cacheSession(session, for: selection)
         self.scheduleRender(immediate: true)
-        self.status = "Loaded high-detail RAW preview for \(selection.lastPathComponent)."
+        self.setStatus("Loaded high-detail RAW preview for \(selection.lastPathComponent).")
       } catch is CancellationError {
         return
       } catch {
         guard generation == self.loadGeneration, self.selection == selection else { return }
         self.isLoading = false
-        self.status = "Unable to load RAW preview detail: \(error.localizedDescription)"
+        self.setStatus(
+          "Unable to load RAW preview detail: \(error.localizedDescription)",
+          kind: .error)
       }
     }
   }
@@ -373,7 +383,7 @@ final class AppModel: ObservableObject {
       isLoading = false
       sourcePixelDimensions = nil
       cancelPredecode()
-      status = "Drop film scans into the window to begin."
+      setStatus("Drop film scans into the window to begin.")
       refreshHistoryAvailability()
       return
     }
@@ -439,18 +449,27 @@ final class AppModel: ObservableObject {
         let session = await Task.detached(priority: .userInitiated) { () -> CachedPreviewSession? in
           let display: UInt16Image
           let kind: PreviewSourceKind
-          if isRaw {
-            guard let thumbnail = try? RawImageDecoder.extractThumbnail(
-              selection, maxDimension: Self.displayPreviewMaxDimension) else { return nil }
-            display = thumbnail.image
-            kind = .embeddedRAW
-          } else {
-            guard let thumbnail = try? StandardImageDecoder.decodePreview(
-              selection, maxDimension: Self.displayPreviewMaxDimension) else { return nil }
-            display = thumbnail
-            kind = .standardThumbnail
+          do {
+            if isRaw {
+              display = try RawImageDecoder.extractThumbnail(
+                selection, maxDimension: Self.displayPreviewMaxDimension).image
+              kind = .embeddedRAW
+            } else {
+              display = try StandardImageDecoder.decodePreview(
+                selection, maxDimension: Self.displayPreviewMaxDimension)
+              kind = .standardThumbnail
+            }
+          } catch {
+            ImportLog.loadSelectionDecodeFailed(
+              path: selection.lastPathComponent,
+              error: "Fast preview: \(error.localizedDescription)")
+            return nil
           }
-          guard let renderer = StillPreviewRenderer(image: display) else { return nil }
+          guard let renderer = StillPreviewRenderer(image: display) else {
+            ImportLog.error(
+              "Fast preview renderer creation failed for \(selection.lastPathComponent)")
+            return nil
+          }
           return CachedPreviewSession(
             sourceKind: kind,
             displaySource: display,
@@ -465,7 +484,9 @@ final class AppModel: ObservableObject {
         }
         guard let session else {
           self.isLoading = false
-          self.status = "Unable to create a fast preview for \(selection.lastPathComponent)."
+          self.setStatus(
+            "Unable to create a fast preview for \(selection.lastPathComponent).",
+            kind: .error)
           return
         }
         let analysisInterval = AppPerformanceSignposts.begin(
@@ -480,7 +501,7 @@ final class AppModel: ObservableObject {
       return
     }
 
-    status = "Decoding \(selection.lastPathComponent)..."
+    setStatus("Decoding \(selection.lastPathComponent)...")
 
     let decodeInterval = AppPerformanceSignposts.begin(
       .decode,
@@ -539,7 +560,9 @@ final class AppModel: ObservableObject {
           error: error.localizedDescription
         )
         isLoading = false
-        status = "Unable to decode \(selection.lastPathComponent): \(error.localizedDescription)"
+        setStatus(
+          "Unable to decode \(selection.lastPathComponent): \(error.localizedDescription)",
+          kind: .error)
       }
     }
   }
@@ -921,15 +944,44 @@ final class AppModel: ObservableObject {
   }
 
   private func reloadProfiles() {
+    profileStatus = ""
+    var loadFailureCount = 0
+
     let builtInCapture = profileStore.builtInCaptureProfiles()
-    let storedCapture = profileStore.listCaptureProfiles().compactMap {
-      try? profileStore.loadCaptureProfile(id: $0)
+    var storedCapture: [CaptureProfile] = []
+    for id in profileStore.listCaptureProfiles() {
+      do {
+        if let profile = try profileStore.loadCaptureProfile(id: id) {
+          storedCapture.append(profile)
+        } else {
+          loadFailureCount += 1
+          ProfileLog.loadFailed(
+            kind: "Capture", id: id.rawValue, error: "The profile file disappeared.")
+        }
+      } catch {
+        loadFailureCount += 1
+        ProfileLog.loadFailed(
+          kind: "Capture", id: id.rawValue, error: error.localizedDescription)
+      }
     }
     availableCaptureProfiles = Self.uniqueCaptureProfiles(builtInCapture + storedCapture)
 
     let builtInStock = profileStore.builtInFilmStockProfiles()
-    let storedStock = profileStore.listFilmStockProfiles().compactMap {
-      try? profileStore.loadFilmStockProfile(id: $0)
+    var storedStock: [FilmStockProfile] = []
+    for id in profileStore.listFilmStockProfiles() {
+      do {
+        if let profile = try profileStore.loadFilmStockProfile(id: id) {
+          storedStock.append(profile)
+        } else {
+          loadFailureCount += 1
+          ProfileLog.loadFailed(
+            kind: "Film-stock", id: id.rawValue, error: "The profile file disappeared.")
+        }
+      } catch {
+        loadFailureCount += 1
+        ProfileLog.loadFailed(
+          kind: "Film-stock", id: id.rawValue, error: error.localizedDescription)
+      }
     }
     availableFilmStockProfiles = Self.uniqueFilmStockProfiles(builtInStock + storedStock)
     do {
@@ -938,7 +990,14 @@ final class AppModel: ObservableObject {
       }
     } catch {
       availableRollProfiles = []
-      profileStatus = "Saved roll profiles could not be loaded."
+      loadFailureCount += 1
+      ProfileLog.loadFailed(
+        kind: "Roll", id: "roll-profiles", error: error.localizedDescription)
+    }
+
+    if loadFailureCount > 0 {
+      profileStatus =
+        "\(loadFailureCount) saved profile\(loadFailureCount == 1 ? "" : "s") could not be loaded. See the app log for details."
     }
   }
 
@@ -1186,7 +1245,7 @@ final class AppModel: ObservableObject {
   func exportSelected() {
     let urls = orderedSelectedFiles
     guard !urls.isEmpty else {
-      status = "No image selected for export."
+      setStatus("No image selected for export.", kind: .error)
       return
     }
     exportFiles(urls)
@@ -1194,7 +1253,7 @@ final class AppModel: ObservableObject {
 
   func exportAll() {
     guard !files.isEmpty else {
-      status = "No images to export."
+      setStatus("No images to export.", kind: .error)
       return
     }
     exportFiles(files)
@@ -1218,7 +1277,9 @@ final class AppModel: ObservableObject {
         alreadyReserved: activeExportDestinations
       )
     } catch {
-      status = "Unable to inspect export destination: \(error.localizedDescription)"
+      setStatus(
+        "Unable to inspect export destination: \(error.localizedDescription)",
+        kind: .error)
       return
     }
     for (url, destination) in zip(urls, destinations) {
@@ -1235,15 +1296,16 @@ final class AppModel: ObservableObject {
     }
     exportQueueCount = max(0, activeExportQueue.count - exportProgressCurrent - 1)
     exportProgressTotal += urls.count
-    status = urls.count == 1
-      ? "Added \(urls[0].lastPathComponent) to the export queue."
-      : "Added \(urls.count) exports to the queue."
+    setStatus(
+      urls.count == 1
+        ? "Added \(urls[0].lastPathComponent) to the export queue."
+        : "Added \(urls.count) exports to the queue.")
   }
 
   func cancelExport() {
     guard isExporting else { return }
     exportWasCancelled = true
-    status = "Cancelling export after the active stage finishes..."
+    setStatus("Cancelling export after the active stage finishes...")
     exportTask?.cancel()
   }
 
@@ -1829,11 +1891,13 @@ final class AppModel: ObservableObject {
   private func exportFiles(_ urls: [URL]) {
     guard !urls.isEmpty else { return }
     guard !isLoading else {
-      status = "Wait for the active preview decode to finish before exporting."
+      setStatus(
+        "Wait for the active preview decode to finish before exporting.",
+        kind: .error)
       return
     }
     guard let destDir = exportParameters.destinationDirectory else {
-      status = "Select an export destination folder first."
+      setStatus("Select an export destination folder first.", kind: .error)
       return
     }
 
@@ -1852,7 +1916,9 @@ final class AppModel: ObservableObject {
       activeExportDestinations = try reserveDestinationURLs(
         for: urls, destinationDirectory: destDir, format: exportParams.format)
     } catch {
-      status = "Unable to inspect export destination: \(error.localizedDescription)"
+      setStatus(
+        "Unable to inspect export destination: \(error.localizedDescription)",
+        kind: .error)
       activeExportQueue = []
       activeExportItemParameters = []
       activeExportCorrelationIDs = []
@@ -1873,7 +1939,7 @@ final class AppModel: ObservableObject {
     exportProgressCurrent = 0
     exportProgressTotal = urls.count
     exportErrors = []
-    status = "Exporting..."
+    setStatus("Exporting...")
 
     exportTask = Task { [weak self] in
       guard let self else { return }
@@ -1974,14 +2040,18 @@ final class AppModel: ObservableObject {
         let failures = results.filter { !$0.isSuccess }
         if wasCancelled {
           self.exportErrors = []
-          self.status = "Export cancelled after \(self.exportProgressCurrent) of \(self.exportProgressTotal) images."
+          self.setStatus(
+            "Export cancelled after \(self.exportProgressCurrent) of \(self.exportProgressTotal) images.")
         } else if failures.isEmpty {
-          self.status = "Exported \(results.count) image\(results.count == 1 ? "" : "s") to \(destDir.lastPathComponent)."
+          self.setStatus(
+            "Exported \(results.count) image\(results.count == 1 ? "" : "s") to \(destDir.lastPathComponent).")
         } else {
           self.exportErrors = failures.compactMap { result in
             result.error.map { "\(result.sourceURL.lastPathComponent): \($0.localizedDescription)" }
           }
-          self.status = "Export complete with \(failures.count) error\(failures.count == 1 ? "" : "s")."
+          self.setStatus(
+            "Export complete with \(failures.count) error\(failures.count == 1 ? "" : "s").",
+            kind: .error)
         }
       }
     }
@@ -2421,7 +2491,9 @@ final class AppModel: ObservableObject {
     do {
       try settingsStore?.save(.init(settingsByPath: settingsByPath, editedPaths: editedKeys))
     } catch {
-      status = "Corrections changed, but could not be saved for the next launch."
+      setStatus(
+        "Corrections changed, but could not be saved for the next launch.",
+        kind: .error)
     }
   }
 
@@ -2429,7 +2501,7 @@ final class AppModel: ObservableObject {
     applyPreviewSession(
       session, selection: selection,
       hasStoredSettings: settingsByPath[settingsKey(selection)] != nil)
-    status = "Loaded \(selection.lastPathComponent) from preview cache."
+    setStatus("Loaded \(selection.lastPathComponent) from preview cache.")
     scheduleRender(immediate: true)
   }
 
@@ -2783,8 +2855,8 @@ final class AppModel: ObservableObject {
         case nil:
           sourceLabel = "Fast preview"
         }
-        status =
-          "\(request.selection.lastPathComponent) • \(preview.width)×\(preview.height) \(result.rendererName) · \(sourceLabel)"
+        setStatus(
+          "\(request.selection.lastPathComponent) • \(preview.width)×\(preview.height) \(result.rendererName) · \(sourceLabel)")
       }
 
       lastRenderEnd = ContinuousClock.now

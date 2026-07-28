@@ -5,6 +5,25 @@ import Testing
 
 @Suite("Perspective warp")
 struct PerspectiveWarpTests {
+  @Test("Large identity warp preserves pixels across parallel row ranges")
+  func largeIdentityWarpParity() {
+    let width = 1_001
+    let height = 1_000
+    let pixels = (0..<(width * height)).map {
+      UInt16(truncatingIfNeeded: $0 * 17)
+    }
+    let image = UInt16Image(
+      width: width, height: height, channels: 1, pixels: pixels)
+
+    let actual = PerspectiveTransform.warpPerspective(
+      image,
+      homography: [1, 0, 0, 0, 1, 0, 0, 0, 1],
+      outputWidth: width,
+      outputHeight: height)
+
+    #expect(actual == image)
+  }
+
   @Test("Parallelism assist softly snaps an edge and leaves distant drags free")
   func parallelismAssist() {
     let crop = PerspectiveCrop.fullFrame

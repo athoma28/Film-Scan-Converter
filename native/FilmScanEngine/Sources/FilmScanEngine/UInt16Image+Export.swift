@@ -101,10 +101,13 @@ extension UInt16Image {
     let packingSeconds = exportSeconds(packingStart.duration(to: .now))
 
     let writerStart = ContinuousClock.now
+    let stagingURL = exportStagingURL(for: url)
+    defer { try? FileManager.default.removeItem(at: stagingURL) }
+
     guard let destination = CGImageDestinationCreateWithURL(
-      url as CFURL, "public.jpeg" as CFString, 1, nil
+      stagingURL as CFURL, "public.jpeg" as CFString, 1, nil
     ) else {
-      throw ExportError.creationFailed
+      throw ExportError.destinationCreationFailed(url, .jpeg)
     }
 
     let options: [CFString: Any] = [
@@ -113,8 +116,9 @@ extension UInt16Image {
     CGImageDestinationAddImage(destination, cgImage, options as CFDictionary)
 
     guard CGImageDestinationFinalize(destination) else {
-      throw ExportError.writeFailed(CocoaError(.fileWriteUnknown))
+      throw ExportError.finalizationFailed(url, .jpeg)
     }
+    try commitStagedExport(stagingURL, to: url, format: .jpeg)
     return try exportMetrics(
       url: url,
       packingSeconds: packingSeconds,
@@ -133,10 +137,13 @@ extension UInt16Image {
     let packingSeconds = exportSeconds(packingStart.duration(to: .now))
 
     let writerStart = ContinuousClock.now
+    let stagingURL = exportStagingURL(for: url)
+    defer { try? FileManager.default.removeItem(at: stagingURL) }
+
     guard let destination = CGImageDestinationCreateWithURL(
-      url as CFURL, "public.tiff" as CFString, 1, nil
+      stagingURL as CFURL, "public.tiff" as CFString, 1, nil
     ) else {
-      throw ExportError.creationFailed
+      throw ExportError.destinationCreationFailed(url, .tiff)
     }
 
     let options: [CFString: Any] = [
@@ -147,8 +154,9 @@ extension UInt16Image {
     CGImageDestinationAddImage(destination, cgImage, options as CFDictionary)
 
     guard CGImageDestinationFinalize(destination) else {
-      throw ExportError.writeFailed(CocoaError(.fileWriteUnknown))
+      throw ExportError.finalizationFailed(url, .tiff)
     }
+    try commitStagedExport(stagingURL, to: url, format: .tiff)
     return try exportMetrics(
       url: url,
       packingSeconds: packingSeconds,
@@ -168,9 +176,7 @@ extension UInt16Image {
     let packingSeconds = exportSeconds(packingStart.duration(to: .now))
 
     let writerStart = ContinuousClock.now
-    let stagingURL = url.deletingLastPathComponent().appendingPathComponent(
-      ".\(url.lastPathComponent).\(UUID().uuidString).tmp"
-    )
+    let stagingURL = exportStagingURL(for: url)
     defer { try? FileManager.default.removeItem(at: stagingURL) }
 
     guard let destination = CGImageDestinationCreateWithURL(
@@ -185,6 +191,25 @@ extension UInt16Image {
       throw ExportError.finalizationFailed(url, .png)
     }
 
+    try commitStagedExport(stagingURL, to: url, format: .png)
+    return try exportMetrics(
+      url: url,
+      packingSeconds: packingSeconds,
+      writerSeconds: exportSeconds(writerStart.duration(to: .now)),
+      packedPixelBytes: width * height * 6
+    )
+  }
+
+  private func exportStagingURL(for url: URL) -> URL {
+    url.deletingLastPathComponent().appendingPathComponent(
+      ".\(url.lastPathComponent).\(UUID().uuidString).tmp")
+  }
+
+  private func commitStagedExport(
+    _ stagingURL: URL,
+    to url: URL,
+    format: ExportFormat
+  ) throws {
     do {
       if FileManager.default.fileExists(atPath: url.path) {
         _ = try FileManager.default.replaceItemAt(url, withItemAt: stagingURL)
@@ -192,14 +217,8 @@ extension UInt16Image {
         try FileManager.default.moveItem(at: stagingURL, to: url)
       }
     } catch {
-      throw ExportError.commitFailed(url, .png, error)
+      throw ExportError.commitFailed(url, format, error)
     }
-    return try exportMetrics(
-      url: url,
-      packingSeconds: packingSeconds,
-      writerSeconds: exportSeconds(writerStart.duration(to: .now)),
-      packedPixelBytes: width * height * 6
-    )
   }
 
   private func exportMetrics(

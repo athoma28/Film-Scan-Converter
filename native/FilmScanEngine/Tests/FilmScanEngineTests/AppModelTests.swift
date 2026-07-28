@@ -56,6 +56,20 @@ struct AppModelTests {
     case timedOut
   }
 
+  @Test("Main status severity tracks the current message without string parsing")
+  func mainStatusSeverity() {
+    let model = AppModel()
+    #expect(model.statusKind == .info)
+
+    model.exportAll()
+    #expect(model.status == "No images to export.")
+    #expect(model.statusKind == .error)
+
+    model.loadSelection()
+    #expect(model.status == "Drop film scans into the window to begin.")
+    #expect(model.statusKind == .info)
+  }
+
   @Test("App performance stages keep stable Instruments labels")
   func appPerformanceStagesKeepStableLabels() {
     #expect(
@@ -1847,6 +1861,23 @@ struct AppModelTests {
 
     #expect(model.parameters.densityCorrection == correction)
     #expect(model.rebateStatus.contains("Density pipeline active"))
+  }
+
+  @Test("Corrupt saved profiles remain visible as a startup diagnostic")
+  func corruptSavedProfileDiagnostic() throws {
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-app-corrupt-profile-\(UUID().uuidString)", isDirectory: true)
+    let captureDirectory = workDir.appendingPathComponent("CaptureProfiles", isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: captureDirectory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    try Data("not json".utf8).write(
+      to: captureDirectory.appendingPathComponent("broken.json"))
+
+    let model = AppModel(profileStore: ProfileStore(baseDirectory: workDir))
+
+    #expect(model.profileStatus.contains("1 saved profile"))
+    #expect(model.availableCaptureProfiles.contains { $0.id == CaptureProfile.default.id })
   }
 
   private func waitUntil(

@@ -7,8 +7,11 @@ interesting idea to be built.
 For verified current behavior, tests, and limitations, use
 [Native macOS Development Status](../development/native-macos.md). Detailed
 measurements live in the
-[40 MP benchmark notes](../performance/40mp-export.md). Processing research is
-background material, not a competing delivery plan.
+[40 MP benchmark notes](../performance/40mp-export.md). The audited
+[full-resolution performance guide](../../PERFORMANCE-OPPORTUNITIES-2026-07-27.md)
+records the evidence, rejected shortcuts, and implementation handoff for the
+active export-latency work. Processing research is background material, not a
+competing delivery plan.
 
 ## Current Product Direction
 
@@ -97,7 +100,54 @@ Acceptance:
 Optimize again only when profiling exposes a user-visible latency or
 resource-safety problem.
 
-### 1. Make The Still Preview A Reliable Judging Surface — Implementation Complete; Direct Check Pending
+### 1. Resolve Measured Full-Resolution RAW Export Bottlenecks — Active
+
+The bounded 40 MP cycle established a trustworthy baseline rather than proving
+that roughly 20 seconds of three-pass X-Trans demosaic is acceptable forever.
+The 2026-07-27 follow-up audit supplied new measured evidence: an isolated
+LibRaw 0.21.4 build with forced OpenMP reduced one Fuji processed-DNG workload
+from 14.74 to 2.10 seconds and demosaic from 13.18 to 1.38 seconds. The
+multi-threaded outputs were not repeatable, so this result is an opportunity
+bound—not a production candidate or a release claim.
+
+Work in this order:
+
+1. add camera-scan stage-boundary hashes and repeated determinism mode to
+   `FilmScanExportBenchmark`;
+2. add a full-resolution X-Trans camera-scan fixture—the existing exact
+   full-output fixture covers `rawPyCompatibility`, while camera-scan tests do
+   not yet establish byte identity;
+3. isolate the first nondeterministic boundary in LibRaw's existing threaded
+   unpack/X-Trans path before porting another demosaic implementation;
+4. add neutral, tone, protected-color, dye-mixing, and combined-adjustment
+   full-resolution correction scenarios, including physical footprint;
+5. after evidence exists, fix the responsible RAW stage and reduce adjusted
+   correction allocations/passes before considering writer or batch work.
+
+Do not start by porting RawTherapee X-Trans, running dependent X-Trans passes
+concurrently, reducing final-quality passes, replacing scalar `pow` in
+isolation, or prefetching another authoritative RAW. TIFF/PNG writer changes
+remain conditional on selected-compression usage. Bayer RCD work requires a
+committed Bayer fixture and decomposed timing first.
+
+Acceptance:
+
+- final-quality three-pass camera-scan pixels are deterministic across at least
+  five repeated parallel runs and preserve the approved exact-output contract;
+- a numeric-tolerance alternative requires an explicit product decision,
+  documented rounding policy, and visual qualification;
+- every claimed speedup compares the same file, settings, stage set, quality,
+  release build, and worker count with at least three timed repetitions;
+- physical footprint remains bounded, cancellation and cleanup remain correct,
+  and one authoritative full-resolution RAW remains in flight;
+- a custom LibRaw build, if adopted, passes dependency closure, notices,
+  packaged launch, and clean-Mac validation;
+- the detailed commands and results are added to the 40 MP benchmark notes.
+
+The audited performance guide owns the technical sequence. This roadmap owns
+its product priority; it is not permission for an open-ended rewrite.
+
+### 2. Make The Still Preview A Reliable Judging Surface — Implementation Complete; Direct Check Pending
 
 Implement zoom and pan before adding more processing ideas. A photographer must
 be able to inspect focus, grain, dust, crop edges, and fine tonal transitions,
@@ -121,7 +171,7 @@ Acceptance:
 - selection changes and resets leave the viewport in a predictable state;
 - preview/export geometry remains shared and pixel dimensions remain truthful.
 
-### 2. Make Editing Safely Reversible — Completed 2026-07-26
+### 3. Make Editing Safely Reversible — Completed 2026-07-26
 
 Native undo/redo now covers the adjustments photographers actually make.
 
@@ -143,7 +193,7 @@ Acceptance:
 - relaunch behavior remains explicit: saved current state is restored, while
   transient undo history need not be.
 
-### 3. Tune The Roll And Batch Workflow — Active
+### 4. Tune The Roll And Batch Workflow — Next After The Bounded Performance Slice
 
 Run a realistic photographer workflow rather than designing batch features in
 isolation: import a roll, establish an anchor look, apply it, correct outliers,
@@ -167,7 +217,7 @@ The usability pass must also verify:
 Only promote sidebar reordering, a larger export queue, ratings, or other
 organization features if this real workflow demonstrates the need.
 
-### 4. Prove Output Trust And Color Semantics — Beta Contract Implemented
+### 5. Prove Output Trust And Color Semantics — Beta Contract Implemented
 
 Exercise the actual packaged app, not only engine entry points.
 
@@ -200,7 +250,7 @@ Acceptance:
   interpretation;
 - no failed job leaves a file that appears successful.
 
-### 5. Complete Distribution Proof
+### 6. Complete Distribution Proof
 
 After the editing and output contracts stabilize:
 
@@ -215,7 +265,9 @@ After the editing and output contracts stabilize:
 
 ## First-Release Gates At A Glance
 
-1. Closed: app-path ten-file performance, memory, and cancellation measurement.
+1. The measured RAW-threading and adjusted-correction follow-up preserves
+   deterministic final-quality pixels, bounded physical footprint,
+   cancellation, cleanup, and packaged dependency closure.
 2. Zoom/pan makes the preview useful for photographic inspection.
 3. Closed: editing-state changes have reliable per-file undo/redo with
    gesture coalescing and transient relaunch semantics.

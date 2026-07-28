@@ -365,12 +365,40 @@ Use two explicit contracts:
    tone conversion, ISO denoise/sharpen, processed-image creation, and Swift
    copy/swizzle costs separately before optimizing it.
 
-## Closed Run Cycle
+## 2026-07-27 Isolated LibRaw OpenMP Opportunity Audit
+
+This audit is separate from the committed repeated baseline above. It used an
+isolated LibRaw 0.21.4 build with OpenMP and `LIBRAW_FORCE_OPENMP`, linked a
+release `FilmScanExportBenchmark` against it, and ran one processed-DNG
+repetition of `sample-raw/fuji400-fresh/DSCF2833.RAF`.
+
+| Build | Threads | Unpack | Demosaic | Decode | Total |
+|---|---:|---:|---:|---:|---:|
+| Homebrew LibRaw | stock | 0.8920 s | 13.1796 s | 14.5411 s | 14.7358 s |
+| Forced OpenMP | 1 | 0.8470 s | 11.6314 s | 12.8970 s | 13.0666 s |
+| Forced OpenMP, run A | 14 | 0.1289 s | 1.3839 s | 1.9002 s | 2.1643 s |
+| Forced OpenMP, run B | 14 | 0.1081 s | 1.3817 s | 1.9324 s | 2.0973 s |
+
+The one-thread output matched the stock output. The two 14-thread outputs
+differed from stock and from each other. This proves a large opportunity on the
+tested machine but fails the production determinism gate. It does not identify
+whether the first divergent stage is threaded unpack, X-Trans demosaic, or
+another OpenMP boundary, and it must not be quoted as an available application
+speedup.
+
+The next benchmark change is stage-boundary hashing plus at least five repeated
+runs per worker count, followed by a full correction matrix covering neutral,
+tone, protected color, dye mixing, and combined adjustments. See the audited
+[full-resolution performance guide](../../PERFORMANCE-OPPORTUNITIES-2026-07-27.md)
+for the source findings, rejected shortcuts, worker-count matrix, packaging
+gate, and first-developer handoff.
+
+## Closed Baseline Cycle And Bounded Follow-Up
 
 These milestones were run in order so each optimization decision had a measured
-input and a regression gate. The cycle is now closed; retain these results as
-regression evidence and reopen optimization only for a measured user-visible or
-resource-safety problem.
+input and a regression gate. The original baseline cycle is closed and remains
+regression evidence. The isolated audit above supplied the measured reason for
+one bounded follow-up; it does not reopen an unrestricted performance rewrite.
 
 1. **Repeated format baseline.** Complete. Three TIFF/JPEG/PNG/DNG runs for
    `DSCF0669.RAF` plus three TIFF runs for `DSCF0718.RAF` and `DSCF0729.RAF`
@@ -413,8 +441,8 @@ resource-safety problem.
    multicore fused power-law correction is 74.9% faster at the measured median,
    and compact TIFF packing removes 80.37 MB while cutting the ten-file median
    interval 23.0%. Both preserve deterministic output bytes and hashes.
-   Do not substitute a one-pass X-Trans quality mode; defer further engine work
-   until a later measurement exposes a user-visible or resource-safety problem.
+   Do not substitute a one-pass X-Trans quality mode. Further work is limited
+   to the evidence gates and order in the audited performance guide.
 7. **Batch confirmation.** Complete. Engine confirmation covers ten sequential
    TIFF exports with output contracts and physical memory. The app-path run adds
    ten queue completions, preview-cache effects, post-batch physical footprint,

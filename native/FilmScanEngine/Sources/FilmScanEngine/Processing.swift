@@ -1,9 +1,12 @@
+import Dispatch
 import Foundation
 
 private func clamp(_ value: Float, _ lo: Float, _ hi: Float) -> Float {
   min(max(value, lo), hi)
 }
 public enum FilmProcessing {
+  static let correctionParallelPixelThreshold = 1_000_000
+
   public static func correctedPreview(
     image: UInt16Image,
     parameters: ProcessingParameters,
@@ -233,12 +236,16 @@ public enum FilmProcessing {
     let shadowWheel = parameters.shadowWheel
 
     var outputPixels = [UInt16](repeating: 0, count: pixelCount * channels)
+    let inputPixels = working.pixels
 
-    for i in 0..<pixelCount {
+    @Sendable func processPixel(
+      _ i: Int,
+      output: UnsafeMutablePointer<UInt16>
+    ) {
       let base = i * channels
-      var b = Float(working.pixels[base])
-      var g = Float(working.pixels[base + 1])
-      var r = Float(working.pixels[base + 2])
+      var b = Float(inputPixels[base])
+      var g = Float(inputPixels[base + 1])
+      var r = Float(inputPixels[base + 2])
 
       // White balance
       b *= wbB
@@ -329,10 +336,15 @@ public enum FilmProcessing {
         r = r2 * 65535.0
       }
 
-      outputPixels[base] = UInt16(min(max(b, 0), 65535))
-      outputPixels[base + 1] = UInt16(min(max(g, 0), 65535))
-      outputPixels[base + 2] = UInt16(min(max(r, 0), 65535))
+      output[base] = UInt16(min(max(b, 0), 65535))
+      output[base + 1] = UInt16(min(max(g, 0), 65535))
+      output[base + 2] = UInt16(min(max(r, 0), 65535))
     }
+
+    processCorrectionPixels(
+      &outputPixels,
+      pixelCount: pixelCount,
+      processPixel: processPixel)
 
     var output = UInt16Image(
       width: working.width,
@@ -455,12 +467,16 @@ public enum FilmProcessing {
     let shadowWheel = parameters.shadowWheel
 
     var outputPixels = [UInt16](repeating: 0, count: pixelCount * channels)
+    let displayPixels = display
 
-    for i in 0..<pixelCount {
+    @Sendable func processPixel(
+      _ i: Int,
+      output: UnsafeMutablePointer<UInt16>
+    ) {
       let base = i * channels
-      var b = Float(min(max(display[base], 0), 1) * 65535)
-      var g = Float(min(max(display[base + 1], 0), 1) * 65535)
-      var r = Float(min(max(display[base + 2], 0), 1) * 65535)
+      var b = Float(min(max(displayPixels[base], 0), 1) * 65535)
+      var g = Float(min(max(displayPixels[base + 1], 0), 1) * 65535)
+      var r = Float(min(max(displayPixels[base + 2], 0), 1) * 65535)
 
       // Curves
       if adjustCurves {
@@ -513,10 +529,15 @@ public enum FilmProcessing {
         r = r2 * 65535.0
       }
 
-      outputPixels[base] = UInt16(min(max(b, 0), 65535))
-      outputPixels[base + 1] = UInt16(min(max(g, 0), 65535))
-      outputPixels[base + 2] = UInt16(min(max(r, 0), 65535))
+      output[base] = UInt16(min(max(b, 0), 65535))
+      output[base + 1] = UInt16(min(max(g, 0), 65535))
+      output[base + 2] = UInt16(min(max(r, 0), 65535))
     }
+
+    processCorrectionPixels(
+      &outputPixels,
+      pixelCount: pixelCount,
+      processPixel: processPixel)
 
     var output = UInt16Image(
       width: working.width,
@@ -526,6 +547,33 @@ public enum FilmProcessing {
     )
     preserveSensorBlack(source: working, output: &output, parameters: parameters)
     return output
+  }
+
+  private static func processCorrectionPixels(
+    _ output: inout [UInt16],
+    pixelCount: Int,
+    processPixel: @Sendable (Int, UnsafeMutablePointer<UInt16>) -> Void
+  ) {
+    let workerCount = min(8, ProcessInfo.processInfo.activeProcessorCount)
+    output.withUnsafeMutableBufferPointer { buffer in
+      guard let baseAddress = buffer.baseAddress else { return }
+      if pixelCount >= correctionParallelPixelThreshold, workerCount > 1 {
+        let sendableBuffer = SendableMutableBuffer(baseAddress)
+        let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
+        DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
+          let start = worker * pixelsPerWorker
+          let end = min(start + pixelsPerWorker, pixelCount)
+          guard start < end else { return }
+          for pixelIndex in start..<end {
+            processPixel(pixelIndex, sendableBuffer.baseAddress)
+          }
+        }
+      } else {
+        for pixelIndex in 0..<pixelCount {
+          processPixel(pixelIndex, baseAddress)
+        }
+      }
+    }
   }
 
   private static func preserveSensorBlack(

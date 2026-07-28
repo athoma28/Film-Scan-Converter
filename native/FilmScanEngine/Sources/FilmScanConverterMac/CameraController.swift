@@ -9,6 +9,7 @@ final class CameraController: NSObject, ObservableObject,
 {
   @Published private(set) var image: CGImage?
   @Published private(set) var status = "Live preview stopped."
+  @Published private(set) var statusKind: StatusKind = .info
   @Published private(set) var isRunning = false
   @Published private(set) var invertNegative = true
   @Published private(set) var exposure: Float = 0
@@ -58,12 +59,12 @@ final class CameraController: NSObject, ObservableObject,
   }
 
   func start() {
-    status = "Requesting camera access..."
+    setStatus("Requesting camera access...")
     AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
       guard let self else { return }
       guard granted else {
         DispatchQueue.main.async {
-          self.status = "Camera access was denied."
+          self.setStatus("Camera access was denied.", kind: .error)
         }
         return
       }
@@ -79,7 +80,7 @@ final class CameraController: NSObject, ObservableObject,
       self.session.stopRunning()
       DispatchQueue.main.async {
         self.isRunning = false
-        self.status = "Live preview stopped."
+        self.setStatus("Live preview stopped.")
       }
     }
   }
@@ -108,8 +109,9 @@ final class CameraController: NSObject, ObservableObject,
         ?? discovery.devices.first
     else {
       DispatchQueue.main.async {
-        self.status =
-          "No AVFoundation video device found. The DSLR may require vendor tethering software."
+        self.setStatus(
+          "No AVFoundation video device found. The DSLR may require vendor tethering software.",
+          kind: .error)
       }
       return
     }
@@ -137,13 +139,20 @@ final class CameraController: NSObject, ObservableObject,
 
       DispatchQueue.main.async {
         self.isRunning = true
-        self.status = "Live preview: \(device.localizedName)"
+        self.setStatus("Live preview: \(device.localizedName)")
       }
     } catch {
       DispatchQueue.main.async {
-        self.status = "Unable to start live preview: \(error.localizedDescription)"
+        self.setStatus(
+          "Unable to start live preview: \(error.localizedDescription)",
+          kind: .error)
       }
     }
+  }
+
+  private func setStatus(_ message: String, kind: StatusKind = .info) {
+    status = message
+    statusKind = kind
   }
 
   func captureOutput(

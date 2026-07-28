@@ -169,6 +169,19 @@ public enum ImportLog {
   }
 }
 
+public enum ProfileLog {
+  private static let logger = Logger(
+    subsystem: "film.scan.converter",
+    category: "Profile"
+  )
+
+  public static func loadFailed(kind: String, id: String, error: String) {
+    let msg = "\(kind) profile \(id) could not be loaded — \(error)"
+    logger.error("\(msg, privacy: .public)")
+    LogFile.write("[Profile] \(msg)")
+  }
+}
+
 public enum DecodeLog {
   private static let logger = Logger(
     subsystem: "film.scan.converter",

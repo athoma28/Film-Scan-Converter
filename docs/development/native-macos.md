@@ -4,7 +4,10 @@ This is the authoritative statement of what the native application does, what
 blocks a high-quality public release, and what is being worked on now. Use the
 [roadmap](../improvements/MacOS-Native-Roadmap.md) for priority and scope, the
 [feature inventory](../features.md) for user-visible behavior, and the
-[40 MP benchmark](../performance/40mp-export.md) for detailed measurements.
+[40 MP benchmark](../performance/40mp-export.md) for committed measurements.
+The audited
+[full-resolution performance guide](../../PERFORMANCE-OPPORTUNITIES-2026-07-27.md)
+records the active optimization evidence and implementation sequence.
 
 **Last verified:** 2026-07-27 against the current working tree. The native test
 suite contains 416 tests across 29 files. Some representative-RAW tests require
@@ -40,9 +43,17 @@ profile/preset application, with one history step per continuous editing
 gesture and transient history restored independently for each selected scan.
 **Apply Look to Selected** now transfers the active frame's look to the
 import-ordered multi-selection while preserving each target's geometry and
-measured film base. Next, complete the representative-image viewport check and
-run the real roll workflow. Do not start another broad performance rewrite or
-divert into stock-look calibration without measured evidence.
+measured film base.
+
+A 2026-07-27 audit has reopened one bounded performance slice before broader
+roll-workflow expansion. First add camera-scan stage hashes, a repeated
+determinism mode, a full-resolution X-Trans camera-scan fixture, and adjusted
+correction benchmark scenarios. Then diagnose LibRaw's existing threaded
+unpack/X-Trans path and repair the first divergent stage. Complete the
+representative-image viewport check alongside that evidence work; resume the
+real roll workflow after the bounded performance slice. Do not begin a broad
+port, writer replacement, batch-prefetch design, or stock-look calibration
+without satisfying the roadmap gates.
 
 The current measurement evidence is:
 
@@ -61,6 +72,16 @@ The current measurement evidence is:
   process-lifetime peak RSS;
 - 19.71 of 21.68 decode seconds were spent in final-quality three-pass X-Trans
   demosaic;
+- an isolated audit build of LibRaw 0.21.4 with forced OpenMP reduced a separate
+  Fuji processed-DNG workload from 14.74 to 2.10 seconds, with demosaic falling
+  from 13.18 to 1.38 seconds and unpack from 0.89 to 0.11–0.13 seconds. A
+  one-thread forced build matched the stock output, but two 14-thread runs
+  differed from the reference and from each other. This is evidence of a large
+  opportunity and an unresolved determinism defect, not a production result;
+- the camera-scan correction baseline covers the neutral fused path. Adjusted
+  exports can enter serial full-frame `Double` passes, including roughly
+  965 MB per three-channel 40.19 MP buffer, but their latency and live-memory
+  cost have not yet been measured in a representative export benchmark;
 - parallel full-resolution power-law correction reduced that measured stage
   from 3.685 seconds to a 0.926-second median with identical TIFF bytes and
   SHA-256, reducing median total export to 24.874 seconds.
@@ -117,12 +138,13 @@ current camera-scan decode contract is not comparable with the faster
 RawPy-compatibility profile because the stage sets and demosaic algorithms
 differ.
 
-This closes the bounded performance cycle. The still-preview zoom/pan surface
-is implemented in the current working tree; it still needs a direct
-representative-image workflow check before the release gate is claimed closed.
-Optimize export again only when a later measurement identifies a user-visible
-or resource-safety problem. Preserve final-quality demosaic, output contracts,
-and the one-full-resolution-RAW-at-a-time bound.
+The original baseline cycle remains closed; the audit created a narrower
+evidence-driven follow-up because it demonstrated a potentially user-visible
+decode improvement and exposed a determinism failure. The still-preview
+zoom/pan surface is implemented in the current working tree and still needs a
+direct representative-image workflow check. Preserve final-quality demosaic,
+output contracts, and the one-full-resolution-RAW-at-a-time bound throughout
+the follow-up.
 
 ## Implemented Product Scope
 
@@ -143,10 +165,18 @@ and command details.
 
 ## Release Gates
 
-### 1. Large-File Performance And Memory — Closed
+### 1. Large-File Performance And Memory — Baseline Closed; Follow-Up Active
 
-The 2026-07-15 app-path batch and cancellation run closed this cycle. The
-standing contract is:
+The 2026-07-15 app-path batch and cancellation run closed the baseline cycle.
+The 2026-07-27 audit added a bounded follow-up with this order:
+
+1. benchmark instrumentation and camera-scan determinism fixture;
+2. isolation and repair of the existing LibRaw threaded-path divergence;
+3. measured reduction of adjusted-correction allocations and serial passes;
+4. only then, re-evaluation of compression writers, batch overlap, Bayer RCD,
+   or micro-optimizations.
+
+The standing contract is:
 
 - prompt bounded corrected feedback;
 - no overlapping authoritative full-resolution decode buffers;
@@ -154,7 +184,10 @@ standing contract is:
 - no sustained physical-footprint growth through a representative batch;
 - stable output and metadata across optimizations;
 - documented p50/p95 latency and peak-live-memory baselines that future changes
-  can detect regressions against.
+  can detect regressions against;
+- final-quality camera-scan threading must repeat deterministically at least
+  five times per fixture before its speed is considered;
+- any custom LibRaw dependency must pass packaging and clean-machine gates.
 
 ### 2. Photographic Judgment And Editing Confidence
 
@@ -228,6 +261,15 @@ fail-closed `public` path. The following remain for the notarized build:
   distortion.
 - RAW CI coverage depends partly on untracked local files; the committed corpus
   does not yet prove the complete packaged-app path.
+- Camera-scan tests do not yet provide a full-resolution exact-output fixture
+  at the unpack, completed-demosaic callback, processed-image, and Swift-image
+  boundaries. The
+  existing exact full-output reference belongs to the faster
+  `rawPyCompatibility` profile and must not be presented as camera-scan proof.
+- LibRaw's forced-OpenMP path produced non-repeatable processed-DNG output in
+  the isolated 2026-07-27 audit. Its speedup is not available to production
+  until the first divergent stage is isolated and the approved pixel contract
+  is restored.
 - The available real RAW corpus is X-Trans and does not provide a committed
   real-file gate for the Bayer RCD path.
 - Camera-scan ISO denoise/sharpen policy is a bounded native approximation, not
@@ -265,6 +307,10 @@ fail-closed `public` path. The following remain for the notarized build:
   identity, and exercise capture-profile migration plus the app processing seam.
 - Export tests cover format round trips, manager behavior, cancellation,
   collisions, partial cleanup, and app-level integration.
+- The isolated LibRaw audit established that existing upstream threading can
+  accelerate the tested Fuji workload, and also established that enabling it
+  wholesale fails the current determinism gate. The detailed experiment and
+  next-step matrix are in the full-resolution performance guide.
 - Local packaging validates the assembled app and extracted ZIP copy, bundled
   license/notice/manifest resources, dependency closure, signature, and
   checksum-oriented archive contract.
@@ -329,6 +375,8 @@ measurement contract.
   clean-machine procedure.
 - [40 MP benchmark](../performance/40mp-export.md): commands, measurements, and
   performance acceptance evidence.
+- [Full-resolution performance guide](../../PERFORMANCE-OPPORTUNITIES-2026-07-27.md):
+  audited optimization priorities, rejected shortcuts, and developer handoff.
 - [Legacy Python](../legacy-python.md): maintenance boundary and retirement
   gates.
 - [Film-processing research](../film-processing-research.md): scientific and

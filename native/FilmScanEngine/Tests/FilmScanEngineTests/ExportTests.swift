@@ -187,6 +187,23 @@ struct ExportTests {
     _ = try requireSRGBImage(at: url)
   }
 
+  @Test func failedExportPreservesExistingDestination() async throws {
+    let url = tempDir.appendingPathComponent("existing.png")
+    let existingData = Data("existing destination".utf8)
+    try existingData.write(to: url)
+
+    let request = ExportManager.ExportRequest(
+      sourceURL: tempDir.appendingPathComponent("source.gray"),
+      destinationURL: url,
+      image: makeGrayImage(),
+      parameters: ExportParameters(format: .png))
+    let results = await ExportManager().export(requests: [request])
+
+    #expect(results.count == 1)
+    #expect(results[0].error != nil)
+    #expect(try Data(contentsOf: url) == existingData)
+  }
+
   @Test func pngExportUsesCompact16BitRGBComponentLayout() throws {
     let image = makeTestImage(width: 7, height: 5)
     let cgImage = try #require(image.makeExportCGImage16())

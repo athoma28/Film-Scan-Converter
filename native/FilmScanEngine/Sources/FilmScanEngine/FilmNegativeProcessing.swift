@@ -1,14 +1,6 @@
 import Dispatch
 import Foundation
 
-private final class SendableMutableBuffer<Element>: @unchecked Sendable {
-  let baseAddress: UnsafeMutablePointer<Element>
-
-  init(_ baseAddress: UnsafeMutablePointer<Element>) {
-    self.baseAddress = baseAddress
-  }
-}
-
 public struct BGRChannelValues: Codable, Equatable, Sendable {
   public var blue: Double
   public var green: Double
@@ -1506,19 +1498,37 @@ extension UInt16Image {
       return 0
     }
 
-    var values = [UInt16]()
-    values.reserveCapacity((x2 - x1) * (y2 - y1))
+    var histogram = [Int](repeating: 0, count: Int(UInt16.max) + 1)
+    var sampleCount = 0
     for y in y1..<y2 {
       for x in x1..<x2 {
-        values.append(pixels[(y * width + x) * channels + channel])
+        let value = pixels[(y * width + x) * channels + channel]
+        histogram[Int(value)] += 1
+        sampleCount += 1
       }
     }
-    values.sort()
-    guard !values.isEmpty else { return 0 }
-    let mid = values.count / 2
-    if values.count.isMultiple(of: 2) {
-      return (Double(values[mid - 1]) + Double(values[mid])) / 2.0
+
+    guard sampleCount > 0 else { return 0 }
+    let lowerRank = (sampleCount - 1) / 2
+    let upperRank = sampleCount / 2
+    var cumulativeCount = 0
+    var lowerValue = 0
+    for (value, count) in histogram.enumerated() {
+      cumulativeCount += count
+      if cumulativeCount > lowerRank {
+        lowerValue = value
+        break
+      }
     }
-    return Double(values[mid])
+    guard upperRank != lowerRank else { return Double(lowerValue) }
+
+    cumulativeCount = 0
+    for (value, count) in histogram.enumerated() {
+      cumulativeCount += count
+      if cumulativeCount > upperRank {
+        return (Double(lowerValue) + Double(value)) / 2
+      }
+    }
+    return Double(lowerValue)
   }
 }
