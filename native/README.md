@@ -19,7 +19,8 @@ elsewhere:
 - `FilmScanConverterMac`: the primary SwiftUI application;
 - `FilmScanRawBenchmark`: compatibility-profile RAW decode benchmark;
 - `FilmScanExportBenchmark`: staged production export benchmark with per-run
-  output hashing and deletion;
+  output hashing and deletion, plus an opt-in camera-scan determinism mode
+  with stage-boundary digests;
 - `FilmScanAdjustmentBenchmark`: release-mode preview benchmark with active
   dye crossover, protected color/tone, curves, and color wheels;
 - `FilmScanPreviewComparator`: CPU/GPU visual and numerical comparison tool;
@@ -114,6 +115,22 @@ reusable pages. The executable covers engine decode/process/write. Use the
 app's correlated signposts in Instruments for deeper settings, classification,
 flat-field, queue, destination, cancellation, and UI timing. See the
 [40 MP benchmark notes](../docs/performance/40mp-export.md).
+
+Run the camera-scan determinism mode to diagnose a threaded decode candidate:
+
+```sh
+native/FilmScanEngine/.build/release/FilmScanExportBenchmark \
+  sample-raw /tmp/film-scan-determinism.json 5 \
+  --determinism --file=fuji400-fresh/DSCF2833.RAF
+```
+
+This repeats full-resolution camera-scan decodes with stage-boundary SHA-256
+capture (unpacked mosaic, demosaiced image, processed image, post-ISO image,
+Swift image, corrected image, writer-input pixels, output file), writes one
+LZW TIFF per repetition, and reports per-boundary digest agreement in pipeline
+order. The first disagreeing boundary is the first stage the candidate allowed
+to diverge. The mode defaults to five repetitions and rejects fewer;
+`--formats` is not accepted in this mode.
 
 Run the opt-in real-app preview and switching benchmark:
 

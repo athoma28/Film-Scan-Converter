@@ -70,6 +70,52 @@ struct BenchmarkReport: Codable {
   let files: [FileResult]
 }
 
+struct DeterminismSample: Codable {
+  let repetition: Int
+  let runClass: String
+  let sourceShape: [Int]
+  let writerInputShape: [Int]
+  let decodeSeconds: Double
+  let decodeSubstages: RawDecodeTimings
+  let decodeUnaccountedSeconds: Double
+  let processingSeconds: Double
+  let geometrySeconds: Double
+  let pixelPackingSeconds: Double
+  let encodingFinalizationSeconds: Double
+  let diagnostics: RawDecodeDiagnostics
+  let correctedImageSHA256: String
+  let writerInputPixelsSHA256: String
+  let outputSHA256: String
+  let outputBytes: Int
+  let peakPhysicalFootprintBytes: UInt64
+  var physicalFootprintBytesAfterRelease: UInt64
+  let outputRemovedAfterRun: Bool
+}
+
+struct DeterminismFileResult: Codable {
+  let file: String
+  let megapixels: Double
+  let decoder: String
+  let repetitions: Int
+  let deterministic: Bool
+  let firstDivergentBoundary: String?
+  let boundaryAgreement: [StageBoundaryAgreement]
+  let samples: [DeterminismSample]
+}
+
+struct DeterminismReport: Codable {
+  let generatedAt: String
+  let mode: String
+  let configuration: String
+  let repetitions: Int
+  let framePercent: Int
+  let writerContract: String
+  let deterministic: Bool
+  let boundaryNote: String
+  let cleanupPolicy: String
+  let files: [DeterminismFileResult]
+}
+
 private struct MeasuredExportRun {
   let sample: ExportSample
   let decoderVersion: String
@@ -93,16 +139,23 @@ struct Options {
   let allFiles: Bool
   let selectedFilename: String?
   let fileLimit: Int?
+  let determinism: Bool
 }
 
 private let usage = """
   Usage: FilmScanExportBenchmark RAW_DIRECTORY OUTPUT_JSON [REPETITIONS]
            [--formats=tiff,jpeg,png,dng] [--frame-percent=N]
-           [--file=NAME.raf | --all] [--limit=N]
+           [--file=NAME.raf | --all] [--limit=N] [--determinism]
 
   The default run benchmarks the first RAF in lexical order in all formats.
   Every generated image is hashed and deleted immediately after its run; only
   the compact JSON report remains.
+
+  --determinism repeats full-resolution camera-scan decodes of each selected
+  file with stage-boundary SHA-256 capture, writes one LZW TIFF per
+  repetition, and reports per-boundary digest agreement so a threaded decode
+  candidate's first divergent stage can be isolated. Use at least 5
+  repetitions. --formats is not accepted in this mode.
   """
 
 private func parseOptions() -> Options? {
@@ -110,18 +163,20 @@ private func parseOptions() -> Options? {
   guard arguments.count >= 3 else { return nil }
 
   let extras = Array(arguments.dropFirst(3))
-  let repetitions = extras.compactMap { Int($0) }.first ?? 3
-  guard repetitions > 0 else { return nil }
-
+  var requestedRepetitions: Int?
   var formats = ExportFormat.allCases
+  var formatsExplicit = false
   var framePercent = 0
   var allFiles = false
   var selectedFilename: String?
   var fileLimit: Int?
+  var determinism = false
 
   for argument in extras {
     if argument == "--all" {
       allFiles = true
+    } else if argument == "--determinism" {
+      determinism = true
     } else if argument.hasPrefix("--file=") {
       selectedFilename = String(argument.dropFirst("--file=".count))
     } else if argument.hasPrefix("--frame-percent=") {
@@ -134,26 +189,36 @@ private func parseOptions() -> Options? {
       let parsed = names.compactMap { ExportFormat(rawValue: String($0).lowercased()) }
       guard parsed.count == names.count, !parsed.isEmpty else { return nil }
       formats = parsed
+      formatsExplicit = true
     } else if argument.hasPrefix("--limit=") {
       guard let value = Int(argument.dropFirst("--limit=".count)), value > 0 else {
         return nil
       }
       fileLimit = value
-    } else if Int(argument) == nil {
+    } else if let value = Int(argument) {
+      guard value > 0, requestedRepetitions == nil else { return nil }
+      requestedRepetitions = value
+    } else {
       return nil
     }
   }
 
   guard !(allFiles && selectedFilename != nil) else { return nil }
+  // Determinism mode fixes one writer contract (LZW TIFF) so repeated samples
+  // stay comparable; format matrices belong to the default mode.
+  guard !(determinism && formatsExplicit) else { return nil }
+  let repetitions = requestedRepetitions ?? (determinism ? 5 : 3)
+  guard !determinism || repetitions >= 5 else { return nil }
   return Options(
     rawDirectory: URL(fileURLWithPath: arguments[1], isDirectory: true),
     outputURL: URL(fileURLWithPath: arguments[2]),
     repetitions: repetitions,
-    formats: formats,
+    formats: determinism ? [.tiff] : formats,
     framePercent: framePercent,
     allFiles: allFiles,
     selectedFilename: selectedFilename,
-    fileLimit: fileLimit
+    fileLimit: fileLimit,
+    determinism: determinism
   )
 }
 
@@ -201,124 +266,366 @@ try FileManager.default.createDirectory(
   at: scratchDirectory, withIntermediateDirectories: true)
 defer { try? FileManager.default.removeItem(at: scratchDirectory) }
 
-var fileResults = [FileResult]()
-for sourceURL in files {
-  let preview = try RawImageDecoder.extractThumbnail(sourceURL, maxDimension: 640).image
-  var filmNegative = FilmNegativeParams.colourNegative
-  filmNegative.measuredMedians = FilmNegativeProcessing.computeMedians(image: preview)
-  let processingParameters = ProcessingParameters(
-    filmType: .colourNegative,
-    filmNegativeParams: filmNegative
+if options.determinism {
+  try runDeterminism(options: options, files: files, scratchDirectory: scratchDirectory)
+} else {
+  try runBenchmark(options: options, files: files, scratchDirectory: scratchDirectory)
+}
+
+private func runBenchmark(options: Options, files: [URL], scratchDirectory: URL) throws {
+  var fileResults = [FileResult]()
+  for sourceURL in files {
+    let preview = try RawImageDecoder.extractThumbnail(sourceURL, maxDimension: 640).image
+    var filmNegative = FilmNegativeParams.colourNegative
+    filmNegative.measuredMedians = FilmNegativeProcessing.computeMedians(image: preview)
+    let processingParameters = ProcessingParameters(
+      filmType: .colourNegative,
+      filmNegativeParams: filmNegative
+    )
+
+    var decoderVersion = "unknown"
+    var formatResults = [FormatResult]()
+    var megapixels = 0.0
+
+    for format in options.formats {
+      var samples = [ExportSample]()
+      for repetition in 1...options.repetitions {
+        let destinationURL = scratchDirectory.appendingPathComponent(
+          "\(sourceURL.deletingPathExtension().lastPathComponent)-\(format.rawValue)-\(repetition).\(format.fileExtension)"
+        )
+        let run = try autoreleasepool {
+          try measureExport(
+            sourceURL: sourceURL,
+            destinationURL: destinationURL,
+            processingParameters: processingParameters,
+            format: format,
+            framePercent: options.framePercent,
+            repetition: repetition
+          )
+        }
+        decoderVersion = run.decoderVersion
+        megapixels = run.megapixels
+        var releasedSample = run.sample
+        let releasedMemory = processMemorySnapshot()
+        releasedSample.residentBytesAfterRelease = releasedMemory.residentBytes
+        releasedSample.physicalFootprintBytesAfterRelease = releasedMemory.physicalFootprintBytes
+        releasedSample.reusableBytesAfterRelease = releasedMemory.reusableBytes
+        releasedSample.heapStatisticsAfterRelease = RawImageDecoder.defaultHeapStatistics()
+        samples.append(releasedSample)
+        print(run.summary)
+      }
+
+      formatResults.append(
+        FormatResult(
+          format: format,
+          samples: samples,
+          medianTotalSeconds: median(samples.map(\.stages.totalSeconds)),
+          medianStageSeconds: StageTimings(
+            decodeSeconds: median(samples.map(\.stages.decodeSeconds)),
+            processingSeconds: median(samples.map(\.stages.processingSeconds)),
+            geometrySeconds: median(samples.map(\.stages.geometrySeconds)),
+            pixelPackingSeconds: median(samples.map(\.stages.pixelPackingSeconds)),
+            encodingFinalizationSeconds: median(
+              samples.map(\.stages.encodingFinalizationSeconds))
+          ),
+          medianDecodeSubstages: RawDecodeTimings(
+            openSeconds: median(samples.map(\.decodeSubstages.openSeconds)),
+            unpackSeconds: median(samples.map(\.decodeSubstages.unpackSeconds)),
+            demosaicSeconds: median(samples.map(\.decodeSubstages.demosaicSeconds)),
+            libRawPostprocessSeconds: median(
+              samples.map(\.decodeSubstages.libRawPostprocessSeconds)),
+            processedImageSeconds: median(samples.map(\.decodeSubstages.processedImageSeconds)),
+            isoPolicySeconds: median(samples.map(\.decodeSubstages.isoPolicySeconds)),
+            swiftCopySwizzleSeconds: median(
+              samples.map(\.decodeSubstages.swiftCopySwizzleSeconds))
+          ),
+          p95TotalSeconds: percentile(samples.map(\.stages.totalSeconds), fraction: 0.95),
+          p95StageSeconds: StageTimings(
+            decodeSeconds: percentile(samples.map(\.stages.decodeSeconds), fraction: 0.95),
+            processingSeconds: percentile(samples.map(\.stages.processingSeconds), fraction: 0.95),
+            geometrySeconds: percentile(samples.map(\.stages.geometrySeconds), fraction: 0.95),
+            pixelPackingSeconds: percentile(
+              samples.map(\.stages.pixelPackingSeconds), fraction: 0.95),
+            encodingFinalizationSeconds: percentile(
+              samples.map(\.stages.encodingFinalizationSeconds), fraction: 0.95)
+          ),
+          p95DecodeSubstages: RawDecodeTimings(
+            openSeconds: percentile(samples.map(\.decodeSubstages.openSeconds), fraction: 0.95),
+            unpackSeconds: percentile(samples.map(\.decodeSubstages.unpackSeconds), fraction: 0.95),
+            demosaicSeconds: percentile(
+              samples.map(\.decodeSubstages.demosaicSeconds), fraction: 0.95),
+            libRawPostprocessSeconds: percentile(
+              samples.map(\.decodeSubstages.libRawPostprocessSeconds), fraction: 0.95),
+            processedImageSeconds: percentile(
+              samples.map(\.decodeSubstages.processedImageSeconds), fraction: 0.95),
+            isoPolicySeconds: percentile(
+              samples.map(\.decodeSubstages.isoPolicySeconds), fraction: 0.95),
+            swiftCopySwizzleSeconds: percentile(
+              samples.map(\.decodeSubstages.swiftCopySwizzleSeconds), fraction: 0.95)
+          )
+        )
+      )
+    }
+
+    fileResults.append(
+      FileResult(
+        file: sourceURL.path.replacingOccurrences(
+          of: options.rawDirectory.path + "/",
+          with: ""
+        ),
+        megapixels: megapixels,
+        decoder: decoderVersion,
+        formats: formatResults
+      )
+    )
+  }
+
+  let report = BenchmarkReport(
+    generatedAt: ISO8601DateFormatter().string(from: Date()),
+    configuration:
+      "\(buildConfiguration)-mode full-resolution RAW decode and production export path",
+    repetitions: options.repetitions,
+    framePercent: options.framePercent,
+    cleanupPolicy:
+      "Each generated export is hashed and deleted immediately after its measured run.",
+    peakResidentMemoryNote:
+      "ru_maxrss and Mach resident_size include reclaimable reusable pages. physicalFootprintBytes and ledger peak physical footprint are the resource-safety measures; reusableBytes explains resident memory that macOS can reclaim.",
+    files: fileResults
   )
+  let parentDirectory = options.outputURL.deletingLastPathComponent()
+  try FileManager.default.createDirectory(
+    at: parentDirectory, withIntermediateDirectories: true)
+  let encoder = JSONEncoder()
+  encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+  try encoder.encode(report).write(to: options.outputURL, options: .atomic)
+  print("Wrote \(options.outputURL.path)")
+}
 
-  var decoderVersion = "unknown"
-  var formatResults = [FormatResult]()
-  var megapixels = 0.0
+private enum BenchmarkError: Error {
+  case missingStageDiagnostics
+}
 
-  for format in options.formats {
-    var samples = [ExportSample]()
+private struct MeasuredDeterminismRun {
+  let sample: DeterminismSample
+  let decoderVersion: String
+  let megapixels: Double
+  let summary: String
+}
+
+private func runDeterminism(options: Options, files: [URL], scratchDirectory: URL) throws {
+  var fileResults = [DeterminismFileResult]()
+  for sourceURL in files {
+    let preview = try RawImageDecoder.extractThumbnail(sourceURL, maxDimension: 640).image
+    var filmNegative = FilmNegativeParams.colourNegative
+    filmNegative.measuredMedians = FilmNegativeProcessing.computeMedians(image: preview)
+    let processingParameters = ProcessingParameters(
+      filmType: .colourNegative,
+      filmNegativeParams: filmNegative
+    )
+
+    var decoderVersion = "unknown"
+    var megapixels = 0.0
+    var samples = [DeterminismSample]()
+
     for repetition in 1...options.repetitions {
       let destinationURL = scratchDirectory.appendingPathComponent(
-        "\(sourceURL.deletingPathExtension().lastPathComponent)-\(format.rawValue)-\(repetition).\(format.fileExtension)")
+        "\(sourceURL.deletingPathExtension().lastPathComponent)-determinism-\(repetition).tiff")
       let run = try autoreleasepool {
-        try measureExport(
+        try measureDeterminismSample(
           sourceURL: sourceURL,
           destinationURL: destinationURL,
           processingParameters: processingParameters,
-          format: format,
           framePercent: options.framePercent,
           repetition: repetition
         )
       }
       decoderVersion = run.decoderVersion
       megapixels = run.megapixels
-      var releasedSample = run.sample
-      let releasedMemory = processMemorySnapshot()
-      releasedSample.residentBytesAfterRelease = releasedMemory.residentBytes
-      releasedSample.physicalFootprintBytesAfterRelease = releasedMemory.physicalFootprintBytes
-      releasedSample.reusableBytesAfterRelease = releasedMemory.reusableBytes
-      releasedSample.heapStatisticsAfterRelease = RawImageDecoder.defaultHeapStatistics()
-      samples.append(releasedSample)
+      var sample = run.sample
+      sample.physicalFootprintBytesAfterRelease = processMemorySnapshot().physicalFootprintBytes
+      samples.append(sample)
       print(run.summary)
     }
 
-    formatResults.append(
-      FormatResult(
-        format: format,
-        samples: samples,
-        medianTotalSeconds: median(samples.map(\.stages.totalSeconds)),
-        medianStageSeconds: StageTimings(
-          decodeSeconds: median(samples.map(\.stages.decodeSeconds)),
-          processingSeconds: median(samples.map(\.stages.processingSeconds)),
-          geometrySeconds: median(samples.map(\.stages.geometrySeconds)),
-          pixelPackingSeconds: median(samples.map(\.stages.pixelPackingSeconds)),
-          encodingFinalizationSeconds: median(
-            samples.map(\.stages.encodingFinalizationSeconds))
+    let agreement =
+      RawDecodeDeterminism.agreement(samples.map(\.diagnostics)) + [
+        digestAgreement(boundary: "correctedImage", digests: samples.map(\.correctedImageSHA256)),
+        digestAgreement(
+          boundary: "writerInputPixels", digests: samples.map(\.writerInputPixelsSHA256)),
+        digestAgreement(boundary: "outputFile", digests: samples.map(\.outputSHA256)),
+      ]
+    let deterministic = agreement.allSatisfy(\.allAgree)
+    let firstDivergent = agreement.first(where: { !$0.allAgree })?.boundary
+    print(
+      "\(sourceURL.lastPathComponent) determinism: "
+        + (deterministic
+          ? "all \(agreement.count) boundaries agree across \(samples.count) repetitions"
+          : "FIRST DIVERGENT BOUNDARY: \(firstDivergent ?? "unknown")")
+    )
+
+    fileResults.append(
+      DeterminismFileResult(
+        file: sourceURL.path.replacingOccurrences(
+          of: options.rawDirectory.path + "/",
+          with: ""
         ),
-        medianDecodeSubstages: RawDecodeTimings(
-          openSeconds: median(samples.map(\.decodeSubstages.openSeconds)),
-          unpackSeconds: median(samples.map(\.decodeSubstages.unpackSeconds)),
-          demosaicSeconds: median(samples.map(\.decodeSubstages.demosaicSeconds)),
-          libRawPostprocessSeconds: median(
-            samples.map(\.decodeSubstages.libRawPostprocessSeconds)),
-          processedImageSeconds: median(samples.map(\.decodeSubstages.processedImageSeconds)),
-          isoPolicySeconds: median(samples.map(\.decodeSubstages.isoPolicySeconds)),
-          swiftCopySwizzleSeconds: median(
-            samples.map(\.decodeSubstages.swiftCopySwizzleSeconds))
-        ),
-        p95TotalSeconds: percentile(samples.map(\.stages.totalSeconds), fraction: 0.95),
-        p95StageSeconds: StageTimings(
-          decodeSeconds: percentile(samples.map(\.stages.decodeSeconds), fraction: 0.95),
-          processingSeconds: percentile(samples.map(\.stages.processingSeconds), fraction: 0.95),
-          geometrySeconds: percentile(samples.map(\.stages.geometrySeconds), fraction: 0.95),
-          pixelPackingSeconds: percentile(samples.map(\.stages.pixelPackingSeconds), fraction: 0.95),
-          encodingFinalizationSeconds: percentile(
-            samples.map(\.stages.encodingFinalizationSeconds), fraction: 0.95)
-        ),
-        p95DecodeSubstages: RawDecodeTimings(
-          openSeconds: percentile(samples.map(\.decodeSubstages.openSeconds), fraction: 0.95),
-          unpackSeconds: percentile(samples.map(\.decodeSubstages.unpackSeconds), fraction: 0.95),
-          demosaicSeconds: percentile(samples.map(\.decodeSubstages.demosaicSeconds), fraction: 0.95),
-          libRawPostprocessSeconds: percentile(
-            samples.map(\.decodeSubstages.libRawPostprocessSeconds), fraction: 0.95),
-          processedImageSeconds: percentile(samples.map(\.decodeSubstages.processedImageSeconds), fraction: 0.95),
-          isoPolicySeconds: percentile(samples.map(\.decodeSubstages.isoPolicySeconds), fraction: 0.95),
-          swiftCopySwizzleSeconds: percentile(
-            samples.map(\.decodeSubstages.swiftCopySwizzleSeconds), fraction: 0.95)
-        )
+        megapixels: megapixels,
+        decoder: decoderVersion,
+        repetitions: options.repetitions,
+        deterministic: deterministic,
+        firstDivergentBoundary: firstDivergent,
+        boundaryAgreement: agreement,
+        samples: samples
       )
     )
   }
 
-  fileResults.append(
-    FileResult(
-      file: sourceURL.path.replacingOccurrences(
-        of: options.rawDirectory.path + "/",
-        with: ""
-      ),
-      megapixels: megapixels,
-      decoder: decoderVersion,
-      formats: formatResults
-    )
+  let report = DeterminismReport(
+    generatedAt: ISO8601DateFormatter().string(from: Date()),
+    mode: "camera-scan-determinism",
+    configuration:
+      "\(buildConfiguration)-mode repeated full-resolution camera-scan decode with stage-boundary SHA-256 capture",
+    repetitions: options.repetitions,
+    framePercent: options.framePercent,
+    writerContract:
+      "One LZW TIFF per repetition, matching the default benchmark's selected compression.",
+    deterministic: fileResults.allSatisfy(\.deterministic),
+    boundaryNote:
+      "Boundaries are listed in pipeline order: unpackedMosaic, demosaicedImage, processedImage, postISOImage, swiftImage, correctedImage, writerInputPixels, outputFile. The first boundary with allAgree == false is the first stage a candidate build allowed to diverge. writerInputPixels is the image handed to the writer before packing; packed bytes and the encoded file are deterministic functions of it plus format parameters. Digests hash raw buffer bytes and compare runs of the same build on the same machine. Diagnostic hashing is included in decodeSeconds; decodeUnaccountedSeconds records decode work not assigned to the production substage timers.",
+    cleanupPolicy:
+      "Each generated export is hashed and deleted immediately after its measured run.",
+    files: fileResults
+  )
+  let parentDirectory = options.outputURL.deletingLastPathComponent()
+  try FileManager.default.createDirectory(
+    at: parentDirectory, withIntermediateDirectories: true)
+  let encoder = JSONEncoder()
+  encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+  try encoder.encode(report).write(to: options.outputURL, options: .atomic)
+  print("Wrote \(options.outputURL.path)")
+}
+
+private func measureDeterminismSample(
+  sourceURL: URL,
+  destinationURL: URL,
+  processingParameters: ProcessingParameters,
+  framePercent: Int,
+  repetition: Int
+) throws -> MeasuredDeterminismRun {
+  defer { try? FileManager.default.removeItem(at: destinationURL) }
+
+  let decodeStart = ContinuousClock.now
+  let decodeResult = try RawImageDecoder.decode(
+    sourceURL,
+    fullResolution: true,
+    profile: .rawTherapeeCameraScan,
+    collectDiagnostics: true
+  )
+  let decodeSeconds = seconds(decodeStart.duration(to: .now))
+  guard let diagnostics = decodeResult.diagnostics else {
+    throw BenchmarkError.missingStageDiagnostics
+  }
+  let decoded = decodeResult.image
+
+  let processingStart = ContinuousClock.now
+  let processed = FilmProcessing.correctedPreview(
+    image: decoded,
+    parameters: processingParameters
+  )
+  let processingSeconds = seconds(processingStart.duration(to: .now))
+  let correctedHash = sha256Pixels(processed.pixels)
+
+  let geometryStart = ContinuousClock.now
+  let output = processed.addingFrame(percent: framePercent)
+  let geometrySeconds = seconds(geometryStart.duration(to: .now))
+  let writerInputHash = sha256Pixels(output.pixels)
+
+  let exportParameters = ExportParameters(
+    format: .tiff,
+    framePercent: framePercent,
+    jpegQuality: 0.95,
+    tiffCompression: .lzw
+  )
+  let writeMetrics = try output.writeMeasured(
+    to: destinationURL,
+    format: .tiff,
+    parameters: exportParameters
+  )
+  let peakFootprint = processMemorySnapshot().peakPhysicalFootprintBytes
+  let outputHash = try sha256File(destinationURL)
+
+  try FileManager.default.removeItem(at: destinationURL)
+  let removed = !FileManager.default.fileExists(atPath: destinationURL.path)
+  guard removed else {
+    throw CocoaError(.fileWriteUnknown)
+  }
+
+  let sample = DeterminismSample(
+    repetition: repetition,
+    runClass: repetition == 1 ? "first-run" : "warm-filesystem-cache",
+    sourceShape: [decoded.height, decoded.width, decoded.channels],
+    writerInputShape: [output.height, output.width, output.channels],
+    decodeSeconds: decodeSeconds,
+    decodeSubstages: decodeResult.timings,
+    decodeUnaccountedSeconds: max(0, decodeSeconds - decodeResult.timings.totalSeconds),
+    processingSeconds: processingSeconds,
+    geometrySeconds: geometrySeconds,
+    pixelPackingSeconds: writeMetrics.pixelPackingSeconds,
+    encodingFinalizationSeconds: writeMetrics.encodingFinalizationSeconds,
+    diagnostics: diagnostics,
+    correctedImageSHA256: correctedHash,
+    writerInputPixelsSHA256: writerInputHash,
+    outputSHA256: outputHash,
+    outputBytes: writeMetrics.outputBytes,
+    peakPhysicalFootprintBytes: peakFootprint,
+    physicalFootprintBytesAfterRelease: 0,
+    outputRemovedAfterRun: removed
+  )
+
+  let summary =
+    "\(sourceURL.lastPathComponent) determinism run \(repetition): "
+    + "decode=\(formatted(decodeSeconds))s "
+    + "[open=\(formatted(decodeResult.timings.openSeconds))s "
+    + "unpack=\(formatted(decodeResult.timings.unpackSeconds))s "
+    + "demosaic=\(formatted(decodeResult.timings.demosaicSeconds))s "
+    + "post=\(formatted(decodeResult.timings.libRawPostprocessSeconds))s "
+    + "image=\(formatted(decodeResult.timings.processedImageSeconds))s "
+    + "iso=\(formatted(decodeResult.timings.isoPolicySeconds))s "
+    + "copy=\(formatted(decodeResult.timings.swiftCopySwizzleSeconds))s] "
+    + "unaccounted=\(formatted(max(0, decodeSeconds - decodeResult.timings.totalSeconds)))s "
+    + "process=\(formatted(processingSeconds))s "
+    + "write=\(formatted(writeMetrics.encodingFinalizationSeconds))s "
+    + "swiftImage=\(diagnostics.swiftImageSHA256.prefix(12))… "
+    + "output=\(outputHash.prefix(12))… "
+    + "removed=\(removed)"
+  return MeasuredDeterminismRun(
+    sample: sample,
+    decoderVersion: decodeResult.decoderVersion,
+    megapixels: Double(decoded.width * decoded.height) / 1_000_000,
+    summary: summary
   )
 }
 
-let report = BenchmarkReport(
-  generatedAt: ISO8601DateFormatter().string(from: Date()),
-  configuration: "release-mode full-resolution RAW decode and production export path",
-  repetitions: options.repetitions,
-  framePercent: options.framePercent,
-  cleanupPolicy: "Each generated export is hashed and deleted immediately after its measured run.",
-  peakResidentMemoryNote: "ru_maxrss and Mach resident_size include reclaimable reusable pages. physicalFootprintBytes and ledger peak physical footprint are the resource-safety measures; reusableBytes explains resident memory that macOS can reclaim.",
-  files: fileResults
-)
-let parentDirectory = options.outputURL.deletingLastPathComponent()
-try FileManager.default.createDirectory(
-  at: parentDirectory, withIntermediateDirectories: true)
-let encoder = JSONEncoder()
-encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-try encoder.encode(report).write(to: options.outputURL, options: .atomic)
-print("Wrote \(options.outputURL.path)")
+private func digestAgreement(boundary: String, digests: [String]) -> StageBoundaryAgreement {
+  let distinct = Set(digests).count
+  return StageBoundaryAgreement(
+    boundary: boundary,
+    distinctDigests: distinct,
+    allAgree: distinct == 1
+  )
+}
+
+private func sha256Pixels(_ pixels: [UInt16]) -> String {
+  pixels.withUnsafeBytes {
+    SHA256.hash(data: $0).map { String(format: "%02x", $0) }.joined()
+  }
+}
+
+#if DEBUG
+  private let buildConfiguration = "debug"
+#else
+  private let buildConfiguration = "release"
+#endif
 
 private func seconds(_ duration: Duration) -> Double {
   let components = duration.components

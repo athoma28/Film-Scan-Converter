@@ -386,12 +386,93 @@ whether the first divergent stage is threaded unpack, X-Trans demosaic, or
 another OpenMP boundary, and it must not be quoted as an available application
 speedup.
 
-The next benchmark change is stage-boundary hashing plus at least five repeated
-runs per worker count, followed by a full correction matrix covering neutral,
-tone, protected color, dye mixing, and combined adjustments. See the audited
+The first benchmark change—stage-boundary hashing with repeated determinism
+runs—landed on 2026-07-28; see the next section. The correction matrix covering
+neutral, tone, protected color, dye mixing, and combined adjustments remains
+pending. See the audited
 [full-resolution performance guide](../../PERFORMANCE-OPPORTUNITIES-2026-07-27.md)
 for the source findings, rejected shortcuts, worker-count matrix, packaging
 gate, and first-developer handoff.
+
+## 2026-07-28 Camera-Scan Stage-Boundary Determinism Instrumentation
+
+`FilmScanExportBenchmark --determinism` repeats full-resolution camera-scan
+decodes of each selected file, captures SHA-256 digests at eight pipeline
+boundaries, writes one LZW TIFF per repetition, and reports per-boundary digest
+agreement in pipeline order. The boundaries are:
+
+1. `unpackedMosaic`: mosaic dimensions/CFA metadata plus the unpacked sensor
+   data after `unpack()`;
+2. `demosaicedImage`: LibRaw's image inside the demosaic callback immediately
+   after interpolation returns, before the remaining `dcraw_process` stages;
+3. `processedImage`: the image returned by `dcraw_make_mem_image`, before the
+   ISO-adaptive filter;
+4. `postISOImage`: the same buffer after the ISO-adaptive filter;
+5. `swiftImage`: the Swift-owned RGB image after the copy/swizzle boundary;
+6. `correctedImage`: after film-negative correction;
+7. `writerInputPixels`: the image handed to the writer, before packing;
+8. `outputFile`: the encoded TIFF bytes.
+
+Digests hash raw buffer bytes and compare runs of the same build on the same
+machine; they are not a cross-platform identity contract. The first boundary
+with `allAgree == false` is the first stage a threaded candidate allowed to
+diverge, which is the evidence required before fixing or replacing that stage.
+Digest capture is opt-in per decode (`collectDiagnostics`), so the production
+decode performs no hashing. Diagnostic decodes fail closed if any required
+boundary is absent or malformed, and agreement never treats repeated empty
+digests as evidence. Engine coverage lives in `RawDecodeDiagnosticsTests`:
+digest completeness and repeatability at full resolution, preview-path
+capture, opt-in and camera-scan-only behavior, pipeline ordering,
+missing-boundary rejection, divergent-boundary isolation, and Codable
+round-trip. Determinism mode defaults to five repetitions and rejects fewer;
+its report also records the actual debug/release configuration, source and
+writer-input shapes, frame percentage, and decode time not assigned to the
+production substage timers.
+
+Command (Mac16,7, stock Homebrew LibRaw 0.21.4, release build):
+
+```sh
+swift build -c release --package-path native/FilmScanEngine \
+  --product FilmScanExportBenchmark
+
+native/FilmScanEngine/.build/release/FilmScanExportBenchmark \
+  sample-raw /tmp/film-scan-determinism.json 5 \
+  --determinism --file=fuji400-fresh/DSCF2833.RAF
+```
+
+Result: the stock build is deterministic at every boundary. All eight
+boundaries agreed across five repetitions. Every output was 174,847,758 bytes
+with SHA-256 `7be6f460d7d47e46a41f1196c88dc4bce00a22c14583c0f64e5fdd7f6311007a`
+and was removed after its run. Per-repetition decode was 14.36–14.41 seconds
+(demosaic 12.72–12.77, unpack 0.87–0.89), the process-lifetime peak physical
+footprint stayed fixed at 683.9 MB, and post-release physical footprint stayed
+between 45.5 and 57.3 MB. The stable full-resolution stage digests, recorded
+per sample in the JSON report, are:
+
+| Boundary | SHA-256 (identical across all five repetitions) |
+|---|---|
+| unpackedMosaic (7872×5196, filters 9, 36 CFA bytes) | `2afd88477279486c912bcd7c9d09d7889b92ff51f13eb8f7c9ef13bc39131897` |
+| demosaicedImage | `70092621482abb3a337b8956dacb86813863ef5be61aa84a44df22756f49127b` |
+| processedImage | `60be4a2510729f1b1be9600f8af61db05750527855ce29bf3accb427cad3f3de` |
+| postISOImage | `7f81faea53fa4858625efe64141adbb035eb268fd2c922b4fbe8d7f1e5835ced` |
+| swiftImage | `91cfb89a62f1fc7296d3b17840ce806b1881501e7f825d061a25f72b3a22d730` |
+| correctedImage / writerInputPixels | `eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4` |
+| outputFile | `7be6f460d7d47e46a41f1196c88dc4bce00a22c14583c0f64e5fdd7f6311007a` |
+
+`correctedImage` and `writerInputPixels` match because this run requested no
+frame; a `--frame-percent` run separates them. The five decode-stage digests
+above now anchor the committed camera-scan byte-identity fixture
+(`native/FilmScanEngine/Tests/FilmScanEngineTests/Fixtures/camera_scan_decode_reference.json`
+plus `CameraScanByteIdentityTests`), which proves the final-quality three-pass
+decode of `DSCF2833.RAF` reproduces every stage digest and the Swift pixel
+hash byte-for-byte; a debug-build determinism run on 2026-07-28 produced the
+identical digests, so the fixture holds across build configurations on this
+machine. Its schema and digest format are validated even when the local RAW
+corpus is unavailable, so a malformed committed fixture cannot silently skip
+its own regression test. The
+next evidence step is a forced-OpenMP build run through the same mode at 1, 2,
+4, 8, 10, and 14 threads with five repetitions each, reading the first
+divergent boundary directly from the report.
 
 ## Closed Baseline Cycle And Bounded Follow-Up
 

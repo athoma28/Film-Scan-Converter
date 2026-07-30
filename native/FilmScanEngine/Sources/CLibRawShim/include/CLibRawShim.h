@@ -51,6 +51,47 @@ int fsc_decode_raw_direct_with_profile(
     size_t error_message_capacity
 );
 
+#define FSC_RAW_STAGE_HASH_HEX_SIZE 65
+
+// Opt-in camera-scan decode diagnostics: SHA-256 digests captured at stage
+// boundaries so a repeated-decode determinism run can isolate the first
+// divergent stage without storing full intermediates. A successful diagnostic
+// decode must populate every digest; an empty digest is incomplete evidence
+// and must not be treated as agreement.
+typedef struct {
+    // Unpacked-mosaic metadata folded into the mosaic digest.
+    uint32_t mosaic_raw_width;
+    uint32_t mosaic_raw_height;
+    uint32_t mosaic_filters;
+    uint32_t mosaic_cfa_bytes;
+    // After unpack(): mosaic dimensions/CFA metadata plus the raw mosaic.
+    char unpacked_mosaic_sha256[FSC_RAW_STAGE_HASH_HEX_SIZE];
+    // Inside the demosaic callback, immediately after interpolation returns,
+    // before the remaining dcraw_process stages.
+    char demosaiced_sha256[FSC_RAW_STAGE_HASH_HEX_SIZE];
+    // The image returned by dcraw_make_mem_image (after the preview
+    // downsample when that path runs), before the ISO-adaptive filter.
+    char processed_image_sha256[FSC_RAW_STAGE_HASH_HEX_SIZE];
+    // The same buffer after the ISO-adaptive filter.
+    char post_iso_sha256[FSC_RAW_STAGE_HASH_HEX_SIZE];
+} fsc_raw_stage_hashes;
+
+// Same contract as fsc_decode_raw_direct_with_profile, plus opt-in
+// stage-boundary digest capture. Passing NULL for stage_hashes keeps the
+// production decode free of hashing work. Digests are collected on the
+// camera-scan path only; other profiles zero the structure and leave every
+// digest empty. Digests compare runs of the same build on the same machine;
+// they hash raw buffer bytes and are not a cross-platform identity contract.
+int fsc_decode_raw_direct_with_profile_diagnostics(
+    const char *path,
+    int full_resolution,
+    fsc_raw_decode_profile profile,
+    fsc_raw_direct *output,
+    fsc_raw_stage_hashes *stage_hashes,
+    char *error_message,
+    size_t error_message_capacity
+);
+
 void fsc_free_raw_direct(fsc_raw_direct *output);
 
 typedef struct {

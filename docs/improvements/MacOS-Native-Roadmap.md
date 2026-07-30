@@ -113,10 +113,16 @@ bound—not a production candidate or a release claim.
 Work in this order:
 
 1. add camera-scan stage-boundary hashes and repeated determinism mode to
-   `FilmScanExportBenchmark`;
-2. add a full-resolution X-Trans camera-scan fixture—the existing exact
-   full-output fixture covers `rawPyCompatibility`, while camera-scan tests do
-   not yet establish byte identity;
+   `FilmScanExportBenchmark` — completed 2026-07-28: opt-in SHA-256 capture at
+   eight pipeline boundaries, a `--determinism` repeat mode with per-boundary
+   agreement, engine tests covering the contract, and a passing
+   five-repetition stock-build baseline recorded in the 40 MP benchmark notes;
+2. add a full-resolution X-Trans camera-scan fixture — completed 2026-07-28:
+   `camera_scan_decode_reference.json` pins the `DSCF2833.RAF` image shape,
+   color description, mosaic metadata, and the five decode-stage digests from
+   the determinism baseline, and `CameraScanByteIdentityTests` proves the
+   final-quality three-pass decode reproduces every stage digest plus the
+   Swift pixel hash byte-for-byte (debug and release agree on this machine);
 3. isolate the first nondeterministic boundary in LibRaw's existing threaded
    unpack/X-Trans path before porting another demosaic implementation;
 4. add neutral, tone, protected-color, dye-mixing, and combined-adjustment

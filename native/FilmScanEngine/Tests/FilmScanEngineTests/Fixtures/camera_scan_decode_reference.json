@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "generator": "FilmScanExportBenchmark --determinism (release build, stock Homebrew LibRaw 0.21.4, Mac16,7)",
+  "recorded": "2026-07-28",
+  "profile": "rawTherapeeCameraScan",
+  "fullResolution": true,
+  "notes": "Same-machine byte-identity contract for the full-resolution X-Trans camera-scan decode. Stage digests hash raw buffer bytes of the recorded build; they are stable across repeated decodes on the same machine but are not a cross-platform identity contract. Refresh only from a documented repeated determinism run recorded in docs/performance/40mp-export.md, never from an untested candidate build.",
+  "file": "fuji400-fresh/DSCF2833.RAF",
+  "imageShape": [5184, 7752, 3],
+  "colorDescription": "sRGB",
+  "mosaic": {
+    "rawWidth": 7872,
+    "rawHeight": 5196,
+    "filters": 9,
+    "cfaBytes": 36
+  },
+  "stageSHA256": {
+    "unpackedMosaic": "2afd88477279486c912bcd7c9d09d7889b92ff51f13eb8f7c9ef13bc39131897",
+    "demosaicedImage": "70092621482abb3a337b8956dacb86813863ef5be61aa84a44df22756f49127b",
+    "processedImage": "60be4a2510729f1b1be9600f8af61db05750527855ce29bf3accb427cad3f3de",
+    "postISOImage": "7f81faea53fa4858625efe64141adbb035eb268fd2c922b4fbe8d7f1e5835ced",
+    "swiftImage": "91cfb89a62f1fc7296d3b17840ce806b1881501e7f825d061a25f72b3a22d730"
+  }
+}

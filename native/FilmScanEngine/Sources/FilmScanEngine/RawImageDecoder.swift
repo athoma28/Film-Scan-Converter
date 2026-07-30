@@ -1,5 +1,6 @@
 import CLibRawShim
 import CoreGraphics
+import CryptoKit
 import Foundation
 import ImageIO
 
@@ -11,6 +12,9 @@ public struct RawDecodeResult: Sendable {
   public let isoSpeed: Double
   public let processing: RawProcessingStages
   public let timings: RawDecodeTimings
+  /// Stage-boundary digests, present only when the decode requested them and
+  /// the profile collects them (currently the camera-scan profile only).
+  public let diagnostics: RawDecodeDiagnostics?
 
   public init(
     image: UInt16Image,
@@ -19,7 +23,8 @@ public struct RawDecodeResult: Sendable {
     profile: RawDecodeProfile = .rawPyCompatibility,
     isoSpeed: Double = 0,
     processing: RawProcessingStages = [],
-    timings: RawDecodeTimings = .zero
+    timings: RawDecodeTimings = .zero,
+    diagnostics: RawDecodeDiagnostics? = nil
   ) {
     self.image = image
     self.colorDescription = colorDescription
@@ -28,6 +33,7 @@ public struct RawDecodeResult: Sendable {
     self.isoSpeed = isoSpeed
     self.processing = processing
     self.timings = timings
+    self.diagnostics = diagnostics
   }
 }
 
@@ -163,10 +169,14 @@ public enum RawImageDecoder {
     )
   }
 
+  /// Decodes a RAW file. When `collectDiagnostics` is true and the profile
+  /// collects stage-boundary digests (currently camera-scan only), the result
+  /// carries `RawDecodeDiagnostics`; the default path performs no hashing.
   public static func decode(
     _ url: URL,
     fullResolution: Bool = false,
-    profile: RawDecodeProfile = .rawPyCompatibility
+    profile: RawDecodeProfile = .rawPyCompatibility,
+    collectDiagnostics: Bool = false
   ) throws -> RawDecodeResult {
     guard url.isFileURL,
       FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased())
@@ -178,9 +188,21 @@ public enum RawImageDecoder {
     DecodeLog.rawDecodeStarted(path: url.lastPathComponent, fullResolution: fullResolution)
 
     var output = fsc_raw_direct()
+    var stageHashes = fsc_raw_stage_hashes()
     var errorBytes = [CChar](repeating: 0, count: 512)
     let code = url.withUnsafeFileSystemRepresentation { path in
-      fsc_decode_raw_direct_with_profile(
+      if collectDiagnostics {
+        return fsc_decode_raw_direct_with_profile_diagnostics(
+          path,
+          fullResolution ? 1 : 0,
+          profile.cValue,
+          &output,
+          &stageHashes,
+          &errorBytes,
+          errorBytes.count
+        )
+      }
+      return fsc_decode_raw_direct_with_profile(
         path,
         fullResolution ? 1 : 0,
         profile.cValue,
@@ -225,6 +247,30 @@ public enum RawImageDecoder {
     }
     let version = String(cString: fsc_libraw_version())
     let processing = RawProcessingStages(rawValue: output.processing_flags)
+    let diagnostics: RawDecodeDiagnostics?
+    if collectDiagnostics, profile == .rawTherapeeCameraScan {
+      let capturedDiagnostics = RawDecodeDiagnostics(
+        mosaicRawWidth: Int(stageHashes.mosaic_raw_width),
+        mosaicRawHeight: Int(stageHashes.mosaic_raw_height),
+        mosaicFilters: stageHashes.mosaic_filters,
+        mosaicCFABytes: Int(stageHashes.mosaic_cfa_bytes),
+        unpackedMosaicSHA256: stageHashString(stageHashes.unpacked_mosaic_sha256),
+        demosaicedSHA256: stageHashString(stageHashes.demosaiced_sha256),
+        processedImageSHA256: stageHashString(stageHashes.processed_image_sha256),
+        postISOImageSHA256: stageHashString(stageHashes.post_iso_sha256),
+        swiftImageSHA256: sha256Hex(pixels)
+      )
+      guard capturedDiagnostics.hasCompleteStageDigests else {
+        DecodeLog.rawDecodeFailed(
+          path: url.lastPathComponent,
+          error: "LibRaw did not capture every requested RAW stage diagnostic."
+        )
+        throw RawImageDecoderError.invalidDiagnostics
+      }
+      diagnostics = capturedDiagnostics
+    } else {
+      diagnostics = nil
+    }
     DecodeLog.rawDecodeComplete(
       path: url.lastPathComponent,
       width: Int(output.width),
@@ -254,7 +300,8 @@ public enum RawImageDecoder {
         processedImageSeconds: output.processed_image_seconds,
         isoPolicySeconds: output.iso_policy_seconds,
         swiftCopySwizzleSeconds: copySeconds
-      )
+      ),
+      diagnostics: diagnostics
     )
   }
 
@@ -373,10 +420,25 @@ private func rawDecodeSeconds(_ duration: Duration) -> Double {
   return Double(components.seconds) + Double(components.attoseconds) / 1e18
 }
 
+/// Converts a fixed-size C char buffer (imported as a tuple) to a Swift string.
+private func stageHashString<T>(_ buffer: T) -> String {
+  withUnsafeBytes(of: buffer) { rawBuffer in
+    let chars = rawBuffer.bindMemory(to: CChar.self)
+    return String(decoding: chars.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+  }
+}
+
+private func sha256Hex(_ pixels: [UInt16]) -> String {
+  pixels.withUnsafeBytes {
+    SHA256.hash(data: $0).map { String(format: "%02x", $0) }.joined()
+  }
+}
+
 public enum RawImageDecoderError: LocalizedError {
   case unsupportedFileType
   case decodeFailed(String)
   case invalidOutput
+  case invalidDiagnostics
 
   public var errorDescription: String? {
     switch self {
@@ -386,6 +448,8 @@ public enum RawImageDecoderError: LocalizedError {
       "LibRaw could not decode the image: \(message)"
     case .invalidOutput:
       "LibRaw returned an invalid 16-bit RGB image."
+    case .invalidDiagnostics:
+      "LibRaw did not capture every requested RAW stage diagnostic."
     }
   }
 }

@@ -9,8 +9,8 @@ The audited
 [full-resolution performance guide](../../PERFORMANCE-OPPORTUNITIES-2026-07-27.md)
 records the active optimization evidence and implementation sequence.
 
-**Last verified:** 2026-07-27 against the current working tree. The native test
-suite contains 416 tests across 29 files. Some representative-RAW tests require
+**Last verified:** 2026-07-28 against the current working tree. The native test
+suite contains 434 tests across 31 files. Some representative-RAW tests require
 the untracked local `sample-raw/` corpus and are explicitly disabled when it is
 absent.
 
@@ -46,10 +46,11 @@ import-ordered multi-selection while preserving each target's geometry and
 measured film base.
 
 A 2026-07-27 audit has reopened one bounded performance slice before broader
-roll-workflow expansion. First add camera-scan stage hashes, a repeated
-determinism mode, a full-resolution X-Trans camera-scan fixture, and adjusted
-correction benchmark scenarios. Then diagnose LibRaw's existing threaded
-unpack/X-Trans path and repair the first divergent stage. Complete the
+roll-workflow expansion. Camera-scan stage hashes and the repeated determinism
+mode landed on 2026-07-28 with a passing stock-build baseline, and the
+full-resolution X-Trans camera-scan byte-identity fixture followed the same
+day. Next add adjusted correction benchmark scenarios, then diagnose LibRaw's
+existing threaded unpack/X-Trans path and repair the first divergent stage. Complete the
 representative-image viewport check alongside that evidence work; resume the
 real roll workflow after the bounded performance slice. Do not begin a broad
 port, writer replacement, batch-prefetch design, or stock-look calibration
@@ -68,6 +69,16 @@ The current measurement evidence is:
 - the release export benchmark measures decode, correction, geometry, packing,
   writer finalization, packed/output bytes and hashes, current resident and
   reusable bytes, and current/peak physical footprint;
+- the benchmark's `--determinism` mode repeats full-resolution camera-scan
+  decodes with opt-in SHA-256 capture at eight pipeline boundaries (unpacked
+  mosaic, demosaiced image, processed image, post-ISO image, Swift image,
+  corrected image, writer-input pixels, output file) and reports per-boundary
+  agreement in pipeline order. On 2026-07-28 the stock Homebrew LibRaw 0.21.4
+  build agreed at every boundary across five repetitions of
+  `fuji400-fresh/DSCF2833.RAF`, with a fixed 683.9 MB process-lifetime peak
+  physical footprint and every output removed; the stable digests are recorded
+  in the 40 MP notes and anchor the byte-identity fixture committed the same
+  day;
 - one 40.19 MP RAF-to-TIFF smoke run took 27.51 seconds and reached a 1.20 GB
   process-lifetime peak RSS;
 - 19.71 of 21.68 decode seconds were spent in final-quality three-pass X-Trans
@@ -170,7 +181,8 @@ and command details.
 The 2026-07-15 app-path batch and cancellation run closed the baseline cycle.
 The 2026-07-27 audit added a bounded follow-up with this order:
 
-1. benchmark instrumentation and camera-scan determinism fixture;
+1. benchmark instrumentation and the camera-scan byte-identity fixture (both
+   landed 2026-07-28);
 2. isolation and repair of the existing LibRaw threaded-path divergence;
 3. measured reduction of adjusted-correction allocations and serial passes;
 4. only then, re-evaluation of compression writers, batch overlap, Bayer RCD,
@@ -261,11 +273,14 @@ fail-closed `public` path. The following remain for the notarized build:
   distortion.
 - RAW CI coverage depends partly on untracked local files; the committed corpus
   does not yet prove the complete packaged-app path.
-- Camera-scan tests do not yet provide a full-resolution exact-output fixture
-  at the unpack, completed-demosaic callback, processed-image, and Swift-image
-  boundaries. The
-  existing exact full-output reference belongs to the faster
-  `rawPyCompatibility` profile and must not be presented as camera-scan proof.
+- The camera-scan full-resolution byte-identity fixture
+  (`camera_scan_decode_reference.json` plus `CameraScanByteIdentityTests`)
+  pins the image shape, mosaic metadata, and all five decode-stage digests
+  from the 2026-07-28 stock-build baseline. It is a same-machine, same-build
+  contract, not a cross-platform identity proof; refresh it only from a
+  documented repeated determinism run. The separate exact full-output
+  reference still belongs to the faster `rawPyCompatibility` profile and must
+  not be presented as camera-scan proof.
 - LibRaw's forced-OpenMP path produced non-repeatable processed-DNG output in
   the isolated 2026-07-27 audit. Its speedup is not available to production
   until the first divergent stage is isolated and the approved pixel contract
@@ -296,7 +311,13 @@ fail-closed `public` path. The following remain for the notarized build:
 
 ## Verification Summary
 
-- 416 native tests across 29 files in the current working tree.
+- 434 native tests across 31 files in the current working tree.
+- The camera-scan byte-identity fixture
+  (`camera_scan_decode_reference.json` plus `CameraScanByteIdentityTests`)
+  pins the full-resolution X-Trans decode of `fuji400-fresh/DSCF2833.RAF` to
+  the 2026-07-28 determinism baseline: image shape, color description, mosaic
+  metadata, all five decode-stage digests, and the Swift pixel hash must
+  reproduce exactly.
 - Frozen Python-generated fixtures cover shared numerical behavior.
 - Production CPU/GPU correction comparisons cover 2,725 channel comparisons
   with zero failures and a maximum difference of 2/255.

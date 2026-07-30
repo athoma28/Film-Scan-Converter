@@ -15,6 +15,7 @@ int fsc_decode_rawtherapee_direct(
     const char *path,
     int full_resolution,
     fsc_raw_direct *output,
+    fsc_raw_stage_hashes *stage_hashes,
     char *error_message,
     size_t error_message_capacity
 );
@@ -172,7 +173,7 @@ int fsc_decode_raw_direct_with_profile(
 
     if (profile == FSC_RAW_DECODE_PROFILE_RAWTHERAPEE_CAMERA_SCAN) {
         return fsc_decode_rawtherapee_direct(
-            path, full_resolution, output, error_message, error_message_capacity
+            path, full_resolution, output, NULL, error_message, error_message_capacity
         );
     }
 
@@ -298,6 +299,34 @@ int fsc_decode_raw_direct_with_profile(
             output->pixel_count, output->color_description);
 
     return LIBRAW_SUCCESS;
+}
+
+int fsc_decode_raw_direct_with_profile_diagnostics(
+    const char *path,
+    int full_resolution,
+    fsc_raw_decode_profile profile,
+    fsc_raw_direct *output,
+    fsc_raw_stage_hashes *stage_hashes,
+    char *error_message,
+    size_t error_message_capacity
+) {
+    if (stage_hashes != NULL) {
+        memset(stage_hashes, 0, sizeof(*stage_hashes));
+    }
+    if (profile == FSC_RAW_DECODE_PROFILE_RAWTHERAPEE_CAMERA_SCAN) {
+        if (path == NULL || output == NULL) {
+            return fail(-1, "Invalid RAW decoder arguments.", error_message, error_message_capacity);
+        }
+        memset(output, 0, sizeof(*output));
+        return fsc_decode_rawtherapee_direct(
+            path, full_resolution, output, stage_hashes, error_message, error_message_capacity
+        );
+    }
+    // Stage-boundary digests are a camera-scan contract. Other profiles decode
+    // normally and leave every digest empty.
+    return fsc_decode_raw_direct_with_profile(
+        path, full_resolution, profile, output, error_message, error_message_capacity
+    );
 }
 
 void fsc_free_raw_direct(fsc_raw_direct *output) {

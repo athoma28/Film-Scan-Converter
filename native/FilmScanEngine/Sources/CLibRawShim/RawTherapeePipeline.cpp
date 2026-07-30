@@ -15,7 +15,54 @@
 #include <memory>
 #include <vector>
 
+// CommonCrypto is part of the OS, so stage hashing adds no packaged
+// dependency. The C API is deprecated in favor of Swift CryptoKit, which is
+// not reachable from this C++ target.
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#include <CommonCrypto/CommonDigest.h>
+
 namespace {
+
+// Incremental SHA-256 over stage-boundary buffers. Metadata is hashed as raw
+// POD bytes: digests compare runs of the same build on the same machine, so
+// endianness stability across platforms is not required.
+class StageHasher {
+public:
+    StageHasher() { CC_SHA256_Init(&context_); }
+
+    template <typename T>
+    void pod(T value) {
+        CC_SHA256_Update(&context_, &value, sizeof(value));
+    }
+
+    void bytes(const void *data, size_t length) {
+        const auto *cursor = static_cast<const uint8_t *>(data);
+        while (length > 0) {
+            const CC_LONG chunk = static_cast<CC_LONG>(
+                std::min<size_t>(length, 64 * 1024 * 1024));
+            CC_SHA256_Update(&context_, cursor, chunk);
+            cursor += chunk;
+            length -= chunk;
+        }
+    }
+
+    void hexDigest(char output[FSC_RAW_STAGE_HASH_HEX_SIZE]) {
+        unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+        CC_SHA256_Final(digest, &context_);
+        static const char kHex[] = "0123456789abcdef";
+        for (int index = 0; index < CC_SHA256_DIGEST_LENGTH; ++index) {
+            output[index * 2] = kHex[digest[index] >> 4];
+            output[index * 2 + 1] = kHex[digest[index] & 0xF];
+        }
+        output[CC_SHA256_DIGEST_LENGTH * 2] = '\0';
+    }
+
+private:
+    CC_SHA256_CTX context_;
+};
+
+#pragma clang diagnostic pop
 
 template <typename T>
 T limited(T value, T lower, T upper) {
@@ -27,6 +74,10 @@ public:
     bool usedRCD = false;
     bool usedXTransThreePass = false;
     double demosaicSeconds = 0;
+    double stageHashSeconds = 0;
+    // Opt-in stage-boundary digest capture. When set, the demosaic callbacks
+    // hash imgdata.image immediately after interpolation returns.
+    fsc_raw_stage_hashes *stageHashes = nullptr;
 
     explicit FSCRawTherapeeDecoder(bool fullResolution)
         : LibRaw(LIBRAW_OPTIONS_NONE), xtransPasses(fullResolution ? 3 : 1) {
@@ -54,11 +105,32 @@ private:
         demosaicSeconds = std::chrono::duration<double>(
             std::chrono::steady_clock::now() - start).count();
         usedXTransThreePass = xtransPasses == 3;
+        hashDemosaicedIfRequested();
     }
 
     int colorAt(int row, int col) const {
         const unsigned filters = imgdata.idata.filters;
         return (filters >> ((((row << 1) & 14) + (col & 1)) << 1)) & 3;
+    }
+
+    // Boundary 2 of the stage-digest contract: imgdata.image immediately
+    // after interpolation returns, before the remaining dcraw_process stages.
+    void hashDemosaicedIfRequested() {
+        if (!stageHashes) { return; }
+        const int width = imgdata.sizes.width;
+        const int height = imgdata.sizes.height;
+        if (!imgdata.image || width <= 0 || height <= 0) { return; }
+        const auto start = std::chrono::steady_clock::now();
+        StageHasher hasher;
+        hasher.pod(static_cast<uint32_t>(width));
+        hasher.pod(static_cast<uint32_t>(height));
+        hasher.pod(imgdata.idata.filters);
+        hasher.bytes(
+            imgdata.image,
+            static_cast<size_t>(width) * static_cast<size_t>(height) * 4 * sizeof(ushort));
+        hasher.hexDigest(stageHashes->demosaiced_sha256);
+        stageHashSeconds += std::chrono::duration<double>(
+            std::chrono::steady_clock::now() - start).count();
     }
 
     void rcdDemosaic() {
@@ -67,12 +139,14 @@ private:
         const int height = imgdata.sizes.height;
         if (!imgdata.image || width < 20 || height < 20 || imgdata.idata.filters <= 1000) {
             lin_interpolate();
+            hashDemosaicedIfRequested();
             return;
         }
         for (int r = 0; r < 2; ++r) {
             for (int c = 0; c < 2; ++c) {
                 if (colorAt(r, c) == 3) {
                     lin_interpolate();
+                    hashDemosaicedIfRequested();
                     return;
                 }
             }
@@ -212,8 +286,34 @@ private:
         demosaicSeconds = std::chrono::duration<double>(
             std::chrono::steady_clock::now() - start).count();
         usedRCD = true;
+        hashDemosaicedIfRequested();
     }
 };
+
+// Boundary 1 of the stage-digest contract: the unpacked single-channel mosaic
+// plus the dimensions and CFA metadata that describe it.
+void hashUnpackedMosaic(LibRaw &raw, fsc_raw_stage_hashes *hashes) {
+    auto &idata = raw.imgdata.idata;
+    auto &sizes = raw.imgdata.sizes;
+    hashes->mosaic_raw_width = sizes.raw_width;
+    hashes->mosaic_raw_height = sizes.raw_height;
+    hashes->mosaic_filters = idata.filters;
+    const bool isXTrans = idata.filters == 9;
+    hashes->mosaic_cfa_bytes = isXTrans ? 36 : 0;
+
+    StageHasher hasher;
+    hasher.pod(hashes->mosaic_raw_width);
+    hasher.pod(hashes->mosaic_raw_height);
+    hasher.pod(hashes->mosaic_filters);
+    if (isXTrans) {
+        hasher.bytes(idata.xtrans, 36);
+    }
+    const size_t photosites =
+        static_cast<size_t>(sizes.raw_width) * static_cast<size_t>(sizes.raw_height);
+    if (!raw.imgdata.rawdata.raw_image || photosites == 0) { return; }
+    hasher.bytes(raw.imgdata.rawdata.raw_image, photosites * sizeof(ushort));
+    hasher.hexDigest(hashes->unpacked_mosaic_sha256);
+}
 
 void isoAdaptiveFilter(libraw_processed_image_t *image, float iso, uint32_t &flags) {
     if (!(iso > 0) || image->width < 3 || image->height < 3) { return; }
@@ -259,6 +359,23 @@ void isoAdaptiveFilter(libraw_processed_image_t *image, float iso, uint32_t &fla
 
 struct Cleanup { libraw_processed_image_t *processed; };
 
+size_t rgb16PixelBytes(const libraw_processed_image_t *image) {
+    return static_cast<size_t>(image->width)
+        * static_cast<size_t>(image->height)
+        * 3
+        * sizeof(uint16_t);
+}
+
+bool isValidRGB16Bitmap(const libraw_processed_image_t *image) {
+    return image
+        && image->type == LIBRAW_IMAGE_BITMAP
+        && image->width > 0
+        && image->height > 0
+        && image->bits == 16
+        && image->colors == 3
+        && image->data_size == rgb16PixelBytes(image);
+}
+
 libraw_processed_image_t *downsampleTwoByTwo(libraw_processed_image_t *source) {
     const unsigned outputWidth = source->width / 2;
     const unsigned outputHeight = source->height / 2;
@@ -297,11 +414,16 @@ libraw_processed_image_t *downsampleTwoByTwo(libraw_processed_image_t *source) {
 
 extern "C" int fsc_decode_rawtherapee_direct(
     const char *path, int full_resolution, fsc_raw_direct *output,
+    fsc_raw_stage_hashes *stage_hashes,
     char *error_message, size_t error_capacity
 ) {
     using Clock = std::chrono::steady_clock;
+    if (stage_hashes) {
+        std::memset(stage_hashes, 0, sizeof(*stage_hashes));
+    }
     std::unique_ptr<FSCRawTherapeeDecoder> raw(
         new FSCRawTherapeeDecoder(full_resolution != 0));
+    raw->stageHashes = stage_hashes;
     const auto openStart = Clock::now();
     int code = raw->open_file(path);
     output->open_seconds = std::chrono::duration<double>(Clock::now() - openStart).count();
@@ -319,14 +441,21 @@ extern "C" int fsc_decode_rawtherapee_direct(
     const auto unpackStart = Clock::now();
     code = raw->unpack();
     output->unpack_seconds = std::chrono::duration<double>(Clock::now() - unpackStart).count();
+    if (code == LIBRAW_SUCCESS && stage_hashes) {
+        hashUnpackedMosaic(*raw, stage_hashes);
+    }
     if (code == LIBRAW_SUCCESS) {
         const auto processStart = Clock::now();
+        const double stageHashSecondsBeforeProcess = raw->stageHashSeconds;
         code = raw->dcraw_process();
         const double processSeconds = std::chrono::duration<double>(
             Clock::now() - processStart).count();
+        const double processStageHashSeconds =
+            raw->stageHashSeconds - stageHashSecondsBeforeProcess;
         output->demosaic_seconds = raw->demosaicSeconds;
         output->libraw_postprocess_seconds = std::max(
-            0.0, processSeconds - output->demosaic_seconds);
+            0.0,
+            processSeconds - output->demosaic_seconds - processStageHashSeconds);
     }
     if (code != LIBRAW_SUCCESS) {
         std::snprintf(error_message, error_capacity, "%s", libraw_strerror(code));
@@ -335,7 +464,7 @@ extern "C" int fsc_decode_rawtherapee_direct(
     int imageError = LIBRAW_SUCCESS;
     const auto processedImageStart = Clock::now();
     libraw_processed_image_t *processed = raw->dcraw_make_mem_image(&imageError);
-    if (!processed || imageError != LIBRAW_SUCCESS || processed->bits != 16 || processed->colors != 3) {
+    if (imageError != LIBRAW_SUCCESS || !isValidRGB16Bitmap(processed)) {
         if (processed) { libraw_dcraw_clear_mem(processed); }
         std::snprintf(error_message, error_capacity, "LibRaw returned an invalid camera-scan image.");
         return imageError == LIBRAW_SUCCESS ? -1 : imageError;
@@ -352,6 +481,15 @@ extern "C" int fsc_decode_rawtherapee_direct(
     }
     output->processed_image_seconds = std::chrono::duration<double>(
         Clock::now() - processedImageStart).count();
+    // Boundary 3: the image LibRaw returns, before the ISO-adaptive filter.
+    if (stage_hashes) {
+        StageHasher hasher;
+        hasher.pod(static_cast<uint32_t>(processed->width));
+        hasher.pod(static_cast<uint32_t>(processed->height));
+        hasher.pod(static_cast<uint32_t>(processed->colors));
+        hasher.bytes(processed->data, rgb16PixelBytes(processed));
+        hasher.hexDigest(stage_hashes->processed_image_sha256);
+    }
     uint32_t flags = 0;
     if (raw->usedRCD) { flags |= FSC_RAW_PROCESSING_RCD; }
     if (raw->usedXTransThreePass) { flags |= FSC_RAW_PROCESSING_XTRANS_THREE_PASS; }
@@ -359,6 +497,12 @@ extern "C" int fsc_decode_rawtherapee_direct(
     isoAdaptiveFilter(processed, raw->imgdata.other.iso_speed, flags);
     output->iso_policy_seconds = std::chrono::duration<double>(
         Clock::now() - isoPolicyStart).count();
+    // Boundary 4: the same buffer after the ISO-adaptive filter.
+    if (stage_hashes) {
+        StageHasher hasher;
+        hasher.bytes(processed->data, rgb16PixelBytes(processed));
+        hasher.hexDigest(stage_hashes->post_iso_sha256);
+    }
     output->width = processed->width; output->height = processed->height;
     output->channels = processed->colors;
     output->pixel_count = static_cast<size_t>(processed->width) * processed->height * 3;
@@ -367,7 +511,11 @@ extern "C" int fsc_decode_rawtherapee_direct(
     output->processing_flags = flags;
     std::snprintf(output->color_description, sizeof(output->color_description), "sRGB");
     auto *cleanup = static_cast<Cleanup *>(std::malloc(sizeof(Cleanup)));
-    if (!cleanup) { libraw_dcraw_clear_mem(processed); return -1; }
+    if (!cleanup) {
+        libraw_dcraw_clear_mem(processed);
+        std::snprintf(error_message, error_capacity, "Could not retain the camera-scan image.");
+        return -1;
+    }
     cleanup->processed = processed; output->_internal = cleanup;
     return LIBRAW_SUCCESS;
 }
