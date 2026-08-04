@@ -469,10 +469,112 @@ hash byte-for-byte; a debug-build determinism run on 2026-07-28 produced the
 identical digests, so the fixture holds across build configurations on this
 machine. Its schema and digest format are validated even when the local RAW
 corpus is unavailable, so a malformed committed fixture cannot silently skip
-its own regression test. The
-next evidence step is a forced-OpenMP build run through the same mode at 1, 2,
-4, 8, 10, and 14 threads with five repetitions each, reading the first
-divergent boundary directly from the report.
+its own regression test. The forced-OpenMP worker-count sweep and
+first-divergent-boundary result were completed on 2026-07-30; see the next
+section.
+
+## 2026-07-30 Forced-OpenMP Boundary Isolation
+
+The next bounded roadmap step used the committed determinism instrumentation
+against an isolated LibRaw 0.21.4 build compiled with OpenMP and
+`LIBRAW_FORCE_OPENMP`. The source archive SHA-256 was
+`6be43f19397e43214ff56aab056bf3ff4925ca14012ce5a1538a172406a09e63`,
+matching the Homebrew 0.21.4 formula. `otool` and undefined-symbol inspection
+confirmed that the isolated library linked
+`/opt/homebrew/opt/libomp/lib/libomp.dylib` and contained OpenMP runtime call
+sites; the normal Homebrew library and application build were not replaced.
+
+`DSCF2833.RAF` was decoded five times at each prescribed worker count. The
+machine was in low-power mode, so these timings locate work and show the
+opportunity on this run; they are not replacements for the normal release
+baseline or universal speed claims.
+
+| Threads | Unpack range | Demosaic range | Decode range | Repeated result |
+|---:|---:|---:|---:|---|
+| 1 | 1.2452–1.2566 s | 16.5329–17.1767 s | 18.9361–19.5687 s | All eight boundaries repeat and match stock |
+| 2 | 0.7209–0.7249 s | 8.6627–9.0700 s | 10.4761–10.8837 s | Repeats, but first differs from stock at `demosaicedImage` |
+| 4 | 0.3780–0.3845 s | 4.7999–4.9301 s | 6.2364–6.3694 s | Repeats, but first differs from stock at `demosaicedImage` |
+| 8 | 0.2536–0.2554 s | 3.7880–3.8713 s | 5.0926–5.1665 s | Non-repeatable; first divergent boundary `demosaicedImage` |
+| 10 | 0.2524–0.2567 s | 3.1310–3.2453 s | 4.4277–4.5393 s | Non-repeatable; first divergent boundary `demosaicedImage` |
+| 14 | 0.1536–0.1996 s | 2.5140–2.7365 s | 3.7116–3.9306 s | Non-repeatable; first divergent boundary `demosaicedImage` |
+
+The unpacked-mosaic digest was
+`2afd88477279486c912bcd7c9d09d7889b92ff51f13eb8f7c9ef13bc39131897`
+in all 30 samples, exactly matching the committed stock reference. At one
+thread, every later digest and the final TIFF also matched stock. At two and
+four threads, the candidate was internally repeatable across five runs but
+already produced different demosaiced pixels; repeatability alone therefore
+cannot qualify it. At eight, ten, and fourteen threads, every demosaiced digest
+differed across the five repetitions, and every later boundary followed it.
+This isolates the first nondeterministic stage to LibRaw's tiled X-Trans
+demosaic rather than Fuji compressed unpack.
+
+A supplementary 14-thread repetition set recorded a stable process-lifetime
+peak physical footprint of 701,564,296 bytes. Per-sample physical footprint
+after model release was 13,895,864–61,376,216 bytes, and all generated TIFFs
+were removed. The isolated run initially terminated with `SIGSEGV` while
+interpolating the final report's build-configuration string, after all samples
+had completed. On 2026-08-03 the same fault was reproduced with the stock
+library and traced to executable initialization order: the top-level benchmark
+invocation could read `buildConfiguration` before its later global declaration
+was initialized. Moving that declaration ahead of execution repaired report
+finalization. The crash was a benchmark bug and is not evidence against the
+threaded candidate's process safety; the exactness and determinism failures
+above remain independently established by the per-sample digests. The original
+forced-OpenMP run produced no JSON artifact, so its console evidence remains
+the durable record.
+
+To make failure evidence durable, determinism mode now prints all eight full
+stage digests plus peak and post-release physical footprint immediately after
+each repetition, before it computes the final agreement or writes JSON.
+
+Decision: do not enable LibRaw OpenMP, do not accept the repeatable-but-wrong
+two- or four-thread output, and do not replace X-Trans demosaic. The first
+divergent boundary is now known. The representative adjusted-correction matrix
+was completed next, as documented below. A later RAW fix must make the tiled
+X-Trans stage exact and repeatable before any speedup can ship.
+
+## 2026-08-03 Adjusted-Correction Scenario Matrix
+
+The next roadmap slice added `FilmScanExportBenchmark --corrections` and ran
+the five representative correction paths against the same full-resolution
+camera-scan decode in each repetition:
+
+```sh
+native/FilmScanEngine/.build/release/FilmScanExportBenchmark \
+  sample-raw /tmp/correction-scenarios.json 3 \
+  --corrections --file=fuji400-fresh/DSCF2833.RAF
+```
+
+The release run used `DSCF2833.RAF` at 7752×5184 (40.19 MP), on AC power with
+low-power mode off, with a separate full-resolution decode per repetition and
+three corrected-stage samples per scenario. Decode took 14.33–14.90 seconds.
+The table isolates correction time; writing and finalizing the LZW TIFF is
+reported separately in the JSON.
+
+| Scenario | Activated passes | Median correction | Nearest-rank p95 |
+|---|---|---:|---:|
+| Neutral | Fused neutral path | 0.105 s | 0.115 s |
+| Tone | `linearTone` | 2.182 s | 2.209 s |
+| Protected color | `protectedColor` | 2.266 s | 2.308 s |
+| Dye mixing | `filmDyeMixing` | 1.885 s | 1.907 s |
+| Combined | `filmDyeMixing`, `linearTone`, `protectedColor` | 2.749 s | 2.751 s |
+
+Every scenario's corrected-image, writer-input, and TIFF hashes repeated
+exactly across all three samples, and all 15 generated TIFFs were removed.
+Post-scenario physical footprint, sampled after corrected/output buffers left
+the autorelease scope while the shared decoded image remained authoritative,
+stayed within 47.3–54.2 MB. The process-lifetime peak rose from 685.6 MB after
+the first neutral sample to 1.984 GB after entering the adjusted linear seam.
+This confirms the serial full-frame `Double` path as the next correction-memory
+target; current footprint returns after each scenario, so the evidence does not
+show a sustained leak.
+
+The five corrected-image digests are committed in
+`correction_scenario_reference.json`. Its schema test always runs, and its
+full-resolution byte-identity test runs when the referenced local RAW corpus is
+available. Scenario unit tests also pin inventory order, active pass mapping,
+base-parameter preservation, determinism, and adjusted-vs-neutral output.
 
 ## Closed Baseline Cycle And Bounded Follow-Up
 

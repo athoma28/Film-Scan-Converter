@@ -129,8 +129,26 @@ capture (unpacked mosaic, demosaiced image, processed image, post-ISO image,
 Swift image, corrected image, writer-input pixels, output file), writes one
 LZW TIFF per repetition, and reports per-boundary digest agreement in pipeline
 order. The first disagreeing boundary is the first stage the candidate allowed
-to diverge. The mode defaults to five repetitions and rejects fewer;
-`--formats` is not accepted in this mode.
+to diverge. Each repetition prints all eight full digests plus peak and
+post-release physical footprint before final report assembly, preserving
+diagnostic evidence if report finalization fails. The mode defaults to five
+repetitions and rejects fewer; `--formats` is not accepted in this mode.
+
+Run the full-resolution correction-scenario matrix:
+
+```sh
+native/FilmScanEngine/.build/release/FilmScanExportBenchmark \
+  sample-raw /tmp/film-scan-corrections.json 3 \
+  --corrections --file=fuji400-fresh/DSCF2833.RAF
+```
+
+This decodes once per repetition and measures neutral, tone, protected-color,
+dye-mixing, and combined correction against the same authoritative image. It
+reports scenario passes, correction and writer timing, corrected/writer/output
+hashes, physical footprint after decode/processing/write/release, process peak,
+and allocator statistics after scenario intermediates are released. One LZW
+TIFF per scenario is verified and removed; `--formats` is not accepted in this
+mode.
 
 Run the opt-in real-app preview and switching benchmark:
 

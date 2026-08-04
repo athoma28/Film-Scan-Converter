@@ -124,11 +124,24 @@ Work in this order:
    final-quality three-pass decode reproduces every stage digest plus the
    Swift pixel hash byte-for-byte (debug and release agree on this machine);
 3. isolate the first nondeterministic boundary in LibRaw's existing threaded
-   unpack/X-Trans path before porting another demosaic implementation;
+   unpack/X-Trans path — completed 2026-07-30: a pinned forced-OpenMP LibRaw
+   0.21.4 build was swept at 1, 2, 4, 8, 10, and 14 threads with five
+   repetitions each; the unpacked mosaic remained byte-identical to the stock
+   reference at every count, while the first changed boundary was always
+   `demosaicedImage`; 8, 10, and 14 threads were also non-repeatable, so no
+   threaded decoder is enabled in production;
 4. add neutral, tone, protected-color, dye-mixing, and combined-adjustment
-   full-resolution correction scenarios, including physical footprint;
+   full-resolution correction scenarios, including physical footprint —
+   completed 2026-08-03: `FilmScanExportBenchmark --corrections` produced a
+   three-repetition 40.19 MP release matrix, all corrected/output hashes
+   repeated exactly, all 15 TIFFs were removed, corrected-stage medians ranged
+   from 0.105 seconds (neutral) to 2.749 seconds (combined), post-scenario
+   physical footprint stayed within 47.3–54.2 MB, and the adjusted paths raised
+   the process-lifetime peak to 1.984 GB; the five corrected-image hashes now
+   anchor a committed full-resolution byte-identity fixture;
 5. after evidence exists, fix the responsible RAW stage and reduce adjusted
-   correction allocations/passes before considering writer or batch work.
+   correction allocations/passes before considering writer or batch work —
+   now active.
 
 Do not start by porting RawTherapee X-Trans, running dependent X-Trans passes
 concurrently, reducing final-quality passes, replacing scalar `pow` in

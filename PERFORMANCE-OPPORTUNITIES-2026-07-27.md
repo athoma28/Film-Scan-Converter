@@ -1,6 +1,8 @@
 # Full-Resolution RAW Decode And Export Performance
 
-**Status:** Audited implementation guide  
+**Status:** Audited implementation guide; threaded boundary isolated 2026-07-30;
+adjusted-correction evidence completed 2026-08-03
+
 **Date:** 2026-07-27  
 **Production baseline:** `main` at `3d8456f`, plus the measurements in
 `docs/performance/40mp-export.md`  
@@ -24,12 +26,13 @@ Two areas justify active work:
    path dramatically faster on the test machine. That build was
    nondeterministic with multiple threads, so it is evidence of opportunity,
    not a production-ready switch.
-2. **Adjusted full-resolution correction has a clear structural problem but no
-   representative benchmark.** Tone, protected-color, and dye-mixing
-   adjustments leave the compact parallel path and use serial full-frame
-   `Double` passes. A 40.19 MP three-channel `Double` buffer is about 965 MB.
-   Measure this path before selecting parallelism, fusion, in-place operation,
-   `Float`, or Accelerate.
+2. **Adjusted full-resolution correction now has representative evidence.**
+   Tone, protected-color, and dye-mixing adjustments leave the compact parallel
+   path and use serial full-frame `Double` passes. The 2026-08-03 three-run
+   40.19 MP matrix measured 1.885–2.749-second adjusted-stage medians and a
+   1.984 GB process-lifetime peak versus 0.105 seconds for neutral correction.
+   Use that evidence to select allocation removal, fusion, in-place operation,
+   and parallelism before considering `Float` or Accelerate.
 
 Do **not** begin with a RawTherapee X-Trans port, a TIFF dependency, batch
 prefetch, or broad micro-optimization. The first implementation slice is
@@ -77,6 +80,14 @@ The committed M4 Pro / Mac16,7 release benchmark for the 40.19 MP
 TIFF compression in the application defaults to `.none`. The LZW numbers above
 describe a selected compression mode because `FilmScanExportBenchmark`
 explicitly requests LZW; they are not the default TIFF cost.
+
+The later `DSCF2833.RAF` correction-scenario matrix isolates the adjusted stage
+on the same 40.19 MP class: neutral, tone, protected-color, dye-mixing, and
+combined medians were 0.105, 2.182, 2.266, 1.885, and 2.749 seconds. All
+scenario hashes repeated across three samples, all temporary TIFFs were
+removed, and post-scenario physical footprint returned to 47.3–54.2 MB despite
+the 1.984 GB process-lifetime peak. See `docs/performance/40mp-export.md` for
+the command, p95 values, and fixture contract.
 
 ## Audit Measurement: Existing LibRaw OpenMP
 
@@ -166,10 +177,17 @@ This is the first work to land.
    thresholds; the exact full-output reference currently covers the
    `rawPyCompatibility` profile instead.
 3. Reproduce the forced-OpenMP result through a documented build, not an
-   implicit Homebrew machine state. If the application ships a custom LibRaw,
-   packaging, notices, load paths, and clean-Mac validation are part of the
-   same change.
-4. Locate and remove the first nondeterministic boundary.
+   implicit Homebrew machine state — diagnostic reproduction completed
+   2026-07-30 with a pinned LibRaw 0.21.4 source archive and isolated
+   application link. The unpacked mosaic stayed exact at every worker count;
+   the first changed boundary was tiled X-Trans demosaic. No custom library
+   was adopted. If the application ships one later, packaging, notices, load
+   paths, and clean-Mac validation remain part of the same change.
+4. Locate and remove the first nondeterministic boundary. Location completed
+   2026-07-30: `demosaicedImage` is the first divergent boundary at 8, 10, and
+   14 threads, while 2 and 4 threads are repeatable but already differ from the
+   stock demosaic reference. The adjusted-correction evidence slice completed
+   2026-08-03, so removal is now part of the active optimization step.
 5. Re-run the documented three-repetition 40 MP format matrix and ten-file
    memory/cancellation checks.
 
@@ -199,14 +217,17 @@ neutral. Adjusted exports pass through serial work including:
 - for the calibrated-color seam, additional `UInt16` to `Double` and back
   conversion in `Processing.swift`.
 
-The structural problem is real. The exact latency saving is unknown, and
-"most exports use this path" has not been established.
+The structural problem and current latency are now measured. The size of an
+achievable saving and how often real exports use each adjusted path have not
+been established.
 
 Implementation order:
 
 1. Add benchmark scenarios for neutral correction, tone adjustment, protected
    color, dye mixing, and a representative combined adjustment. Report each
-   pass, allocations, physical footprint, and output hash.
+   pass, allocations, physical footprint, and output hash — completed
+   2026-08-03 with three release repetitions, exact repeated hashes, cleanup
+   checks, a committed full-resolution fixture, and documented memory evidence.
 2. Remove avoidable full-frame allocations using in-place variants where
    ownership permits.
 3. Fuse adjacent per-pixel operations when that removes a material pass without
@@ -309,7 +330,7 @@ Important constraints:
 | Run three X-Trans passes concurrently | Reject; later passes depend on earlier results |
 | Parallelize RCD as P0 | Defer until Bayer fixture and timing exist |
 | Treat unpack as an accepted floor | Reject; forced OpenMP accelerated the tested Fuji unpack |
-| Optimize adjusted correction | Keep as P1, benchmark before implementation |
+| Optimize adjusted correction | Keep as P1; benchmark completed 2026-08-03, implementation next |
 | Use vForce `pow` | Keep only as a measured candidate |
 | Parallelize small full-frame passes | Keep as profile-gated cleanup |
 | Lift worker cap to active processor count | Replace with per-kernel worker sweep |
@@ -337,7 +358,8 @@ Every performance change must state which cells it exercises:
 ## First Developer Handoff
 
 A useful first pull request should contain instrumentation and tests, not the
-final optimization:
+final optimization. This handoff was completed across the 2026-07-28 through
+2026-08-03 evidence slices:
 
 1. add camera-scan repeat/determinism mode to `FilmScanExportBenchmark`;
 2. expose hashes after unpack, inside the completed demosaic callback, after

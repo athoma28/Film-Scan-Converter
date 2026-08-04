@@ -49,12 +49,16 @@ A 2026-07-27 audit has reopened one bounded performance slice before broader
 roll-workflow expansion. Camera-scan stage hashes and the repeated determinism
 mode landed on 2026-07-28 with a passing stock-build baseline, and the
 full-resolution X-Trans camera-scan byte-identity fixture followed the same
-day. Next add adjusted correction benchmark scenarios, then diagnose LibRaw's
-existing threaded unpack/X-Trans path and repair the first divergent stage. Complete the
-representative-image viewport check alongside that evidence work; resume the
-real roll workflow after the bounded performance slice. Do not begin a broad
-port, writer replacement, batch-prefetch design, or stock-look calibration
-without satisfying the roadmap gates.
+day. The 2026-07-30 forced-OpenMP sweep then isolated tiled X-Trans demosaic as
+the first changed and nondeterministic boundary while proving threaded Fuji
+unpack stayed byte-identical. The adjusted correction benchmark scenarios and
+full-resolution byte-identity fixture followed on 2026-08-03, locating the
+adjusted-path memory peak. Next repair the isolated RAW stage and reduce those
+correction allocations/passes. Complete the representative-image viewport
+check alongside that work; resume the real roll workflow after the bounded
+performance slice. Do not begin a broad port, writer replacement,
+batch-prefetch design, or stock-look calibration without satisfying the
+roadmap gates.
 
 The current measurement evidence is:
 
@@ -87,12 +91,22 @@ The current measurement evidence is:
   Fuji processed-DNG workload from 14.74 to 2.10 seconds, with demosaic falling
   from 13.18 to 1.38 seconds and unpack from 0.89 to 0.11–0.13 seconds. A
   one-thread forced build matched the stock output, but two 14-thread runs
-  differed from the reference and from each other. This is evidence of a large
-  opportunity and an unresolved determinism defect, not a production result;
-- the camera-scan correction baseline covers the neutral fused path. Adjusted
-  exports can enter serial full-frame `Double` passes, including roughly
-  965 MB per three-channel 40.19 MP buffer, but their latency and live-memory
-  cost have not yet been measured in a representative export benchmark;
+  differed from the reference and from each other. The 2026-07-30 pinned
+  follow-up swept 1/2/4/8/10/14 threads with five repetitions each: every
+  unpacked mosaic matched stock; 2 and 4 threads repeated but changed at
+  `demosaicedImage`; 8, 10, and 14 first became non-repeatable at that same
+  boundary. The 14-thread low-power run used 2.51–2.74 seconds for demosaic
+  versus 16.53–17.18 at one thread and held a 701.6 MB process-lifetime peak
+  physical footprint. This is a located opportunity and failed pixel candidate,
+  not a production result;
+- the 2026-08-03 correction-scenario matrix measured the neutral fused path and
+  tone, protected-color, dye-mixing, and combined adjusted paths over three
+  40.19 MP release repetitions. Corrected/output hashes repeated exactly and
+  all 15 TIFFs were removed. Corrected-stage medians were 0.105, 2.182, 2.266,
+  1.885, and 2.749 seconds respectively; post-scenario physical footprint stayed
+  within 47.3–54.2 MB, while the adjusted paths raised process-lifetime peak
+  physical footprint to 1.984 GB. The serial full-frame `Double` seam is now a
+  measured allocation target rather than an inferred risk;
 - parallel full-resolution power-law correction reduced that measured stage
   from 3.685 seconds to a 0.926-second median with identical TIFF bytes and
   SHA-256, reducing median total export to 24.874 seconds.
@@ -281,10 +295,12 @@ fail-closed `public` path. The following remain for the notarized build:
   documented repeated determinism run. The separate exact full-output
   reference still belongs to the faster `rawPyCompatibility` profile and must
   not be presented as camera-scan proof.
-- LibRaw's forced-OpenMP path produced non-repeatable processed-DNG output in
-  the isolated 2026-07-27 audit. Its speedup is not available to production
-  until the first divergent stage is isolated and the approved pixel contract
-  is restored.
+- LibRaw's forced-OpenMP path first changes pixels at tiled X-Trans demosaic,
+  as isolated by the 2026-07-30 worker-count sweep. Threaded Fuji unpack stayed
+  exact, but no tested multi-thread demosaic matched the approved stock pixels:
+  2 and 4 threads were repeatable-but-wrong, while 8, 10, and 14 were also
+  non-repeatable. Its speedup is not available to production until that stage
+  is repaired and the approved pixel contract is restored.
 - The available real RAW corpus is X-Trans and does not provide a committed
   real-file gate for the Bayer RCD path.
 - Camera-scan ISO denoise/sharpen policy is a bounded native approximation, not
@@ -329,9 +345,11 @@ fail-closed `public` path. The following remain for the notarized build:
 - Export tests cover format round trips, manager behavior, cancellation,
   collisions, partial cleanup, and app-level integration.
 - The isolated LibRaw audit established that existing upstream threading can
-  accelerate the tested Fuji workload, and also established that enabling it
-  wholesale fails the current determinism gate. The detailed experiment and
-  next-step matrix are in the full-resolution performance guide.
+  accelerate the tested Fuji workload. The completed six-count follow-up
+  isolated tiled X-Trans demosaic as the first changed boundary, proved
+  threaded unpack remains exact for the fixture, and confirmed that enabling
+  the candidate wholesale fails determinism and exactness.
+  The detailed experiment is in the full-resolution performance guide.
 - Local packaging validates the assembled app and extracted ZIP copy, bundled
   license/notice/manifest resources, dependency closure, signature, and
   checksum-oriented archive contract.

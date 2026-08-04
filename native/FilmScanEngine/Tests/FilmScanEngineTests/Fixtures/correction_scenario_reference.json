@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "generator": "FilmScanExportBenchmark --corrections (release)",
+  "recorded": "2026-08-03",
+  "profile": "rawTherapeeCameraScan",
+  "fullResolution": true,
+  "notes": "Stock LibRaw 0.21.4 release build. correctedImageSHA256 hashes the full-resolution UInt16 BGR buffer after each deterministic correction scenario with a zero-percent frame.",
+  "file": "fuji400-fresh/DSCF2833.RAF",
+  "imageShape": [5184, 7752, 3],
+  "scenarios": [
+    {
+      "scenario": "neutral",
+      "correctedImageSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4"
+    },
+    {
+      "scenario": "tone",
+      "correctedImageSHA256": "29a1e73911dece0eafc2306d2446ebda1c82d5b0009dac11349badaadfd86e1c"
+    },
+    {
+      "scenario": "protectedColor",
+      "correctedImageSHA256": "a4be49d0afd52a5da0814189ed8a639a5fdeb209cd1b237b16d8e21c40275e20"
+    },
+    {
+      "scenario": "dyeMixing",
+      "correctedImageSHA256": "6aac25ad70adb06044bd019dc468f6f05f9a0c57c49a34e3eb666b95a2954ba5"
+    },
+    {
+      "scenario": "combined",
+      "correctedImageSHA256": "b2989c815a17d7acdd689442fceb77351bf42f7519830845f7825000616e73a9"
+    }
+  ]
+}
