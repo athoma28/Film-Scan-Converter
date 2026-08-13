@@ -105,10 +105,26 @@ enum SampleRawCorpus {
       profile: .rawTherapeeCameraScan
     ).image
     let fullRaw = try RawImageDecoder.fullResolutionDimensions(triplet.rawURL)
+    let xmp = try String(contentsOf: triplet.xmpURL, encoding: .utf8)
+    func attribute(_ qualifiedName: String) -> String? {
+      let marker = "\(qualifiedName)=\""
+      guard let start = xmp.range(of: marker)?.upperBound,
+        let end = xmp[start...].firstIndex(of: "\"")
+      else { return nil }
+      return String(xmp[start..<end])
+    }
+    let targetAlignmentQuarterTurns: Int
+    switch Int(attribute("tiff:Orientation") ?? "1") ?? 1 {
+    case 1: targetAlignmentQuarterTurns = 0
+    case 3: targetAlignmentQuarterTurns = 2
+    case 6: targetAlignmentQuarterTurns = -1
+    case 8: targetAlignmentQuarterTurns = 1
+    default: throw CocoaError(.coderInvalidValue)
+    }
     let fullTarget = try StandardImageDecoder.fullResolutionDimensions(triplet.targetURL)
     let scaleX = Double(raw.width) / Double(fullRaw.width)
     let scaleY = Double(raw.height) / Double(fullRaw.height)
-    let target = try StandardImageDecoder.decodePreview(
+    let decodedTarget = try StandardImageDecoder.decodePreview(
       triplet.targetURL,
       maxDimension: max(
         1,
@@ -122,21 +138,21 @@ enum SampleRawCorpus {
         )
       )
     )
+    let target = decodedTarget.rotated(quarterTurns: targetAlignmentQuarterTurns)
+    let alignedFullTargetWidth = targetAlignmentQuarterTurns.isMultiple(of: 2)
+      ? fullTarget.width : fullTarget.height
+    let alignedFullTargetHeight = targetAlignmentQuarterTurns.isMultiple(of: 2)
+      ? fullTarget.height : fullTarget.width
 
-    let xmp = try String(contentsOf: triplet.xmpURL, encoding: .utf8)
     func value(_ name: String, fallback: Double) -> Double {
-      let marker = "crs:\(name)=\""
-      guard let start = xmp.range(of: marker)?.upperBound,
-        let end = xmp[start...].firstIndex(of: "\"")
-      else { return fallback }
-      return Double(xmp[start..<end]) ?? fallback
+      Double(attribute("crs:\(name)") ?? "") ?? fallback
     }
     let cropTop = value("CropTop", fallback: 0)
     let cropLeft = value("CropLeft", fallback: 0)
     let cropBottom = value("CropBottom", fallback: 1)
     let cropRight = value("CropRight", fallback: 1)
-    let activeWidth = Double(fullTarget.width) / max(cropRight - cropLeft, 1e-6)
-    let activeHeight = Double(fullTarget.height) / max(cropBottom - cropTop, 1e-6)
+    let activeWidth = Double(alignedFullTargetWidth) / max(cropRight - cropLeft, 1e-6)
+    let activeHeight = Double(alignedFullTargetHeight) / max(cropBottom - cropTop, 1e-6)
     let originX = Int(
       round(
         ((Double(fullRaw.width) - activeWidth) / 2 + cropLeft * activeWidth)

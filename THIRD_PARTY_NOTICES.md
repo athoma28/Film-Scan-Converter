@@ -27,6 +27,12 @@ Weyrich. RawTherapee is licensed under GPLv3.
 LibRaw provides camera-RAW decoding. The distributed build uses LibRaw under
 the GNU Lesser General Public License 2.1 option offered by the project.
 
+`native/FilmScanEngine/Sources/CLibRawShim/XTransDemosaicBody.inc` adapts the
+LibRaw 0.21.4 X-Trans implementation while preserving its pixel arithmetic and
+serial dependency order. Film Scan Converter adds bounded parallel execution
+only to independent row phases. The source file retains its attribution and is
+distributed under LibRaw's LGPL-2.1-only option.
+
 - Project: <https://www.libraw.org/>
 - Source: <https://github.com/LibRaw/LibRaw>
 - License: LGPL-2.1-only OR CDDL-1.0

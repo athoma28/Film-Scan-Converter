@@ -115,6 +115,10 @@ struct CameraScanByteIdentityTests {
     // The exact-output contract applies to the final-quality three-pass
     // camera-scan path; a one-pass fallback must fail this fixture loudly.
     #expect(result.processing.contains(.xTransThreePass))
+    #expect(result.demosaicWorkerCount >= 1)
+    #expect(
+      result.processing.contains(.deterministicParallelXTrans)
+        == (result.demosaicWorkerCount > 1))
     #expect(dimensions.width == reference.imageShape[1], "\(reference.file) full-resolution width")
     #expect(
       dimensions.height == reference.imageShape[0], "\(reference.file) full-resolution height")

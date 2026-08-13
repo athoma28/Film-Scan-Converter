@@ -7,7 +7,7 @@ editing, roll-wide settings, and full-resolution export.
 
 ## Current Status
 
-**Film Scan Converter 0.1.0 Beta 1** is available for Apple Silicon Macs running
+**Film Scan Converter 0.2.0 Beta 1** is available for Apple Silicon Macs running
 macOS 14 or later. The native macOS app is the primary product and the only
 target for new features.
 
@@ -27,7 +27,7 @@ The beta currently includes:
 This is an ad-hoc-signed technical beta, not yet an Apple-notarized general
 release. Applied dust removal is not yet available; native dust detection is
 currently a diagnostic overlay only. See the
-[beta release notes](RELEASE_NOTES.md) and
+[0.2.0 Beta 1 release notes](RELEASE_NOTES.md) and
 [native macOS development status](docs/development/native-macos.md) for the
 verified release position and known limitations.
 

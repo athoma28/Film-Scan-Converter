@@ -2,7 +2,7 @@
 
 **Status:** Audited implementation guide; threaded boundary isolated 2026-07-30;
 adjusted-correction evidence completed 2026-08-03; adjusted-correction repair
-completed 2026-08-12
+completed 2026-08-12; deterministic X-Trans repair completed 2026-08-12
 
 **Date:** 2026-07-27  
 **Production baseline:** `main` at `3d8456f`, plus the measurements in
@@ -20,20 +20,18 @@ proven before an optimization can ship.
 
 ## Executive Decision
 
-Two areas justify active work:
+The two measured areas have completed bounded repairs:
 
-1. **Final-quality X-Trans decode is the dominant measured cost.** An isolated
-   build proved that the OpenMP code already present in LibRaw can make this
-   path dramatically faster on the test machine. That build was
-   nondeterministic with multiple threads, so it is evidence of opportunity,
-   not a production-ready switch.
-2. **Adjusted full-resolution correction now has representative evidence.**
-   Tone, protected-color, and dye-mixing adjustments leave the compact parallel
-   path and use serial full-frame `Double` passes. The 2026-08-03 three-run
-   40.19 MP matrix measured 1.885–2.749-second adjusted-stage medians and a
-   1.984 GB process-lifetime peak versus 0.105 seconds for neutral correction.
-   Use that evidence to select allocation removal, fusion, in-place operation,
-   and parallelism before considering `Float` or Accelerate.
+1. **Final-quality X-Trans decode had a safe parallel seam.** LibRaw's
+   order-sensitive interpolation and tile traversal remain serial; only the
+   independent CIELab, derivative, homogeneity, and final-write row ranges run
+   across at most eight workers. Five release repetitions reproduced all eight
+   approved stage/output digests, while warm demosaic fell from the stock
+   12.72–12.77-second range to 3.38–3.54 seconds.
+2. **Adjusted full-resolution correction had avoidable passes and allocations.**
+   The 2026-08-12 in-place parallel repair preserved every scenario digest,
+   reduced the adjusted-path peak from 1.984 GB to 1.017 GB, and materially
+   reduced all four adjusted scenario intervals.
 
 Do **not** begin with a RawTherapee X-Trans port, a TIFF dependency, batch
 prefetch, or broad micro-optimization. The first implementation slice is
@@ -167,7 +165,7 @@ Do not reduce final-quality export from three passes to one.
 
 ## Revised Work Plan
 
-### P0 — Establish production gates and diagnose RAW threading
+### P0 — Establish production gates and diagnose RAW threading — Completed 2026-08-12
 
 This is the first work to land.
 
@@ -184,13 +182,16 @@ This is the first work to land.
    the first changed boundary was tiled X-Trans demosaic. No custom library
    was adopted. If the application ships one later, packaging, notices, load
    paths, and clean-Mac validation remain part of the same change.
-4. Locate and remove the first nondeterministic boundary. Location completed
-   2026-07-30: `demosaicedImage` is the first divergent boundary at 8, 10, and
-   14 threads, while 2 and 4 threads are repeatable but already differ from the
-   stock demosaic reference. The adjusted-correction evidence slice completed
-   2026-08-03, so removal is now part of the active optimization step.
+4. Locate and remove the first nondeterministic boundary — completed
+   2026-08-12. Rather than enabling LibRaw's overlapping OpenMP tiles, the shim
+   preserves its serial tile/interpolation order and parallelizes only proven
+   independent back-half rows. The committed demosaic and final pixels remain
+   exact across five eight-worker repetitions.
 5. Re-run the documented three-repetition 40 MP format matrix and ten-file
-   memory/cancellation checks.
+   memory/cancellation checks — completed 2026-08-12. All 18 format-matrix
+   outputs and all ten sequential TIFF outputs were removed, engine footprint
+   stayed bounded, the ten-job app path completed without error, and active
+   decode cancellation left no output.
 
 Acceptance:
 
@@ -202,8 +203,9 @@ Acceptance:
 - one authoritative full-resolution RAW remains in flight;
 - packaged-app dependency closure still passes.
 
-No speedup target is an acceptance gate until deterministic production code is
-measured. The isolated 6.9× result is an opportunity bound, not a promise.
+No custom LibRaw library or new packaged dependency was adopted. The isolated
+6.9× OpenMP result remains historical opportunity evidence, not a shipped
+claim; the production row-parallel measurements are recorded separately.
 
 ### P1 — Measure and repair adjusted full-resolution correction
 

@@ -1,8 +1,9 @@
-# Film Scan Converter 0.1.0 Beta 1
+# Film Scan Converter 0.2.0 Beta 1
 
-This is the first public beta of the native Swift/SwiftUI Film Scan Converter
-for macOS. It is intended for photographers who are comfortable testing beta
-software and reporting reproducible problems.
+This technical beta advances the native macOS application from a capable first
+release workflow into a more dependable tool for real camera-scanned film. It
+is intended for photographers comfortable testing beta software and reporting
+reproducible problems.
 
 ## Supported system
 
@@ -11,25 +12,45 @@ software and reporting reproducible problems.
 - Intel users and developers may build from source with Swift 6 and Homebrew
   LibRaw, but that path is not part of the Beta 1 binary test matrix
 
-## Highlights
+## What’s improved since 0.1
 
-- Camera RAW and standard-image import with bounded, responsive previews
-- Color-negative, black-and-white-negative, slide, and crop-only workflows
-- Film-base measurement, power-law and density inversion, curves, color wheels,
-  protected tone/color controls, crop, straighten, and perspective correction
-- Per-file settings, presets, copy/paste, selected/all application, and ordered
-  batch export
-- TIFF, JPEG, and PNG exports tagged as display-referred sRGB
-- Standards-valid processed-RGB DNG export using output-referred linear sRGB
-- Self-contained application bundle with LibRaw and its non-system libraries
+- **Session undo and redo.** Correction edits can now be stepped backward and
+  forward without changing source files; all editing remains non-destructive.
+- **More reliable negative profiles.** Reference calibration now respects frame
+  orientation, validates held-out frames, and adds a Shanghai GP3 alternate
+  profile for better real-film matching.
+- **Faster, leaner full-resolution exports.** The adjusted correction path now
+  works in place and in parallel, cutting the measured process peak from 1.984
+  GB to 1.017 GB while retaining approved output digests.
+- **Deterministic parallel X-Trans RAW processing.** Final-quality three-pass
+  Fuji X-Trans demosaic keeps LibRaw’s order-sensitive results while safely
+  parallelizing independent row phases. Five eight-worker runs matched every
+  approved decode/output digest; warm demosaic fell from 12.72–12.77 seconds
+  to 3.38–3.54 seconds on the measured 40 MP fixture.
+- **Stronger release and performance evidence.** The 40 MP format matrix,
+  ten-file engine and app-path export checks, cancellation check, and packaged
+  bundle validation now document both output correctness and bounded memory.
+
+The existing 0.1 workflow remains: camera RAW and standard-image import;
+color-negative, black-and-white, slide, and crop-only workflows; film-base
+measurement; curves and color controls; crop, straighten, and perspective;
+presets; roll-wide application; and TIFF, JPEG, PNG, and processed-RGB DNG
+export.
+
+## What’s next
+
+The next milestone is to complete the representative-image viewport check, so
+photographers can confidently judge focus, framing, and corrections at useful
+detail. From there, development returns to the real-roll workflow: validating
+the complete import-to-export experience on varied camera scans before opening
+new processing research. Apple notarization and an independent-Mac installation
+check remain required before this can become a general signed release.
 
 ## Known limitations
 
 - This beta is ad-hoc signed because the project does not yet have a Developer
   ID signing identity. macOS will not treat it as a notarized application; see
   `docs/installation.md` for the normal Finder Control-click/Open flow.
-- Undo/redo is not implemented. Edits are non-destructive and source files are
-  never modified, but use Reset Corrections or saved presets deliberately.
 - Native dust detection currently provides a diagnostic overlay; it does not
   apply dust removal to preview or export.
 - DNG output contains processed RGB, not untouched sensor mosaics. TIFF is the
@@ -40,12 +61,13 @@ software and reporting reproducible problems.
 
 ## Verification
 
-The 2026-07-17 local candidate passed all 395 native regression tests with
-normal Metal access and all 24 legacy Python tests; opt-in performance tests
-remained intentionally skipped. The unsigned-beta packager passed dependency,
-architecture, license-resource, strict signature, extracted-archive, checksum,
-and bundled-library hash validation. The packaged app also launched through
-macOS Launch Services.
+The 0.2 candidate has 456 native regression tests across 32 files, including
+the camera-scan byte-identity fixture and the deterministic X-Trans regression
+gate. The 2026-08-12 measured export cycle verified 18 format outputs, ten
+sequential engine TIFFs, ten queued app exports, and active-decode cancellation;
+all test outputs scheduled for cleanup were removed. The unsigned-beta packager
+validates dependency closure, architectures, bundled license resources, strict
+signature, extracted archive, checksum, and bundled-library hashes.
 
 Publication additionally requires green native and legacy GitHub Actions runs.
 Independent-Mac installation remains a disclosed follow-up beta check; see

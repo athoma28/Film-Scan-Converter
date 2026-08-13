@@ -19,6 +19,7 @@ typedef struct {
     char color_description[5];
     float iso_speed;
     uint32_t processing_flags;
+    uint32_t demosaic_workers;
     double open_seconds;
     double unpack_seconds;
     double demosaic_seconds;
@@ -34,7 +35,8 @@ enum {
     FSC_RAW_PROCESSING_REC2020 = 1u << 1,
     FSC_RAW_PROCESSING_ISO_DENOISE = 1u << 2,
     FSC_RAW_PROCESSING_ISO_SHARPEN = 1u << 3,
-    FSC_RAW_PROCESSING_XTRANS_THREE_PASS = 1u << 4
+    FSC_RAW_PROCESSING_XTRANS_THREE_PASS = 1u << 4,
+    FSC_RAW_PROCESSING_XTRANS_DETERMINISTIC_PARALLEL = 1u << 5
 };
 
 typedef enum {

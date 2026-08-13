@@ -73,6 +73,7 @@ struct BenchmarkReport: Codable {
 struct DeterminismSample: Codable {
   let repetition: Int
   let runClass: String
+  let demosaicWorkerCount: Int
   let sourceShape: [Int]
   let writerInputShape: [Int]
   let decodeSeconds: Double
@@ -868,6 +869,7 @@ private func measureDeterminismSample(
   let sample = DeterminismSample(
     repetition: repetition,
     runClass: repetition == 1 ? "first-run" : "warm-filesystem-cache",
+    demosaicWorkerCount: decodeResult.demosaicWorkerCount,
     sourceShape: [decoded.height, decoded.width, decoded.channels],
     writerInputShape: [output.height, output.width, output.channels],
     decodeSeconds: decodeSeconds,
@@ -893,6 +895,7 @@ private func measureDeterminismSample(
     + "[open=\(formatted(decodeResult.timings.openSeconds))s "
     + "unpack=\(formatted(decodeResult.timings.unpackSeconds))s "
     + "demosaic=\(formatted(decodeResult.timings.demosaicSeconds))s "
+    + "xtransWorkers=\(decodeResult.demosaicWorkerCount) "
     + "post=\(formatted(decodeResult.timings.libRawPostprocessSeconds))s "
     + "image=\(formatted(decodeResult.timings.processedImageSeconds))s "
     + "iso=\(formatted(decodeResult.timings.isoPolicySeconds))s "

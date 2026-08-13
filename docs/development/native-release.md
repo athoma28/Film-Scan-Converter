@@ -33,7 +33,7 @@ Install LibRaw, start from a clean release commit, and run:
 brew install libraw
 RELEASE_MODE=unsigned-beta \
 RELEASE_LABEL=beta.1 \
-APP_VERSION=0.1.0 \
+APP_VERSION=0.2.0 \
 BUILD_NUMBER=1 \
 native/package-release.sh
 ```
@@ -41,8 +41,8 @@ native/package-release.sh
 On an Apple Silicon build machine this creates:
 
 - `dist/Film Scan Converter.app`
-- `dist/Film-Scan-Converter-0.1.0-beta.1-apple-silicon.zip`
-- `dist/Film-Scan-Converter-0.1.0-beta.1-apple-silicon.zip.sha256`
+- `dist/Film-Scan-Converter-0.2.0-beta.1-apple-silicon.zip`
+- `dist/Film-Scan-Converter-0.2.0-beta.1-apple-silicon.zip.sha256`
 
 The architecture suffix is derived from the built executable; a future
 two-architecture build is automatically labeled `universal`. The archive
@@ -86,7 +86,7 @@ Then run the complete gated path:
 ```sh
 RELEASE_MODE=public \
 RELEASE_LABEL=beta.1 \
-APP_VERSION=0.1.0 \
+APP_VERSION=0.2.0 \
 BUILD_NUMBER=1 \
 SIGNING_IDENTITY="Developer ID Application: Example (TEAMID)" \
 NOTARY_PROFILE=film-scan-notary \

@@ -285,6 +285,7 @@ int fsc_decode_raw_direct_with_profile(
     output->pixel_count = pixel_count;
     output->iso_speed = raw->other.iso_speed;
     output->processing_flags = 0;
+    output->demosaic_workers = 1;
     output->bgr_pixels = (const uint16_t *)processed->data;
     snprintf(output->color_description, sizeof(output->color_description), "%.4s", raw->idata.cdesc);
 

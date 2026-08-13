@@ -77,7 +77,7 @@ not a product profile. See the
 Build a self-contained, locally ad-hoc-signed app and ZIP:
 
 ```sh
-RELEASE_MODE=unsigned-beta RELEASE_LABEL=beta.1 native/package-release.sh
+RELEASE_MODE=unsigned-beta RELEASE_LABEL=beta.1 APP_VERSION=0.2.0 native/package-release.sh
 open "dist/Film Scan Converter.app"
 ```
 

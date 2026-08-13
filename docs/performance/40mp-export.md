@@ -596,6 +596,54 @@ decode slowed to 21.5–22.5 s from the 14.3–14.9 s baseline, so the latencies
 directional evidence rather than a controlled same-state A/B, while the
 peak-footprint and byte-identity results are machine-independent.
 
+## 2026-08-12 Deterministic Parallel X-Trans Repair
+
+The production repair does not enable LibRaw's failed overlapping-tile OpenMP
+loop. Film Scan Converter retains LibRaw 0.21.4's integer arithmetic, serial
+tile traversal, and order-sensitive interpolation passes, then divides only
+the independent CIELab, derivative, homogeneity-map, and final-write rows among
+at most eight workers. `FSC_XTRANS_WORKERS=1` remains a diagnostic serial
+oracle. The default worker count and deterministic-parallel processing flag are
+reported by the C bridge and benchmark.
+
+The release determinism command used the committed `DSCF2833.RAF` fixture:
+
+```sh
+native/FilmScanEngine/.build/release/FilmScanExportBenchmark \
+  sample-raw /tmp/film-scan-xtrans-deterministic-parallel.json 5 \
+  --determinism --file=fuji400-fresh/DSCF2833.RAF
+```
+
+All eight boundaries agreed across five eight-worker repetitions and matched
+the 2026-07-28 stock reference byte-for-byte, including demosaiced image, Swift
+pixels, and final LZW TIFF. Warm demosaic measured 3.382–3.542 seconds versus
+12.72–12.77 seconds in the stock reference run. Warm full decode measured
+5.184–5.396 seconds; the first sample was 7.035 seconds. Process-lifetime peak
+physical footprint was 694,011,416 bytes. Every TIFF was removed.
+
+The closing format matrix used three all-format repetitions of `DSCF2833.RAF`
+and three TIFF repetitions each of `DSCF2851.RAF` and `DSCF2856.RAF`. All 18
+outputs were removed. Median results were:
+
+| Source | Format | Total median | Decode median | Demosaic median |
+|---|---|---:|---:|---:|
+| DSCF2833.RAF | TIFF | 6.328 s | 4.822 s | 3.405 s |
+| DSCF2833.RAF | JPEG | 5.118 s | 4.885 s | 3.455 s |
+| DSCF2833.RAF | PNG | 8.408 s | 4.895 s | 3.467 s |
+| DSCF2833.RAF | DNG | 5.139 s | 4.965 s | 3.539 s |
+| DSCF2851.RAF | TIFF | 6.314 s | 4.833 s | 3.414 s |
+| DSCF2856.RAF | TIFF | 6.300 s | 4.799 s | 3.361 s |
+
+A separate `--all --limit=10 --formats=tiff` engine run removed all ten
+outputs, held post-release physical footprint within 45,532,744–53,626,776
+bytes, and held peak physical footprint at 686,753,016 bytes. The production
+app path then completed ten TIFF jobs in 50.066 seconds with no export errors,
+removed all ten outputs, observed 75.79–80.48 MB physical footprint during
+progress, and returned to 62.13 MB after model release. A cancellation request
+250 ms into the next full-resolution decode completed at the safe boundary in
+4.744 seconds, reported cancellation after the active first item with nine
+items unstarted, left no output, and returned to 62.46 MB after model release.
+
 ## Closed Baseline Cycle And Bounded Follow-Up
 
 These milestones were run in order so each optimization decision had a measured
@@ -640,12 +688,13 @@ one bounded follow-up; it does not reopen an unrestricted performance rewrite.
    replacement stage. Preview-cache depth sampling is complete for the local
    six-RAF corpus; retain the realized-session count in future larger-corpus
    reports rather than implying depth 32 was fully populated here.
-6. **Optimization slice.** Two safe secondary-stage slices are complete:
+6. **Optimization slice.** Three safe measured slices are complete:
    multicore fused power-law correction is 74.9% faster at the measured median,
    and compact TIFF packing removes 80.37 MB while cutting the ten-file median
-   interval 23.0%. Both preserve deterministic output bytes and hashes.
-   Do not substitute a one-pass X-Trans quality mode. Further work is limited
-   to the evidence gates and order in the audited performance guide.
+   interval 23.0%. Deterministic X-Trans row parallelism reduces the warm
+   three-pass demosaic from 12.72–12.77 seconds to 3.38–3.54 seconds without
+   changing any approved stage or output digest. Do not substitute a one-pass
+   X-Trans quality mode or enable the failed overlapping-tile OpenMP path.
 7. **Batch confirmation.** Complete. Engine confirmation covers ten sequential
    TIFF exports with output contracts and physical memory. The app-path run adds
    ten queue completions, preview-cache effects, post-batch physical footprint,

@@ -55,10 +55,12 @@ unpack stayed byte-identical. The adjusted correction benchmark scenarios and
 full-resolution byte-identity fixture followed on 2026-08-03, locating the
 adjusted-path memory peak. The adjusted correction passes were then made
 in-place and parallel on 2026-08-12, halving the measured process-lifetime peak
-while preserving the committed scenario digests byte-for-byte. Next repair the
-isolated threaded X-Trans RAW stage, then complete the representative-image
-viewport check; resume the real roll workflow after the bounded performance
-slice. Do not begin a broad port, writer replacement,
+while preserving the committed scenario digests byte-for-byte. The X-Trans
+repair completed the bounded performance slice later on 2026-08-12: the shim
+keeps LibRaw's serial tile/interpolation order and parallelizes only independent
+back-half rows, reproducing all approved digests across five eight-worker runs.
+Next complete the representative-image viewport check, then resume the real
+roll workflow. Do not begin a broad port, writer replacement,
 batch-prefetch design, or stock-look calibration without satisfying the
 roadmap gates.
 
@@ -101,6 +103,20 @@ The current measurement evidence is:
   versus 16.53–17.18 at one thread and held a 701.6 MB process-lifetime peak
   physical footprint. This is a located opportunity and failed pixel candidate,
   not a production result;
+- the production repair does not enable LibRaw's overlapping OpenMP tile loop.
+  It preserves tile and order-sensitive interpolation order, while CIELab,
+  derivative, homogeneity, and final-write rows use at most eight workers. Five
+  release repetitions of `DSCF2833.RAF` reproduced all eight committed
+  boundaries and output bytes exactly. Warm demosaic measured 3.38–3.54 seconds
+  versus the stock 12.72–12.77-second baseline, with a 694.0 MB peak physical
+  footprint;
+- the closing 18-output format matrix removed every output; `DSCF2833.RAF`
+  format medians were 6.33 seconds TIFF, 5.12 JPEG, 8.41 PNG, and 5.14 DNG.
+  A separate ten-file TIFF sequence removed all ten outputs, held post-release
+  footprint within 45.5–53.6 MB, and held the process peak to 686.8 MB. The
+  ten-job app path completed in 50.07 seconds without errors or retained output;
+  cancellation reached the post-decode boundary in 4.74 seconds and wrote no
+  output;
 - the 2026-08-03 correction-scenario matrix measured the neutral fused path and
   tone, protected-color, dye-mixing, and combined adjusted paths over three
   40.19 MP release repetitions. Corrected/output hashes repeated exactly and
@@ -199,7 +215,7 @@ and command details.
 
 ## Release Gates
 
-### 1. Large-File Performance And Memory — Baseline Closed; Follow-Up Active
+### 1. Large-File Performance And Memory — Follow-Up Closed 2026-08-12
 
 The 2026-07-15 app-path batch and cancellation run closed the baseline cycle.
 The 2026-07-27 audit added a bounded follow-up with this order:
@@ -207,7 +223,7 @@ The 2026-07-27 audit added a bounded follow-up with this order:
 1. benchmark instrumentation and the camera-scan byte-identity fixture (both
    landed 2026-07-28);
 2. isolation and repair of the existing LibRaw threaded-path divergence
-   (isolation landed 2026-07-30; the tiled X-Trans repair remains open);
+   (isolated 2026-07-30; deterministic row-parallel repair landed 2026-08-12);
 3. measured reduction of adjusted-correction allocations and serial passes
    (landed 2026-08-12: in-place parallel tone/protected-color/dye-mixing with
    byte-identical scenario digests and a 1.984 GB → 1.017 GB peak);
@@ -308,11 +324,11 @@ fail-closed `public` path. The following remain for the notarized build:
   reference still belongs to the faster `rawPyCompatibility` profile and must
   not be presented as camera-scan proof.
 - LibRaw's forced-OpenMP path first changes pixels at tiled X-Trans demosaic,
-  as isolated by the 2026-07-30 worker-count sweep. Threaded Fuji unpack stayed
-  exact, but no tested multi-thread demosaic matched the approved stock pixels:
-  2 and 4 threads were repeatable-but-wrong, while 8, 10, and 14 were also
-  non-repeatable. Its speedup is not available to production until that stage
-  is repaired and the approved pixel contract is restored.
+  as isolated by the 2026-07-30 worker-count sweep. It remains disabled. The
+  production shim instead parallelizes only independent rows within each
+  serially ordered tile and reproduces the approved pixels. This retains an
+  adapted LibRaw 0.21.4 algorithm body that must be reviewed when LibRaw is
+  upgraded.
 - The available real RAW corpus is X-Trans and does not provide a committed
   real-file gate for the Bayer RCD path.
 - Camera-scan ISO denoise/sharpen policy is a bounded native approximation, not
@@ -339,7 +355,7 @@ fail-closed `public` path. The following remain for the notarized build:
 
 ## Verification Summary
 
-- 434 native tests across 31 files in the current working tree.
+- 456 native tests across 32 files in the current working tree.
 - The camera-scan byte-identity fixture
   (`camera_scan_decode_reference.json` plus `CameraScanByteIdentityTests`)
   pins the full-resolution X-Trans decode of `fuji400-fresh/DSCF2833.RAF` to
@@ -360,7 +376,9 @@ fail-closed `public` path. The following remain for the notarized build:
   accelerate the tested Fuji workload. The completed six-count follow-up
   isolated tiled X-Trans demosaic as the first changed boundary, proved
   threaded unpack remains exact for the fixture, and confirmed that enabling
-  the candidate wholesale fails determinism and exactness.
+  the candidate wholesale fails determinism and exactness. The completed
+  production repair preserves the serial dependency chain, parallelizes only
+  independent back-half rows, and passes the original exact-output fixture.
   The detailed experiment is in the full-resolution performance guide.
 - Local packaging validates the assembled app and extracted ZIP copy, bundled
   license/notice/manifest resources, dependency closure, signature, and

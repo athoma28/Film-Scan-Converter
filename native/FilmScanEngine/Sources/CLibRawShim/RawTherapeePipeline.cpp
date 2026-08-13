@@ -6,13 +6,16 @@
 #include "CLibRawShim.h"
 
 #include <libraw/libraw.h>
+#include <dispatch/dispatch.h>
 #include <algorithm>
 #include <chrono>
+#include <cfloat>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <thread>
 #include <vector>
 
 // CommonCrypto is part of the OS, so stage hashing adds no packaged
@@ -73,6 +76,8 @@ class FSCRawTherapeeDecoder final : public LibRaw {
 public:
     bool usedRCD = false;
     bool usedXTransThreePass = false;
+    bool usedDeterministicParallelXTrans = false;
+    int xtransWorkerCount = 1;
     double demosaicSeconds = 0;
     double stageHashSeconds = 0;
     // Opt-in stage-boundary digest capture. When set, the demosaic callbacks
@@ -99,13 +104,124 @@ private:
     void xtransDemosaic() {
         // LibRaw's X-Trans implementation is Markesteijn-derived. Three passes
         // trade decode time for the cleaner fine colour detail RawTherapee
-        // recommends for final-quality X-Trans output.
+        // recommends for final-quality X-Trans output. Preserve the upstream
+        // tile and interpolation order, then parallelize only the independent
+        // row ranges in its CIELab, derivative, homogeneity, and final-write
+        // phases. This avoids the overlapping-tile races in LibRaw's OpenMP
+        // path while retaining the approved serial pixels.
         const auto start = std::chrono::steady_clock::now();
-        xtrans_interpolate(xtransPasses);
+        deterministicParallelXTransInterpolate(xtransPasses);
         demosaicSeconds = std::chrono::duration<double>(
             std::chrono::steady_clock::now() - start).count();
         usedXTransThreePass = xtransPasses == 3;
         hashDemosaicedIfRequested();
+    }
+
+    static int configuredXTransWorkerCount() {
+        constexpr int maximumWorkers = 8;
+        int workers = static_cast<int>(std::thread::hardware_concurrency());
+        workers = limited(workers, 1, maximumWorkers);
+        const char *overrideValue = std::getenv("FSC_XTRANS_WORKERS");
+        if (!overrideValue || !*overrideValue) { return workers; }
+        char *end = nullptr;
+        const long parsed = std::strtol(overrideValue, &end, 10);
+        if (end == overrideValue || *end != '\0' || parsed < 1 || parsed > maximumWorkers) {
+            return workers;
+        }
+        return static_cast<int>(parsed);
+    }
+
+    static char **allocateXTransBuffers(int count, size_t size) {
+        auto **buffers = static_cast<char **>(std::calloc(count, sizeof(char *)));
+        if (!buffers) { throw LIBRAW_EXCEPTION_ALLOC; }
+        for (int index = 0; index < count; ++index) {
+            buffers[index] = static_cast<char *>(std::calloc(size, 1));
+            if (!buffers[index]) {
+                for (int allocated = 0; allocated < index; ++allocated) {
+                    std::free(buffers[allocated]);
+                }
+                std::free(buffers);
+                throw LIBRAW_EXCEPTION_ALLOC;
+            }
+        }
+        return buffers;
+    }
+
+    static void releaseXTransBuffers(char **buffers, int count) {
+        if (!buffers) { return; }
+        for (int index = 0; index < count; ++index) { std::free(buffers[index]); }
+        std::free(buffers);
+    }
+
+    template <typename RowFunction>
+    void parallelXTransRows(int firstRow, int endRow, RowFunction function) {
+        const int rowCount = endRow - firstRow;
+        const int workerCount = std::min(xtransWorkerCount, rowCount);
+        if (workerCount <= 1) {
+            for (int row = firstRow; row < endRow; ++row) { function(row); }
+            return;
+        }
+        struct Context {
+            int firstRow;
+            int endRow;
+            int workerCount;
+            RowFunction *function;
+        } context = {firstRow, endRow, workerCount, &function};
+        dispatch_apply_f(
+            static_cast<size_t>(workerCount),
+            dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0),
+            &context,
+            [](void *rawContext, size_t workerIndex) {
+                auto *context = static_cast<Context *>(rawContext);
+                const int rowsPerWorker =
+                    (context->endRow - context->firstRow + context->workerCount - 1)
+                    / context->workerCount;
+                const int start = context->firstRow
+                    + static_cast<int>(workerIndex) * rowsPerWorker;
+                const int end = std::min(start + rowsPerWorker, context->endRow);
+                for (int row = start; row < end; ++row) { (*context->function)(row); }
+            });
+    }
+
+    // The included implementation preserves LibRaw 0.21.4's arithmetic,
+    // order-sensitive interpolation, and tile traversal. Its independent
+    // back-half row phases use the bounded helper above.
+    void deterministicParallelXTransInterpolate(int passes) {
+        xtransWorkerCount = configuredXTransWorkerCount();
+        usedDeterministicParallelXTrans = xtransWorkerCount > 1;
+#define fcol(row, col) xtrans[(row + 6) % 6][(col + 6) % 6]
+#define image (imgdata.image)
+#define xtrans (imgdata.idata.xtrans)
+#define height (imgdata.sizes.height)
+#define width (imgdata.sizes.width)
+#define FORC(count) for (c = 0; c < count; c++)
+#define FORC3 FORC(3)
+#define FORC4 FORC(4)
+#define SQR(value) ((value) * (value))
+#define ABS(value) (((int)(value) ^ ((int)(value) >> 31)) - ((int)(value) >> 31))
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+#define LIM(value, lower, upper) MAX(lower, MIN(value, upper))
+#define CLIP(value) LIM((int)(value), 0, 65535)
+#define malloc_omp_buffers allocateXTransBuffers
+#define free_omp_buffers releaseXTransBuffers
+#include "XTransDemosaicBody.inc"
+#undef free_omp_buffers
+#undef malloc_omp_buffers
+#undef CLIP
+#undef LIM
+#undef MAX
+#undef MIN
+#undef ABS
+#undef SQR
+#undef FORC4
+#undef FORC3
+#undef FORC
+#undef width
+#undef height
+#undef xtrans
+#undef image
+#undef fcol
     }
 
     int colorAt(int row, int col) const {
@@ -453,6 +569,7 @@ extern "C" int fsc_decode_rawtherapee_direct(
         const double processStageHashSeconds =
             raw->stageHashSeconds - stageHashSecondsBeforeProcess;
         output->demosaic_seconds = raw->demosaicSeconds;
+        output->demosaic_workers = raw->xtransWorkerCount;
         output->libraw_postprocess_seconds = std::max(
             0.0,
             processSeconds - output->demosaic_seconds - processStageHashSeconds);
@@ -493,6 +610,9 @@ extern "C" int fsc_decode_rawtherapee_direct(
     uint32_t flags = 0;
     if (raw->usedRCD) { flags |= FSC_RAW_PROCESSING_RCD; }
     if (raw->usedXTransThreePass) { flags |= FSC_RAW_PROCESSING_XTRANS_THREE_PASS; }
+    if (raw->usedDeterministicParallelXTrans) {
+        flags |= FSC_RAW_PROCESSING_XTRANS_DETERMINISTIC_PARALLEL;
+    }
     const auto isoPolicyStart = Clock::now();
     isoAdaptiveFilter(processed, raw->imgdata.other.iso_speed, flags);
     output->iso_policy_seconds = std::chrono::duration<double>(

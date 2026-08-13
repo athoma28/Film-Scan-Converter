@@ -11,6 +11,7 @@ public struct RawDecodeResult: Sendable {
   public let profile: RawDecodeProfile
   public let isoSpeed: Double
   public let processing: RawProcessingStages
+  public let demosaicWorkerCount: Int
   public let timings: RawDecodeTimings
   /// Stage-boundary digests, present only when the decode requested them and
   /// the profile collects them (currently the camera-scan profile only).
@@ -23,6 +24,7 @@ public struct RawDecodeResult: Sendable {
     profile: RawDecodeProfile = .rawPyCompatibility,
     isoSpeed: Double = 0,
     processing: RawProcessingStages = [],
+    demosaicWorkerCount: Int = 1,
     timings: RawDecodeTimings = .zero,
     diagnostics: RawDecodeDiagnostics? = nil
   ) {
@@ -32,6 +34,7 @@ public struct RawDecodeResult: Sendable {
     self.profile = profile
     self.isoSpeed = isoSpeed
     self.processing = processing
+    self.demosaicWorkerCount = demosaicWorkerCount
     self.timings = timings
     self.diagnostics = diagnostics
   }
@@ -122,6 +125,8 @@ public struct RawProcessingStages: OptionSet, Sendable, Equatable {
   public static let isoSharpen = Self(rawValue: UInt32(FSC_RAW_PROCESSING_ISO_SHARPEN))
   public static let xTransThreePass = Self(
     rawValue: UInt32(FSC_RAW_PROCESSING_XTRANS_THREE_PASS))
+  public static let deterministicParallelXTrans = Self(
+    rawValue: UInt32(FSC_RAW_PROCESSING_XTRANS_DETERMINISTIC_PARALLEL))
 }
 
 public enum RawDecodeProfile: UInt32, Sendable, Codable, Equatable {
@@ -292,6 +297,7 @@ public enum RawImageDecoder {
       profile: profile,
       isoSpeed: Double(output.iso_speed),
       processing: processing,
+      demosaicWorkerCount: Int(output.demosaic_workers),
       timings: RawDecodeTimings(
         openSeconds: output.open_seconds,
         unpackSeconds: output.unpack_seconds,

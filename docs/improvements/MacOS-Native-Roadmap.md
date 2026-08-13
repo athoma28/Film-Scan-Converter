@@ -100,7 +100,7 @@ Acceptance:
 Optimize again only when profiling exposes a user-visible latency or
 resource-safety problem.
 
-### 1. Resolve Measured Full-Resolution RAW Export Bottlenecks — Active
+### 1. Resolve Measured Full-Resolution RAW Export Bottlenecks — Completed 2026-08-12
 
 The bounded 40 MP cycle established a trustworthy baseline rather than proving
 that roughly 20 seconds of three-pass X-Trans demosaic is acceptable forever.
@@ -128,8 +128,8 @@ Work in this order:
    0.21.4 build was swept at 1, 2, 4, 8, 10, and 14 threads with five
    repetitions each; the unpacked mosaic remained byte-identical to the stock
    reference at every count, while the first changed boundary was always
-   `demosaicedImage`; 8, 10, and 14 threads were also non-repeatable, so no
-   threaded decoder is enabled in production;
+   `demosaicedImage`; 8, 10, and 14 threads were also non-repeatable, so that
+   overlapping-tile threaded decoder was not enabled in production;
 4. add neutral, tone, protected-color, dye-mixing, and combined-adjustment
    full-resolution correction scenarios, including physical footprint —
    completed 2026-08-03: `FilmScanExportBenchmark --corrections` produced a
@@ -141,11 +141,14 @@ Work in this order:
    anchor a committed full-resolution byte-identity fixture;
 5. after evidence exists, fix the responsible RAW stage and reduce adjusted
    correction allocations/passes before considering writer or batch work —
-   the correction slice is complete (2026-08-12): tone, protected-color, and
+   both repairs are complete (2026-08-12). Tone, protected-color, and
    dye-mixing run in-place and in parallel, the adjusted-scenario
    process-lifetime peak fell from 1.984 GB to 1.017 GB, and the committed
-   correction-scenario digests reproduce byte-for-byte. The isolated threaded
-   X-Trans RAW-stage repair remains active.
+   correction-scenario digests reproduce byte-for-byte. X-Trans keeps LibRaw's
+   serial tile/interpolation order but uses bounded row parallelism in the
+   independent CIELab, derivative, homogeneity, and final-write phases. Five
+   eight-worker runs reproduced every approved digest; warm demosaic measured
+   3.38–3.54 seconds versus the 12.72–12.77-second stock baseline.
 
 Do not start by porting RawTherapee X-Trans, running dependent X-Trans passes
 concurrently, reducing final-quality passes, replacing scalar `pow` in
@@ -169,6 +172,11 @@ Acceptance:
 
 The audited performance guide owns the technical sequence. This roadmap owns
 its product priority; it is not permission for an open-ended rewrite.
+
+The closing matrix covered 18 repeated format outputs, ten sequential engine
+TIFFs, and the ten-job app path plus active-decode cancellation. Every output
+scheduled for cleanup was removed, the engine's post-release footprint stayed
+within 45.5–53.6 MB with a 686.8 MB peak, and cancellation left no output.
 
 ### 2. Make The Still Preview A Reliable Judging Surface — Implementation Complete; Direct Check Pending
 
