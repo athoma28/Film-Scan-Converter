@@ -1,7 +1,8 @@
 # Full-Resolution RAW Decode And Export Performance
 
 **Status:** Audited implementation guide; threaded boundary isolated 2026-07-30;
-adjusted-correction evidence completed 2026-08-03
+adjusted-correction evidence completed 2026-08-03; adjusted-correction repair
+completed 2026-08-12
 
 **Date:** 2026-07-27  
 **Production baseline:** `main` at `3d8456f`, plus the measurements in
@@ -217,9 +218,10 @@ neutral. Adjusted exports pass through serial work including:
 - for the calibrated-color seam, additional `UInt16` to `Double` and back
   conversion in `Processing.swift`.
 
-The structural problem and current latency are now measured. The size of an
-achievable saving and how often real exports use each adjusted path have not
-been established.
+The structural problem and current latency are now measured and repaired. The
+2026-08-12 implementation slice converted the serial full-frame `Double` seam
+to in-place parallel operators, and the size of the achieved saving is now
+recorded against the committed scenario fixture.
 
 Implementation order:
 
@@ -229,13 +231,34 @@ Implementation order:
    2026-08-03 with three release repetitions, exact repeated hashes, cleanup
    checks, a committed full-resolution fixture, and documented memory evidence.
 2. Remove avoidable full-frame allocations using in-place variants where
-   ownership permits.
+   ownership permits — completed 2026-08-12. `RenderReadyLinearImage` gained
+   mutating `applyLinearToneAdjustments` and `applyProtectedColorAdjustments`,
+   and `Processing`'s calibrated-color, power-law, and density seams now apply
+   tone, dye mixing, and protected color on one buffer instead of reallocating
+   a second scene-linear frame per pass.
 3. Fuse adjacent per-pixel operations when that removes a material pass without
-   obscuring the reference math.
-4. Parallelize remaining independent rows/pixels and sweep worker counts.
+   obscuring the reference math — subsumed by step 2: the tone and color passes
+   now write through one buffer, so no intermediate copy separates them.
+4. Parallelize remaining independent rows/pixels and sweep worker counts —
+   completed 2026-08-12. Tone, protected color, dye mixing,
+   `powerLawRenderReadyLinear`, `renderPowerLawDisplay`, and the
+   calibrated-color `UInt16`↔`Double` conversion passes all use disjoint
+   per-pixel ranges over at most eight workers above the one-megapixel
+   threshold, and each output element is written by exactly one worker.
 5. Consider `Float`, structure-of-arrays, vDSP, or vForce only as separately
    measured candidates. Numeric changes require a rounding/tolerance contract
    and visual qualification.
+
+The 2026-08-12 release `--corrections` run measured the adjusted-scenario
+process-lifetime peak physical footprint at 1.017 GB, down from the 1.984 GB
+baseline, and the committed corrected-image digests still reproduce
+byte-for-byte. The measured correction-stage medians (tone 0.954 s, protected
+color 0.993 s, dye mixing 0.944 s, combined 1.269 s versus 2.182/2.266/1.885/
+2.749 s) came from a run whose decode slowed to 21.5–22.5 s from the
+14.3–14.9 s baseline, so the latencies are directional while the
+peak-footprint and byte-identity results are machine-independent. `Float`,
+structure-of-arrays, vDSP, and vForce were not adopted; they remain separate
+candidates only if profiling later justifies them.
 
 Do not assume `vForce.vvpow` is a drop-in improvement. The current fast kernel
 is fused and interleaved; materializing bases/exponents for a vector API may

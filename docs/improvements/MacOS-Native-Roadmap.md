@@ -141,7 +141,11 @@ Work in this order:
    anchor a committed full-resolution byte-identity fixture;
 5. after evidence exists, fix the responsible RAW stage and reduce adjusted
    correction allocations/passes before considering writer or batch work —
-   now active.
+   the correction slice is complete (2026-08-12): tone, protected-color, and
+   dye-mixing run in-place and in parallel, the adjusted-scenario
+   process-lifetime peak fell from 1.984 GB to 1.017 GB, and the committed
+   correction-scenario digests reproduce byte-for-byte. The isolated threaded
+   X-Trans RAW-stage repair remains active.
 
 Do not start by porting RawTherapee X-Trans, running dependent X-Trans passes
 concurrently, reducing final-quality passes, replacing scalar `pow` in

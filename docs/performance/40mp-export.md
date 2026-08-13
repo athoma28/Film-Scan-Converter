@@ -576,6 +576,26 @@ full-resolution byte-identity test runs when the referenced local RAW corpus is
 available. Scenario unit tests also pin inventory order, active pass mapping,
 base-parameter preservation, determinism, and adjusted-vs-neutral output.
 
+## 2026-08-12 In-Place Parallel Adjusted Correction
+
+The adjusted linear seam measured above was serial and reallocated a fresh
+full-frame `Double` buffer for each active pass. The 2026-08-12 slice made tone,
+protected-color, and dye-mixing in-place and parallel, parallelized
+`powerLawRenderReadyLinear`, `renderPowerLawDisplay`, and the calibrated-color
+`UInt16`↔`Double` conversion passes, and left the exact-neutral and fused
+neutral paths unchanged. In-place tone and color now write through one
+scene-linear buffer, so the combined scenario no longer allocates a second
+full-frame `Double` per adjustment.
+
+A release `--corrections` run on the same `DSCF2833.RAF` (three repetitions)
+reproduced every committed corrected-image digest byte-for-byte and removed all
+15 TIFFs. The process-lifetime peak physical footprint fell from 1.984 GB to
+1.017 GB. Measured correction-stage medians were neutral 0.154 s, tone 0.954 s,
+protected color 0.993 s, dye mixing 0.944 s, and combined 1.269 s. That run's
+decode slowed to 21.5–22.5 s from the 14.3–14.9 s baseline, so the latencies are
+directional evidence rather than a controlled same-state A/B, while the
+peak-footprint and byte-identity results are machine-independent.
+
 ## Closed Baseline Cycle And Bounded Follow-Up
 
 These milestones were run in order so each optimization decision had a measured

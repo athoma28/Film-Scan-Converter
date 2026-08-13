@@ -65,9 +65,10 @@ public enum FilmProcessing {
           }
         case .powerLaw, .calibratedColor:
           if parameters.photoAdjustments.hasToneAdjustment {
-            let renderReady = FilmNegativeProcessing.powerLawRenderReadyLinear(
+            var renderReady = FilmNegativeProcessing.powerLawRenderReadyLinear(
               image: working, params: parameters.filmNegativeParams
-            ).applyingLinearToneAdjustments(
+            )
+            renderReady.applyLinearToneAdjustments(
               parameters.photoAdjustments,
               referenceLuminance: FilmNegativeProcessing.calibrationTargetFraction
             )
@@ -115,15 +116,14 @@ public enum FilmProcessing {
               renderReady.applyFilmDyeMixing(parameters.filmDyeMixing)
             }
             if parameters.photoAdjustments.hasToneAdjustment {
-              renderReady = renderReady.applyingLinearToneAdjustments(
+              renderReady.applyLinearToneAdjustments(
                 parameters.photoAdjustments,
                 referenceLuminance: FilmNegativeProcessing.calibrationTargetFraction
               )
               usedLinearToneSeam = true
             }
             if parameters.photoAdjustments.hasColorAdjustment {
-              renderReady = renderReady.applyingProtectedColorAdjustments(
-                parameters.photoAdjustments)
+              renderReady.applyProtectedColorAdjustments(parameters.photoAdjustments)
               usedLinearColorSeam = true
             }
             working = FilmNegativeProcessing.renderPowerLawDisplay(renderReady)
@@ -412,7 +412,7 @@ public enum FilmProcessing {
       renderReady.applyFilmDyeMixing(parameters.filmDyeMixing)
     }
     if parameters.photoAdjustments.hasToneAdjustment {
-      renderReady = renderReady.applyingLinearToneAdjustments(
+      renderReady.applyLinearToneAdjustments(
         parameters.photoAdjustments,
         referenceLuminance: 1
       )
@@ -420,7 +420,7 @@ public enum FilmProcessing {
     let usedLinearSeam = parameters.filmType == .colourNegative
       && parameters.photoAdjustments.hasColorAdjustment
     if usedLinearSeam {
-      renderReady = renderReady.applyingProtectedColorAdjustments(parameters.photoAdjustments)
+      renderReady.applyProtectedColorAdjustments(parameters.photoAdjustments)
     }
     var display = FilmNegativeProcessing.renderDisplay(
       sceneLinear: renderReady.pixels,
@@ -638,18 +638,43 @@ public enum FilmProcessing {
     applyColorAdjustments: Bool = false
   ) -> UInt16Image {
     guard image.channels == 3 else { return image }
-    var linearPixels = [Double](repeating: 0, count: image.pixels.count)
-    for pixelIndex in 0..<(image.width * image.height) {
+    let inputPixels = image.pixels
+    let pixelCount = image.width * image.height
+    var linearPixels = [Double](repeating: 0, count: inputPixels.count)
+
+    @Sendable func toLinear(_ pixelIndex: Int, output: UnsafeMutablePointer<Double>) {
       let base = pixelIndex * 3
       let linear = FilmNegativeProcessing.linearSRGBToRec2020(
-        red: FilmNegativeProcessing.sRGBToLinear(Double(image.pixels[base + 2]) / 65_535),
-        green: FilmNegativeProcessing.sRGBToLinear(Double(image.pixels[base + 1]) / 65_535),
-        blue: FilmNegativeProcessing.sRGBToLinear(Double(image.pixels[base]) / 65_535)
+        red: FilmNegativeProcessing.sRGBToLinear(Double(inputPixels[base + 2]) / 65_535),
+        green: FilmNegativeProcessing.sRGBToLinear(Double(inputPixels[base + 1]) / 65_535),
+        blue: FilmNegativeProcessing.sRGBToLinear(Double(inputPixels[base]) / 65_535)
       )
-      linearPixels[base] = linear.blue
-      linearPixels[base + 1] = linear.green
-      linearPixels[base + 2] = linear.red
+      output[base] = linear.blue
+      output[base + 1] = linear.green
+      output[base + 2] = linear.red
     }
+
+    let workerCount = min(8, ProcessInfo.processInfo.activeProcessorCount)
+    linearPixels.withUnsafeMutableBufferPointer { buffer in
+      guard let baseAddress = buffer.baseAddress else { return }
+      if pixelCount >= correctionParallelPixelThreshold, workerCount > 1 {
+        let sendableBuffer = SendableMutableBuffer(baseAddress)
+        let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
+        DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
+          let start = worker * pixelsPerWorker
+          let end = min(start + pixelsPerWorker, pixelCount)
+          guard start < end else { return }
+          for pixelIndex in start..<end {
+            toLinear(pixelIndex, output: sendableBuffer.baseAddress)
+          }
+        }
+      } else {
+        for pixelIndex in 0..<pixelCount {
+          toLinear(pixelIndex, output: baseAddress)
+        }
+      }
+    }
+
     var adjusted = RenderReadyLinearImage(
       width: image.width, height: image.height, pixels: linearPixels
     )
@@ -657,18 +682,21 @@ public enum FilmProcessing {
       adjusted.applyFilmDyeMixing(dyeMixing)
     }
     if parameters.hasToneAdjustment {
-      adjusted = adjusted.applyingLinearToneAdjustments(parameters)
+      adjusted.applyLinearToneAdjustments(parameters)
     }
     if applyColorAdjustments {
-      adjusted = adjusted.applyingProtectedColorAdjustments(parameters)
+      adjusted.applyProtectedColorAdjustments(parameters)
     }
-    var output = [UInt16](repeating: 0, count: image.pixels.count)
-    for pixelIndex in 0..<(image.width * image.height) {
+
+    var output = [UInt16](repeating: 0, count: inputPixels.count)
+    let adjustedPixels = adjusted.pixels
+
+    @Sendable func toDisplay(_ pixelIndex: Int, output: UnsafeMutablePointer<UInt16>) {
       let base = pixelIndex * 3
       let display = FilmNegativeProcessing.linearRec2020ToSRGB(
-        red: adjusted.pixels[base + 2],
-        green: adjusted.pixels[base + 1],
-        blue: adjusted.pixels[base]
+        red: adjustedPixels[base + 2],
+        green: adjustedPixels[base + 1],
+        blue: adjustedPixels[base]
       )
       output[base] = UInt16(
         min(max(FilmNegativeProcessing.linearToSRGB(display.blue) * 65_535, 0), 65_535))
@@ -677,6 +705,12 @@ public enum FilmProcessing {
       output[base + 2] = UInt16(
         min(max(FilmNegativeProcessing.linearToSRGB(display.red) * 65_535, 0), 65_535))
     }
+
+    processCorrectionPixels(
+      &output,
+      pixelCount: pixelCount,
+      processPixel: toDisplay)
+
     return UInt16Image(
       width: image.width, height: image.height, channels: image.channels, pixels: output)
   }

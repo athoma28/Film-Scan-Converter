@@ -9,8 +9,8 @@ The audited
 [full-resolution performance guide](../../PERFORMANCE-OPPORTUNITIES-2026-07-27.md)
 records the active optimization evidence and implementation sequence.
 
-**Last verified:** 2026-07-28 against the current working tree. The native test
-suite contains 434 tests across 31 files. Some representative-RAW tests require
+**Last verified:** 2026-08-12 against the current working tree. The native test
+suite contains 443 tests across 32 files. Some representative-RAW tests require
 the untracked local `sample-raw/` corpus and are explicitly disabled when it is
 absent.
 
@@ -53,10 +53,12 @@ day. The 2026-07-30 forced-OpenMP sweep then isolated tiled X-Trans demosaic as
 the first changed and nondeterministic boundary while proving threaded Fuji
 unpack stayed byte-identical. The adjusted correction benchmark scenarios and
 full-resolution byte-identity fixture followed on 2026-08-03, locating the
-adjusted-path memory peak. Next repair the isolated RAW stage and reduce those
-correction allocations/passes. Complete the representative-image viewport
-check alongside that work; resume the real roll workflow after the bounded
-performance slice. Do not begin a broad port, writer replacement,
+adjusted-path memory peak. The adjusted correction passes were then made
+in-place and parallel on 2026-08-12, halving the measured process-lifetime peak
+while preserving the committed scenario digests byte-for-byte. Next repair the
+isolated threaded X-Trans RAW stage, then complete the representative-image
+viewport check; resume the real roll workflow after the bounded performance
+slice. Do not begin a broad port, writer replacement,
 batch-prefetch design, or stock-look calibration without satisfying the
 roadmap gates.
 
@@ -105,8 +107,15 @@ The current measurement evidence is:
   all 15 TIFFs were removed. Corrected-stage medians were 0.105, 2.182, 2.266,
   1.885, and 2.749 seconds respectively; post-scenario physical footprint stayed
   within 47.3–54.2 MB, while the adjusted paths raised process-lifetime peak
-  physical footprint to 1.984 GB. The serial full-frame `Double` seam is now a
-  measured allocation target rather than an inferred risk;
+  physical footprint to 1.984 GB. The serial full-frame `Double` seam was then
+  reduced in place on 2026-08-12: tone, protected-color, and dye-mixing now run
+  in-place and in parallel, dropping the adjusted-scenario process-lifetime peak
+  to 1.017 GB while the committed scenario digests still reproduce byte-for-byte;
+- the in-place parallel adjusted seam cut the measured correction-scenario
+  medians (tone 2.182→0.954 s, protected color 2.266→0.993 s, dye mixing
+  1.885→0.944 s, combined 2.749→1.269 s) on a run whose decode had slowed to
+  21.5–22.5 s from the 14.3–14.9 s baseline, so those latencies are directional
+  while the peak-footprint and byte-identity results are machine-independent;
 - parallel full-resolution power-law correction reduced that measured stage
   from 3.685 seconds to a 0.926-second median with identical TIFF bytes and
   SHA-256, reducing median total export to 24.874 seconds.
@@ -197,8 +206,11 @@ The 2026-07-27 audit added a bounded follow-up with this order:
 
 1. benchmark instrumentation and the camera-scan byte-identity fixture (both
    landed 2026-07-28);
-2. isolation and repair of the existing LibRaw threaded-path divergence;
-3. measured reduction of adjusted-correction allocations and serial passes;
+2. isolation and repair of the existing LibRaw threaded-path divergence
+   (isolation landed 2026-07-30; the tiled X-Trans repair remains open);
+3. measured reduction of adjusted-correction allocations and serial passes
+   (landed 2026-08-12: in-place parallel tone/protected-color/dye-mixing with
+   byte-identical scenario digests and a 1.984 GB → 1.017 GB peak);
 4. only then, re-evaluation of compression writers, batch overlap, Bayer RCD,
    or micro-optimizations.
 

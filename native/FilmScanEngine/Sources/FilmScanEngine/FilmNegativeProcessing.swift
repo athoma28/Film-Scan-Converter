@@ -518,11 +518,17 @@ public enum FilmNegativeProcessing {
     let totalComponents = pixelCount * 3
     var output = [Double](repeating: 0, count: totalComponents)
 
-    for i in 0..<pixelCount {
-      let base = i * 3
-      let b = image.pixels[base]
-      let g = image.pixels[base + 1]
-      let r = image.pixels[base + 2]
+    let inputPixels = image.pixels
+    let enabled = params.enabled
+    let multiplierB = multipliers.b
+    let multiplierG = multipliers.g
+    let multiplierR = multipliers.r
+
+    @Sendable func processPixel(_ pixelIndex: Int, output: UnsafeMutablePointer<Double>) {
+      let base = pixelIndex * 3
+      let b = inputPixels[base]
+      let g = inputPixels[base + 1]
+      let r = inputPixels[base + 2]
 
       let linearB = Double(sRGBToLinearLUT[Int(b)])
       let linearG = Double(sRGBToLinearLUT[Int(g)])
@@ -531,15 +537,36 @@ public enum FilmNegativeProcessing {
       var linG = 0.0113623 * linearB + 0.9195404 * linearG + 0.0690973 * linearR
       var linR = 0.0433131 * linearB + 0.3292830 * linearG + 0.6274039 * linearR
 
-      if params.enabled {
-        linB = multipliers.b * pow(max(linB, inputFloor), blueExp)
-        linG = multipliers.g * pow(max(linG, inputFloor), greenExp)
-        linR = multipliers.r * pow(max(linR, inputFloor), redExp)
+      if enabled {
+        linB = multiplierB * pow(max(linB, inputFloor), blueExp)
+        linG = multiplierG * pow(max(linG, inputFloor), greenExp)
+        linR = multiplierR * pow(max(linR, inputFloor), redExp)
       }
 
       output[base] = linB
       output[base + 1] = linG
       output[base + 2] = linR
+    }
+
+    let workerCount = min(8, ProcessInfo.processInfo.activeProcessorCount)
+    output.withUnsafeMutableBufferPointer { buffer in
+      guard let baseAddress = buffer.baseAddress else { return }
+      if pixelCount >= fusedPowerLawParallelPixelThreshold, workerCount > 1 {
+        let sendableBuffer = SendableMutableBuffer(baseAddress)
+        let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
+        DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
+          let start = worker * pixelsPerWorker
+          let end = min(start + pixelsPerWorker, pixelCount)
+          guard start < end else { return }
+          for pixelIndex in start..<end {
+            processPixel(pixelIndex, output: sendableBuffer.baseAddress)
+          }
+        }
+      } else {
+        for pixelIndex in 0..<pixelCount {
+          processPixel(pixelIndex, output: baseAddress)
+        }
+      }
     }
 
     return RenderReadyLinearImage(width: image.width, height: image.height, pixels: output)
@@ -552,11 +579,13 @@ public enum FilmNegativeProcessing {
   ) -> UInt16Image {
     let pixelCount = image.pixelCount
     var output = [UInt16](repeating: 0, count: image.pixels.count)
-    for pixelIndex in 0..<pixelCount {
+    let inputPixels = image.pixels
+
+    @Sendable func processPixel(_ pixelIndex: Int, output: UnsafeMutablePointer<UInt16>) {
       let base = pixelIndex * 3
-      let linB = image.pixels[base]
-      let linG = image.pixels[base + 1]
-      let linR = image.pixels[base + 2]
+      let linB = inputPixels[base]
+      let linG = inputPixels[base + 1]
+      let linR = inputPixels[base + 2]
 
       let srgbB = 1.1187297 * linB - 0.1005789 * linG - 0.0181508 * linR
       let srgbG = -0.0083494 * linB + 1.1328999 * linG - 0.1245505 * linR
@@ -565,6 +594,27 @@ public enum FilmNegativeProcessing {
       output[base] = displayEncodedFilmNegativeValue(srgbB)
       output[base + 1] = displayEncodedFilmNegativeValue(srgbG)
       output[base + 2] = displayEncodedFilmNegativeValue(srgbR)
+    }
+
+    let workerCount = min(8, ProcessInfo.processInfo.activeProcessorCount)
+    output.withUnsafeMutableBufferPointer { buffer in
+      guard let baseAddress = buffer.baseAddress else { return }
+      if pixelCount >= fusedPowerLawParallelPixelThreshold, workerCount > 1 {
+        let sendableBuffer = SendableMutableBuffer(baseAddress)
+        let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
+        DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
+          let start = worker * pixelsPerWorker
+          let end = min(start + pixelsPerWorker, pixelCount)
+          guard start < end else { return }
+          for pixelIndex in start..<end {
+            processPixel(pixelIndex, output: sendableBuffer.baseAddress)
+          }
+        }
+      } else {
+        for pixelIndex in 0..<pixelCount {
+          processPixel(pixelIndex, output: baseAddress)
+        }
+      }
     }
     return UInt16Image(width: image.width, height: image.height, channels: 3, pixels: output)
   }

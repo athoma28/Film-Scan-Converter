@@ -1,3 +1,4 @@
+import Dispatch
 import Foundation
 
 /// An unclamped, scene-linear BGR image shared by inversion front-ends and
@@ -5,6 +6,7 @@ import Foundation
 /// display or export transform, not this buffer.
 public struct RenderReadyLinearImage: Equatable, Sendable {
   public static let statisticsSampleLimit = 65_536
+  static let parallelPixelThreshold = 1_000_000
 
   public let width: Int
   public let height: Int
@@ -32,12 +34,25 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
     _ parameters: PhotoAdjustmentParameters,
     referenceLuminance: Double = 0.18
   ) -> RenderReadyLinearImage {
+    var copy = self
+    copy.applyLinearToneAdjustments(parameters, referenceLuminance: referenceLuminance)
+    return copy
+  }
+
+  /// In-place form used by full-resolution processing so an active tone
+  /// adjustment does not allocate a second scene-linear frame. The arithmetic
+  /// is identical to `applyingLinearToneAdjustments`; per-pixel ranges are
+  /// independent, so images above the parallel threshold use bounded workers.
+  public mutating func applyLinearToneAdjustments(
+    _ parameters: PhotoAdjustmentParameters,
+    referenceLuminance: Double = 0.18
+  ) {
     let hasToneAdjustment = parameters.exposureEV != 0
       || parameters.brightness != 0
       || parameters.contrast != 0
       || parameters.highlights != 0
       || parameters.shadows != 0
-    guard hasToneAdjustment else { return self }
+    guard hasToneAdjustment else { return }
 
     let pivot = min(max(referenceLuminance, 1e-6), 16)
     let exposureGain = exp2(parameters.exposureEV)
@@ -54,56 +69,59 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
     let shadowEnd = pivot * 2
     let minGain = 0.0005
 
-    var adjusted = [Double](repeating: 0, count: pixels.count)
-    for pixelIndex in 0..<pixelCount {
-      let base = pixelIndex * 3
-      var b = pixels[base]
-      var g = pixels[base + 1]
-      var r = pixels[base + 2]
+    let pixelCount = self.pixelCount
+    pixels.withUnsafeMutableBufferPointer { buffer in
+      guard let baseAddress = buffer.baseAddress else { return }
+      let sendable = SendableMutableBuffer(baseAddress)
+      Self.forEachPixelInParallel(pixelCount: pixelCount) { pixelIndex in
+        let base = pixelIndex * 3
+        var b = sendable.baseAddress[base]
+        var g = sendable.baseAddress[base + 1]
+        var r = sendable.baseAddress[base + 2]
 
-      b *= exposureGain
-      g *= exposureGain
-      r *= exposureGain
+        b *= exposureGain
+        g *= exposureGain
+        r *= exposureGain
 
-      b += brightnessOffset
-      g += brightnessOffset
-      r += brightnessOffset
+        b += brightnessOffset
+        g += brightnessOffset
+        r += brightnessOffset
 
-      if contrastActive {
-        let luminance = 0.2626983 * r + 0.6780 * g + 0.0593017 * b
-        if luminance > 0 {
-          let normalized = luminance / pivot
-          let adjustedLuminance = Self.powClamped(normalized, contrastGamma) * pivot
-          let scale = adjustedLuminance / luminance
-          b *= scale
-          g *= scale
-          r *= scale
+        if contrastActive {
+          let luminance = 0.2626983 * r + 0.6780 * g + 0.0593017 * b
+          if luminance > 0 {
+            let normalized = luminance / pivot
+            let adjustedLuminance = Self.powClamped(normalized, contrastGamma) * pivot
+            let scale = adjustedLuminance / luminance
+            b *= scale
+            g *= scale
+            r *= scale
+          }
         }
+
+        if highlightsActive || shadowsActive {
+          let luminance = 0.2626983 * r + 0.6780 * g + 0.0593017 * b
+          if highlightsActive {
+            let highlightWeight = Self.smoothstep(highlightStart, highlightEnd, luminance)
+            let highlightGain = max(1 - highlightsScale * highlightWeight, minGain)
+            b *= highlightGain
+            g *= highlightGain
+            r *= highlightGain
+          }
+          if shadowsActive {
+            let shadowWeight = 1 - Self.smoothstep(0, shadowEnd, luminance)
+            let shadowGain = max(1 + shadowsScale * shadowWeight, minGain)
+            b *= shadowGain
+            g *= shadowGain
+            r *= shadowGain
+          }
+        }
+
+        sendable.baseAddress[base] = b
+        sendable.baseAddress[base + 1] = g
+        sendable.baseAddress[base + 2] = r
       }
-
-      if highlightsActive || shadowsActive {
-        let luminance = 0.2626983 * r + 0.6780 * g + 0.0593017 * b
-        if highlightsActive {
-          let highlightWeight = Self.smoothstep(highlightStart, highlightEnd, luminance)
-          let highlightGain = max(1 - highlightsScale * highlightWeight, minGain)
-          b *= highlightGain
-          g *= highlightGain
-          r *= highlightGain
-        }
-        if shadowsActive {
-          let shadowWeight = 1 - Self.smoothstep(0, shadowEnd, luminance)
-          let shadowGain = max(1 + shadowsScale * shadowWeight, minGain)
-          b *= shadowGain
-          g *= shadowGain
-          r *= shadowGain
-        }
-      }
-
-      adjusted[base] = b
-      adjusted[base + 1] = g
-      adjusted[base + 2] = r
     }
-    return RenderReadyLinearImage(width: width, height: height, pixels: adjusted)
   }
 
   private static func smoothstep(_ low: Double, _ high: Double, _ value: Double) -> Double {
@@ -116,6 +134,33 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
     let result = pow(clampedBase, exponent)
     if !result.isFinite { return clampedBase >= 1 ? 1e12 : 1e-12 }
     return result
+  }
+
+  /// Runs an independent per-pixel body over the buffer. Pixel ranges are
+  /// disjoint and each output element is written by exactly one worker, so the
+  /// parallel path is byte-identical to the serial path. Images below the
+  /// threshold stay serial so bounded interactive inputs do not pay dispatch
+  /// overhead.
+  private static func forEachPixelInParallel(
+    pixelCount: Int,
+    _ body: @Sendable (Int) -> Void
+  ) {
+    let workerCount = min(8, ProcessInfo.processInfo.activeProcessorCount)
+    if pixelCount >= parallelPixelThreshold, workerCount > 1 {
+      let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
+      DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
+        let start = worker * pixelsPerWorker
+        let end = min(start + pixelsPerWorker, pixelCount)
+        guard start < end else { return }
+        for pixelIndex in start..<end {
+          body(pixelIndex)
+        }
+      }
+    } else {
+      for pixelIndex in 0..<pixelCount {
+        body(pixelIndex)
+      }
+    }
   }
 
   /// Applies the film-dye crossover correction before photographic tone and
@@ -137,21 +182,26 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
     let mixing = parameters.clamped()
     guard !mixing.isNeutral else { return }
 
-    for pixelIndex in 0..<pixelCount {
-      let base = pixelIndex * 3
-      let blue = pixels[base]
-      let green = pixels[base + 1]
-      let red = pixels[base + 2]
+    let pixelCount = self.pixelCount
+    pixels.withUnsafeMutableBufferPointer { buffer in
+      guard let baseAddress = buffer.baseAddress else { return }
+      let sendable = SendableMutableBuffer(baseAddress)
+      Self.forEachPixelInParallel(pixelCount: pixelCount) { pixelIndex in
+        let base = pixelIndex * 3
+        let blue = sendable.baseAddress[base]
+        let green = sendable.baseAddress[base + 1]
+        let red = sendable.baseAddress[base + 2]
 
-      pixels[base] = blue
-        + mixing.blueFromRed * (red - blue)
-        + mixing.blueFromGreen * (green - blue)
-      pixels[base + 1] = green
-        + mixing.greenFromRed * (red - green)
-        + mixing.greenFromBlue * (blue - green)
-      pixels[base + 2] = red
-        + mixing.redFromGreen * (green - red)
-        + mixing.redFromBlue * (blue - red)
+        sendable.baseAddress[base] = blue
+          + mixing.blueFromRed * (red - blue)
+          + mixing.blueFromGreen * (green - blue)
+        sendable.baseAddress[base + 1] = green
+          + mixing.greenFromRed * (red - green)
+          + mixing.greenFromBlue * (blue - green)
+        sendable.baseAddress[base + 2] = red
+          + mixing.redFromGreen * (green - red)
+          + mixing.redFromBlue * (blue - red)
+      }
     }
   }
 
@@ -162,26 +212,40 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
   public func applyingProtectedColorAdjustments(
     _ parameters: PhotoAdjustmentParameters
   ) -> RenderReadyLinearImage {
+    var copy = self
+    copy.applyProtectedColorAdjustments(parameters)
+    return copy
+  }
+
+  /// In-place form used by full-resolution processing so an active protected
+  /// color adjustment does not allocate a second scene-linear frame. The
+  /// arithmetic is identical to `applyingProtectedColorAdjustments`.
+  public mutating func applyProtectedColorAdjustments(
+    _ parameters: PhotoAdjustmentParameters
+  ) {
     let hasColorAdjustment = parameters.temperatureShiftMired != 0
       || parameters.tint != 0
       || parameters.saturation != 0
       || parameters.vibrance != 0
-    guard hasColorAdjustment else { return self }
+    guard hasColorAdjustment else { return }
 
-    var adjusted = [Double](repeating: 0, count: pixels.count)
-    for pixelIndex in 0..<pixelCount {
-      let base = pixelIndex * 3
-      let output = ProtectedColorAdjustment.apply(
-        blue: pixels[base],
-        green: pixels[base + 1],
-        red: pixels[base + 2],
-        parameters: parameters
-      )
-      adjusted[base] = output.blue
-      adjusted[base + 1] = output.green
-      adjusted[base + 2] = output.red
+    let pixelCount = self.pixelCount
+    pixels.withUnsafeMutableBufferPointer { buffer in
+      guard let baseAddress = buffer.baseAddress else { return }
+      let sendable = SendableMutableBuffer(baseAddress)
+      Self.forEachPixelInParallel(pixelCount: pixelCount) { pixelIndex in
+        let base = pixelIndex * 3
+        let output = ProtectedColorAdjustment.apply(
+          blue: sendable.baseAddress[base],
+          green: sendable.baseAddress[base + 1],
+          red: sendable.baseAddress[base + 2],
+          parameters: parameters
+        )
+        sendable.baseAddress[base] = output.blue
+        sendable.baseAddress[base + 1] = output.green
+        sendable.baseAddress[base + 2] = output.red
+      }
     }
-    return RenderReadyLinearImage(width: width, height: height, pixels: adjusted)
   }
 
   public func statistics(
