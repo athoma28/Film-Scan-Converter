@@ -1297,8 +1297,13 @@ struct FilmNegativeProcessingTests {
     #expect(builtIns.contains(FilmStockProfile.harmanPhoenixIIAlternate))
     #expect(builtIns.contains(FilmStockProfile.legacyColorNegative))
     #expect(builtIns.contains(FilmStockProfile.genericBW))
+    #expect(builtIns.contains(FilmStockProfile.shanghaiGP3Alternate))
     #expect(builtIns.contains(FilmStockProfile.legacyBW))
     #expect(FilmStockProfile.genericBW.filmNegativeParams.rendering == .calibratedMonochrome)
+    #expect(FilmStockProfile.shanghaiGP3Alternate.filmNegativeParams.rendering == .calibratedMonochrome)
+    #expect(
+      FilmStockProfile.shanghaiGP3Alternate.filmNegativeParams.calibratedMonochromeProfile
+        == .shanghaiGP3)
     #expect(FilmStockProfile.legacyBW.filmNegativeParams.rendering == .powerLaw)
     #expect(FilmStockProfile.genericColorNegative.filmNegativeParams.rendering == .calibratedColor)
     #expect(

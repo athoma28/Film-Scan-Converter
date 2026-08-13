@@ -17,6 +17,9 @@ private struct XMPSettings {
   let cropRight: Double
   let exposure: Double
   let monochrome: Bool
+  /// Quarter turns needed to rotate Adobe's oriented export back into the
+  /// camera-scan decode's sensor orientation (0, 1, 2, or 3).
+  let targetAlignmentQuarterTurns: Int
 }
 
 private struct ReferenceTriplet {
@@ -98,6 +101,8 @@ private struct CalibrationReport: Codable {
   let decodeProfile: String
   let stride: Int
   let discoveredTriplets: Int
+  let loadedTriplets: Int
+  let skippedFrames: [String]
   let genericColor: CandidateReport?
   let genericMonochrome: CandidateReport?
   let stockProfiles: [String: CandidateReport]
@@ -140,9 +145,17 @@ private func run(options: Options) throws {
   }
 
   var frames: [ReferenceFrame] = []
+  var skippedFrames: [String] = []
   for (index, triplet) in triplets.enumerated() {
     print("[\(index + 1)/\(triplets.count)] \(triplet.stockID)/\(triplet.stem)")
-    frames.append(try loadFrame(triplet, stride: options.stride))
+    do {
+      frames.append(try loadFrame(triplet, stride: options.stride))
+    } catch {
+      skippedFrames.append("\(triplet.stockID)/\(triplet.stem): \(error)")
+      FileHandle.standardError.write(
+        Data("  skipped \(triplet.stockID)/\(triplet.stem): \(error)\n".utf8)
+      )
+    }
   }
 
   let colorFrames = frames.filter { !$0.monochrome }
@@ -179,12 +192,14 @@ private func run(options: Options) throws {
   }
 
   let report = CalibrationReport(
-    schemaVersion: 4,
+    schemaVersion: 5,
     generatedAt: ISO8601DateFormatter().string(from: Date()),
     sampleRoot: options.root.path,
     decodeProfile: "rawTherapeeCameraScan half-resolution",
     stride: options.stride,
     discoveredTriplets: triplets.count,
+    loadedTriplets: frames.count,
+    skippedFrames: skippedFrames,
     genericColor: genericColor,
     genericMonochrome: genericMonochrome,
     stockProfiles: stockProfiles
@@ -261,12 +276,23 @@ private func preferredTarget(stem: String, files: [URL]) -> URL? {
 }
 
 private func parseXMP(_ text: String) -> XMPSettings {
-  func value(_ name: String, fallback: Double) -> Double {
-    let marker = "crs:\(name)=\""
+  func attribute(_ qualifiedName: String) -> String? {
+    let marker = "\(qualifiedName)=\""
     guard let start = text.range(of: marker)?.upperBound,
       let end = text[start...].firstIndex(of: "\"")
-    else { return fallback }
-    return Double(text[start..<end]) ?? fallback
+    else { return nil }
+    return String(text[start..<end])
+  }
+  func value(_ name: String, fallback: Double) -> Double {
+    Double(attribute("crs:\(name)") ?? "") ?? fallback
+  }
+  let targetAlignmentQuarterTurns: Int
+  switch Int(attribute("tiff:Orientation") ?? "1") ?? 1 {
+  case 1: targetAlignmentQuarterTurns = 0
+  case 3: targetAlignmentQuarterTurns = 2
+  case 6: targetAlignmentQuarterTurns = -1
+  case 8: targetAlignmentQuarterTurns = 1
+  default: targetAlignmentQuarterTurns = 0
   }
   return XMPSettings(
     cropTop: value("CropTop", fallback: 0),
@@ -274,7 +300,8 @@ private func parseXMP(_ text: String) -> XMPSettings {
     cropBottom: value("CropBottom", fallback: 1),
     cropRight: value("CropRight", fallback: 1),
     exposure: value("Exposure2012", fallback: 0),
-    monochrome: text.contains("ConvertToGrayscale=\"True\"")
+    monochrome: text.contains("ConvertToGrayscale=\"True\""),
+    targetAlignmentQuarterTurns: targetAlignmentQuarterTurns
   )
 }
 
@@ -298,15 +325,23 @@ private func loadFrame(_ triplet: ReferenceTriplet, stride: Int) throws -> Refer
       )
     )
   )
-  let target = try StandardImageDecoder.decodePreview(
+  let decodedTarget = try StandardImageDecoder.decodePreview(
     triplet.targetURL,
     maxDimension: targetMaxDimension
   )
+  let target = decodedTarget.rotated(
+    quarterTurns: triplet.xmp.targetAlignmentQuarterTurns
+  )
+  let turns = triplet.xmp.targetAlignmentQuarterTurns
+  let alignedFullTargetWidth = turns.isMultiple(of: 2)
+    ? targetFull.width : targetFull.height
+  let alignedFullTargetHeight = turns.isMultiple(of: 2)
+    ? targetFull.height : targetFull.width
 
   let cropWidth = max(triplet.xmp.cropRight - triplet.xmp.cropLeft, 1e-6)
   let cropHeight = max(triplet.xmp.cropBottom - triplet.xmp.cropTop, 1e-6)
-  let adobeActiveWidth = Double(targetFull.width) / cropWidth
-  let adobeActiveHeight = Double(targetFull.height) / cropHeight
+  let adobeActiveWidth = Double(alignedFullTargetWidth) / cropWidth
+  let adobeActiveHeight = Double(alignedFullTargetHeight) / cropHeight
   let activeOriginX = (Double(fullRaw.width) - adobeActiveWidth) / 2
   let activeOriginY = (Double(fullRaw.height) - adobeActiveHeight) / 2
   let originX = Int(
@@ -601,13 +636,12 @@ private func fitUnvalidatedStockCandidate(
   _ frames: [ReferenceFrame],
   monochrome: Bool
 ) -> CandidateReport {
-  let exposureNormalization = monochrome ? 1.0 : 0.5
-  let colorNormalization = monochrome ? 0.0 : 0.25
+  let strengths = bestNormalizationForUnvalidated(frames, monochrome: monochrome)
   let candidate = fitCandidate(
     frames,
     monochrome: monochrome,
-    exposureNormalization: exposureNormalization,
-    colorNormalization: colorNormalization
+    exposureNormalization: strengths.exposure,
+    colorNormalization: strengths.color
   )
   var frameScores: [FrameScore] = []
   var fittedError = 0.0
@@ -662,6 +696,43 @@ private func completeBuiltInStockMean(_ frames: [ReferenceFrame]) -> Double? {
   let errors = frames.compactMap(\.builtInStockProfileMAE)
   guard errors.count == frames.count, !errors.isEmpty else { return nil }
   return errors.reduce(0, +) / Double(errors.count)
+}
+
+/// Grid-searches exposure and channel-ratio normalization on in-sample MAE for
+/// stocks with too few frames for cross-validation. Prefer a data-driven anchor
+/// over the fixed `0.5`/`0.25` defaults, which are tuned for full colour sets.
+private func bestNormalizationForUnvalidated(
+  _ frames: [ReferenceFrame],
+  monochrome: Bool
+) -> (exposure: Double, color: Double) {
+  let exposureGrid = [0.0, 0.25, 0.5, 0.75, 1.0]
+  let colorGrid = monochrome ? [0.0] : [0.0, 0.25, 0.5, 0.75, 1.0]
+  var best = (exposure: monochrome ? 1.0 : 0.5, color: monochrome ? 0.0 : 0.25)
+  var bestError = Double.greatestFiniteMagnitude
+  for exposure in exposureGrid {
+    for color in colorGrid {
+      let candidate = fitCandidate(
+        frames,
+        monochrome: monochrome,
+        exposureNormalization: exposure,
+        colorNormalization: color
+      )
+      var error = 0.0
+      var componentCount = 0
+      for frame in frames {
+        let scored = score(frame: frame, candidate: candidate, monochrome: monochrome)
+        error += scored.errorSum
+        componentCount += scored.componentCount
+      }
+      guard componentCount > 0 else { continue }
+      let mean = error / Double(componentCount)
+      if mean < bestError {
+        bestError = mean
+        best = (exposure, color)
+      }
+    }
+  }
+  return best
 }
 
 private func fitCandidate(

@@ -224,6 +224,14 @@ public struct FilmStockProfile: Codable, Equatable, Sendable {
     notes: "Paired Camera Raw monochrome curve with adaptive exposure anchoring"
   )
 
+  public static let shanghaiGP3Alternate = FilmStockProfile(
+    id: FilmStockProfileID(rawValue: "alternate_shanghai_gp3"),
+    displayName: "Alternate — Shanghai GP3",
+    filmType: .blackAndWhiteNegative,
+    filmNegativeParams: .shanghaiGP3Alternate,
+    notes: "Six-frame stock-specific monochrome fit with leave-one-frame-out validation"
+  )
+
   public static let legacyBW = FilmStockProfile(
     id: FilmStockProfileID(rawValue: "generic_bw_negative"),
     displayName: "Generic B&W Negative (Legacy)",
@@ -441,6 +449,7 @@ public final class ProfileStore: Sendable {
       .harmanPhoenixIIAlternate,
       .legacyColorNegative,
       .genericBW,
+      .shanghaiGP3Alternate,
       .legacyBW,
     ]
   }

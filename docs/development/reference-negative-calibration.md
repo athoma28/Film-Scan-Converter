@@ -28,17 +28,24 @@ The tool:
 
 1. discovers color and monochrome triplets recursively;
 2. decodes each RAF through `rawTherapeeCameraScan`, never its embedded preview;
-3. maps the XMP crop back into the decoder's active RAW rectangle;
-4. scores current and Legacy neutral renders against the manual JPEG;
-5. scores any matching shipped stock profile as a separate baseline;
-6. fits monotone 11-point curves plus exposure and channel-ratio normalization;
-7. selects a generic color candidate with stock-balanced leave-one-stock-out
+3. maps the XMP crop back into the decoder's active RAW rectangle, rotating
+   Adobe's oriented export back into the sensor decode via `tiff:Orientation`
+   so portrait scans align like landscape ones;
+4. skips (rather than aborts on) any frame that fails to decode or align,
+   logging the stem and reason and continuing with the remaining corpus;
+5. scores current and Legacy neutral renders against the manual JPEG;
+6. scores any matching shipped stock profile as a separate baseline;
+7. fits monotone 11-point curves plus exposure and channel-ratio normalization;
+8. grid-searches the exposure and channel-ratio anchors on held-out error for
+   sets with enough frames, and on in-sample error for smaller stocks instead
+   of assuming the full-set `0.5`/`0.25` defaults;
+9. selects a generic color candidate with stock-balanced leave-one-stock-out
    validation, rather than allowing a large stock folder to dominate;
-8. reports leave-one-frame-out error for candidates with at least three frames;
-   smaller stock folders still emit explicitly unvalidated fitted curves and
-   base medians for experimental alternate looks.
+10. reports leave-one-frame-out error for candidates with at least three frames;
+    smaller stock folders still emit explicitly unvalidated fitted curves and
+    base medians for experimental alternate looks.
 
-The July 27, 2026 corpus contains 31 triplets: 26 color and five monochrome.
+The July 27, 2026 corpus contains 32 triplets: 26 color and six monochrome.
 The expanded generic-color candidate reached `0.120` stock-balanced
 leave-one-stock-out MAE. It was not promoted: its roughly 4.4% macro-average
 improvement missed the 5% threshold, and it regressed the current rendering on
@@ -62,6 +69,9 @@ material held-out improvement (currently 5% relative) for that.
   sub-percent in-sample change.
 - Fuji 200 Expired still has one reference, and its existing alternate
   (`0.0711`) already matches or slightly beats the new candidate (`0.0712`).
-- Shanghai GP3 now has five references. The proposed B&W refit has `0.157`
-  leave-one-frame-out MAE, worse than the current calibrated curve's `0.140`
-  fixed-profile score, so the shipped B&W profile remains unchanged.
+- Shanghai GP3 now has six references, including a portrait scan that only
+  aligns after the `tiff:Orientation` fix. Its stock-specific curve reaches
+  `0.126` in-sample and `0.143` leave-one-frame-out MAE versus `0.137` for the
+  generic B&W curve, and `0.146` for Legacy. The GP3 curve ships as an explicit
+  **Alternate — Shanghai GP3** monochrome profile with a half-strength exposure
+  anchor; the generic B&W curve remains the default.

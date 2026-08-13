@@ -101,7 +101,9 @@ features.
 - The generic B&W profile uses a paired RAW/JPEG/XMP-calibrated decreasing
   curve, full per-frame exposure anchoring, and a negative-side exposure
   control. The former B&W power-law rendering remains selectable as
-  **Generic B&W Negative (Legacy)**.
+  **Generic B&W Negative (Legacy)**. A stock-specific
+  **Alternate — Shanghai GP3** curve is fitted from six paired references and
+  uses a half-strength exposure anchor for a softer per-frame response.
 - The generic color profile likewise uses paired Camera Raw color curves and a
   negative-side exposure control. Its legacy profile retains the former
   scene-median-normalized exponent rendering for existing looks.

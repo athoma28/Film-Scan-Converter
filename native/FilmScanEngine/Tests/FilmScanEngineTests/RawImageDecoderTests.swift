@@ -201,6 +201,57 @@ struct RawImageDecoderTests {
   }
 
   @Test(
+    "Shanghai GP3 alternate tracks paired Camera Raw references and beats legacy",
+    .enabled(
+      if: pairedBlackAndWhiteSamplesAvailable,
+      "paired B&W RAW/JPEG/XMP samples unavailable; calibration guard skipped")
+  )
+  func shanghaiGP3AlternateTracksCameraRawReferences() throws {
+    let triplets = SampleRawCorpus.triplets().filter(\.isMonochrome)
+    var alternateErrors: [Double] = []
+    var legacyErrors: [Double] = []
+    for triplet in triplets {
+      let reference = try SampleRawCorpus.loadAlignedReference(triplet)
+      let medians = FilmNegativeProcessing.computeMedians(
+        image: reference.raw,
+        borderPercent: 20
+      )
+      var alternate = FilmNegativeParams.shanghaiGP3Alternate
+      alternate.measuredMedians = medians
+      let alternateRender = FilmProcessing.correctedPreview(
+        image: reference.raw,
+        parameters: ProcessingParameters(
+          filmType: .blackAndWhiteNegative,
+          filmNegativeParams: alternate
+        )
+      )
+      var legacy = FilmNegativeParams.legacyBlackAndWhite
+      legacy.measuredMedians = medians
+      let legacyRender = FilmProcessing.correctedPreview(
+        image: reference.raw,
+        parameters: ProcessingParameters(
+          filmType: .blackAndWhiteNegative,
+          filmNegativeParams: legacy
+        )
+      )
+      let alternateError = referenceMAE(alternateRender, against: reference)
+      let legacyError = referenceMAE(legacyRender, against: reference)
+      alternateErrors.append(alternateError)
+      legacyErrors.append(legacyError)
+      #expect(
+        alternateError < 0.25,
+        "\(triplet.stockID)/\(triplet.stem) GP3 alternate tone error \(alternateError)")
+    }
+
+    let alternateMean = alternateErrors.reduce(0, +) / Double(alternateErrors.count)
+    let legacyMean = legacyErrors.reduce(0, +) / Double(legacyErrors.count)
+    #expect(alternateMean < 0.18)
+    #expect(
+      alternateMean < legacyMean,
+      "GP3 alternate \(alternateMean) should beat legacy B&W \(legacyMean)")
+  }
+
+  @Test(
     "Half-resolution X-T5 decode fully interpolates bright X-Trans frames",
     .enabled(
       if: xT5RegressionSamplesAvailable,

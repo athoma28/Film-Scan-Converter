@@ -1510,10 +1510,17 @@ struct ContentView: View {
     {
       return .legacyColourNegative
     }
-    if fn.rendering == FilmNegativeParams.blackAndWhite.rendering
-      && fn.monochromeExposureEV == FilmNegativeParams.blackAndWhite.monochromeExposureEV
-    {
-      return .blackAndWhite
+    if fn.rendering == FilmNegativeParams.blackAndWhite.rendering {
+      switch fn.calibratedMonochromeProfile {
+      case .generic:
+        if fn.monochromeExposureEV == FilmNegativeParams.blackAndWhite.monochromeExposureEV {
+          return .blackAndWhite
+        }
+      case .shanghaiGP3:
+        if fn.monochromeExposureEV == FilmNegativeParams.shanghaiGP3Alternate.monochromeExposureEV {
+          return .shanghaiGP3Alternate
+        }
+      }
     }
     if fn.rendering == FilmNegativeParams.legacyBlackAndWhite.rendering
       && fn.redRatio == FilmNegativeParams.legacyBlackAndWhite.redRatio
@@ -1559,7 +1566,7 @@ struct ContentView: View {
         .legacyColourNegative,
       ]
     case .blackAndWhiteNegative:
-      [.off, .blackAndWhite, .legacyBlackAndWhite]
+      [.off, .blackAndWhite, .shanghaiGP3Alternate, .legacyBlackAndWhite]
     case .slide, .cropOnly:
       [.off]
     }

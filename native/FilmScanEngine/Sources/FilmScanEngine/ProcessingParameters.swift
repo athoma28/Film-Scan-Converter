@@ -70,6 +70,14 @@ public enum CalibratedColorNegativeProfile: String, Codable, Equatable, Sendable
   case harmanPhoenixII
 }
 
+/// Selects the paired-reference curve and exposure anchor used by the
+/// calibrated monochrome-negative renderer. Stock-specific cases keep their
+/// own curve and base anchor so saved edits remain stable as stocks are added.
+public enum CalibratedMonochromeProfile: String, Codable, Equatable, Sendable {
+  case generic
+  case shanghaiGP3
+}
+
 public struct FilmNegativeParams: Codable, Equatable, Sendable {
   public var enabled: Bool
   public var redRatio: Double
@@ -77,6 +85,7 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
   public var blueRatio: Double
   public var rendering: FilmNegativeRendering
   public var calibratedColorProfile: CalibratedColorNegativeProfile
+  public var calibratedMonochromeProfile: CalibratedMonochromeProfile
   /// Exposure applied to the scan before a calibrated decreasing curve.
   /// Positive values therefore produce a darker positive image.
   public var monochromeExposureEV: Double
@@ -90,6 +99,7 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     case blueRatio
     case rendering
     case calibratedColorProfile
+    case calibratedMonochromeProfile
     case monochromeExposureEV
   }
 
@@ -100,6 +110,7 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     blueRatio: Double = 0.86,
     rendering: FilmNegativeRendering = .powerLaw,
     calibratedColorProfile: CalibratedColorNegativeProfile = .generic,
+    calibratedMonochromeProfile: CalibratedMonochromeProfile = .generic,
     monochromeExposureEV: Double = 0,
     measuredMedians: BGRChannelValues? = nil
   ) {
@@ -110,6 +121,7 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     self.blueRatio = blueRatio
     self.rendering = rendering
     self.calibratedColorProfile = calibratedColorProfile
+    self.calibratedMonochromeProfile = calibratedMonochromeProfile
     self.monochromeExposureEV = monochromeExposureEV
     self.measuredMedians = measuredMedians
   }
@@ -128,6 +140,9 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     calibratedColorProfile = try container.decodeIfPresent(
       CalibratedColorNegativeProfile.self, forKey: .calibratedColorProfile
     ) ?? .generic
+    calibratedMonochromeProfile = try container.decodeIfPresent(
+      CalibratedMonochromeProfile.self, forKey: .calibratedMonochromeProfile
+    ) ?? .generic
     monochromeExposureEV = try container.decodeIfPresent(
       Double.self, forKey: .monochromeExposureEV
     ) ?? 0
@@ -142,6 +157,7 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     try container.encode(blueRatio, forKey: .blueRatio)
     try container.encode(rendering, forKey: .rendering)
     try container.encode(calibratedColorProfile, forKey: .calibratedColorProfile)
+    try container.encode(calibratedMonochromeProfile, forKey: .calibratedMonochromeProfile)
     try container.encode(monochromeExposureEV, forKey: .monochromeExposureEV)
   }
 
@@ -185,6 +201,11 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     blueRatio: 1.0,
     rendering: .calibratedMonochrome
   )
+  public static let shanghaiGP3Alternate = FilmNegativeParams(
+    enabled: true,
+    rendering: .calibratedMonochrome,
+    calibratedMonochromeProfile: .shanghaiGP3
+  )
 }
 
 public enum FilmNegativePreset: Int, CaseIterable, Hashable, Sendable {
@@ -196,6 +217,7 @@ public enum FilmNegativePreset: Int, CaseIterable, Hashable, Sendable {
   case harmanPhoenixIIAlternate
   case legacyColourNegative
   case blackAndWhite
+  case shanghaiGP3Alternate
   case legacyBlackAndWhite
 
   public var displayName: String {
@@ -208,6 +230,7 @@ public enum FilmNegativePreset: Int, CaseIterable, Hashable, Sendable {
     case .harmanPhoenixIIAlternate: "Alternate — Harman Phoenix II"
     case .legacyColourNegative: "Color Negative (Legacy)"
     case .blackAndWhite: "Black & White"
+    case .shanghaiGP3Alternate: "Alternate — Shanghai GP3"
     case .legacyBlackAndWhite: "Black & White (Legacy)"
     }
   }

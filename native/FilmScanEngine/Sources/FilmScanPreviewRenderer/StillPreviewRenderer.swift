@@ -85,6 +85,10 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       case .cinestill800T: 3
       case .harmanPhoenixII: 4
       }
+      let calibratedMonochromeProfile: Float = switch fnp.calibratedMonochromeProfile {
+      case .generic: 0
+      case .shanghaiGP3: 1
+      }
       let (fnRExp, fnGExp, fnBExp): (Float, Float, Float)
       let (fnRMult, fnGMult, fnBMult): (Float, Float, Float)
 
@@ -118,7 +122,8 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         case .calibratedMonochrome:
           let gain = Float(
             FilmNegativeProcessing.calibratedMonochromeInputGain(
-              measuredMedians: fnp.measuredMedians
+              measuredMedians: fnp.measuredMedians,
+              profile: fnp.calibratedMonochromeProfile
             )
           )
           fnRExp = 0; fnGExp = 0; fnBExp = 0
@@ -174,6 +179,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
             Float(fnEnabled ? 1 : 0),
             renderingMode,
             calibratedColorProfile,
+            calibratedMonochromeProfile,
             Float(fnp.monochromeExposureEV),
             fnRExp,
             fnGExp,
@@ -401,34 +407,44 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       return clamp(result, 0.0, 1.0);
     }
 
+    float calibratedMonochromeKnot(float profile, float knot) {
+      if (profile < 0.5) {
+        if (knot < 0.5) return 0.989069;
+        if (knot < 1.5) return 0.912663;
+        if (knot < 2.5) return 0.668040;
+        if (knot < 3.5) return 0.603132;
+        if (knot < 4.5) return 0.488223;
+        if (knot < 5.5) return 0.330530;
+        if (knot < 6.5) return 0.157710;
+        if (knot < 7.5) return 0.105823;
+        if (knot < 8.5) return 0.105823;
+        if (knot < 9.5) return 0.105823;
+        return 0.067593;
+      }
+      if (knot < 0.5) return 0.988401;
+      if (knot < 1.5) return 0.919551;
+      if (knot < 2.5) return 0.788751;
+      if (knot < 3.5) return 0.676859;
+      if (knot < 4.5) return 0.517770;
+      if (knot < 5.5) return 0.355288;
+      if (knot < 6.5) return 0.199164;
+      if (knot < 7.5) return 0.140077;
+      if (knot < 8.5) return 0.132008;
+      if (knot < 9.5) return 0.092534;
+      return 0.067556;
+    }
+
     float calibratedMonochromeCurve(
-      float value, float inputGain, float negativeExposureEV
+      float value, float inputGain, float negativeExposureEV, float profile
     ) {
       float exposed = clamp(
         value * inputGain * pow(2.0, negativeExposureEV), 0.0, 1.0);
-      float x0, y0, y1;
-      if (exposed < 0.10) {
-        x0 = 0.00; y0 = 0.989069; y1 = 0.912663;
-      } else if (exposed < 0.20) {
-        x0 = 0.10; y0 = 0.912663; y1 = 0.668040;
-      } else if (exposed < 0.30) {
-        x0 = 0.20; y0 = 0.668040; y1 = 0.603132;
-      } else if (exposed < 0.40) {
-        x0 = 0.30; y0 = 0.603132; y1 = 0.488223;
-      } else if (exposed < 0.50) {
-        x0 = 0.40; y0 = 0.488223; y1 = 0.330530;
-      } else if (exposed < 0.60) {
-        x0 = 0.50; y0 = 0.330530; y1 = 0.157710;
-      } else if (exposed < 0.70) {
-        x0 = 0.60; y0 = 0.157710; y1 = 0.105823;
-      } else if (exposed < 0.80) {
-        x0 = 0.70; y0 = 0.105823; y1 = 0.105823;
-      } else if (exposed < 0.90) {
-        x0 = 0.80; y0 = 0.105823; y1 = 0.105823;
-      } else {
-        x0 = 0.90; y0 = 0.105823; y1 = 0.067593;
-      }
-      return mix(y0, y1, (exposed - x0) * 10.0);
+      float position = exposed * 10.0;
+      float lower = min(floor(position), 9.0);
+      return mix(
+        calibratedMonochromeKnot(profile, lower),
+        calibratedMonochromeKnot(profile, lower + 1.0),
+        position - lower);
     }
 
     vec3 calibratedColorKnot(float profile, float knot) {
@@ -766,6 +782,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       float filmNegativeEnabled,
       float filmNegativeRendering,
       float calibratedColorProfile,
+      float calibratedMonochromeProfile,
       float monochromeExposureEV,
       float fnRExp,
       float fnGExp,
@@ -797,7 +814,8 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       if (filmNegativeEnabled == 1.0 && useCalibratedMonochrome) {
         float gray = dot(rgb, vec3(0.299, 0.587, 0.114));
         rgb = vec3(
-          calibratedMonochromeCurve(gray, fnGMult, monochromeExposureEV));
+          calibratedMonochromeCurve(
+            gray, fnGMult, monochromeExposureEV, calibratedMonochromeProfile));
         if (useLinearTone) {
           vec3 linear = displayLinearValue(rgb);
           linear = linearToneAdjustments(

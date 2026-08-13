@@ -472,6 +472,8 @@ struct StillPreviewBenchmarkTests {
     filmNegative.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
     var blackAndWhiteNegative = FilmNegativeParams.blackAndWhite
     blackAndWhiteNegative.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
+    var shanghaiGP3Negative = FilmNegativeParams.shanghaiGP3Alternate
+    shanghaiGP3Negative.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
 
     let configs: [(String, ProcessingParameters)] = [
       ("exposure+1", ProcessingParameters(
@@ -514,6 +516,8 @@ struct StillPreviewBenchmarkTests {
       ("bw-negative-exposure", ProcessingParameters(
         filmType: .blackAndWhiteNegative, filmNegativeParams: blackAndWhiteNegative,
         photoAdjustments: PhotoAdjustmentParameters(exposureEV: -0.5))),
+      ("gp3-bw-negative", ProcessingParameters(
+        filmType: .blackAndWhiteNegative, filmNegativeParams: shanghaiGP3Negative)),
     ]
 
     var maxDiff = 0

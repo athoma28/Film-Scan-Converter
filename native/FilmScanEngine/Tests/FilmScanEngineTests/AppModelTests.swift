@@ -1794,6 +1794,10 @@ struct AppModelTests {
     model.setCalibratedNegativeExposure(1.25)
     #expect(model.parameters.filmNegativeParams.monochromeExposureEV == 1.25)
 
+    model.setFilmNegativePreset(.shanghaiGP3Alternate)
+    #expect(model.parameters.filmNegativeParams.calibratedMonochromeProfile == .shanghaiGP3)
+    #expect(model.parameters.filmNegativeParams.rendering == .calibratedMonochrome)
+
     model.setFilmNegativePreset(.legacyBlackAndWhite)
     #expect(model.parameters.filmNegativeParams == .legacyBlackAndWhite)
 

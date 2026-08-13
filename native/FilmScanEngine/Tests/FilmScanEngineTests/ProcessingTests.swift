@@ -867,6 +867,40 @@ struct ProcessingTests {
     #expect(actual.last! > 0.06)
   }
 
+  @Test("Shanghai GP3 monochrome profile is a distinct stock-specific curve")
+  func shanghaiGP3MonochromeProfile() {
+    let expected: [Double] = [
+      0.988401, 0.919551, 0.788751, 0.676859, 0.517770, 0.355288,
+      0.199164, 0.140077, 0.132008, 0.092534, 0.067556,
+    ]
+    let actual = (0...10).map {
+      FilmNegativeProcessing.calibratedMonochromeToneCurve(
+        Double($0) / 10,
+        profile: .shanghaiGP3
+      )
+    }
+
+    for (value, reference) in zip(actual, expected) {
+      #expect(abs(value - reference) < 0.001)
+    }
+    #expect(actual == actual.sorted(by: >))
+    #expect(actual.last! > 0.06)
+
+    let generic = (0...10).map {
+      FilmNegativeProcessing.calibratedMonochromeToneCurve(Double($0) / 10)
+    }
+    #expect(actual != generic)
+
+    let referenceMedians = BGRChannelValues(
+      blue: 37_407.5, green: 26_811.5, red: 20_828.5
+    )
+    let gain = FilmNegativeProcessing.calibratedMonochromeInputGain(
+      measuredMedians: referenceMedians,
+      profile: .shanghaiGP3
+    )
+    #expect(abs(gain - 1.0) < 1e-9)
+  }
+
   @Test("Calibrated color curves retain density-dependent channel separation")
   func calibratedColorReferenceCurves() {
     let blue = (0...10).map {

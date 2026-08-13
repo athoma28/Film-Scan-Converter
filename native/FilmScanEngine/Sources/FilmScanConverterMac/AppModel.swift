@@ -796,6 +796,8 @@ final class AppModel: ObservableObject {
         $0.filmNegativeParams = FilmNegativeParams.legacyColourNegative
       case .blackAndWhite:
         $0.filmNegativeParams = FilmNegativeParams.blackAndWhite
+      case .shanghaiGP3Alternate:
+        $0.filmNegativeParams = FilmNegativeParams.shanghaiGP3Alternate
       case .legacyBlackAndWhite:
         $0.filmNegativeParams = FilmNegativeParams.legacyBlackAndWhite
       }
@@ -2273,6 +2275,9 @@ final class AppModel: ObservableObject {
       next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
     case .blackAndWhite:
       next.filmNegativeParams = FilmNegativeParams.blackAndWhite
+      next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
+    case .shanghaiGP3Alternate:
+      next.filmNegativeParams = FilmNegativeParams.shanghaiGP3Alternate
       next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
     case .legacyBlackAndWhite:
       next.filmNegativeParams = FilmNegativeParams.legacyBlackAndWhite

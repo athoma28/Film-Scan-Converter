@@ -59,7 +59,9 @@ The native application is the primary product. It provides:
    profiles remain starting looks rather than general stock characterizations.
    **Black & White** uses a paired-scan calibrated monochrome curve with full
    exposure anchoring so frames from one roll do not sit on an overexposed
-   highlight plateau. **Black & White (Legacy)** preserves the old rendering.
+   highlight plateau. **Alternate — Shanghai GP3** is a six-frame
+   stock-specific monochrome curve with a half-strength exposure anchor.
+   **Black & White (Legacy)** preserves the old rendering.
    Under **Advanced profile tuning**, **Negative Exposure** moves a calibrated
    color or B&W scan before inversion; positive values make the resulting
    positive darker.
@@ -92,8 +94,9 @@ The native application is the primary product. It provides:
    rendering settings. The generic color and B&W profiles are calibrated from
    paired RAW/JPEG/XMP references, while user-created profiles remain the route
    for individual capture setups and stocks without a measured built-in
-   alternate. Harman Phoenix II is the only built-in stock curve with a
-   material improvement on a varied held-out set.
+   alternate. Harman Phoenix II is the only built-in color stock curve with a
+   material improvement on a varied held-out set; **Alternate — Shanghai GP3**
+   offers a measured B&W stock curve alongside the generic B&W default.
 8. In Film Base, optionally load a matching flat field and measure a clear,
    unexposed film edge automatically or by dragging over it. This enables the
    measured density pipeline for negative conversion and replaces the generic

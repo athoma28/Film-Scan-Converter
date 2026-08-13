@@ -383,11 +383,38 @@ public enum FilmNegativeProcessing {
     case .harmanPhoenixII: harmanPhoenixIICalibratedColor
     }
   }
-  private static let calibratedMonochromeReferenceGreenMedian = 28_685.0
-  private static let calibratedMonochromeCurve = [
-    0.989069, 0.912663, 0.668040, 0.603132, 0.488223, 0.330530,
-    0.157710, 0.105823, 0.105823, 0.105823, 0.067593,
-  ]
+  private struct CalibratedMonochromeDefinition {
+    let referenceGreenMedian: Double
+    let exposureNormalization: Double
+    let curve: [Double]
+  }
+
+  private static let genericCalibratedMonochrome = CalibratedMonochromeDefinition(
+    referenceGreenMedian: 28_685.0,
+    exposureNormalization: 1.0,
+    curve: [
+      0.989069, 0.912663, 0.668040, 0.603132, 0.488223, 0.330530,
+      0.157710, 0.105823, 0.105823, 0.105823, 0.067593,
+    ]
+  )
+
+  private static let shanghaiGP3CalibratedMonochrome = CalibratedMonochromeDefinition(
+    referenceGreenMedian: 26_811.5,
+    exposureNormalization: 0.5,
+    curve: [
+      0.988401, 0.919551, 0.788751, 0.676859, 0.517770, 0.355288,
+      0.199164, 0.140077, 0.132008, 0.092534, 0.067556,
+    ]
+  )
+
+  private static func calibratedMonochromeDefinition(
+    for profile: CalibratedMonochromeProfile
+  ) -> CalibratedMonochromeDefinition {
+    switch profile {
+    case .generic: genericCalibratedMonochrome
+    case .shanghaiGP3: shanghaiGP3CalibratedMonochrome
+    }
+  }
 
   // ── Fused power-law inversion (UInt16 → UInt16, single pass) ──
 
@@ -683,10 +710,15 @@ public enum FilmNegativeProcessing {
   }
 
   public static func calibratedMonochromeInputGain(
-    measuredMedians: BGRChannelValues?
+    measuredMedians: BGRChannelValues?,
+    profile: CalibratedMonochromeProfile = .generic
   ) -> Double {
     guard let medians = measuredMedians else { return 1 }
-    return calibratedMonochromeReferenceGreenMedian / max(medians.green, 1)
+    let definition = calibratedMonochromeDefinition(for: profile)
+    return pow(
+      definition.referenceGreenMedian / max(medians.green, 1),
+      definition.exposureNormalization
+    )
   }
 
   public static func applyCalibratedColorInversion(
@@ -761,18 +793,24 @@ public enum FilmNegativeProcessing {
   }
 
   /// Camera Raw-inspired monochrome inversion calibrated from paired scans.
-  /// Full green-median exposure anchoring is intentional: the fixed predecessor
-  /// left most scan values on an almost-white plateau, producing severe and
-  /// frame-dependent overexposure even within one Shanghai GP3 roll.
+  /// Full green-median exposure anchoring is intentional for the generic curve:
+  /// the fixed predecessor left most scan values on an almost-white plateau,
+  /// producing severe and frame-dependent overexposure even within one Shanghai
+  /// GP3 roll. Stock-specific curves carry their own calibrated anchor strength.
   public static func calibratedMonochromeToneCurve(
     _ value: Double,
     negativeExposureEV: Double = 0,
-    measuredMedians: BGRChannelValues? = nil
+    measuredMedians: BGRChannelValues? = nil,
+    profile: CalibratedMonochromeProfile = .generic
   ) -> Double {
+    let definition = calibratedMonochromeDefinition(for: profile)
     return calibratedCurveValue(
       value,
-      curve: calibratedMonochromeCurve,
-      inputGain: calibratedMonochromeInputGain(measuredMedians: measuredMedians),
+      curve: definition.curve,
+      inputGain: calibratedMonochromeInputGain(
+        measuredMedians: measuredMedians,
+        profile: profile
+      ),
       negativeExposureEV: negativeExposureEV
     )
   }
@@ -786,8 +824,11 @@ public enum FilmNegativeProcessing {
   ) -> UInt16Image {
     precondition(image.channels == 3, "Monochrome inversion requires 3-channel BGR image")
 
+    let profile = params.calibratedMonochromeProfile
+    let definition = calibratedMonochromeDefinition(for: profile)
     let inputGain = calibratedMonochromeInputGain(
-      measuredMedians: params.measuredMedians
+      measuredMedians: params.measuredMedians,
+      profile: profile
     )
     let lut = (0...65_535).map { input in
       UInt16(
@@ -795,7 +836,7 @@ public enum FilmNegativeProcessing {
           max(
             calibratedCurveValue(
               Double(input) / maxOutput,
-              curve: calibratedMonochromeCurve,
+              curve: definition.curve,
               inputGain: inputGain,
               negativeExposureEV: params.monochromeExposureEV
             ) * maxOutput,
