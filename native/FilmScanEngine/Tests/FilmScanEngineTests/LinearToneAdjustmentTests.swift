@@ -299,13 +299,13 @@ struct LinearToneAdjustmentTests {
 
     let result = image.applyingLinearToneAdjustments(params)
 
-    let d0_orig = pixels[2] - pixels[0]
-    let d0_result = result.pixels[2] - result.pixels[0]
-    #expect(abs(d0_result - d0_orig) < 1e-12)
+    let firstOriginalDifference = pixels[2] - pixels[0]
+    let firstResultDifference = result.pixels[2] - result.pixels[0]
+    #expect(abs(firstResultDifference - firstOriginalDifference) < 1e-12)
 
-    let d1_orig = pixels[5] - pixels[3]
-    let d1_result = result.pixels[5] - result.pixels[3]
-    #expect(abs(d1_result - d1_orig) < 1e-12)
+    let secondOriginalDifference = pixels[5] - pixels[3]
+    let secondResultDifference = result.pixels[5] - result.pixels[3]
+    #expect(abs(secondResultDifference - secondOriginalDifference) < 1e-12)
   }
 
   @Test("Gain floor prevents total blackout even at extreme negative values")
@@ -324,7 +324,8 @@ struct LinearToneAdjustmentTests {
 
   @Test("Tone-adjusted image has same dimensions as input")
   func dimensionsPreserved() {
-    let image = RenderReadyLinearImage(width: 20, height: 5, pixels: [Double](repeating: 0.18, count: 300))
+    let image = RenderReadyLinearImage(
+      width: 20, height: 5, pixels: [Double](repeating: 0.18, count: 300))
     let params = PhotoAdjustmentParameters(exposureEV: 1, contrast: 0.5)
 
     let result = image.applyingLinearToneAdjustments(params)

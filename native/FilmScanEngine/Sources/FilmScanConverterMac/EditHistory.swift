@@ -18,11 +18,12 @@ struct EditHistory<State: Equatable> {
 
   mutating func record(actionName: String, before: State, after: State) {
     guard before != after else { return }
-    undoEntries.append(Entry(
-      actionName: actionName,
-      before: before,
-      after: after
-    ))
+    undoEntries.append(
+      Entry(
+        actionName: actionName,
+        before: before,
+        after: after
+      ))
     if undoEntries.count > limit {
       undoEntries.removeFirst(undoEntries.count - limit)
     }

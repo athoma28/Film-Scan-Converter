@@ -134,18 +134,22 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     blueRatio = try container.decodeIfPresent(Double.self, forKey: .blueRatio) ?? 0.86
     // Profiles and per-file settings written before this field existed used
     // the power-law renderer. Preserve that appearance during migration.
-    rendering = try container.decodeIfPresent(
-      FilmNegativeRendering.self, forKey: .rendering
-    ) ?? .powerLaw
-    calibratedColorProfile = try container.decodeIfPresent(
-      CalibratedColorNegativeProfile.self, forKey: .calibratedColorProfile
-    ) ?? .generic
-    calibratedMonochromeProfile = try container.decodeIfPresent(
-      CalibratedMonochromeProfile.self, forKey: .calibratedMonochromeProfile
-    ) ?? .generic
-    monochromeExposureEV = try container.decodeIfPresent(
-      Double.self, forKey: .monochromeExposureEV
-    ) ?? 0
+    rendering =
+      try container.decodeIfPresent(
+        FilmNegativeRendering.self, forKey: .rendering
+      ) ?? .powerLaw
+    calibratedColorProfile =
+      try container.decodeIfPresent(
+        CalibratedColorNegativeProfile.self, forKey: .calibratedColorProfile
+      ) ?? .generic
+    calibratedMonochromeProfile =
+      try container.decodeIfPresent(
+        CalibratedMonochromeProfile.self, forKey: .calibratedMonochromeProfile
+      ) ?? .generic
+    monochromeExposureEV =
+      try container.decodeIfPresent(
+        Double.self, forKey: .monochromeExposureEV
+      ) ?? 0
     measuredMedians = nil
   }
 
@@ -352,14 +356,16 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     self.shadowWheel = shadowWheel
     self.filmNegativeParams = filmNegativeParams
     self.filmDyeMixing = filmDyeMixing.clamped()
-    self.photoAdjustments = photoAdjustments ?? .migratingLegacy(
-      gamma: gamma,
-      shadows: shadows,
-      highlights: highlights,
-      temperature: temperature,
-      tint: tint,
-      saturation: saturation
-    )
+    self.photoAdjustments =
+      photoAdjustments
+      ?? .migratingLegacy(
+        gamma: gamma,
+        shadows: shadows,
+        highlights: highlights,
+        temperature: temperature,
+        tint: tint,
+        saturation: saturation
+      )
     self.densityPipelineEnabled = densityPipelineEnabled
     self.densityBaseDensity = densityBaseDensity
     self.densityCorrection = densityCorrection
@@ -404,45 +410,65 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     tint = try container.decodeIfPresent(Int.self, forKey: .tint) ?? 0
     saturation = try container.decodeIfPresent(Int.self, forKey: .saturation) ?? 100
     curveEnabled = try container.decodeIfPresent(Bool.self, forKey: .curveEnabled) ?? false
-    curveControlPoints = try container.decodeIfPresent([CurvePoint].self, forKey: .curveControlPoints) ?? []
+    curveControlPoints =
+      try container.decodeIfPresent([CurvePoint].self, forKey: .curveControlPoints) ?? []
     redCurveEnabled = try container.decodeIfPresent(Bool.self, forKey: .redCurveEnabled) ?? false
-    redCurveControlPoints = try container.decodeIfPresent([CurvePoint].self, forKey: .redCurveControlPoints) ?? []
-    greenCurveEnabled = try container.decodeIfPresent(Bool.self, forKey: .greenCurveEnabled) ?? false
-    greenCurveControlPoints = try container.decodeIfPresent([CurvePoint].self, forKey: .greenCurveControlPoints) ?? []
+    redCurveControlPoints =
+      try container.decodeIfPresent([CurvePoint].self, forKey: .redCurveControlPoints) ?? []
+    greenCurveEnabled =
+      try container.decodeIfPresent(Bool.self, forKey: .greenCurveEnabled) ?? false
+    greenCurveControlPoints =
+      try container.decodeIfPresent([CurvePoint].self, forKey: .greenCurveControlPoints) ?? []
     blueCurveEnabled = try container.decodeIfPresent(Bool.self, forKey: .blueCurveEnabled) ?? false
-    blueCurveControlPoints = try container.decodeIfPresent([CurvePoint].self, forKey: .blueCurveControlPoints) ?? []
-    highlightWheel = try container.decodeIfPresent(ColorWheel.self, forKey: .highlightWheel) ?? ColorWheel()
-    midtoneWheel = try container.decodeIfPresent(ColorWheel.self, forKey: .midtoneWheel) ?? ColorWheel()
-    shadowWheel = try container.decodeIfPresent(ColorWheel.self, forKey: .shadowWheel) ?? ColorWheel()
-    filmNegativeParams = try container.decodeIfPresent(FilmNegativeParams.self, forKey: .filmNegativeParams) ?? FilmNegativeParams()
-    filmDyeMixing = try container.decodeIfPresent(
-      FilmDyeMixingParameters.self,
-      forKey: .filmDyeMixing
-    )?.clamped() ?? .neutral
-    photoAdjustments = try container.decodeIfPresent(
-      PhotoAdjustmentParameters.self, forKey: .photoAdjustments
-    ) ?? .migratingLegacy(
-      gamma: gamma,
-      shadows: shadows,
-      highlights: highlights,
-      temperature: temperature,
-      tint: tint,
-      saturation: saturation
-    )
-    densityPipelineEnabled = try container.decodeIfPresent(Bool.self, forKey: .densityPipelineEnabled) ?? false
-    densityBaseDensity = try container.decodeIfPresent(BGRChannelValues.self, forKey: .densityBaseDensity)
-    densityCorrection = try container.decodeIfPresent(
-      DensityCorrectionMatrix.self, forKey: .densityCorrection
-    ) ?? .identity
-    densityC41Profile = try container.decodeIfPresent(GenericC41Profile.self, forKey: .densityC41Profile) ?? .identity
-    densityDisplayParams = try container.decodeIfPresent(DisplayRenderingParameters.self, forKey: .densityDisplayParams) ?? DisplayRenderingParameters()
+    blueCurveControlPoints =
+      try container.decodeIfPresent([CurvePoint].self, forKey: .blueCurveControlPoints) ?? []
+    highlightWheel =
+      try container.decodeIfPresent(ColorWheel.self, forKey: .highlightWheel) ?? ColorWheel()
+    midtoneWheel =
+      try container.decodeIfPresent(ColorWheel.self, forKey: .midtoneWheel) ?? ColorWheel()
+    shadowWheel =
+      try container.decodeIfPresent(ColorWheel.self, forKey: .shadowWheel) ?? ColorWheel()
+    filmNegativeParams =
+      try container.decodeIfPresent(FilmNegativeParams.self, forKey: .filmNegativeParams)
+      ?? FilmNegativeParams()
+    filmDyeMixing =
+      try container.decodeIfPresent(
+        FilmDyeMixingParameters.self,
+        forKey: .filmDyeMixing
+      )?.clamped() ?? .neutral
+    photoAdjustments =
+      try container.decodeIfPresent(
+        PhotoAdjustmentParameters.self, forKey: .photoAdjustments
+      )
+      ?? .migratingLegacy(
+        gamma: gamma,
+        shadows: shadows,
+        highlights: highlights,
+        temperature: temperature,
+        tint: tint,
+        saturation: saturation
+      )
+    densityPipelineEnabled =
+      try container.decodeIfPresent(Bool.self, forKey: .densityPipelineEnabled) ?? false
+    densityBaseDensity = try container.decodeIfPresent(
+      BGRChannelValues.self, forKey: .densityBaseDensity)
+    densityCorrection =
+      try container.decodeIfPresent(
+        DensityCorrectionMatrix.self, forKey: .densityCorrection
+      ) ?? .identity
+    densityC41Profile =
+      try container.decodeIfPresent(GenericC41Profile.self, forKey: .densityC41Profile) ?? .identity
+    densityDisplayParams =
+      try container.decodeIfPresent(DisplayRenderingParameters.self, forKey: .densityDisplayParams)
+      ?? DisplayRenderingParameters()
     darkThreshold = try container.decodeIfPresent(Int.self, forKey: .darkThreshold) ?? 25
     lightThreshold = try container.decodeIfPresent(Int.self, forKey: .lightThreshold) ?? 100
     cropRect = try container.decodeIfPresent(RotatedRect.self, forKey: .cropRect)
-    cropRectCoordinateSpace = try container.decodeIfPresent(
-      NormalizedCropCoordinateSpace.self,
-      forKey: .cropRectCoordinateSpace
-    ) ?? (cropRect == nil ? .imageAxes : .legacyTransposedAxes)
+    cropRectCoordinateSpace =
+      try container.decodeIfPresent(
+        NormalizedCropCoordinateSpace.self,
+        forKey: .cropRectCoordinateSpace
+      ) ?? (cropRect == nil ? .imageAxes : .legacyTransposedAxes)
     perspectiveCrop = try container.decodeIfPresent(PerspectiveCrop.self, forKey: .perspectiveCrop)
     manualCrop = try container.decodeIfPresent(NormalizedCropRect.self, forKey: .manualCrop)
   }

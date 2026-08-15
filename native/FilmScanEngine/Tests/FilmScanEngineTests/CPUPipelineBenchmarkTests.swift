@@ -65,7 +65,8 @@ struct CPUPipelineBenchmarkTests {
         midtoneWheel: wheelsEnabled ? ColorWheel(hue: 190, strength: 0.25) : ColorWheel(),
         shadowWheel: wheelsEnabled ? ColorWheel(hue: 285, strength: 0.5) : ColorWheel()
       )
-      p.filmNegativeParams.measuredMedians = BGRChannelValues(blue: 20_000, green: 26_000, red: 32_000)
+      p.filmNegativeParams.measuredMedians = BGRChannelValues(
+        blue: 20_000, green: 26_000, red: 32_000)
       params.append(p)
     }
 
@@ -76,7 +77,8 @@ struct CPUPipelineBenchmarkTests {
       let start = ContinuousClock.now
       let result = FilmProcessing.correctedPreview(image: image, parameters: snapshot)
       let elapsed = start.duration(to: .now)
-      let ms = Double(elapsed.components.seconds) * 1000.0
+      let ms =
+        Double(elapsed.components.seconds) * 1000.0
         + Double(elapsed.components.attoseconds) / 1e15
       latenciesMs.append(ms)
 
@@ -107,8 +109,10 @@ struct CPUPipelineBenchmarkTests {
       "set RUN_PERFORMANCE_TESTS=1 to run the CPU density benchmark")
   )
   func cpuDensityBurstBenchmark() {
-    let image = Self.createSolidImage(width: Self.proxyWidth, height: Self.proxyHeight, value: 30_000)
-    let flatField = Self.createSolidImage(width: Self.proxyWidth, height: Self.proxyHeight, value: 60_000)
+    let image = Self.createSolidImage(
+      width: Self.proxyWidth, height: Self.proxyHeight, value: 30_000)
+    let flatField = Self.createSolidImage(
+      width: Self.proxyWidth, height: Self.proxyHeight, value: 60_000)
 
     var params: [ProcessingParameters] = []
     params.reserveCapacity(Self.benchmarkIterations)
@@ -140,7 +144,8 @@ struct CPUPipelineBenchmarkTests {
       let result = FilmProcessing.correctedPreview(
         image: image, parameters: snapshot, flatField: flatField)
       let elapsed = start.duration(to: .now)
-      let ms = Double(elapsed.components.seconds) * 1000.0
+      let ms =
+        Double(elapsed.components.seconds) * 1000.0
         + Double(elapsed.components.attoseconds) / 1e15
       latenciesMs.append(ms)
 
@@ -179,7 +184,8 @@ struct CPUPipelineBenchmarkTests {
       let start = ContinuousClock.now
       let cgImage = image.makeExportCGImage16()
       let elapsed = start.duration(to: .now)
-      let ms = Double(elapsed.components.seconds) * 1000.0
+      let ms =
+        Double(elapsed.components.seconds) * 1000.0
         + Double(elapsed.components.attoseconds) / 1e15
       latenciesMs.append(ms)
 
@@ -223,7 +229,8 @@ struct CPUPipelineBenchmarkTests {
       let start = ContinuousClock.now
       try? image.write(to: url, format: .dng, parameters: params)
       let elapsed = start.duration(to: .now)
-      let ms = Double(elapsed.components.seconds) * 1000.0
+      let ms =
+        Double(elapsed.components.seconds) * 1000.0
         + Double(elapsed.components.attoseconds) / 1e15
       latenciesMs.append(ms)
     }

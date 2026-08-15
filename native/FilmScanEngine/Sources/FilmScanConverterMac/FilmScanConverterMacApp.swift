@@ -1,5 +1,5 @@
-import FilmScanEngine
 import AppKit
+import FilmScanEngine
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -68,10 +68,12 @@ struct FilmScanConverterMacApp: App {
 
       CommandGroup(after: .appInfo) {
         Button("Open Source Licenses…") {
-          guard let noticesURL = Bundle.main.url(
-            forResource: "THIRD_PARTY_NOTICES",
-            withExtension: "md"
-          ) else { return }
+          guard
+            let noticesURL = Bundle.main.url(
+              forResource: "THIRD_PARTY_NOTICES",
+              withExtension: "md"
+            )
+          else { return }
           NSWorkspace.shared.open(noticesURL)
         }
         .disabled(

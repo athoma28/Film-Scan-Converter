@@ -42,7 +42,8 @@ private final class DNGWriter {
   private static let sRGBToLinear16: [UInt16] = {
     (0...Int(UInt16.max)).map { encoded in
       let value = Double(encoded) / Double(UInt16.max)
-      let linear = value <= 0.04045
+      let linear =
+        value <= 0.04045
         ? value / 12.92
         : pow((value + 0.055) / 1.055, 2.4)
       return UInt16((linear * Double(UInt16.max)).rounded())
@@ -112,7 +113,8 @@ private final class DNGWriter {
         return
       }
       let output = SendableMutableBuffer(baseAddress)
-      let workerCount = pixelCount >= 1_000_000
+      let workerCount =
+        pixelCount >= 1_000_000
         ? max(1, min(8, ProcessInfo.processInfo.activeProcessorCount))
         : 1
       let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
@@ -126,7 +128,8 @@ private final class DNGWriter {
           for pixelIndex in start..<end {
             let component = pixelIndex * 3
             output.baseAddress[component] = transfer[Int(sourcePixels[component + 2])].littleEndian
-            output.baseAddress[component + 1] = transfer[Int(sourcePixels[component + 1])].littleEndian
+            output.baseAddress[component + 1] =
+              transfer[Int(sourcePixels[component + 1])].littleEndian
             output.baseAddress[component + 2] = transfer[Int(sourcePixels[component])].littleEndian
           }
         } else {
@@ -226,11 +229,14 @@ private final class DNGWriter {
     if channels == 3 {
       // CIE XYZ (D65) to linear sRGB, stored in row-scan order as required
       // for ColorMatrix1's reference-XYZ-to-native-space transform.
-      entries.append(signedRationals(50721, [
-        (3_240_454, 1_000_000), (-1_537_139, 1_000_000), (-498_531, 1_000_000),
-        (-969_266, 1_000_000), (1_876_011, 1_000_000), (41_556, 1_000_000),
-        (55_643, 1_000_000), (-204_026, 1_000_000), (1_057_225, 1_000_000),
-      ]))
+      entries.append(
+        signedRationals(
+          50721,
+          [
+            (3_240_454, 1_000_000), (-1_537_139, 1_000_000), (-498_531, 1_000_000),
+            (-969_266, 1_000_000), (1_876_011, 1_000_000), (41_556, 1_000_000),
+            (55_643, 1_000_000), (-204_026, 1_000_000), (1_057_225, 1_000_000),
+          ]))
     }
     return entries
   }

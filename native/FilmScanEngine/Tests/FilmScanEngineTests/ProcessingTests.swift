@@ -387,25 +387,28 @@ struct ProcessingTests {
       CurvePoint(input: 1, output: 1),
     ]
     let samples = try (0...100).map { sample -> Double in
-      try #require(FilmProcessing.curveOutput(
-        at: Double(sample) / 100,
-        controlPoints: points
-      ))
+      try #require(
+        FilmProcessing.curveOutput(
+          at: Double(sample) / 100,
+          controlPoints: points
+        ))
     }
 
     #expect(samples == samples.sorted())
     #expect(samples.allSatisfy { $0 >= 0 && $0 <= 1 })
 
     let epsilon = 0.0001
-    let left = try #require(FilmProcessing.curveOutput(
-      at: 0.5 - epsilon,
-      controlPoints: points
-    ))
+    let left = try #require(
+      FilmProcessing.curveOutput(
+        at: 0.5 - epsilon,
+        controlPoints: points
+      ))
     let center = try #require(FilmProcessing.curveOutput(at: 0.5, controlPoints: points))
-    let right = try #require(FilmProcessing.curveOutput(
-      at: 0.5 + epsilon,
-      controlPoints: points
-    ))
+    let right = try #require(
+      FilmProcessing.curveOutput(
+        at: 0.5 + epsilon,
+        controlPoints: points
+      ))
     let leftSlope = (center - left) / epsilon
     let rightSlope = (right - center) / epsilon
     #expect(abs(leftSlope - rightSlope) < 0.01)
@@ -568,7 +571,8 @@ struct ProcessingTests {
     let brightShift =
       abs(result[3] - 58982.0) + abs(result[4] - 58982.0) + abs(result[5] - 58982.0)
     #expect(darkShift > 1, "Dark pixels should change under shadow wheel, shift=\(darkShift)")
-    #expect(brightShift <= 1, "Bright pixels should not change under shadow wheel, shift=\(brightShift)")
+    #expect(
+      brightShift <= 1, "Bright pixels should not change under shadow wheel, shift=\(brightShift)")
   }
 
   @Test("Color wheel preserves luminance")
@@ -593,7 +597,6 @@ struct ProcessingTests {
       "Luminance should be preserved. Original: \(originalLuminance), new: \(newLuminance)")
   }
 
-
   @Test("Curve LUT handles unsorted control points by sorting")
   func curveLUTUnsortedPoints() {
     let points = [
@@ -609,7 +612,8 @@ struct ProcessingTests {
     let lutSorted = FilmProcessing.buildCurveLUT(controlPoints: sortedPoints)!
 
     for i in stride(from: 0, to: 65536, by: 1024) {
-      #expect(lutValues[i] == lutSorted[i],
+      #expect(
+        lutValues[i] == lutSorted[i],
         "Unsorted and sorted LUTs should match at index \(i)")
     }
   }
@@ -629,13 +633,15 @@ struct ProcessingTests {
     let belowOut = lutValues[belowIdx]
     let firstOutput = UInt16(0.1 * 65535)
     let diff = belowOut > firstOutput ? belowOut - firstOutput : firstOutput - belowOut
-    #expect(diff <= 1,
+    #expect(
+      diff <= 1,
       "Below first point should clamp to first output \(firstOutput), got \(belowOut)")
 
     let extremeIdx = 0
     let extremeOut = lutValues[extremeIdx]
     let d2 = extremeOut > firstOutput ? extremeOut - firstOutput : firstOutput - extremeOut
-    #expect(d2 <= 1,
+    #expect(
+      d2 <= 1,
       "At index 0 should also clamp to first output \(firstOutput), got \(extremeOut)")
   }
 
@@ -653,7 +659,8 @@ struct ProcessingTests {
     let aboveOut = lutValues[aboveIdx]
     let lastOut = UInt16(0.1 * 65535)
     let diff = aboveOut > lastOut ? aboveOut - lastOut : lastOut - aboveOut
-    #expect(diff <= 1,
+    #expect(
+      diff <= 1,
       "Above last point should clamp to last output \(lastOut), got \(aboveOut)")
   }
 
@@ -668,7 +675,8 @@ struct ProcessingTests {
     let result360 = FilmProcessing.applyColorWheels(
       image: image360, pixelCount: 1, channels: 3, parameters: params360)
     for i in 0..<3 {
-      #expect(abs(result0[i] - result360[i]) <= 1,
+      #expect(
+        abs(result0[i] - result360[i]) <= 1,
         "hue=0 and hue=360 should match at channel \(i): \(result0[i]) vs \(result360[i])")
     }
   }
@@ -687,7 +695,8 @@ struct ProcessingTests {
     let params = ProcessingParameters(
       filmType: .blackAndWhiteNegative, curveEnabled: true, curveControlPoints: points)
     let result = FilmProcessing.correctedPreview(image: image, parameters: params)
-    #expect(result.channels == 1,
+    #expect(
+      result.channels == 1,
       "B&W negative should produce 1-channel output, got \(result.channels)")
   }
 
@@ -701,7 +710,8 @@ struct ProcessingTests {
       filmType: .blackAndWhiteNegative,
       highlightWheel: ColorWheel(hue: 0, strength: 1.0))
     let result = FilmProcessing.correctedPreview(image: image, parameters: params)
-    #expect(result.channels == 1,
+    #expect(
+      result.channels == 1,
       "B&W negative should produce 1-channel output with color wheels, got \(result.channels)")
   }
 
@@ -714,7 +724,8 @@ struct ProcessingTests {
       image: pixels, pixelCount: 1, channels: 3, parameters: params)
     let shift =
       abs(result[0] - 32768.0) + abs(result[1] - 32768.0) + abs(result[2] - 32768.0)
-    #expect(shift > 100,
+    #expect(
+      shift > 100,
       "Full-strength red midtone wheel should visibly shift mid-gray, total shift=\(shift)")
   }
 
@@ -746,7 +757,6 @@ struct ProcessingTests {
     #expect(lutValues[65535] >= 0 && lutValues[65535] <= 65535)
   }
 
-
   @Test("Curve LUT with zero-range segment (duplicate inputs) handles gracefully")
   func curveLUTDuplicateInputs() {
     let points = [
@@ -776,7 +786,8 @@ struct ProcessingTests {
     let result = FilmProcessing.applyColorWheels(
       image: pixels, pixelCount: 10, channels: 3, parameters: params)
     for i in pixels.indices {
-      #expect(abs(result[i] - pixels[i]) <= 1,
+      #expect(
+        abs(result[i] - pixels[i]) <= 1,
         "Zero-strength wheel should not change pixel \(i): \(pixels[i]) -> \(result[i])")
     }
   }
@@ -799,9 +810,15 @@ struct ProcessingTests {
     let hExpected = UInt16(0.5 * 0.5 * 65535)
     let tExpected = UInt16(0.75 * 0.5 * 65535)
 
-    #expect(lutValues[quarter] == qExpected || lutValues[quarter] == qExpected &+ 1 || lutValues[quarter] == qExpected &- 1)
-    #expect(lutValues[half] == hExpected || lutValues[half] == hExpected &+ 1 || lutValues[half] == hExpected &- 1)
-    #expect(lutValues[threeQuarter] == tExpected || lutValues[threeQuarter] == tExpected &+ 1 || lutValues[threeQuarter] == tExpected &- 1)
+    #expect(
+      lutValues[quarter] == qExpected || lutValues[quarter] == qExpected &+ 1
+        || lutValues[quarter] == qExpected &- 1)
+    #expect(
+      lutValues[half] == hExpected || lutValues[half] == hExpected &+ 1
+        || lutValues[half] == hExpected &- 1)
+    #expect(
+      lutValues[threeQuarter] == tExpected || lutValues[threeQuarter] == tExpected &+ 1
+        || lutValues[threeQuarter] == tExpected &- 1)
   }
 
   @Test("Color wheel mask overlap: pixel at luminance 0.5 affected by all three wheels")
@@ -847,7 +864,9 @@ struct ProcessingTests {
 
     let firstPixel = result.pixels[0]
     let lastPixel = result.pixels[(width - 1) * 3]
-    #expect(lastPixel < firstPixel, "Dense (dark) areas should become bright, clear (bright) areas should become dark")
+    #expect(
+      lastPixel < firstPixel,
+      "Dense (dark) areas should become bright, clear (bright) areas should become dark")
   }
 
   @Test("Calibrated monochrome curve follows paired Camera Raw reference tonality")
@@ -924,20 +943,29 @@ struct ProcessingTests {
 
   @Test("Alternate color profiles use distinct fitted base curves and anchors")
   func alternateCalibratedColorProfiles() {
-    let cases: [(
-      profile: CalibratedColorNegativeProfile,
-      reference: BGRChannelValues,
-      expectedRedMidpoint: Double
-    )] = [
-      (.fuji400Fresh, BGRChannelValues(blue: 20_441, green: 18_792, red: 27_054.5),
-        0.253077),
-      (.fuji200Expired, BGRChannelValues(blue: 41_143, green: 32_428, red: 38_592),
-        0.581862),
-      (.cinestill800T, BGRChannelValues(blue: 18_248.5, green: 18_741, red: 26_588.5),
-        0.216966),
-      (.harmanPhoenixII, BGRChannelValues(blue: 33_887.5, green: 30_313.5, red: 24_727),
-        0.108709),
-    ]
+    let cases:
+      [(
+        profile: CalibratedColorNegativeProfile,
+        reference: BGRChannelValues,
+        expectedRedMidpoint: Double
+      )] = [
+        (
+          .fuji400Fresh, BGRChannelValues(blue: 20_441, green: 18_792, red: 27_054.5),
+          0.253077
+        ),
+        (
+          .fuji200Expired, BGRChannelValues(blue: 41_143, green: 32_428, red: 38_592),
+          0.581862
+        ),
+        (
+          .cinestill800T, BGRChannelValues(blue: 18_248.5, green: 18_741, red: 26_588.5),
+          0.216966
+        ),
+        (
+          .harmanPhoenixII, BGRChannelValues(blue: 33_887.5, green: 30_313.5, red: 24_727),
+          0.108709
+        ),
+      ]
 
     for item in cases {
       let red = (0...10).map {
@@ -1062,7 +1090,8 @@ struct ProcessingTests {
     var pixels = [UInt16](repeating: 10000, count: 32 * 32 * 3)
     var rng = SystemRandomNumberGenerator()
     for i in pixels.indices {
-      pixels[i] = UInt16(max(0, min(65535, Double(pixels[i]) + Double.random(in: -2000...2000, using: &rng))))
+      pixels[i] = UInt16(
+        max(0, min(65535, Double(pixels[i]) + Double.random(in: -2000...2000, using: &rng))))
     }
     let image = UInt16Image(width: 32, height: 32, channels: 3, pixels: pixels)
 
@@ -1084,7 +1113,8 @@ struct ProcessingTests {
     let target = UInt16(
       65535.0 * FilmNegativeProcessing.rawTherapeeFilmNegativeToneCurve(encodedTarget)
     )
-    #expect(abs(Int(medianResult) - Int(target)) < 1500,
+    #expect(
+      abs(Int(medianResult) - Int(target)) < 1500,
       "Median output should include transfer encoding and preset curves, got \(medianResult)")
   }
 
@@ -1130,8 +1160,11 @@ struct ProcessingTests {
     let result = FilmNegativeProcessing.applyPowerLawInversion(image: image, params: params)
     let green = result.pixels[1]
 
-    #expect(green > 14_000, "Preset median should remain visible after display mapping, got \(green)")
-    #expect(green < 25_000, "Preset median should retain RawTherapee's low reference placement, got \(green)")
+    #expect(
+      green > 14_000, "Preset median should remain visible after display mapping, got \(green)")
+    #expect(
+      green < 25_000,
+      "Preset median should retain RawTherapee's low reference placement, got \(green)")
   }
 
   @Test("Film negative corrected preview produces valid output")
@@ -1280,7 +1313,10 @@ struct ProcessingTests {
 
     #expect(result.width == 4)
     #expect(result.height == 6)
-    #expect(result.pixels == [18, 12, 6, 0, 19, 13, 7, 1, 20, 14, 8, 2, 21, 15, 9, 3, 22, 16, 10, 4, 23, 17, 11, 5])
+    #expect(
+      result.pixels == [
+        18, 12, 6, 0, 19, 13, 7, 1, 20, 14, 8, 2, 21, 15, 9, 3, 22, 16, 10, 4, 23, 17, 11, 5,
+      ])
   }
 
   @Test("Power-law processing applies protected color before the display transform")
@@ -1441,9 +1477,10 @@ struct ProcessingTests {
         photoAdjustments: PhotoAdjustmentParameters(exposureEV: 1)))
 
     #expect(adjusted != neutral)
-    #expect(zip(adjusted.pixels, neutral.pixels).allSatisfy { adjusted, neutral in
-      adjusted >= neutral
-    })
+    #expect(
+      zip(adjusted.pixels, neutral.pixels).allSatisfy { adjusted, neutral in
+        adjusted >= neutral
+      })
   }
 
   @Test("Semantic light controls affect calibrated black-and-white negatives")
@@ -1465,8 +1502,9 @@ struct ProcessingTests {
         photoAdjustments: PhotoAdjustmentParameters(exposureEV: -1)))
 
     #expect(adjusted != neutral)
-    #expect(zip(adjusted.pixels, neutral.pixels).allSatisfy { adjusted, neutral in
-      adjusted <= neutral
-    })
+    #expect(
+      zip(adjusted.pixels, neutral.pixels).allSatisfy { adjusted, neutral in
+        adjusted <= neutral
+      })
   }
 }

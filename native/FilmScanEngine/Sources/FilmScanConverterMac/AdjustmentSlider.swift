@@ -143,7 +143,8 @@ enum AdjustmentSliderResponse {
   ) -> Double {
     let boundedPosition = min(max(position, range.lowerBound), range.upperBound)
     guard exponent > 1 else { return boundedPosition }
-    let span = boundedPosition < neutral
+    let span =
+      boundedPosition < neutral
       ? neutral - range.lowerBound
       : range.upperBound - neutral
     guard span > 0 else { return neutral }
@@ -160,7 +161,8 @@ enum AdjustmentSliderResponse {
   ) -> Double {
     let boundedValue = min(max(value, range.lowerBound), range.upperBound)
     guard exponent > 1 else { return boundedValue }
-    let span = boundedValue < neutral
+    let span =
+      boundedValue < neutral
       ? neutral - range.lowerBound
       : range.upperBound - neutral
     guard span > 0 else { return neutral }

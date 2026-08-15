@@ -1,5 +1,5 @@
-import CoreImage
 import CoreGraphics
+import CoreImage
 import FilmScanEngine
 import Metal
 
@@ -21,7 +21,8 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       .outputColorSpace: NSNull(),
     ]
     let devices = MTLCopyAllDevices()
-    let device = devices.first(where: { !$0.isLowPower })
+    let device =
+      devices.first(where: { !$0.isLowPower })
       ?? devices.first
       ?? MTLCreateSystemDefaultDevice()
     if let device {
@@ -66,29 +67,35 @@ public final class StillPreviewRenderer: @unchecked Sendable {
 
       let fnp = parameters.filmNegativeParams
       let dyeMixing = parameters.filmDyeMixing.clamped()
-      let usesCalibratedMonochrome = parameters.filmType == .blackAndWhiteNegative
+      let usesCalibratedMonochrome =
+        parameters.filmType == .blackAndWhiteNegative
         && fnp.rendering == .calibratedMonochrome
-      let usesCalibratedColor = parameters.filmType == .colourNegative
+      let usesCalibratedColor =
+        parameters.filmType == .colourNegative
         && fnp.rendering == .calibratedColor
-      let fnEnabled = parameters.filmNegativeParams.enabled
+      let fnEnabled =
+        parameters.filmNegativeParams.enabled
         && (parameters.filmType == .colourNegative || parameters.filmType == .blackAndWhiteNegative)
         && (usesCalibratedMonochrome || usesCalibratedColor || fnp.measuredMedians != nil)
-      let renderingMode: Float = switch fnp.rendering {
-      case .powerLaw: 0
-      case .calibratedMonochrome: 1
-      case .calibratedColor: 2
-      }
-      let calibratedColorProfile: Float = switch fnp.calibratedColorProfile {
-      case .generic: 0
-      case .fuji400Fresh: 1
-      case .fuji200Expired: 2
-      case .cinestill800T: 3
-      case .harmanPhoenixII: 4
-      }
-      let calibratedMonochromeProfile: Float = switch fnp.calibratedMonochromeProfile {
-      case .generic: 0
-      case .shanghaiGP3: 1
-      }
+      let renderingMode: Float =
+        switch fnp.rendering {
+        case .powerLaw: 0
+        case .calibratedMonochrome: 1
+        case .calibratedColor: 2
+        }
+      let calibratedColorProfile: Float =
+        switch fnp.calibratedColorProfile {
+        case .generic: 0
+        case .fuji400Fresh: 1
+        case .fuji200Expired: 2
+        case .cinestill800T: 3
+        case .harmanPhoenixII: 4
+        }
+      let calibratedMonochromeProfile: Float =
+        switch fnp.calibratedMonochromeProfile {
+        case .generic: 0
+        case .shanghaiGP3: 1
+        }
       let (fnRExp, fnGExp, fnBExp): (Float, Float, Float)
       let (fnRMult, fnGMult, fnBMult): (Float, Float, Float)
 
@@ -107,15 +114,21 @@ public final class StillPreviewRenderer: @unchecked Sendable {
             fnGMult = Float(multipliers.g)
             fnBMult = Float(multipliers.b)
           } else {
-            fnRExp = 0; fnGExp = 0; fnBExp = 0
-            fnRMult = 1; fnGMult = 1; fnBMult = 1
+            fnRExp = 0
+            fnGExp = 0
+            fnBExp = 0
+            fnRMult = 1
+            fnGMult = 1
+            fnBMult = 1
           }
         case .calibratedColor:
           let gains = FilmNegativeProcessing.calibratedColorInputGains(
             measuredMedians: fnp.measuredMedians,
             profile: fnp.calibratedColorProfile
           )
-          fnRExp = 0; fnGExp = 0; fnBExp = 0
+          fnRExp = 0
+          fnGExp = 0
+          fnBExp = 0
           fnRMult = Float(gains.red)
           fnGMult = Float(gains.green)
           fnBMult = Float(gains.blue)
@@ -126,12 +139,20 @@ public final class StillPreviewRenderer: @unchecked Sendable {
               profile: fnp.calibratedMonochromeProfile
             )
           )
-          fnRExp = 0; fnGExp = 0; fnBExp = 0
-          fnRMult = gain; fnGMult = gain; fnBMult = gain
+          fnRExp = 0
+          fnGExp = 0
+          fnBExp = 0
+          fnRMult = gain
+          fnGMult = gain
+          fnBMult = gain
         }
       } else {
-        fnRExp = 0; fnGExp = 0; fnBExp = 0
-        fnRMult = 1; fnGMult = 1; fnBMult = 1
+        fnRExp = 0
+        fnGExp = 0
+        fnBExp = 0
+        fnRMult = 1
+        fnGMult = 1
+        fnBMult = 1
       }
 
       guard
@@ -218,16 +239,18 @@ public final class StillPreviewRenderer: @unchecked Sendable {
     let width = max(1, Int((Double(image.width) * scale).rounded()))
     let height = max(1, Int((Double(image.height) * scale).rounded()))
     var rgba = [UInt8](repeating: 0, count: width * height * 4)
-    guard let context = CGContext(
-      data: &rgba,
-      width: width,
-      height: height,
-      bitsPerComponent: 8,
-      bytesPerRow: width * 4,
-      space: CGColorSpaceCreateDeviceRGB(),
-      bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue
-        | CGImageAlphaInfo.noneSkipLast.rawValue
-    ) else {
+    guard
+      let context = CGContext(
+        data: &rgba,
+        width: width,
+        height: height,
+        bitsPerComponent: 8,
+        bytesPerRow: width * 4,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue
+          | CGImageAlphaInfo.noneSkipLast.rawValue
+      )
+    else {
       return nil
     }
     context.interpolationQuality = .medium
@@ -282,15 +305,20 @@ public final class StillPreviewRenderer: @unchecked Sendable {
   }
 
   static func makeCurveLUTImage(parameters: ProcessingParameters) -> CIImage {
-    let hasAnyCurve = parameters.curveEnabled || parameters.redCurveEnabled
+    let hasAnyCurve =
+      parameters.curveEnabled || parameters.redCurveEnabled
       || parameters.greenCurveEnabled || parameters.blueCurveEnabled
-    let overallLUT = parameters.curveEnabled
+    let overallLUT =
+      parameters.curveEnabled
       ? FilmProcessing.buildCurveLUT(controlPoints: parameters.curveControlPoints) : nil
-    let redLUT = parameters.redCurveEnabled
+    let redLUT =
+      parameters.redCurveEnabled
       ? FilmProcessing.buildCurveLUT(controlPoints: parameters.redCurveControlPoints) : nil
-    let greenLUT = parameters.greenCurveEnabled
+    let greenLUT =
+      parameters.greenCurveEnabled
       ? FilmProcessing.buildCurveLUT(controlPoints: parameters.greenCurveControlPoints) : nil
-    let blueLUT = parameters.blueCurveEnabled
+    let blueLUT =
+      parameters.blueCurveEnabled
       ? FilmProcessing.buildCurveLUT(controlPoints: parameters.blueCurveControlPoints) : nil
 
     let width = 256

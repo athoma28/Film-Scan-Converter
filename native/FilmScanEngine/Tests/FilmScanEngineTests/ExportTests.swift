@@ -63,7 +63,8 @@ struct ExportTests {
       | UInt32(data[offset + 3]) << 24
   }
 
-  private func dngIFDEntries(_ data: Data) -> [UInt16: (type: UInt16, count: UInt32, value: UInt32)] {
+  private func dngIFDEntries(_ data: Data) -> [UInt16: (type: UInt16, count: UInt32, value: UInt32)]
+  {
     let ifdOffset = Int(littleEndianUInt32(data, at: 4))
     let count = Int(littleEndianUInt16(data, at: ifdOffset))
     var result: [UInt16: (type: UInt16, count: UInt32, value: UInt32)] = [:]
@@ -285,11 +286,13 @@ struct ExportTests {
 
     let data = try Data(contentsOf: url)
     #expect(data.count > 0, "DNG file must not be empty")
-    #expect(data.count >= original.width * original.height * original.channels * 2,
+    #expect(
+      data.count >= original.width * original.height * original.channels * 2,
       "DNG data must contain at least the pixel data")
 
     let byteOrder = [UInt8](data[0..<2])
-    #expect(byteOrder == [0x49, 0x49] || byteOrder == [0x4D, 0x4D],
+    #expect(
+      byteOrder == [0x49, 0x49] || byteOrder == [0x4D, 0x4D],
       "DNG should have valid TIFF byte order marker")
 
     let entries = dngIFDEntries(data)
@@ -297,7 +300,7 @@ struct ExportTests {
     let stripByteCount = try #require(entries[279]?.value)
     #expect(Int(stripOffset + stripByteCount) == data.count)
     #expect(entries[258]?.count == 3)
-    #expect(entries[50706]?.value == 0x00000201)
+    #expect(entries[50706]?.value == 0x0000_0201)
     #expect(entries[50721]?.count == 9)
     #expect(entries[50879]?.value == 1)
   }
@@ -353,12 +356,13 @@ struct ExportTests {
       let image = makeTestImage()
       let params = ExportParameters(format: .tiff)
       let destURL = tempDir.appendingPathComponent("cancel_\(i).tiff")
-      requests.append(ExportManager.ExportRequest(
-        sourceURL: URL(fileURLWithPath: "/fake/source_\(i).raf"),
-        destinationURL: destURL,
-        image: image,
-        parameters: params
-      ))
+      requests.append(
+        ExportManager.ExportRequest(
+          sourceURL: URL(fileURLWithPath: "/fake/source_\(i).raf"),
+          destinationURL: destURL,
+          image: image,
+          parameters: params
+        ))
     }
 
     let manager = ExportManager()

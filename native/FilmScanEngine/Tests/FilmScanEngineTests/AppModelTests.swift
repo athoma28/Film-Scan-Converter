@@ -1,6 +1,6 @@
 import AppKit
-import Foundation
 import FilmScanEngine
+import Foundation
 import Testing
 
 @testable import FilmScanConverterMac
@@ -158,11 +158,15 @@ struct AppModelTests {
     model.setExportFormat(.png)
 
     model.exportAll()
-    try await waitUntil(timeout: .seconds(10)) { !model.isExporting && model.exportProgressCurrent == 2 }
+    try await waitUntil(timeout: .seconds(10)) {
+      !model.isExporting && model.exportProgressCurrent == 2
+    }
 
     #expect(model.exportErrors.isEmpty)
-    #expect(FileManager.default.fileExists(atPath: destination.appendingPathComponent("first.png").path))
-    #expect(FileManager.default.fileExists(atPath: destination.appendingPathComponent("second.png").path))
+    #expect(
+      FileManager.default.fileExists(atPath: destination.appendingPathComponent("first.png").path))
+    #expect(
+      FileManager.default.fileExists(atPath: destination.appendingPathComponent("second.png").path))
     #expect(model.exportProgressTotal == 2)
   }
 
@@ -363,7 +367,8 @@ struct AppModelTests {
     try await waitUntil { model.decodedImage != nil && model.previewImage != nil }
     let decoded = try #require(model.decodedImage)
     model.setFlatField(decoded)
-    model.measureRebateRegion(normalizedX: 0, normalizedY: 0, normalizedWidth: 1, normalizedHeight: 1)
+    model.measureRebateRegion(
+      normalizedX: 0, normalizedY: 0, normalizedWidth: 1, normalizedHeight: 1)
     try await waitUntil { model.parameters.densityPipelineEnabled && !model.isRendering }
     model.rotateClockwise()
     model.setExportDestinationDirectory(destination)
@@ -373,15 +378,18 @@ struct AppModelTests {
     try await waitUntil { !model.isExporting && model.exportProgressCurrent == 1 }
 
     #expect(model.exportErrors.isEmpty)
-    #expect(FileManager.default.fileExists(atPath: destination.appendingPathComponent("input.png").path))
+    #expect(
+      FileManager.default.fileExists(atPath: destination.appendingPathComponent("input.png").path))
   }
 
   @Test("RAW exports request full-resolution camera-scan decoding")
   func rawExportDecodePolicy() {
-    #expect(AppModel.requiresFullResolutionExportDecode(
-      URL(fileURLWithPath: "/tmp/scan.RAF")))
-    #expect(!AppModel.requiresFullResolutionExportDecode(
-      URL(fileURLWithPath: "/tmp/scan.tiff")))
+    #expect(
+      AppModel.requiresFullResolutionExportDecode(
+        URL(fileURLWithPath: "/tmp/scan.RAF")))
+    #expect(
+      !AppModel.requiresFullResolutionExportDecode(
+        URL(fileURLWithPath: "/tmp/scan.tiff")))
   }
 
   @Test(
@@ -391,7 +399,8 @@ struct AppModelTests {
   func exportRecalibratesFilmBaseMedians(filmType: FilmType) throws {
     var parameters = ProcessingParameters()
     parameters.filmType = filmType
-    parameters.filmNegativeParams = filmType == .colourNegative
+    parameters.filmNegativeParams =
+      filmType == .colourNegative
       ? .legacyColourNegative
       : .legacyBlackAndWhite
     parameters.filmNegativeParams.measuredMedians = BGRChannelValues(
@@ -491,8 +500,9 @@ struct AppModelTests {
     stale.filmNegativeParams.measuredMedians = BGRChannelValues(
       blue: 60_000, green: 8_000, red: 60_000)
     let settingsStore = PerFileSettingsStore(baseDirectory: workDirectory)
-    try settingsStore.save(.init(
-      settingsByPath: [input.standardizedFileURL.path: stale], editedPaths: []))
+    try settingsStore.save(
+      .init(
+        settingsByPath: [input.standardizedFileURL.path: stale], editedPaths: []))
 
     let model = AppModel(settingsStore: settingsStore)
     model.importFiles([input])
@@ -596,8 +606,9 @@ struct AppModelTests {
     let originalSize = try #require(model.previewImage?.size)
     let displayedBeforeCrop = model.renderStats.displayedRenders
 
-    model.setManualCrop(NormalizedCropRect(
-      x: 1.0 / 3.0, y: 0.5, width: 1.0 / 3.0, height: 0.5))
+    model.setManualCrop(
+      NormalizedCropRect(
+        x: 1.0 / 3.0, y: 0.5, width: 1.0 / 3.0, height: 0.5))
     try await waitUntil {
       model.renderStats.displayedRenders > displayedBeforeCrop && !model.isRendering
     }
@@ -624,12 +635,13 @@ struct AppModelTests {
   @Test("Reset corrections clears crop processing and inspector state")
   func resetCorrectionsClearsCropState() {
     let model = AppModel()
-    model.setPerspectiveCrop(PerspectiveCrop(
-      topLeft: .init(x: 0.1, y: 0.1),
-      topRight: .init(x: 0.9, y: 0.1),
-      bottomRight: .init(x: 0.9, y: 0.9),
-      bottomLeft: .init(x: 0.1, y: 0.9)
-    ))
+    model.setPerspectiveCrop(
+      PerspectiveCrop(
+        topLeft: .init(x: 0.1, y: 0.1),
+        topRight: .init(x: 0.9, y: 0.1),
+        bottomRight: .init(x: 0.9, y: 0.9),
+        bottomLeft: .init(x: 0.1, y: 0.9)
+      ))
     model.setStraightenAngle(12.5)
     model.setManualCrop(NormalizedCropRect(x: 0.1, y: 0.1, width: 0.8, height: 0.8))
 
@@ -789,7 +801,9 @@ struct AppModelTests {
 
   @Test(
     "RAW import keeps the embedded 1000px preview as the interactive source",
-    .enabled(if: appModelRawCorpusAvailable, "sample-raw corpus unavailable; AppModel RAW preview test skipped")
+    .enabled(
+      if: appModelRawCorpusAvailable,
+      "sample-raw corpus unavailable; AppModel RAW preview test skipped")
   )
   func rawImportUsesFastEmbeddedPreview() async throws {
     let raw = try #require(appModelRepresentativeRawURL)
@@ -805,7 +819,9 @@ struct AppModelTests {
 
   @Test(
     "Load RAW Preview replaces embedded pixels with a bounded demosaiced preview",
-    .enabled(if: appModelRawCorpusAvailable, "sample-raw corpus unavailable; RAW detail preview test skipped")
+    .enabled(
+      if: appModelRawCorpusAvailable,
+      "sample-raw corpus unavailable; RAW detail preview test skipped")
   )
   func rawDetailPreviewUsesCameraScanDecode() async throws {
     let raw = try #require(appModelRepresentativeRawURL)
@@ -904,7 +920,8 @@ struct AppModelTests {
       tint: -25,
       saturation: 140
     )
-    #expect(model.parameters.photoAdjustments.temperatureShiftMired == expected.temperatureShiftMired)
+    #expect(
+      model.parameters.photoAdjustments.temperatureShiftMired == expected.temperatureShiftMired)
     #expect(model.parameters.photoAdjustments.tint == expected.tint)
     #expect(model.parameters.photoAdjustments.saturation == expected.saturation)
     #expect(model.parameters.photoAdjustments.vibrance == 0.6)
@@ -917,10 +934,11 @@ struct AppModelTests {
     model.setCurveEnabled(true)
 
     #expect(model.parameters.curveEnabled)
-    #expect(model.parameters.curveControlPoints == [
-      CurvePoint(input: 0, output: 0),
-      CurvePoint(input: 1, output: 1),
-    ])
+    #expect(
+      model.parameters.curveControlPoints == [
+        CurvePoint(input: 0, output: 0),
+        CurvePoint(input: 1, output: 1),
+      ])
   }
 
   @Test("Per-file corrections persist across app model instances")
@@ -1019,7 +1037,9 @@ struct AppModelTests {
 
     model.selection = second
     model.loadSelection()
-    try await waitUntil { model.selection == second && model.previewImage != nil && !model.isRendering }
+    try await waitUntil {
+      model.selection == second && model.previewImage != nil && !model.isRendering
+    }
     let secondBaseline = model.parameters.photoAdjustments.exposureEV
     #expect(!model.canUndo)
     model.setExposureEV(-1.5)
@@ -1187,10 +1207,11 @@ struct AppModelTests {
     first.photoAdjustments.exposureEV = 2
     var second = ProcessingParameters()
     second.photoAdjustments.exposureEV = -1
-    try store.save(.init(
-      settingsByPath: [firstPath: first, secondPath: second],
-      editedPaths: [firstPath, secondPath]
-    ))
+    try store.save(
+      .init(
+        settingsByPath: [firstPath: first, secondPath: second],
+        editedPaths: [firstPath, secondPath]
+      ))
 
     let loaded = try store.loadState().settingsByPath
     #expect(loaded[firstPath]?.photoAdjustments.exposureEV == 2)
@@ -1280,7 +1301,8 @@ struct AppModelTests {
     replacement.photoAdjustments.exposureEV = 2
 
     try store.savePreset(named: "Warm Print", settings: CorrectionSettings(capturing: first))
-    try store.savePreset(named: " warm print ", settings: CorrectionSettings(capturing: replacement))
+    try store.savePreset(
+      named: " warm print ", settings: CorrectionSettings(capturing: replacement))
 
     let loaded = try store.load()
     #expect(loaded.count == 1)
@@ -1494,14 +1516,15 @@ struct AppModelTests {
     thirdSettings.photoAdjustments.exposureEV = -1.25
 
     let store = PerFileSettingsStore(baseDirectory: workDir)
-    try store.save(.init(
-      settingsByPath: [
-        first.standardizedFileURL.path: anchor,
-        second.standardizedFileURL.path: secondSettings,
-        third.standardizedFileURL.path: thirdSettings,
-      ],
-      editedPaths: []
-    ))
+    try store.save(
+      .init(
+        settingsByPath: [
+          first.standardizedFileURL.path: anchor,
+          second.standardizedFileURL.path: secondSettings,
+          third.standardizedFileURL.path: thirdSettings,
+        ],
+        editedPaths: []
+      ))
 
     let model = AppModel(settingsStore: store)
     model.importFiles([first, second, third])
@@ -1558,7 +1581,8 @@ struct AppModelTests {
       .appendingPathComponent("fsc-queued-snapshot-\(UUID().uuidString)", isDirectory: true)
     let sourceDir = workDir.appendingPathComponent("source", isDirectory: true)
     let firstDestination = workDir.appendingPathComponent("first-destination", isDirectory: true)
-    let changedDestination = workDir.appendingPathComponent("changed-destination", isDirectory: true)
+    let changedDestination = workDir.appendingPathComponent(
+      "changed-destination", isDirectory: true)
     for directory in [sourceDir, firstDestination, changedDestination] {
       try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
@@ -1580,10 +1604,12 @@ struct AppModelTests {
     model.addSelectedToExportQueue()
 
     try await waitUntil { !model.isExporting && model.exportProgressCurrent == 2 }
-    #expect(FileManager.default.fileExists(
-      atPath: firstDestination.appendingPathComponent("first.png").path))
-    #expect(FileManager.default.fileExists(
-      atPath: changedDestination.appendingPathComponent("second.jpeg").path))
+    #expect(
+      FileManager.default.fileExists(
+        atPath: firstDestination.appendingPathComponent("first.png").path))
+    #expect(
+      FileManager.default.fileExists(
+        atPath: changedDestination.appendingPathComponent("second.jpeg").path))
   }
 
   @Test("The same file can be queued repeatedly with independent JPEG quality snapshots")
@@ -1623,9 +1649,12 @@ struct AppModelTests {
     try await waitUntil { !model.isExporting && model.exportProgressCurrent == 3 }
     let names = try FileManager.default.contentsOfDirectory(atPath: destination.path).sorted()
     #expect(names == ["scan-2.jpeg", "scan-3.jpeg", "scan.jpeg"])
-    let highQualityBytes = try Data(contentsOf: destination.appendingPathComponent("scan.jpeg")).count
-    let lowQualityBytes = try Data(contentsOf: destination.appendingPathComponent("scan-2.jpeg")).count
-    let mediumQualityBytes = try Data(contentsOf: destination.appendingPathComponent("scan-3.jpeg")).count
+    let highQualityBytes = try Data(contentsOf: destination.appendingPathComponent("scan.jpeg"))
+      .count
+    let lowQualityBytes = try Data(contentsOf: destination.appendingPathComponent("scan-2.jpeg"))
+      .count
+    let mediumQualityBytes = try Data(contentsOf: destination.appendingPathComponent("scan-3.jpeg"))
+      .count
     #expect(lowQualityBytes < mediumQualityBytes)
     #expect(mediumQualityBytes < highQualityBytes)
   }
@@ -1658,10 +1687,12 @@ struct AppModelTests {
     model.exportSelected()
 
     try await waitUntil { !model.isExporting && model.exportProgressCurrent == 2 }
-    #expect(FileManager.default.fileExists(
-      atPath: destination.appendingPathComponent("first.png").path))
-    #expect(FileManager.default.fileExists(
-      atPath: destination.appendingPathComponent("second.png").path))
+    #expect(
+      FileManager.default.fileExists(
+        atPath: destination.appendingPathComponent("first.png").path))
+    #expect(
+      FileManager.default.fileExists(
+        atPath: destination.appendingPathComponent("second.png").path))
   }
 
   @Test("Export cancellation clears active and pending queue state")

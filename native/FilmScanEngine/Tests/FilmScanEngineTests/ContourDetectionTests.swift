@@ -250,13 +250,15 @@ struct ContourDetectionTests {
       coordinateSpace: .legacyTransposedAxes
     )
 
-    #expect(decoded == RotatedRect(
-      centerX: 300,
-      centerY: 200,
-      width: 150,
-      height: 100,
-      angle: 45
-    ))
+    #expect(
+      decoded
+        == RotatedRect(
+          centerX: 300,
+          centerY: 200,
+          width: 150,
+          height: 100,
+          angle: 45
+        ))
   }
 
   @Test("findOptimalCrop on threshold from a real image produces valid normalized rect")

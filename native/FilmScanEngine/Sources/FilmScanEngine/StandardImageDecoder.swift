@@ -76,11 +76,13 @@ public enum StandardImageDecoder {
   private static func fullImageApplyingMetadataOrientation(
     _ source: CGImageSource
   ) -> CGImage? {
-    guard let image = CGImageSourceCreateImageAtIndex(
-      source,
-      0,
-      [kCGImageSourceShouldCacheImmediately: true] as CFDictionary
-    ) else {
+    guard
+      let image = CGImageSourceCreateImageAtIndex(
+        source,
+        0,
+        [kCGImageSourceShouldCacheImmediately: true] as CFDictionary
+      )
+    else {
       return nil
     }
     let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]

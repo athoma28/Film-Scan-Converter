@@ -134,7 +134,8 @@ public struct RollProfile: Codable, Equatable, Sendable {
     )
   }
 
-  private static func rollBaseDensity(from measurements: [FilmBaseMeasurement]) -> BGRChannelValues? {
+  private static func rollBaseDensity(from measurements: [FilmBaseMeasurement]) -> BGRChannelValues?
+  {
     guard !measurements.isEmpty else { return nil }
     return BGRChannelValues(
       blue: median(measurements.map(\.baseDensity.blue).sorted()),
@@ -176,9 +177,10 @@ public struct RollProfile: Codable, Equatable, Sendable {
       BGRChannelValues.self, forKey: .measuredBaseDensity)
     measurementCount = try container.decodeIfPresent(Int.self, forKey: .measurementCount) ?? 0
     exposureBias = try container.decodeIfPresent(Double.self, forKey: .exposureBias) ?? 0
-    whiteBalanceCorrection = try container.decodeIfPresent(
-      BGRChannelValues.self, forKey: .whiteBalanceCorrection
-    ) ?? BGRChannelValues(blue: 1, green: 1, red: 1)
+    whiteBalanceCorrection =
+      try container.decodeIfPresent(
+        BGRChannelValues.self, forKey: .whiteBalanceCorrection
+      ) ?? BGRChannelValues(blue: 1, green: 1, red: 1)
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -307,12 +309,18 @@ public enum FilmNegativeProcessing {
     exposureNormalization: 0.5,
     ratioNormalization: 0.25,
     curves: [
-      [0.985590, 0.928206, 0.733601, 0.590298, 0.308451, 0.273508,
-        0.231637, 0.057239, 0.057239, 0.057239, 0.057239],
-      [0.981603, 0.862303, 0.575805, 0.393775, 0.241577, 0.190320,
-        0.091074, 0.043509, 0.037671, 0.029825, 0.025845],
-      [0.988782, 0.906913, 0.741342, 0.529294, 0.377395, 0.246425,
-        0.174431, 0.096998, 0.063358, 0.025520, 0.025520],
+      [
+        0.985590, 0.928206, 0.733601, 0.590298, 0.308451, 0.273508,
+        0.231637, 0.057239, 0.057239, 0.057239, 0.057239,
+      ],
+      [
+        0.981603, 0.862303, 0.575805, 0.393775, 0.241577, 0.190320,
+        0.091074, 0.043509, 0.037671, 0.029825, 0.025845,
+      ],
+      [
+        0.988782, 0.906913, 0.741342, 0.529294, 0.377395, 0.246425,
+        0.174431, 0.096998, 0.063358, 0.025520, 0.025520,
+      ],
     ]
   )
 
@@ -321,12 +329,18 @@ public enum FilmNegativeProcessing {
     exposureNormalization: 0.25,
     ratioNormalization: 0.25,
     curves: [
-      [0.984934, 0.932758, 0.768483, 0.549015, 0.313488, 0.255865,
-        0.255865, 0.134999, 0.061323, 0.052189, 0.042113],
-      [0.982016, 0.868660, 0.595692, 0.381230, 0.234961, 0.213014,
-        0.114352, 0.041374, 0.028878, 0.028878, 0.019974],
-      [0.988695, 0.899821, 0.757199, 0.506845, 0.313549, 0.253077,
-        0.167284, 0.110408, 0.041514, 0.029620, 0.018251],
+      [
+        0.984934, 0.932758, 0.768483, 0.549015, 0.313488, 0.255865,
+        0.255865, 0.134999, 0.061323, 0.052189, 0.042113,
+      ],
+      [
+        0.982016, 0.868660, 0.595692, 0.381230, 0.234961, 0.213014,
+        0.114352, 0.041374, 0.028878, 0.028878, 0.019974,
+      ],
+      [
+        0.988695, 0.899821, 0.757199, 0.506845, 0.313549, 0.253077,
+        0.167284, 0.110408, 0.041514, 0.029620, 0.018251,
+      ],
     ]
   )
 
@@ -335,12 +349,18 @@ public enum FilmNegativeProcessing {
     exposureNormalization: 0.5,
     ratioNormalization: 0.25,
     curves: [
-      [0.992886, 0.959548, 0.809359, 0.807061, 0.745133, 0.609145,
-        0.401956, 0.256013, 0.208724, 0.094601, 0.037899],
-      [0.989718, 0.929469, 0.776278, 0.717912, 0.584919, 0.377581,
-        0.216584, 0.172346, 0.075729, 0.060105, 0.030462],
-      [0.992840, 0.964433, 0.772915, 0.772915, 0.650805, 0.581862,
-        0.445023, 0.300384, 0.122844, 0.087376, 0.049887],
+      [
+        0.992886, 0.959548, 0.809359, 0.807061, 0.745133, 0.609145,
+        0.401956, 0.256013, 0.208724, 0.094601, 0.037899,
+      ],
+      [
+        0.989718, 0.929469, 0.776278, 0.717912, 0.584919, 0.377581,
+        0.216584, 0.172346, 0.075729, 0.060105, 0.030462,
+      ],
+      [
+        0.992840, 0.964433, 0.772915, 0.772915, 0.650805, 0.581862,
+        0.445023, 0.300384, 0.122844, 0.087376, 0.049887,
+      ],
     ]
   )
 
@@ -349,12 +369,18 @@ public enum FilmNegativeProcessing {
     exposureNormalization: 0.5,
     ratioNormalization: 0.25,
     curves: [
-      [0.983561, 0.873425, 0.583469, 0.399432, 0.242909, 0.242909,
-        0.242909, 0.185946, 0.094080, 0.094080, 0.094080],
-      [0.976831, 0.778123, 0.466709, 0.292708, 0.192789, 0.150298,
-        0.150298, 0.150298, 0.068440, 0.053849, 0.053849],
-      [0.889071, 0.800569, 0.675436, 0.619374, 0.417016, 0.216966,
-        0.117165, 0.117165, 0.117165, 0.078848, 0.078848],
+      [
+        0.983561, 0.873425, 0.583469, 0.399432, 0.242909, 0.242909,
+        0.242909, 0.185946, 0.094080, 0.094080, 0.094080,
+      ],
+      [
+        0.976831, 0.778123, 0.466709, 0.292708, 0.192789, 0.150298,
+        0.150298, 0.150298, 0.068440, 0.053849, 0.053849,
+      ],
+      [
+        0.889071, 0.800569, 0.675436, 0.619374, 0.417016, 0.216966,
+        0.117165, 0.117165, 0.117165, 0.078848, 0.078848,
+      ],
     ]
   )
 
@@ -363,12 +389,18 @@ public enum FilmNegativeProcessing {
     exposureNormalization: 0.75,
     ratioNormalization: 0,
     curves: [
-      [0.972354, 0.909126, 0.688301, 0.688301, 0.551931, 0.326745,
-        0.144854, 0.095234, 0.095234, 0.092993, 0.071834],
-      [0.974144, 0.846462, 0.543931, 0.524965, 0.296099, 0.140592,
-        0.090988, 0.087881, 0.013066, 0.011410, 0.010492],
-      [0.952454, 0.754535, 0.458264, 0.317229, 0.161046, 0.108709,
-        0.056521, 0.037348, 0.021589, 0.017122, 0.012818],
+      [
+        0.972354, 0.909126, 0.688301, 0.688301, 0.551931, 0.326745,
+        0.144854, 0.095234, 0.095234, 0.092993, 0.071834,
+      ],
+      [
+        0.974144, 0.846462, 0.543931, 0.524965, 0.296099, 0.140592,
+        0.090988, 0.087881, 0.013066, 0.011410, 0.010492,
+      ],
+      [
+        0.952454, 0.754535, 0.458264, 0.317229, 0.161046, 0.108709,
+        0.056521, 0.037348, 0.021589, 0.017122, 0.012818,
+      ],
     ]
   )
 
@@ -439,11 +471,14 @@ public enum FilmNegativeProcessing {
     let blueExp = -(params.greenExp * params.blueRatio)
     let inputFloor = 1.0 / maxOutput
 
-    let bMedian = params.measuredMedians?.blue
+    let bMedian =
+      params.measuredMedians?.blue
       ?? image.channelMedian(channel: 0, borderPercent: borderPercent)
-    let gMedian = params.measuredMedians?.green
+    let gMedian =
+      params.measuredMedians?.green
       ?? image.channelMedian(channel: 1, borderPercent: borderPercent)
-    let rMedian = params.measuredMedians?.red
+    let rMedian =
+      params.measuredMedians?.red
       ?? image.channelMedian(channel: 2, borderPercent: borderPercent)
 
     let multipliers = computeMultipliers(
@@ -534,7 +569,8 @@ public enum FilmNegativeProcessing {
 
     let multipliers: (r: Double, g: Double, b: Double)
     if params.enabled {
-      let medians = params.measuredMedians
+      let medians =
+        params.measuredMedians
         ?? computeMedians(image: image, borderPercent: borderPercent)
       multipliers = computeMultipliers(medians: medians, params: params)
     } else {
@@ -691,10 +727,11 @@ public enum FilmNegativeProcessing {
     func channelGain(frame: Double, reference: Double) -> Double {
       let frameRatio = max(frame, 1) / max(medians.green, 1)
       let referenceRatio = reference / definition.referenceMedians.green
-      return exposure * pow(
-        referenceRatio / frameRatio,
-        definition.ratioNormalization
-      )
+      return exposure
+        * pow(
+          referenceRatio / frameRatio,
+          definition.ratioNormalization
+        )
     }
     return BGRChannelValues(
       blue: channelGain(
@@ -1010,7 +1047,8 @@ public enum FilmNegativeProcessing {
         for channel in 0..<3 {
           let black = parameters.blackLevel[channel]
           let signal = max(Double(image.pixels[base + channel]) - black, 0)
-          let clearSignal = max(Double(flatField.pixels[base + channel]) - black, parameters.epsilon)
+          let clearSignal = max(
+            Double(flatField.pixels[base + channel]) - black, parameters.epsilon)
           let transmittance = min(max(signal / clearSignal, parameters.epsilon), 1)
           samples[channel].append(transmittance)
         }
@@ -1093,7 +1131,8 @@ public enum FilmNegativeProcessing {
         && image.channels == flatField.channels,
       "Flat field must match the image dimensions and channels"
     )
-    precondition(edgeFraction > 0 && edgeFraction <= 0.25, "Edge fraction must be in the range (0, 0.25]")
+    precondition(
+      edgeFraction > 0 && edgeFraction <= 0.25, "Edge fraction must be in the range (0, 0.25]")
     precondition(
       minimumConfidence >= 0 && minimumConfidence <= 1,
       "Minimum confidence must be in the range [0, 1]"
@@ -1125,12 +1164,14 @@ public enum FilmNegativeProcessing {
     )
 
     return regions.compactMap { region in
-      guard let measurement = try? measureBaseDensity(
-        image: image,
-        flatField: flatField,
-        region: region,
-        parameters: parameters
-      ) else {
+      guard
+        let measurement = try? measureBaseDensity(
+          image: image,
+          flatField: flatField,
+          region: region,
+          parameters: parameters
+        )
+      else {
         return nil
       }
       let edgeLuminance = luminance(measurement.medianTransmittance)
@@ -1383,7 +1424,8 @@ public enum FilmNegativeProcessing {
     let h = x[interval + 1] - x[interval]
     let a = (x[interval + 1] - first) / h
     let b = (first - x[interval]) / h
-    let result = a * y[interval] + b * y[interval + 1]
+    let result =
+      a * y[interval] + b * y[interval + 1]
       + ((a * a * a - a) * ypp[interval]
         + (b * b * b - b) * ypp[interval + 1]) * h * h / 6.0
     return min(max(result, 0), 1)
@@ -1556,19 +1598,22 @@ private func regionMedianLuminance(
   region: ImageRegion,
   parameters: CaptureNormalizationParameters
 ) -> Double {
-  guard let measurement = try? FilmNegativeProcessing.measureBaseDensity(
-    image: image,
-    flatField: flatField,
-    region: region,
-    parameters: parameters
-  ) else {
+  guard
+    let measurement = try? FilmNegativeProcessing.measureBaseDensity(
+      image: image,
+      flatField: flatField,
+      region: region,
+      parameters: parameters
+    )
+  else {
     return 0
   }
   return luminance(measurement.medianTransmittance)
 }
 
 private func luminance(_ values: BGRChannelValues) -> Double {
-  values.red * 0.2126 + values.green * 0.7152 + values.blue * 0.0722
+  let weights = LuminanceStandards.rec709
+  return values.red * weights.red + values.green * weights.green + values.blue * weights.blue
 }
 
 private func relativeDifference(_ a: Double, _ b: Double) -> Double {

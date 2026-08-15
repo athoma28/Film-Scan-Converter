@@ -156,9 +156,11 @@ struct RenderReadyLinearSeamTests {
     )
 
     #expect(inPlace == reference)
-    #expect(inPlace == image.applyingLinearToneAdjustments(
-      parameters,
-      referenceLuminance: FilmNegativeProcessing.calibrationTargetFraction))
+    #expect(
+      inPlace
+        == image.applyingLinearToneAdjustments(
+          parameters,
+          referenceLuminance: FilmNegativeProcessing.calibrationTargetFraction))
   }
 
   @Test("Large-image in-place protected-color adjustment matches copy reference")

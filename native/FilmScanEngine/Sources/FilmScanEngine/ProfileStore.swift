@@ -60,18 +60,21 @@ public struct CaptureProfile: Codable, Equatable, Sendable {
     id = try container.decode(CaptureProfileID.self, forKey: .id)
     cameraModel = try container.decodeIfPresent(String.self, forKey: .cameraModel) ?? ""
     lensModel = try container.decodeIfPresent(String.self, forKey: .lensModel) ?? ""
-    backlightDescription = try container.decodeIfPresent(
-      String.self, forKey: .backlightDescription
-    ) ?? ""
+    backlightDescription =
+      try container.decodeIfPresent(
+        String.self, forKey: .backlightDescription
+      ) ?? ""
     estimatedColorTemperature = try container.decodeIfPresent(
       Double.self, forKey: .estimatedColorTemperature
     )
-    normalizationParams = try container.decodeIfPresent(
-      CaptureNormalizationParameters.self, forKey: .normalizationParams
-    ) ?? CaptureNormalizationParameters()
-    densityCorrection = try container.decodeIfPresent(
-      DensityCorrectionMatrix.self, forKey: .densityCorrection
-    ) ?? .identity
+    normalizationParams =
+      try container.decodeIfPresent(
+        CaptureNormalizationParameters.self, forKey: .normalizationParams
+      ) ?? CaptureNormalizationParameters()
+    densityCorrection =
+      try container.decodeIfPresent(
+        DensityCorrectionMatrix.self, forKey: .densityCorrection
+      ) ?? .identity
     preferredISO = try container.decodeIfPresent(Double.self, forKey: .preferredISO)
     notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
   }
@@ -113,7 +116,8 @@ public struct FilmStockProfile: Codable, Equatable, Sendable {
     self.filmType = filmType
     self.c41Profile = c41Profile
     self.displayRendering = displayRendering
-    self.filmNegativeParams = filmNegativeParams
+    self.filmNegativeParams =
+      filmNegativeParams
       ?? Self.defaultFilmNegativeParams(for: filmType)
     self.filmNegativeParams.measuredMedians = nil
     self.dyeMixing = dyeMixing.clamped()
@@ -132,29 +136,32 @@ public struct FilmStockProfile: Codable, Equatable, Sendable {
     id = try container.decode(FilmStockProfileID.self, forKey: .id)
     displayName = try container.decode(String.self, forKey: .displayName)
     filmType = try container.decode(FilmType.self, forKey: .filmType)
-    c41Profile = try container.decodeIfPresent(
-      GenericC41Profile.self,
-      forKey: .c41Profile
-    ) ?? .identity
-    displayRendering = try container.decodeIfPresent(
-      DisplayRenderingParameters.self,
-      forKey: .displayRendering
-    ) ?? DisplayRenderingParameters()
-    filmNegativeParams = try container.decodeIfPresent(
-      FilmNegativeParams.self,
-      forKey: .filmNegativeParams
-    ) ?? (
-      schemaVersion < 4 && filmType == .colourNegative
+    c41Profile =
+      try container.decodeIfPresent(
+        GenericC41Profile.self,
+        forKey: .c41Profile
+      ) ?? .identity
+    displayRendering =
+      try container.decodeIfPresent(
+        DisplayRenderingParameters.self,
+        forKey: .displayRendering
+      ) ?? DisplayRenderingParameters()
+    filmNegativeParams =
+      try container.decodeIfPresent(
+        FilmNegativeParams.self,
+        forKey: .filmNegativeParams
+      )
+      ?? (schemaVersion < 4 && filmType == .colourNegative
         ? .legacyColourNegative
         : schemaVersion < 3 && filmType == .blackAndWhiteNegative
           ? .legacyBlackAndWhite
-          : Self.defaultFilmNegativeParams(for: filmType)
-    )
+          : Self.defaultFilmNegativeParams(for: filmType))
     filmNegativeParams.measuredMedians = nil
-    dyeMixing = try container.decodeIfPresent(
-      FilmDyeMixingParameters.self,
-      forKey: .dyeMixing
-    )?.clamped() ?? .neutral
+    dyeMixing =
+      try container.decodeIfPresent(
+        FilmDyeMixingParameters.self,
+        forKey: .dyeMixing
+      )?.clamped() ?? .neutral
     notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
   }
 
@@ -278,9 +285,11 @@ public final class ProfileStore: Sendable {
   }
 
   public init?(appGroupIdentifier: String) {
-    guard let base = FileManager.default.urls(
-      for: .applicationSupportDirectory, in: .userDomainMask
-    ).first?.appendingPathComponent(appGroupIdentifier) else {
+    guard
+      let base = FileManager.default.urls(
+        for: .applicationSupportDirectory, in: .userDomainMask
+      ).first?.appendingPathComponent(appGroupIdentifier)
+    else {
       return nil
     }
     self.baseDirectory = base
@@ -293,20 +302,46 @@ public final class ProfileStore: Sendable {
       at: url, withIntermediateDirectories: true)
   }
 
-  private func profileURL(
-    for id: CaptureProfileID, in directory: URL
-  ) -> URL {
-    directory.appendingPathComponent("\(id.rawValue).json")
+  private func profileURL(named identifier: String, in directory: URL) -> URL {
+    directory.appendingPathComponent("\(identifier).json")
   }
 
-  private func profileURL(
-    for id: FilmStockProfileID, in directory: URL
-  ) -> URL {
-    directory.appendingPathComponent("\(id.rawValue).json")
+  private func save<Profile: Encodable>(
+    _ profile: Profile,
+    named identifier: String,
+    in directory: URL
+  ) throws {
+    try ensureDirectory(directory)
+    let data = try encoder.encode(profile)
+    try data.write(to: profileURL(named: identifier, in: directory), options: .atomic)
   }
 
-  private func profileURL(for rollID: String, in directory: URL) -> URL {
-    directory.appendingPathComponent("\(rollID).json")
+  private func load<Profile: Decodable>(
+    _ profileType: Profile.Type,
+    named identifier: String,
+    in directory: URL
+  ) throws -> Profile? {
+    let url = profileURL(named: identifier, in: directory)
+    guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+    return try decoder.decode(profileType, from: Data(contentsOf: url))
+  }
+
+  private func listedIdentifiers<ID: RawRepresentable>(
+    in directory: URL,
+    as _: ID.Type
+  ) -> [ID] where ID.RawValue == String {
+    guard
+      let contents = try? FileManager.default.contentsOfDirectory(
+        at: directory,
+        includingPropertiesForKeys: nil
+      )
+    else {
+      return []
+    }
+    return
+      contents
+      .filter { $0.pathExtension == "json" }
+      .compactMap { ID(rawValue: $0.deletingPathExtension().lastPathComponent) }
   }
 
   // MARK: - Capture Profiles
@@ -316,19 +351,17 @@ public final class ProfileStore: Sendable {
   }
 
   public func saveCaptureProfile(_ profile: CaptureProfile) throws {
-    try ensureDirectory(captureProfilesDirectory)
-    let url = profileURL(for: profile.id, in: captureProfilesDirectory)
-    let data = try encoder.encode(profile)
-    try data.write(to: url, options: .atomic)
+    try save(profile, named: profile.id.rawValue, in: captureProfilesDirectory)
   }
 
   public func loadCaptureProfile(id: CaptureProfileID) throws -> CaptureProfile? {
-    let url = profileURL(for: id, in: captureProfilesDirectory)
-    guard FileManager.default.fileExists(atPath: url.path) else {
-      return nil
-    }
-    let data = try Data(contentsOf: url)
-    let profile = try decoder.decode(CaptureProfile.self, from: data)
+    guard
+      let profile = try load(
+        CaptureProfile.self,
+        named: id.rawValue,
+        in: captureProfilesDirectory
+      )
+    else { return nil }
     try validateSchemaVersion(
       profile.schemaVersion,
       supported: CaptureProfile.currentSchemaVersion
@@ -337,16 +370,7 @@ public final class ProfileStore: Sendable {
   }
 
   public func listCaptureProfiles() -> [CaptureProfileID] {
-    guard let contents = try? FileManager.default.contentsOfDirectory(
-      at: captureProfilesDirectory, includingPropertiesForKeys: nil
-    ) else {
-      return []
-    }
-    return contents
-      .filter { $0.pathExtension == "json" }
-      .compactMap {
-        CaptureProfileID(rawValue: $0.deletingPathExtension().lastPathComponent)
-      }
+    listedIdentifiers(in: captureProfilesDirectory, as: CaptureProfileID.self)
   }
 
   // MARK: - Film Stock Profiles
@@ -356,19 +380,17 @@ public final class ProfileStore: Sendable {
   }
 
   public func saveFilmStockProfile(_ profile: FilmStockProfile) throws {
-    try ensureDirectory(stockProfilesDirectory)
-    let url = profileURL(for: profile.id, in: stockProfilesDirectory)
-    let data = try encoder.encode(profile)
-    try data.write(to: url, options: .atomic)
+    try save(profile, named: profile.id.rawValue, in: stockProfilesDirectory)
   }
 
   public func loadFilmStockProfile(id: FilmStockProfileID) throws -> FilmStockProfile? {
-    let url = profileURL(for: id, in: stockProfilesDirectory)
-    guard FileManager.default.fileExists(atPath: url.path) else {
-      return nil
-    }
-    let data = try Data(contentsOf: url)
-    let profile = try decoder.decode(FilmStockProfile.self, from: data)
+    guard
+      let profile = try load(
+        FilmStockProfile.self,
+        named: id.rawValue,
+        in: stockProfilesDirectory
+      )
+    else { return nil }
     try validateSchemaVersion(
       profile.schemaVersion,
       supported: FilmStockProfile.currentSchemaVersion
@@ -377,16 +399,7 @@ public final class ProfileStore: Sendable {
   }
 
   public func listFilmStockProfiles() -> [FilmStockProfileID] {
-    guard let contents = try? FileManager.default.contentsOfDirectory(
-      at: stockProfilesDirectory, includingPropertiesForKeys: nil
-    ) else {
-      return []
-    }
-    return contents
-      .filter { $0.pathExtension == "json" }
-      .compactMap {
-        FilmStockProfileID(rawValue: $0.deletingPathExtension().lastPathComponent)
-      }
+    listedIdentifiers(in: stockProfilesDirectory, as: FilmStockProfileID.self)
   }
 
   // MARK: - Roll Profiles
@@ -396,19 +409,17 @@ public final class ProfileStore: Sendable {
   }
 
   public func saveRollProfile(_ profile: RollProfile) throws {
-    try ensureDirectory(rollProfilesDirectory)
-    let url = profileURL(for: profile.rollID, in: rollProfilesDirectory)
-    let data = try encoder.encode(profile)
-    try data.write(to: url, options: .atomic)
+    try save(profile, named: profile.rollID, in: rollProfilesDirectory)
   }
 
   public func loadRollProfile(rollID: String) throws -> RollProfile? {
-    let url = profileURL(for: rollID, in: rollProfilesDirectory)
-    guard FileManager.default.fileExists(atPath: url.path) else {
-      return nil
-    }
-    let data = try Data(contentsOf: url)
-    var profile = try decoder.decode(RollProfile.self, from: data)
+    guard
+      var profile = try load(
+        RollProfile.self,
+        named: rollID,
+        in: rollProfilesDirectory
+      )
+    else { return nil }
     try validateSchemaVersion(
       profile.schemaVersion, supported: RollProfile.currentSchemaVersion)
     if profile.rollID.isEmpty {
@@ -423,7 +434,8 @@ public final class ProfileStore: Sendable {
     let contents = try FileManager.default.contentsOfDirectory(
       at: rollProfilesDirectory, includingPropertiesForKeys: nil
     )
-    return try contents
+    return
+      try contents
       .filter { $0.pathExtension == "json" }
       .map { url in
         let rollID = url.deletingPathExtension().lastPathComponent

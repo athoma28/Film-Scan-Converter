@@ -118,7 +118,8 @@ struct ParameterCombo: Hashable, CustomStringConvertible {
     self.photo = photo
   }
   var description: String {
-    var parts = "\(filmType) T\(temperature) tint\(tint) γ\(gamma) s\(shadows) h\(highlights) sat\(saturation) curve=\(curveEnabled) wheels=\(wheelsEnabled)"
+    var parts =
+      "\(filmType) T\(temperature) tint\(tint) γ\(gamma) s\(shadows) h\(highlights) sat\(saturation) curve=\(curveEnabled) wheels=\(wheelsEnabled)"
     if photo.exposureEV != 0 { parts += " EV=\(String(format: "%.1f", photo.exposureEV))" }
     if photo.brightness != 0 { parts += " bri=\(String(format: "%.2f", photo.brightness))" }
     if photo.contrast != 0 { parts += " con=\(String(format: "%.2f", photo.contrast))" }
@@ -145,30 +146,34 @@ func toneControlGrid() -> [ParameterCombo] {
           let active =
             [ev != 0, bri != 0, con != 0].filter { $0 }.count
           guard active <= 1 else { continue }
-          combos.append(ParameterCombo(
-            filmType: ft,
-            photo: PhotoAdjustmentParameters(
-              exposureEV: ev, brightness: bri, contrast: con)))
+          combos.append(
+            ParameterCombo(
+              filmType: ft,
+              photo: PhotoAdjustmentParameters(
+                exposureEV: ev, brightness: bri, contrast: con)))
         }
       }
     }
 
     for hl in highlightValues {
-      combos.append(ParameterCombo(
-        filmType: ft,
-        photo: PhotoAdjustmentParameters(highlights: hl)))
+      combos.append(
+        ParameterCombo(
+          filmType: ft,
+          photo: PhotoAdjustmentParameters(highlights: hl)))
     }
     for sh in shadowValues {
-      combos.append(ParameterCombo(
-        filmType: ft,
-        photo: PhotoAdjustmentParameters(shadows: sh)))
+      combos.append(
+        ParameterCombo(
+          filmType: ft,
+          photo: PhotoAdjustmentParameters(shadows: sh)))
     }
 
-    combos.append(ParameterCombo(
-      filmType: ft,
-      photo: PhotoAdjustmentParameters(
-        exposureEV: 0.5, brightness: 0.2, contrast: 0.3,
-        highlights: -0.3, shadows: 0.3)))
+    combos.append(
+      ParameterCombo(
+        filmType: ft,
+        photo: PhotoAdjustmentParameters(
+          exposureEV: 0.5, brightness: 0.2, contrast: 0.3,
+          highlights: -0.3, shadows: 0.3)))
   }
   return combos
 }
@@ -205,9 +210,10 @@ func parameterGrid() -> [ParameterCombo] {
   // De-duplicate: keep combos with ≤3 non-default parameters
   let baseCombos = combos.filter { combo in
     let active =
-      [combo.temperature != 0, combo.tint != 0,
+      [
+        combo.temperature != 0, combo.tint != 0,
         combo.gamma != 0, combo.shadows != 0, combo.highlights != 0,
-        combo.saturation != 100
+        combo.saturation != 100,
       ].filter { $0 }.count
     return active <= 3
   }
@@ -249,7 +255,9 @@ let images: [(String, UInt16Image)] = [
 let baseCombos = parameterGrid()
 let toneCombos = toneControlGrid()
 let combos = baseCombos + toneCombos
-print("Parameter combinations to test: \(combos.count) (base: \(baseCombos.count), tone: \(toneCombos.count))")
+print(
+  "Parameter combinations to test: \(combos.count) (base: \(baseCombos.count), tone: \(toneCombos.count))"
+)
 print()
 
 var totalComparisons = 0

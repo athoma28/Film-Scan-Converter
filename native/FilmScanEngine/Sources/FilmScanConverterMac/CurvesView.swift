@@ -152,10 +152,14 @@ struct IntegratedCurvesView: View {
         let x = drawRect.minX + drawRect.width * frac
         let y = drawRect.minY + drawRect.height * frac
 
-        var h = Path(); h.move(to: CGPoint(x: x, y: drawRect.minY)); h.addLine(to: CGPoint(x: x, y: drawRect.maxY))
+        var h = Path()
+        h.move(to: CGPoint(x: x, y: drawRect.minY))
+        h.addLine(to: CGPoint(x: x, y: drawRect.maxY))
         context.stroke(h, with: .color(.white.opacity(0.06)), lineWidth: 0.5)
 
-        var v = Path(); v.move(to: CGPoint(x: drawRect.minX, y: y)); v.addLine(to: CGPoint(x: drawRect.maxX, y: y))
+        var v = Path()
+        v.move(to: CGPoint(x: drawRect.minX, y: y))
+        v.addLine(to: CGPoint(x: drawRect.maxX, y: y))
         context.stroke(v, with: .color(.white.opacity(0.06)), lineWidth: 0.5)
       }
     }
@@ -176,15 +180,17 @@ struct IntegratedCurvesView: View {
       guard sorted.count >= 2 else { return }
       let toView = makeViewTransform(drawRect: drawRect)
       let sampleCount = max(64, Int(drawRect.width.rounded()))
-      let samples = FilmProcessing.curveSamples(
-        controlPoints: sorted,
-        sampleCount: sampleCount
-      ) ?? sorted
+      let samples =
+        FilmProcessing.curveSamples(
+          controlPoints: sorted,
+          sampleCount: sampleCount
+        ) ?? sorted
       for (index, sample) in samples.enumerated() {
-        let point = toView(CGPoint(
-          x: sample.input,
-          y: min(max(sample.output, 0), 1)
-        ))
+        let point = toView(
+          CGPoint(
+            x: sample.input,
+            y: min(max(sample.output, 0), 1)
+          ))
         if index == 0 {
           path.move(to: point)
         } else {
@@ -192,7 +198,8 @@ struct IntegratedCurvesView: View {
         }
       }
     }
-    .stroke(selectedChannel.color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
+    .stroke(
+      selectedChannel.color, style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
   }
 
   private func controlPoints(drawRect: CGRect) -> some View {
@@ -287,12 +294,18 @@ struct IntegratedCurvesView: View {
   private var presetButtonsRow: some View {
     HStack(spacing: 6) {
       compactPresetButton("Linear", systemImage: "line.diagonal") { applyPresetToCurrent(.linear) }
-      compactPresetButton("S-Curve", systemImage: "function") { applyPresetToCurrent(.mediumContrast) }
-      compactPresetButton("Strong S", systemImage: "chart.line.uptrend.xyaxis") { applyPresetToCurrent(.strongContrast) }
+      compactPresetButton("S-Curve", systemImage: "function") {
+        applyPresetToCurrent(.mediumContrast)
+      }
+      compactPresetButton("Strong S", systemImage: "chart.line.uptrend.xyaxis") {
+        applyPresetToCurrent(.strongContrast)
+      }
     }
   }
 
-  private func compactPresetButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+  private func compactPresetButton(
+    _ title: String, systemImage: String, action: @escaping () -> Void
+  ) -> some View {
     Button(action: action) {
       HStack(spacing: 4) {
         Image(systemName: systemImage).font(.system(size: 9))
@@ -351,7 +364,8 @@ struct IntegratedCurvesView: View {
     case .green: pts = model.parameters.greenCurveControlPoints
     case .blue: pts = model.parameters.blueCurveControlPoints
     }
-    let resolved = pts.isEmpty
+    let resolved =
+      pts.isEmpty
       ? [CurvePoint(input: 0, output: 0), CurvePoint(input: 1, output: 1)]
       : pts
     return resolved.sorted { $0.input < $1.input }
@@ -373,7 +387,9 @@ struct IntegratedCurvesView: View {
   }
 
   private func makeViewTransform(drawRect: CGRect) -> (CGPoint) -> CGPoint {
-    { pt in CGPoint(x: drawRect.minX + pt.x * drawRect.width, y: drawRect.maxY - pt.y * drawRect.height) }
+    { pt in
+      CGPoint(x: drawRect.minX + pt.x * drawRect.width, y: drawRect.maxY - pt.y * drawRect.height)
+    }
   }
 
   private func makeInverseTransform(drawRect: CGRect) -> (CGPoint) -> CGPoint {

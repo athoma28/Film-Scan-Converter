@@ -44,7 +44,10 @@ struct AppBundleValidatorTests {
     try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
     try Data("not a plist".utf8).write(to: contents.appendingPathComponent("Info.plist"))
 
-    #expect(AppBundleValidator.validate(bundleAt: root) == ["Contents/Info.plist is not a readable property list"])
+    #expect(
+      AppBundleValidator.validate(bundleAt: root) == [
+        "Contents/Info.plist is not a readable property list"
+      ])
   }
 
   @Test("Requires the declared application icon resource")
@@ -55,7 +58,9 @@ struct AppBundleValidatorTests {
       includeIcon: false
     )
 
-    #expect(AppBundleValidator.validate(bundleAt: bundle).contains("Contents/Resources/AppIcon.icns is missing"))
+    #expect(
+      AppBundleValidator.validate(bundleAt: bundle).contains(
+        "Contents/Resources/AppIcon.icns is missing"))
   }
 
   @Test("Requires license, notices, release notes, and library manifest")
@@ -66,9 +71,10 @@ struct AppBundleValidatorTests {
       omittedResource: "THIRD_PARTY_NOTICES.md"
     )
 
-    #expect(AppBundleValidator.validate(bundleAt: bundle).contains(
-      "Contents/Resources/THIRD_PARTY_NOTICES.md is missing or empty"
-    ))
+    #expect(
+      AppBundleValidator.validate(bundleAt: bundle).contains(
+        "Contents/Resources/THIRD_PARTY_NOTICES.md is missing or empty"
+      ))
   }
 
   @Test("Requires complete bundled-library license texts")
@@ -79,9 +85,10 @@ struct AppBundleValidatorTests {
       omittedResource: "LLVM-OpenMP-LICENSE.txt"
     )
 
-    #expect(AppBundleValidator.validate(bundleAt: bundle).contains(
-      "Contents/Resources/ThirdPartyLicenses/LLVM-OpenMP-LICENSE.txt is missing or empty"
-    ))
+    #expect(
+      AppBundleValidator.validate(bundleAt: bundle).contains(
+        "Contents/Resources/ThirdPartyLicenses/LLVM-OpenMP-LICENSE.txt is missing or empty"
+      ))
   }
 
   @Test("Does not require license files for libraries absent from the bundle")
@@ -91,10 +98,12 @@ struct AppBundleValidatorTests {
       executableData: Data("binary".utf8)
     )
     let contents = bundle.appendingPathComponent("Contents", isDirectory: true)
-    let jasperLibrary = contents
+    let jasperLibrary =
+      contents
       .appendingPathComponent("Frameworks", isDirectory: true)
       .appendingPathComponent("libjasper.dylib")
-    let licenses = contents
+    let licenses =
+      contents
       .appendingPathComponent("Resources", isDirectory: true)
       .appendingPathComponent("ThirdPartyLicenses", isDirectory: true)
     try FileManager.default.removeItem(at: jasperLibrary)
@@ -108,16 +117,17 @@ struct AppBundleValidatorTests {
   func requiresDocumentRegistration() throws {
     var info = validInfo
     info["CFBundleDocumentTypes"] = [
-      ["LSItemContentTypes": ["public.image"]],
+      ["LSItemContentTypes": ["public.image"]]
     ]
     let bundle = try makeBundle(
       info: info,
       executableData: Data("binary".utf8)
     )
 
-    #expect(AppBundleValidator.validate(bundleAt: bundle).contains(
-      "CFBundleDocumentTypes must register public.camera-raw-image"
-    ))
+    #expect(
+      AppBundleValidator.validate(bundleAt: bundle).contains(
+        "CFBundleDocumentTypes must register public.camera-raw-image"
+      ))
   }
 
   private var validInfo: [String: Any] {
@@ -130,7 +140,7 @@ struct AppBundleValidatorTests {
       "CFBundleShortVersionString": "0.1.0",
       "CFBundleVersion": "1",
       "CFBundleDocumentTypes": [
-        ["LSItemContentTypes": ["public.image", "public.camera-raw-image"]],
+        ["LSItemContentTypes": ["public.image", "public.camera-raw-image"]]
       ],
       "LSMinimumSystemVersion": "14.0",
       "NSCameraUsageDescription": "Camera access is used for live preview.",

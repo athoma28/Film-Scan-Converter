@@ -71,6 +71,8 @@ rules to the whole repository.
 
 For the primary native Swift code:
 
+- run `swift format` on changed Swift files and keep the strict native lint
+  check clean;
 - use two-space indentation, as in the existing Swift package;
 - use normal Swift double-quoted string literals;
 - keep spaces after collection elements and parameters and around operators;

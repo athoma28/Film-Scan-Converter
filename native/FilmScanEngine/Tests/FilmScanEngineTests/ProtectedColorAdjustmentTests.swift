@@ -94,7 +94,8 @@ struct ProtectedColorAdjustmentTests {
     )
     let sourceOpponent = opponent(image.pixels)
     let adjustedOpponent = opponent(adjusted.pixels)
-    let cosine = dot(sourceOpponent, adjustedOpponent)
+    let cosine =
+      dot(sourceOpponent, adjustedOpponent)
       / (magnitude(sourceOpponent) * magnitude(adjustedOpponent))
 
     #expect(adjusted.pixels.allSatisfy { $0 >= 0 && $0 <= 1 })

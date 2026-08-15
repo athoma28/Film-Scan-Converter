@@ -81,21 +81,24 @@ struct PhotoAdjustmentParametersTests {
   @Test("Processing settings migrate useful legacy controls and ignore removed no-op fields")
   func processingParametersMigratesOldJSON() throws {
     let json = Data(
-      #"{"filmType":1,"whitePoint":30,"blackPoint":-20,"removeDust":true,"gamma":50,"shadows":-25,"highlights":80,"temperature":40,"tint":-20,"saturation":125}"#.utf8
+      #"{"filmType":1,"whitePoint":30,"blackPoint":-20,"removeDust":true,"gamma":50,"shadows":-25,"highlights":80,"temperature":40,"tint":-20,"saturation":125}"#
+        .utf8
     )
 
     let decoded = try JSONDecoder().decode(ProcessingParameters.self, from: json)
 
     #expect(decoded.gamma == 50)
     #expect(decoded.saturation == 125)
-    #expect(decoded.photoAdjustments == .migratingLegacy(
-      gamma: 50,
-      shadows: -25,
-      highlights: 80,
-      temperature: 40,
-      tint: -20,
-      saturation: 125
-    ))
+    #expect(
+      decoded.photoAdjustments
+        == .migratingLegacy(
+          gamma: 50,
+          shadows: -25,
+          highlights: 80,
+          temperature: 40,
+          tint: -20,
+          saturation: 125
+        ))
     let migratedJSON = String(decoding: try JSONEncoder().encode(decoded), as: UTF8.self)
     #expect(!migratedJSON.contains("whitePoint"))
     #expect(!migratedJSON.contains("blackPoint"))

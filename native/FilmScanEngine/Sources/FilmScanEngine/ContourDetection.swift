@@ -83,7 +83,8 @@ public enum ContourDetection {
       scaledHull = hull
     }
 
-    let normalized = normalizeToUnit(scaledRect, imageWidth: threshold.width, imageHeight: threshold.height)
+    let normalized = normalizeToUnit(
+      scaledRect, imageWidth: threshold.width, imageHeight: threshold.height)
     return (threshold, normalized, scaledHull)
   }
 

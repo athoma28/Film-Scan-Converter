@@ -100,12 +100,14 @@ struct StillPreviewBenchmarkTests {
         failedRenders += 1
         continue
       }
-      let milliseconds = Double(elapsed.components.seconds) * 1000.0
+      let milliseconds =
+        Double(elapsed.components.seconds) * 1000.0
         + Double(elapsed.components.attoseconds) / 1e15
       latenciesMs.append(milliseconds)
     }
 
-    #expect(failedRenders == 0, "\(failedRenders) renders failed out of \(Self.benchmarkIterations)")
+    #expect(
+      failedRenders == 0, "\(failedRenders) renders failed out of \(Self.benchmarkIterations)")
     guard !latenciesMs.isEmpty else { return }
 
     let sorted = latenciesMs.sorted()
@@ -376,10 +378,16 @@ struct StillPreviewBenchmarkTests {
       ("highlights-pull", ProcessingParameters(filmType: .colourNegative, highlights: -45)),
       ("sat-boost", ProcessingParameters(filmType: .colourNegative, saturation: 150)),
       ("sat-zero", ProcessingParameters(filmType: .colourNegative, saturation: 0)),
-      ("exposure-combo", ProcessingParameters(
-        filmType: .colourNegative, gamma: -35, shadows: 60, highlights: -45)),
-      ("wb-combo", ProcessingParameters(
-        filmType: .colourNegative, temperature: 65, tint: -40, saturation: 130)),
+      (
+        "exposure-combo",
+        ProcessingParameters(
+          filmType: .colourNegative, gamma: -35, shadows: 60, highlights: -45)
+      ),
+      (
+        "wb-combo",
+        ProcessingParameters(
+          filmType: .colourNegative, temperature: 65, tint: -40, saturation: 130)
+      ),
       ("protected-warm-vibrance", protectedWarmVibrance),
       ("protected-gamut-edge", protectedGamutEdge),
       ("tone-exposure-plus", toneExposurePlus),
@@ -388,43 +396,73 @@ struct StillPreviewBenchmarkTests {
       ("tone-highlights-recover", toneHighlightsRecover),
       ("tone-shadows-lift", toneShadowsLift),
       ("tone-full-combo", toneFullCombo),
-      ("curve-only", ProcessingParameters(
-        filmType: .colourNegative, curveEnabled: true, curveControlPoints: curvePoints)),
-      ("wheels-only", ProcessingParameters(
-        filmType: .colourNegative,
-        highlightWheel: ColorWheel(hue: 35, strength: 0.4),
-        midtoneWheel: ColorWheel(hue: 190, strength: 0.25),
-        shadowWheel: ColorWheel(hue: 285, strength: 0.5))),
-      ("curves-and-wheels", ProcessingParameters(
-        filmType: .colourNegative,
-        curveEnabled: true, curveControlPoints: curvePoints,
-        highlightWheel: ColorWheel(hue: 35, strength: 0.4),
-        midtoneWheel: ColorWheel(hue: 190, strength: 0.25),
-        shadowWheel: ColorWheel(hue: 285, strength: 0.5))),
-      ("full-combo", ProcessingParameters(
-        filmType: .colourNegative,
-        gamma: 35, shadows: 40, highlights: -30,
-        temperature: 45, tint: -25, saturation: 145,
-        curveEnabled: true, curveControlPoints: curvePoints,
-        highlightWheel: ColorWheel(hue: 35, strength: 0.4),
-        midtoneWheel: ColorWheel(hue: 190, strength: 0.25),
-        shadowWheel: ColorWheel(hue: 285, strength: 0.5))),
-      ("per-channel-curves", ProcessingParameters(
-        filmType: .colourNegative,
-        redCurveEnabled: true,
-        redCurveControlPoints: [CurvePoint(input: 0, output: 0.05), CurvePoint(input: 0.45, output: 0.7), CurvePoint(input: 1, output: 0.95)],
-        greenCurveEnabled: true,
-        greenCurveControlPoints: [CurvePoint(input: 0, output: 0), CurvePoint(input: 0.5, output: 0.3), CurvePoint(input: 1, output: 1)],
-        blueCurveEnabled: true,
-        blueCurveControlPoints: [CurvePoint(input: 0, output: 0.1), CurvePoint(input: 0.65, output: 0.45), CurvePoint(input: 1, output: 1)]
-      )),
-      ("slide-curves", ProcessingParameters(
-        filmType: .slide, curveEnabled: true, curveControlPoints: curvePoints)),
-      ("slide-wheels", ProcessingParameters(
-        filmType: .slide,
-        highlightWheel: ColorWheel(hue: 120, strength: 0.3),
-        midtoneWheel: ColorWheel(hue: 60, strength: 0.2),
-        shadowWheel: ColorWheel(hue: 300, strength: 0.4))),
+      (
+        "curve-only",
+        ProcessingParameters(
+          filmType: .colourNegative, curveEnabled: true, curveControlPoints: curvePoints)
+      ),
+      (
+        "wheels-only",
+        ProcessingParameters(
+          filmType: .colourNegative,
+          highlightWheel: ColorWheel(hue: 35, strength: 0.4),
+          midtoneWheel: ColorWheel(hue: 190, strength: 0.25),
+          shadowWheel: ColorWheel(hue: 285, strength: 0.5))
+      ),
+      (
+        "curves-and-wheels",
+        ProcessingParameters(
+          filmType: .colourNegative,
+          curveEnabled: true, curveControlPoints: curvePoints,
+          highlightWheel: ColorWheel(hue: 35, strength: 0.4),
+          midtoneWheel: ColorWheel(hue: 190, strength: 0.25),
+          shadowWheel: ColorWheel(hue: 285, strength: 0.5))
+      ),
+      (
+        "full-combo",
+        ProcessingParameters(
+          filmType: .colourNegative,
+          gamma: 35, shadows: 40, highlights: -30,
+          temperature: 45, tint: -25, saturation: 145,
+          curveEnabled: true, curveControlPoints: curvePoints,
+          highlightWheel: ColorWheel(hue: 35, strength: 0.4),
+          midtoneWheel: ColorWheel(hue: 190, strength: 0.25),
+          shadowWheel: ColorWheel(hue: 285, strength: 0.5))
+      ),
+      (
+        "per-channel-curves",
+        ProcessingParameters(
+          filmType: .colourNegative,
+          redCurveEnabled: true,
+          redCurveControlPoints: [
+            CurvePoint(input: 0, output: 0.05), CurvePoint(input: 0.45, output: 0.7),
+            CurvePoint(input: 1, output: 0.95),
+          ],
+          greenCurveEnabled: true,
+          greenCurveControlPoints: [
+            CurvePoint(input: 0, output: 0), CurvePoint(input: 0.5, output: 0.3),
+            CurvePoint(input: 1, output: 1),
+          ],
+          blueCurveEnabled: true,
+          blueCurveControlPoints: [
+            CurvePoint(input: 0, output: 0.1), CurvePoint(input: 0.65, output: 0.45),
+            CurvePoint(input: 1, output: 1),
+          ]
+        )
+      ),
+      (
+        "slide-curves",
+        ProcessingParameters(
+          filmType: .slide, curveEnabled: true, curveControlPoints: curvePoints)
+      ),
+      (
+        "slide-wheels",
+        ProcessingParameters(
+          filmType: .slide,
+          highlightWheel: ColorWheel(hue: 120, strength: 0.3),
+          midtoneWheel: ColorWheel(hue: 60, strength: 0.2),
+          shadowWheel: ColorWheel(hue: 300, strength: 0.4))
+      ),
     ]
 
     var maxDiff = 0
@@ -456,8 +494,10 @@ struct StillPreviewBenchmarkTests {
       }
     }
 
-    #expect(maxDiff <= 2,
-      "Production renderer max diff \(maxDiff)/255 at '\(worstName)'; should be <= 2 for visual equivalence")
+    #expect(
+      maxDiff <= 2,
+      "Production renderer max diff \(maxDiff)/255 at '\(worstName)'; should be <= 2 for visual equivalence"
+    )
   }
 
   @Test("Tone controls match CPU within 2/255 across representative parameter grid")
@@ -476,48 +516,87 @@ struct StillPreviewBenchmarkTests {
     shanghaiGP3Negative.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
 
     let configs: [(String, ProcessingParameters)] = [
-      ("exposure+1", ProcessingParameters(
-        filmType: .colourNegative, filmNegativeParams: filmNegative,
-        photoAdjustments: PhotoAdjustmentParameters(exposureEV: 1))),
-      ("exposure-1", ProcessingParameters(
-        filmType: .colourNegative, filmNegativeParams: filmNegative,
-        photoAdjustments: PhotoAdjustmentParameters(exposureEV: -1))),
-      ("brightness+0.5", ProcessingParameters(
-        filmType: .colourNegative, filmNegativeParams: filmNegative,
-        photoAdjustments: PhotoAdjustmentParameters(brightness: 0.5))),
-      ("brightness-0.5", ProcessingParameters(
-        filmType: .colourNegative, filmNegativeParams: filmNegative,
-        photoAdjustments: PhotoAdjustmentParameters(brightness: -0.5))),
-      ("contrast+0.5", ProcessingParameters(
-        filmType: .colourNegative, filmNegativeParams: filmNegative,
-        photoAdjustments: PhotoAdjustmentParameters(contrast: 0.5))),
-      ("contrast-0.5", ProcessingParameters(
-        filmType: .colourNegative, filmNegativeParams: filmNegative,
-        photoAdjustments: PhotoAdjustmentParameters(contrast: -0.5))),
-      ("highlights+0.5", ProcessingParameters(
-        filmType: .colourNegative, filmNegativeParams: filmNegative,
-        photoAdjustments: PhotoAdjustmentParameters(highlights: 0.5))),
-      ("shadows+0.5", ProcessingParameters(
-        filmType: .colourNegative, filmNegativeParams: filmNegative,
-        photoAdjustments: PhotoAdjustmentParameters(shadows: 0.5))),
-      ("tone-combo", ProcessingParameters(
-        filmType: .colourNegative, filmNegativeParams: filmNegative,
-        photoAdjustments: PhotoAdjustmentParameters(
-          exposureEV: 0.5, brightness: 0.2, contrast: 0.3,
-          highlights: -0.3, shadows: 0.3))),
-      ("tone-with-color", ProcessingParameters(
-        filmType: .colourNegative, filmNegativeParams: filmNegative,
-        photoAdjustments: PhotoAdjustmentParameters(
-          exposureEV: 0.5, contrast: 0.3,
-          temperatureShiftMired: 20, tint: -0.2, saturation: 0.3))),
-      ("slide-exposure", ProcessingParameters(
-        filmType: .slide,
-        photoAdjustments: PhotoAdjustmentParameters(exposureEV: 0.5))),
-      ("bw-negative-exposure", ProcessingParameters(
-        filmType: .blackAndWhiteNegative, filmNegativeParams: blackAndWhiteNegative,
-        photoAdjustments: PhotoAdjustmentParameters(exposureEV: -0.5))),
-      ("gp3-bw-negative", ProcessingParameters(
-        filmType: .blackAndWhiteNegative, filmNegativeParams: shanghaiGP3Negative)),
+      (
+        "exposure+1",
+        ProcessingParameters(
+          filmType: .colourNegative, filmNegativeParams: filmNegative,
+          photoAdjustments: PhotoAdjustmentParameters(exposureEV: 1))
+      ),
+      (
+        "exposure-1",
+        ProcessingParameters(
+          filmType: .colourNegative, filmNegativeParams: filmNegative,
+          photoAdjustments: PhotoAdjustmentParameters(exposureEV: -1))
+      ),
+      (
+        "brightness+0.5",
+        ProcessingParameters(
+          filmType: .colourNegative, filmNegativeParams: filmNegative,
+          photoAdjustments: PhotoAdjustmentParameters(brightness: 0.5))
+      ),
+      (
+        "brightness-0.5",
+        ProcessingParameters(
+          filmType: .colourNegative, filmNegativeParams: filmNegative,
+          photoAdjustments: PhotoAdjustmentParameters(brightness: -0.5))
+      ),
+      (
+        "contrast+0.5",
+        ProcessingParameters(
+          filmType: .colourNegative, filmNegativeParams: filmNegative,
+          photoAdjustments: PhotoAdjustmentParameters(contrast: 0.5))
+      ),
+      (
+        "contrast-0.5",
+        ProcessingParameters(
+          filmType: .colourNegative, filmNegativeParams: filmNegative,
+          photoAdjustments: PhotoAdjustmentParameters(contrast: -0.5))
+      ),
+      (
+        "highlights+0.5",
+        ProcessingParameters(
+          filmType: .colourNegative, filmNegativeParams: filmNegative,
+          photoAdjustments: PhotoAdjustmentParameters(highlights: 0.5))
+      ),
+      (
+        "shadows+0.5",
+        ProcessingParameters(
+          filmType: .colourNegative, filmNegativeParams: filmNegative,
+          photoAdjustments: PhotoAdjustmentParameters(shadows: 0.5))
+      ),
+      (
+        "tone-combo",
+        ProcessingParameters(
+          filmType: .colourNegative, filmNegativeParams: filmNegative,
+          photoAdjustments: PhotoAdjustmentParameters(
+            exposureEV: 0.5, brightness: 0.2, contrast: 0.3,
+            highlights: -0.3, shadows: 0.3))
+      ),
+      (
+        "tone-with-color",
+        ProcessingParameters(
+          filmType: .colourNegative, filmNegativeParams: filmNegative,
+          photoAdjustments: PhotoAdjustmentParameters(
+            exposureEV: 0.5, contrast: 0.3,
+            temperatureShiftMired: 20, tint: -0.2, saturation: 0.3))
+      ),
+      (
+        "slide-exposure",
+        ProcessingParameters(
+          filmType: .slide,
+          photoAdjustments: PhotoAdjustmentParameters(exposureEV: 0.5))
+      ),
+      (
+        "bw-negative-exposure",
+        ProcessingParameters(
+          filmType: .blackAndWhiteNegative, filmNegativeParams: blackAndWhiteNegative,
+          photoAdjustments: PhotoAdjustmentParameters(exposureEV: -0.5))
+      ),
+      (
+        "gp3-bw-negative",
+        ProcessingParameters(
+          filmType: .blackAndWhiteNegative, filmNegativeParams: shanghaiGP3Negative)
+      ),
     ]
 
     var maxDiff = 0
@@ -549,8 +628,10 @@ struct StillPreviewBenchmarkTests {
       }
     }
 
-    #expect(maxDiff <= 2,
-      "Tone control GPU renderer max diff \(maxDiff)/255 at '\(worstName)'; should be <= 2 for visual equivalence")
+    #expect(
+      maxDiff <= 2,
+      "Tone control GPU renderer max diff \(maxDiff)/255 at '\(worstName)'; should be <= 2 for visual equivalence"
+    )
   }
 
   private func rgbaPixels(_ image: CGImage) -> [UInt8]? {

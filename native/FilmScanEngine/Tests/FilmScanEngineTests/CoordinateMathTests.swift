@@ -86,11 +86,12 @@ struct CoordinateMathTests {
 
     let result = CoordinateMath.shrinkBox(box: box, xPercent: 0, yPercent: 0)
 
-    #expect(result.map { [$0.x, $0.y] } == [
-      [16_777_216, 180],
-      [16_777_216, 120],
-      [16_777_217, 120],
-      [16_777_217, 180],
-    ])
+    #expect(
+      result.map { [$0.x, $0.y] } == [
+        [16_777_216, 180],
+        [16_777_216, 120],
+        [16_777_217, 120],
+        [16_777_217, 180],
+      ])
   }
 }

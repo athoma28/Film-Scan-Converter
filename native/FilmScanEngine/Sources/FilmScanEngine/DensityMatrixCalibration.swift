@@ -243,7 +243,8 @@ public enum DensityMatrixCalibrator {
     } else {
       relativeImprovement = validationMetrics.weightedRMSE == 0 ? 0 : -1
     }
-    let passesGate = validationMetrics.weightedRMSE < baselineMetrics.weightedRMSE
+    let passesGate =
+      validationMetrics.weightedRMSE < baselineMetrics.weightedRMSE
       && relativeImprovement >= minimumValidationImprovement
 
     return DensityMatrixCalibrationReport(
@@ -356,11 +357,14 @@ public enum DensityMatrixCalibrator {
         green: c41Profile.densitySlope.green * corrected.green + c41Profile.densityOffset.green,
         red: c41Profile.densitySlope.red * corrected.red + c41Profile.densityOffset.red
       )
-      blueSquaredError += sample.weight
+      blueSquaredError +=
+        sample.weight
         * squared(predicted.blue - sample.targetLogExposure.blue)
-      greenSquaredError += sample.weight
+      greenSquaredError +=
+        sample.weight
         * squared(predicted.green - sample.targetLogExposure.green)
-      redSquaredError += sample.weight
+      redSquaredError +=
+        sample.weight
         * squared(predicted.red - sample.targetLogExposure.red)
       weightSum += sample.weight
     }

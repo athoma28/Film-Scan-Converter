@@ -13,6 +13,7 @@ brew install libraw
 Run the native regression gate and build the app:
 
 ```sh
+swift format lint --strict --recursive native/FilmScanEngine/Package.swift native/FilmScanEngine/Sources native/FilmScanEngine/Tests
 swift test --package-path native/FilmScanEngine --no-parallel
 swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
 swift run --package-path native/FilmScanEngine FilmScanConverterMac

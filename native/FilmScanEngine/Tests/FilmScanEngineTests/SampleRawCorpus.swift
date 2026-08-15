@@ -1,5 +1,5 @@
-import Foundation
 import FilmScanEngine
+import Foundation
 
 struct SampleRawTriplet: Sendable {
   let stockID: String
@@ -76,7 +76,8 @@ enum SampleRawCorpus {
         else { continue }
 
         let xmp = (try? String(contentsOf: xmpURL, encoding: .utf8)) ?? ""
-        let stockID = directory == root
+        let stockID =
+          directory == root
           ? root.lastPathComponent
           : directory.path.replacingOccurrences(of: root.path + "/", with: "")
         result.append(
@@ -139,9 +140,11 @@ enum SampleRawCorpus {
       )
     )
     let target = decodedTarget.rotated(quarterTurns: targetAlignmentQuarterTurns)
-    let alignedFullTargetWidth = targetAlignmentQuarterTurns.isMultiple(of: 2)
+    let alignedFullTargetWidth =
+      targetAlignmentQuarterTurns.isMultiple(of: 2)
       ? fullTarget.width : fullTarget.height
-    let alignedFullTargetHeight = targetAlignmentQuarterTurns.isMultiple(of: 2)
+    let alignedFullTargetHeight =
+      targetAlignmentQuarterTurns.isMultiple(of: 2)
       ? fullTarget.height : fullTarget.width
 
     func value(_ name: String, fallback: Double) -> Double {
@@ -181,11 +184,13 @@ enum SampleRawCorpus {
   }
 
   private static func allFiles() -> [URL] {
-    guard let enumerator = FileManager.default.enumerator(
-      at: root,
-      includingPropertiesForKeys: [.isRegularFileKey],
-      options: [.skipsHiddenFiles]
-    ) else { return [] }
+    guard
+      let enumerator = FileManager.default.enumerator(
+        at: root,
+        includingPropertiesForKeys: [.isRegularFileKey],
+        options: [.skipsHiddenFiles]
+      )
+    else { return [] }
 
     return enumerator.compactMap { item in
       guard let url = item as? URL else { return nil }

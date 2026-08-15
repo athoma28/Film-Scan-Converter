@@ -14,8 +14,8 @@ public enum FilmProcessing {
   ) -> UInt16Image {
     if parameters.densityPipelineEnabled,
       parameters.densityBaseDensity != nil,
-      (parameters.filmType == .colourNegative
-        || parameters.filmType == .blackAndWhiteNegative),
+      parameters.filmType == .colourNegative
+        || parameters.filmType == .blackAndWhiteNegative,
       parameters.filmNegativeParams.rendering == .powerLaw
     {
       return correctedPreviewDensity(
@@ -38,9 +38,10 @@ public enum FilmProcessing {
     )
     working = PerspectiveTransform.rotate(
       working, clockwiseDegrees: -parameters.straightenAngle)
-    working = parameters.manualCrop.flatMap {
-      PerspectiveTransform.crop(working, canvasRect: $0)
-    } ?? working
+    working =
+      parameters.manualCrop.flatMap {
+        PerspectiveTransform.crop(working, canvasRect: $0)
+      } ?? working
     let sensorSource = working
     guard parameters.filmType != .cropOnly else {
       return working
@@ -87,7 +88,8 @@ public enum FilmProcessing {
     } else if parameters.filmType == .colourNegative {
       if parameters.filmNegativeParams.enabled {
         let needsDyeMixing = !parameters.filmDyeMixing.isNeutral
-        let needsLinearSeam = needsDyeMixing
+        let needsLinearSeam =
+          needsDyeMixing
           || parameters.photoAdjustments.hasColorAdjustment
           || parameters.photoAdjustments.hasToneAdjustment
         switch parameters.filmNegativeParams.rendering {
@@ -157,19 +159,24 @@ public enum FilmProcessing {
 
     let adjustWhiteBalance =
       working.channels == 3 && !usedLinearColorSeam
-        && (parameters.temperature != 0 || parameters.tint != 0)
-    let adjustExposure = !usedLinearToneSeam
+      && (parameters.temperature != 0 || parameters.tint != 0)
+    let adjustExposure =
+      !usedLinearToneSeam
       && (parameters.gamma != 0 || parameters.shadows != 0 || parameters.highlights != 0)
     let adjustCurves =
-      working.channels == 3 && (parameters.curveEnabled || parameters.redCurveEnabled
+      working.channels == 3
+      && (parameters.curveEnabled || parameters.redCurveEnabled
         || parameters.greenCurveEnabled || parameters.blueCurveEnabled)
     let adjustColorWheels =
-      working.channels == 3 && (!parameters.highlightWheel.isNeutral
+      working.channels == 3
+      && (!parameters.highlightWheel.isNeutral
         || !parameters.midtoneWheel.isNeutral || !parameters.shadowWheel.isNeutral)
-    let adjustSaturation = working.channels == 3 && !usedLinearColorSeam
+    let adjustSaturation =
+      working.channels == 3 && !usedLinearColorSeam
       && parameters.saturation != 100
-    guard adjustWhiteBalance || adjustExposure || adjustCurves || adjustColorWheels
-      || adjustSaturation
+    guard
+      adjustWhiteBalance || adjustExposure || adjustCurves || adjustColorWheels
+        || adjustSaturation
     else {
       preserveSensorBlack(source: sensorSource, output: &working, parameters: parameters)
       return working
@@ -179,7 +186,8 @@ public enum FilmProcessing {
     let channels = working.channels
 
     if channels == 1 {
-      let values = adjustExposure
+      let values =
+        adjustExposure
         ? exposure(
           image: working.pixels.map(Double.init),
           gamma: parameters.gamma,
@@ -201,7 +209,9 @@ public enum FilmProcessing {
     let needsColorWheels = adjustColorWheels
     let needsSaturation = adjustSaturation
 
-    let wbB: Float, wbG: Float, wbR: Float
+    let wbB: Float
+    let wbG: Float
+    let wbR: Float
     if adjustWhiteBalance {
       let tempF = Float(parameters.temperature)
       let tintF = Float(parameters.tint)
@@ -210,23 +220,31 @@ public enum FilmProcessing {
       wbG = 1.0 - tintF / mult
       wbR = 1.0 + tempF / mult + tintF / mult / 2.0
     } else {
-      wbB = 1; wbG = 1; wbR = 1
+      wbB = 1
+      wbG = 1
+      wbR = 1
     }
 
     let gammaExponent = adjustExposure ? pow(2.0, -Float(parameters.gamma) / 100.0) : 1
-    let shadowsCoeff: Float = adjustExposure && parameters.shadows != 0
+    let shadowsCoeff: Float =
+      adjustExposure && parameters.shadows != 0
       ? 4.15e-5 * pow(Float(parameters.shadows), 2) + 0.02185 * Float(parameters.shadows) : 0
-    let highlightsCoeff: Float = adjustExposure && parameters.highlights != 0
+    let highlightsCoeff: Float =
+      adjustExposure && parameters.highlights != 0
       ? -4.15e-5 * pow(Float(parameters.highlights), 2) + 0.02185 * Float(parameters.highlights) : 0
     let hasExposure = adjustExposure
 
-    let overallLUT = parameters.curveEnabled
+    let overallLUT =
+      parameters.curveEnabled
       ? buildCurveLUT(controlPoints: parameters.curveControlPoints) : nil
-    let redLUT = parameters.redCurveEnabled
+    let redLUT =
+      parameters.redCurveEnabled
       ? buildCurveLUT(controlPoints: parameters.redCurveControlPoints) : nil
-    let greenLUT = parameters.greenCurveEnabled
+    let greenLUT =
+      parameters.greenCurveEnabled
       ? buildCurveLUT(controlPoints: parameters.greenCurveControlPoints) : nil
-    let blueLUT = parameters.blueCurveEnabled
+    let blueLUT =
+      parameters.blueCurveEnabled
       ? buildCurveLUT(controlPoints: parameters.blueCurveControlPoints) : nil
 
     let satFactor = needsSaturation ? Float(parameters.saturation) / 100.0 : 1
@@ -303,17 +321,44 @@ public enum FilmProcessing {
         let lum: Float = 0.299 * rNorm + 0.587 * gNorm + 0.114 * bNorm
         let lumD = Double(lum)
 
-        let hwR = Float(applySingleWheel(channel: Double(rNorm), luminance: lumD, wheel: highlightWheel, mask: highlightMask(lumD), channelIndex: 0))
-        let hwG = Float(applySingleWheel(channel: Double(gNorm), luminance: lumD, wheel: highlightWheel, mask: highlightMask(lumD), channelIndex: 1))
-        let hwB = Float(applySingleWheel(channel: Double(bNorm), luminance: lumD, wheel: highlightWheel, mask: highlightMask(lumD), channelIndex: 2))
+        let hwR = Float(
+          applySingleWheel(
+            channel: Double(rNorm), luminance: lumD, wheel: highlightWheel,
+            mask: highlightMask(lumD), channelIndex: 0))
+        let hwG = Float(
+          applySingleWheel(
+            channel: Double(gNorm), luminance: lumD, wheel: highlightWheel,
+            mask: highlightMask(lumD), channelIndex: 1))
+        let hwB = Float(
+          applySingleWheel(
+            channel: Double(bNorm), luminance: lumD, wheel: highlightWheel,
+            mask: highlightMask(lumD), channelIndex: 2))
 
-        let mwR = Float(applySingleWheel(channel: Double(hwR), luminance: lumD, wheel: midtoneWheel, mask: midtoneMask(lumD), channelIndex: 0))
-        let mwG = Float(applySingleWheel(channel: Double(hwG), luminance: lumD, wheel: midtoneWheel, mask: midtoneMask(lumD), channelIndex: 1))
-        let mwB = Float(applySingleWheel(channel: Double(hwB), luminance: lumD, wheel: midtoneWheel, mask: midtoneMask(lumD), channelIndex: 2))
+        let mwR = Float(
+          applySingleWheel(
+            channel: Double(hwR), luminance: lumD, wheel: midtoneWheel, mask: midtoneMask(lumD),
+            channelIndex: 0))
+        let mwG = Float(
+          applySingleWheel(
+            channel: Double(hwG), luminance: lumD, wheel: midtoneWheel, mask: midtoneMask(lumD),
+            channelIndex: 1))
+        let mwB = Float(
+          applySingleWheel(
+            channel: Double(hwB), luminance: lumD, wheel: midtoneWheel, mask: midtoneMask(lumD),
+            channelIndex: 2))
 
-        let swR = Float(applySingleWheel(channel: Double(mwR), luminance: lumD, wheel: shadowWheel, mask: shadowMask(lumD), channelIndex: 0))
-        let swG = Float(applySingleWheel(channel: Double(mwG), luminance: lumD, wheel: shadowWheel, mask: shadowMask(lumD), channelIndex: 1))
-        let swB = Float(applySingleWheel(channel: Double(mwB), luminance: lumD, wheel: shadowWheel, mask: shadowMask(lumD), channelIndex: 2))
+        let swR = Float(
+          applySingleWheel(
+            channel: Double(mwR), luminance: lumD, wheel: shadowWheel, mask: shadowMask(lumD),
+            channelIndex: 0))
+        let swG = Float(
+          applySingleWheel(
+            channel: Double(mwG), luminance: lumD, wheel: shadowWheel, mask: shadowMask(lumD),
+            channelIndex: 1))
+        let swB = Float(
+          applySingleWheel(
+            channel: Double(mwB), luminance: lumD, wheel: shadowWheel, mask: shadowMask(lumD),
+            channelIndex: 2))
 
         let newLum: Float = 0.299 * swR + 0.587 * swG + 0.114 * swB
         let lumRatio = lum / max(newLum, 1e-9)
@@ -330,7 +375,11 @@ public enum FilmProcessing {
         let rNorm = min(max(r, 0), 65535) / 65535.0
         var (h, s, v) = rgbToHsvFloat32(r: rNorm, g: gNorm, b: bNorm)
         s = min(max(s * satFactor, 0), 1)
-        let (r2, g2, b2) = hsvToRgbFloat32(h: h, s: s, v: v)
+        let (r2, g2, b2) = ColorConversion.hsvToRGB(
+          hue: h,
+          saturation: s,
+          value: v
+        )
         b = b2 * 65535.0
         g = g2 * 65535.0
         r = r2 * 65535.0
@@ -417,7 +466,8 @@ public enum FilmProcessing {
         referenceLuminance: 1
       )
     }
-    let usedLinearSeam = parameters.filmType == .colourNegative
+    let usedLinearSeam =
+      parameters.filmType == .colourNegative
       && parameters.photoAdjustments.hasColorAdjustment
     if usedLinearSeam {
       renderReady.applyProtectedColorAdjustments(parameters.photoAdjustments)
@@ -441,24 +491,31 @@ public enum FilmProcessing {
     }
 
     let adjustCurves =
-      working.channels == 3 && (parameters.curveEnabled || parameters.redCurveEnabled
+      working.channels == 3
+      && (parameters.curveEnabled || parameters.redCurveEnabled
         || parameters.greenCurveEnabled || parameters.blueCurveEnabled)
     let adjustColorWheels =
-      working.channels == 3 && (!parameters.highlightWheel.isNeutral
+      working.channels == 3
+      && (!parameters.highlightWheel.isNeutral
         || !parameters.midtoneWheel.isNeutral || !parameters.shadowWheel.isNeutral)
-    let adjustSaturation = working.channels == 3 && !usedLinearSeam
+    let adjustSaturation =
+      working.channels == 3 && !usedLinearSeam
       && parameters.saturation != 100
 
     let pixelCount = working.width * working.height
     let channels = working.channels
 
-    let overallLUT = parameters.curveEnabled
+    let overallLUT =
+      parameters.curveEnabled
       ? buildCurveLUT(controlPoints: parameters.curveControlPoints) : nil
-    let redLUT = parameters.redCurveEnabled
+    let redLUT =
+      parameters.redCurveEnabled
       ? buildCurveLUT(controlPoints: parameters.redCurveControlPoints) : nil
-    let greenLUT = parameters.greenCurveEnabled
+    let greenLUT =
+      parameters.greenCurveEnabled
       ? buildCurveLUT(controlPoints: parameters.greenCurveControlPoints) : nil
-    let blueLUT = parameters.blueCurveEnabled
+    let blueLUT =
+      parameters.blueCurveEnabled
       ? buildCurveLUT(controlPoints: parameters.blueCurveControlPoints) : nil
 
     let satFactor = adjustSaturation ? Float(parameters.saturation) / 100.0 : 1
@@ -496,17 +553,44 @@ public enum FilmProcessing {
         let lum: Float = 0.299 * rNorm + 0.587 * gNorm + 0.114 * bNorm
         let lumD = Double(lum)
 
-        let hwR = Float(applySingleWheel(channel: Double(rNorm), luminance: lumD, wheel: highlightWheel, mask: highlightMask(lumD), channelIndex: 0))
-        let hwG = Float(applySingleWheel(channel: Double(gNorm), luminance: lumD, wheel: highlightWheel, mask: highlightMask(lumD), channelIndex: 1))
-        let hwB = Float(applySingleWheel(channel: Double(bNorm), luminance: lumD, wheel: highlightWheel, mask: highlightMask(lumD), channelIndex: 2))
+        let hwR = Float(
+          applySingleWheel(
+            channel: Double(rNorm), luminance: lumD, wheel: highlightWheel,
+            mask: highlightMask(lumD), channelIndex: 0))
+        let hwG = Float(
+          applySingleWheel(
+            channel: Double(gNorm), luminance: lumD, wheel: highlightWheel,
+            mask: highlightMask(lumD), channelIndex: 1))
+        let hwB = Float(
+          applySingleWheel(
+            channel: Double(bNorm), luminance: lumD, wheel: highlightWheel,
+            mask: highlightMask(lumD), channelIndex: 2))
 
-        let mwR = Float(applySingleWheel(channel: Double(hwR), luminance: lumD, wheel: midtoneWheel, mask: midtoneMask(lumD), channelIndex: 0))
-        let mwG = Float(applySingleWheel(channel: Double(hwG), luminance: lumD, wheel: midtoneWheel, mask: midtoneMask(lumD), channelIndex: 1))
-        let mwB = Float(applySingleWheel(channel: Double(hwB), luminance: lumD, wheel: midtoneWheel, mask: midtoneMask(lumD), channelIndex: 2))
+        let mwR = Float(
+          applySingleWheel(
+            channel: Double(hwR), luminance: lumD, wheel: midtoneWheel, mask: midtoneMask(lumD),
+            channelIndex: 0))
+        let mwG = Float(
+          applySingleWheel(
+            channel: Double(hwG), luminance: lumD, wheel: midtoneWheel, mask: midtoneMask(lumD),
+            channelIndex: 1))
+        let mwB = Float(
+          applySingleWheel(
+            channel: Double(hwB), luminance: lumD, wheel: midtoneWheel, mask: midtoneMask(lumD),
+            channelIndex: 2))
 
-        let swR = Float(applySingleWheel(channel: Double(mwR), luminance: lumD, wheel: shadowWheel, mask: shadowMask(lumD), channelIndex: 0))
-        let swG = Float(applySingleWheel(channel: Double(mwG), luminance: lumD, wheel: shadowWheel, mask: shadowMask(lumD), channelIndex: 1))
-        let swB = Float(applySingleWheel(channel: Double(mwB), luminance: lumD, wheel: shadowWheel, mask: shadowMask(lumD), channelIndex: 2))
+        let swR = Float(
+          applySingleWheel(
+            channel: Double(mwR), luminance: lumD, wheel: shadowWheel, mask: shadowMask(lumD),
+            channelIndex: 0))
+        let swG = Float(
+          applySingleWheel(
+            channel: Double(mwG), luminance: lumD, wheel: shadowWheel, mask: shadowMask(lumD),
+            channelIndex: 1))
+        let swB = Float(
+          applySingleWheel(
+            channel: Double(mwB), luminance: lumD, wheel: shadowWheel, mask: shadowMask(lumD),
+            channelIndex: 2))
 
         let newLum: Float = 0.299 * swR + 0.587 * swG + 0.114 * swB
         let lumRatio = lum / max(newLum, 1e-9)
@@ -523,7 +607,11 @@ public enum FilmProcessing {
         let rNorm = min(max(r, 0), 65535) / 65535.0
         var (h, s, v) = rgbToHsvFloat32(r: rNorm, g: gNorm, b: bNorm)
         s = min(max(s * satFactor, 0), 1)
-        let (r2, g2, b2) = hsvToRgbFloat32(h: h, s: s, v: v)
+        let (r2, g2, b2) = ColorConversion.hsvToRGB(
+          hue: h,
+          saturation: s,
+          value: v
+        )
         b = b2 * 65535.0
         g = g2 * 65535.0
         r = r2 * 65535.0
@@ -581,7 +669,8 @@ public enum FilmProcessing {
     output: inout UInt16Image,
     parameters: ProcessingParameters
   ) {
-    guard parameters.filmType == .colourNegative
+    guard
+      parameters.filmType == .colourNegative
         || parameters.filmType == .blackAndWhiteNegative,
       source.channels == 3,
       output.channels == 3,
@@ -770,7 +859,11 @@ public enum FilmProcessing {
 
       var (h, s, v) = rgbToHsvFloat32(r: r, g: g, b: b)
       s = min(max(s * satFactor, 0), 1)
-      let (r2, g2, b2) = hsvToRgbFloat32(h: h, s: s, v: v)
+      let (r2, g2, b2) = ColorConversion.hsvToRGB(
+        hue: h,
+        saturation: s,
+        value: v
+      )
 
       result[base] = Double(b2) * 65535.0
       result[base + 1] = Double(g2) * 65535.0
@@ -845,13 +938,17 @@ public enum FilmProcessing {
     channels: Int,
     parameters: ProcessingParameters
   ) -> [Double] {
-    let overallLUT = parameters.curveEnabled
+    let overallLUT =
+      parameters.curveEnabled
       ? buildCurveLUT(controlPoints: parameters.curveControlPoints) : nil
-    let redLUT = parameters.redCurveEnabled
+    let redLUT =
+      parameters.redCurveEnabled
       ? buildCurveLUT(controlPoints: parameters.redCurveControlPoints) : nil
-    let greenLUT = parameters.greenCurveEnabled
+    let greenLUT =
+      parameters.greenCurveEnabled
       ? buildCurveLUT(controlPoints: parameters.greenCurveControlPoints) : nil
-    let blueLUT = parameters.blueCurveEnabled
+    let blueLUT =
+      parameters.blueCurveEnabled
       ? buildCurveLUT(controlPoints: parameters.blueCurveControlPoints) : nil
 
     var result = image
@@ -879,6 +976,7 @@ public enum FilmProcessing {
     parameters: ProcessingParameters
   ) -> [Double] {
     var result = image
+    let luminanceWeights = LuminanceStandards.bt601
 
     for i in 0..<pixelCount {
       let base = i * channels
@@ -886,7 +984,10 @@ public enum FilmProcessing {
       let g = min(max(result[base + 1], 0), 65535) / 65535.0
       let r = min(max(result[base + 2], 0), 65535) / 65535.0
 
-      let luminance = 0.299 * r + 0.587 * g + 0.114 * b
+      let luminance =
+        luminanceWeights.red * r
+        + luminanceWeights.green * g
+        + luminanceWeights.blue * b
 
       let rgb = [
         applySingleWheel(
@@ -955,7 +1056,10 @@ public enum FilmProcessing {
       let finalG = afterMidtones[1]
       let finalB = afterMidtones[2]
 
-      let newLuminance = 0.299 * finalR + 0.587 * finalG + 0.114 * finalB
+      let newLuminance =
+        luminanceWeights.red * finalR
+        + luminanceWeights.green * finalG
+        + luminanceWeights.blue * finalB
       let lumRatio = luminance / max(newLuminance, 1e-9)
 
       result[base + 2] = min(max(finalR * lumRatio, 0), 1) * 65535.0
@@ -1001,10 +1105,11 @@ public enum FilmProcessing {
     samples.reserveCapacity(sampleCount + 1)
     for sample in 0...sampleCount {
       let input = Double(sample) / Double(sampleCount)
-      samples.append(CurvePoint(
-        input: input,
-        output: curve.value(at: input, segmentIndex: &segmentIndex)
-      ))
+      samples.append(
+        CurvePoint(
+          input: input,
+          output: curve.value(at: input, segmentIndex: &segmentIndex)
+        ))
     }
     return samples
   }
@@ -1034,7 +1139,11 @@ public enum FilmProcessing {
     guard wheel.strength > 0, wheel.strength <= 1 else {
       return (0, 0, 0)
     }
-    let (r, g, b) = hsvToRgbFloat64(h: wheel.hue / 360.0, s: 1.0, v: 1.0)
+    let (r, g, b) = ColorConversion.hsvToRGB(
+      hue: wheel.hue / 360.0,
+      saturation: 1.0,
+      value: 1.0
+    )
     let pushR = (r * 2.0 - 1.0) * wheel.strength * 0.3
     let pushG = (g * 2.0 - 1.0) * wheel.strength * 0.3
     let pushB = (b * 2.0 - 1.0) * wheel.strength * 0.3
@@ -1067,7 +1176,8 @@ private struct CurveInterpolator {
   private let tangents: [Double]
 
   init?(controlPoints: [CurvePoint]) {
-    let sorted = controlPoints
+    let sorted =
+      controlPoints
       .filter { $0.input.isFinite && $0.output.isFinite }
       .sorted { $0.input < $1.input }
     guard sorted.count >= 2 else { return nil }
@@ -1114,7 +1224,8 @@ private struct CurveInterpolator {
       }
       let firstWeight = 2 * widths[index] + widths[index - 1]
       let secondWeight = widths[index] + 2 * widths[index - 1]
-      calculated[index] = (firstWeight + secondWeight)
+      calculated[index] =
+        (firstWeight + secondWeight)
         / (firstWeight / previousSlope + secondWeight / nextSlope)
     }
     calculated[count - 1] = Self.endpointTangent(
@@ -1175,8 +1286,9 @@ private struct CurveInterpolator {
     firstSlope: Double,
     secondSlope: Double
   ) -> Double {
-    var tangent = ((2 * firstWidth + secondWidth) * firstSlope
-      - firstWidth * secondSlope) / (firstWidth + secondWidth)
+    var tangent =
+      ((2 * firstWidth + secondWidth) * firstSlope
+        - firstWidth * secondSlope) / (firstWidth + secondWidth)
     if tangent.sign != firstSlope.sign {
       tangent = 0
     } else if firstSlope.sign != secondSlope.sign,
@@ -1209,51 +1321,4 @@ private func rgbToHsvFloat32(r: Float, g: Float, b: Float) -> (h: Float, s: Floa
   if h < 0 { h += 360 }
 
   return (h / 360.0, s, v)
-}
-
-private func hsvToRgbFloat32(h: Float, s: Float, v: Float) -> (r: Float, g: Float, b: Float) {
-  if s == 0 {
-    return (v, v, v)
-  }
-
-  let h6 = h * 6.0
-  let i = Int(floor(h6))
-  let f = h6 - Float(i)
-
-  let p = v * (1 - s)
-  let q = v * (1 - s * f)
-  let t = v * (1 - s * (1 - f))
-
-  switch i % 6 {
-  case 0: return (v, t, p)
-  case 1: return (q, v, p)
-  case 2: return (p, v, t)
-  case 3: return (p, q, v)
-  case 4: return (t, p, v)
-  default: return (v, p, q)
-  }
-}
-
-private func hsvToRgbFloat64(h: Double, s: Double, v: Double) -> (r: Double, g: Double, b: Double)
-{
-  if s == 0 {
-    return (v, v, v)
-  }
-
-  let h6 = h * 6.0
-  let i = Int(floor(h6))
-  let f = h6 - Double(i)
-
-  let p = v * (1 - s)
-  let q = v * (1 - s * f)
-  let t = v * (1 - s * (1 - f))
-
-  switch i % 6 {
-  case 0: return (v, t, p)
-  case 1: return (q, v, p)
-  case 2: return (p, v, t)
-  case 3: return (p, q, v)
-  case 4: return (t, p, v)
-  default: return (v, p, q)
-  }
 }

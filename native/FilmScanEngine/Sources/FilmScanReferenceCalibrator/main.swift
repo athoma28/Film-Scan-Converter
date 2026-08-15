@@ -160,7 +160,8 @@ private func run(options: Options) throws {
 
   let colorFrames = frames.filter { !$0.monochrome }
   let monochromeFrames = frames.filter(\.monochrome)
-  let genericColor = colorFrames.count >= 3
+  let genericColor =
+    colorFrames.count >= 3
     ? calibrate(
       colorFrames,
       monochrome: false,
@@ -169,7 +170,8 @@ private func run(options: Options) throws {
         : .leaveOneFrameOut
     )
     : nil
-  let genericMonochrome = monochromeFrames.count >= 3
+  let genericMonochrome =
+    monochromeFrames.count >= 3
     ? calibrate(
       monochromeFrames,
       monochrome: true,
@@ -182,7 +184,8 @@ private func run(options: Options) throws {
     let modes = Set(stockFrames.map(\.monochrome))
     guard modes.count == 1 else { continue }
     let monochrome = modes.first == true
-    stockProfiles[stockID] = stockFrames.count >= 3
+    stockProfiles[stockID] =
+      stockFrames.count >= 3
       ? calibrate(
         stockFrames,
         monochrome: monochrome,
@@ -235,7 +238,8 @@ private func discoverTriplets(under root: URL) throws -> [ReferenceTriplet] {
         let targetURL = preferredTarget(stem: stem, files: directoryFiles)
       else { continue }
       let xmpText = try String(contentsOf: xmpURL, encoding: .utf8)
-      let relativeDirectory = directory == root
+      let relativeDirectory =
+        directory == root
         ? root.lastPathComponent
         : directory.path.replacingOccurrences(of: root.path + "/", with: "")
       result.append(
@@ -333,9 +337,11 @@ private func loadFrame(_ triplet: ReferenceTriplet, stride: Int) throws -> Refer
     quarterTurns: triplet.xmp.targetAlignmentQuarterTurns
   )
   let turns = triplet.xmp.targetAlignmentQuarterTurns
-  let alignedFullTargetWidth = turns.isMultiple(of: 2)
+  let alignedFullTargetWidth =
+    turns.isMultiple(of: 2)
     ? targetFull.width : targetFull.height
-  let alignedFullTargetHeight = turns.isMultiple(of: 2)
+  let alignedFullTargetHeight =
+    turns.isMultiple(of: 2)
     ? targetFull.height : targetFull.width
 
   let cropWidth = max(triplet.xmp.cropRight - triplet.xmp.cropLeft, 1e-6)
@@ -369,11 +375,13 @@ private func loadFrame(_ triplet: ReferenceTriplet, stride: Int) throws -> Refer
   }
 
   let medians = FilmNegativeProcessing.computeMedians(image: decoded, borderPercent: 20)
-  var currentParams = triplet.xmp.monochrome
+  var currentParams =
+    triplet.xmp.monochrome
     ? FilmNegativeParams.blackAndWhite
     : FilmNegativeParams.colourNegative
   currentParams.measuredMedians = medians
-  let filmType: FilmType = triplet.xmp.monochrome
+  let filmType: FilmType =
+    triplet.xmp.monochrome
     ? .blackAndWhiteNegative
     : .colourNegative
   let current = FilmProcessing.correctedPreview(
@@ -383,7 +391,8 @@ private func loadFrame(_ triplet: ReferenceTriplet, stride: Int) throws -> Refer
       filmNegativeParams: currentParams
     )
   )
-  var legacyParams = triplet.xmp.monochrome
+  var legacyParams =
+    triplet.xmp.monochrome
     ? FilmNegativeParams.legacyBlackAndWhite
     : FilmNegativeParams.legacyColourNegative
   legacyParams.measuredMedians = medians
@@ -441,19 +450,22 @@ private func loadFrame(_ triplet: ReferenceTriplet, stride: Int) throws -> Refer
         let legacyValue = legacy.pixels[
           legacyBase + (legacy.channels == 1 ? 0 : channel)
         ]
-        currentError += abs(
-          Double(currentValue) - Double(targetChannels[channel])
-        ) / 65_535
-        legacyError += abs(
-          Double(legacyValue) - Double(targetChannels[channel])
-        ) / 65_535
+        currentError +=
+          abs(
+            Double(currentValue) - Double(targetChannels[channel])
+          ) / 65_535
+        legacyError +=
+          abs(
+            Double(legacyValue) - Double(targetChannels[channel])
+          ) / 65_535
         if let builtInStock, let builtInStockBase {
           let builtInStockValue = builtInStock.pixels[
             builtInStockBase + (builtInStock.channels == 1 ? 0 : channel)
           ]
-          builtInStockError += abs(
-            Double(builtInStockValue) - Double(targetChannels[channel])
-          ) / 65_535
+          builtInStockError +=
+            abs(
+              Double(builtInStockValue) - Double(targetChannels[channel])
+            ) / 65_535
         }
         componentCount += 1
       }
@@ -523,7 +535,8 @@ private func calibrate(
     colorNormalization: bestStrengths.color,
     method: .leaveOneFrameOut
   )
-  let leaveOneStockOut = Set(frames.map(\.stockID)).count > 1
+  let leaveOneStockOut =
+    Set(frames.map(\.stockID)).count > 1
     ? crossValidatedScores(
       frames,
       monochrome: monochrome,
@@ -766,16 +779,14 @@ private func fitCandidate(
     )
     for pair in frame.pairs {
       if monochrome {
-        let raw = (
-          0.114 * Double(pair.rawB)
+        let raw =
+          (0.114 * Double(pair.rawB)
             + 0.587 * Double(pair.rawG)
-            + 0.299 * Double(pair.rawR)
-        ) / 65_535 * gains.green
-        let target = (
-          0.114 * Double(pair.targetB)
+            + 0.299 * Double(pair.rawR)) / 65_535 * gains.green
+        let target =
+          (0.114 * Double(pair.targetB)
             + 0.587 * Double(pair.targetG)
-            + 0.299 * Double(pair.targetR)
-        ) / 65_535
+            + 0.299 * Double(pair.targetR)) / 65_535
         accumulate(
           input: raw,
           output: target,
@@ -926,17 +937,15 @@ private func score(
   var count = 0
   for pair in frame.pairs {
     if monochrome {
-      let rawGray = (
-        0.114 * Double(pair.rawB)
+      let rawGray =
+        (0.114 * Double(pair.rawB)
           + 0.587 * Double(pair.rawG)
-          + 0.299 * Double(pair.rawR)
-      ) / 65_535 * gains.green
+          + 0.299 * Double(pair.rawR)) / 65_535 * gains.green
       let predicted = curveValue(candidate.curves[0], input: rawGray)
-      let target = (
-        0.114 * Double(pair.targetB)
+      let target =
+        (0.114 * Double(pair.targetB)
           + 0.587 * Double(pair.targetG)
-          + 0.299 * Double(pair.targetR)
-      ) / 65_535
+          + 0.299 * Double(pair.targetR)) / 65_535
       error += abs(predicted - target)
       count += 1
     } else {

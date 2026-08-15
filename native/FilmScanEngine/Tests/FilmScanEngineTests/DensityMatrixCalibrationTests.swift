@@ -81,7 +81,8 @@ struct DensityMatrixCalibrationTests {
 
   @Test("Frame-level leakage between fit and validation is rejected")
   func rejectsFrameLeakage() {
-    let samples = calibrationSamples()
+    let samples =
+      calibrationSamples()
       + [
         DensityCalibrationSample(
           sourceFrameID: "fit-0",

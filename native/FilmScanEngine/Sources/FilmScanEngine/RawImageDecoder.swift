@@ -223,7 +223,8 @@ public enum RawImageDecoder {
     }
     guard code == 0 else {
       let message = decodedCString(errorBytes)
-      DecodeLog.rawDecodeFailed(path: url.lastPathComponent, error: message.isEmpty ? "Unknown LibRaw error." : message)
+      DecodeLog.rawDecodeFailed(
+        path: url.lastPathComponent, error: message.isEmpty ? "Unknown LibRaw error." : message)
       throw RawImageDecoderError.decodeFailed(message.isEmpty ? "Unknown LibRaw error." : message)
     }
     defer {
@@ -384,15 +385,17 @@ public enum RawImageDecoder {
     let width = cgImage.width
     let height = cgImage.height
     var components = [UInt16](repeating: 0, count: width * height * 4)
-    guard let context = CGContext(
-      data: &components,
-      width: width,
-      height: height,
-      bitsPerComponent: 16,
-      bytesPerRow: width * 8,
-      space: CGColorSpaceCreateDeviceRGB(),
-      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue | CGBitmapInfo.byteOrder16Little.rawValue
-    ) else {
+    guard
+      let context = CGContext(
+        data: &components,
+        width: width,
+        height: height,
+        bitsPerComponent: 16,
+        bytesPerRow: width * 8,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue | CGBitmapInfo.byteOrder16Little.rawValue
+      )
+    else {
       throw RawImageDecoderError.decodeFailed("Cannot create decode context.")
     }
     context.interpolationQuality = .none

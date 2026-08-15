@@ -50,9 +50,10 @@ struct PerspectiveWarpTests {
       pixels: (0..<20).map(UInt16.init)
     )
 
-    let cropped = try #require(PerspectiveTransform.crop(
-      image, perspectiveCrop: .fullFrame
-    ))
+    let cropped = try #require(
+      PerspectiveTransform.crop(
+        image, perspectiveCrop: .fullFrame
+      ))
 
     #expect(cropped.width == image.width)
     #expect(cropped.height == image.height)
@@ -67,7 +68,8 @@ struct PerspectiveWarpTests {
       bottomRight: .init(x: 0.9, y: 0.1),
       bottomLeft: .init(x: 0.1, y: 0.9)
     )
-    let image = UInt16Image(width: 4, height: 4, channels: 1, pixels: [UInt16](repeating: 1, count: 16))
+    let image = UInt16Image(
+      width: 4, height: 4, channels: 1, pixels: [UInt16](repeating: 1, count: 16))
 
     #expect(!folded.isValid)
     #expect(PerspectiveTransform.crop(image, perspectiveCrop: folded) == nil)
@@ -202,8 +204,9 @@ struct PerspectiveWarpTests {
       (0, 0), (10, 0), (10, 8), (0, 8),
     ]
 
-    let h = try #require(PerspectiveTransform.computeHomography(
-      srcPoints: pts, dstPoints: pts))
+    let h = try #require(
+      PerspectiveTransform.computeHomography(
+        srcPoints: pts, dstPoints: pts))
 
     #expect(abs(h[0] - 1) < 0.0001)
     #expect(abs(h[4] - 1) < 0.0001)
@@ -225,8 +228,9 @@ struct PerspectiveWarpTests {
       (2, 1), (9, 1), (9, 6), (2, 6),
     ]
 
-    let h = try #require(PerspectiveTransform.computeHomography(
-      srcPoints: src, dstPoints: dst))
+    let h = try #require(
+      PerspectiveTransform.computeHomography(
+        srcPoints: src, dstPoints: dst))
 
     #expect(abs(h[0] - 1) < 0.0001)
     #expect(abs(h[2] - 2) < 0.0001)
@@ -254,8 +258,9 @@ struct PerspectiveWarpTests {
       (1, 0), (6, 1), (7, 4), (0, 5),
     ]
 
-    let h = try #require(PerspectiveTransform.computeHomography(
-      srcPoints: src, dstPoints: dst))
+    let h = try #require(
+      PerspectiveTransform.computeHomography(
+        srcPoints: src, dstPoints: dst))
 
     let expected: [Float] = [
       1.1818181818181819, -0.2, 1.0,
@@ -264,8 +269,9 @@ struct PerspectiveWarpTests {
     ]
 
     for i in 0..<9 {
-      #expect(abs(h[i] - expected[i]) < 0.0001,
-              "Element \(i): got \(h[i]), expected \(expected[i])")
+      #expect(
+        abs(h[i] - expected[i]) < 0.0001,
+        "Element \(i): got \(h[i]), expected \(expected[i])")
     }
   }
 
@@ -286,9 +292,9 @@ struct PerspectiveWarpTests {
     }
 
     let img = UInt16Image(width: w, height: h, channels: 3, pixels: pixels)
-    let h_identity: [Float] = [1, 0, 0, 0, 1, 0, 0, 0, 1]
+    let identityHomography: [Float] = [1, 0, 0, 0, 1, 0, 0, 0, 1]
     let warped = PerspectiveTransform.warpPerspective(
-      img, homography: h_identity, outputWidth: w, outputHeight: h)
+      img, homography: identityHomography, outputWidth: w, outputHeight: h)
 
     #expect(warped.width == w)
     #expect(warped.height == h)
@@ -303,9 +309,9 @@ struct PerspectiveWarpTests {
     let pixels = [UInt16](repeating: UInt16.max, count: w * h)
     let img = UInt16Image(width: w, height: h, channels: 1, pixels: pixels)
 
-    let h_singular: [Float] = [0, 0, 1, 0, 0, 1, 0, 0, 0]
+    let singularHomography: [Float] = [0, 0, 1, 0, 0, 1, 0, 0, 0]
     let warped = PerspectiveTransform.warpPerspective(
-      img, homography: h_singular, outputWidth: 4, outputHeight: 4)
+      img, homography: singularHomography, outputWidth: 4, outputHeight: 4)
 
     for p in warped.pixels {
       #expect(p == 0)
@@ -372,9 +378,9 @@ struct PerspectiveWarpTests {
     }
     let img = UInt16Image(width: w, height: h, channels: 1, pixels: pixels)
 
-    let h_trans: [Float] = [1, 0, 10, 0, 1, 10, 0, 0, 1]
+    let translatedHomography: [Float] = [1, 0, 10, 0, 1, 10, 0, 0, 1]
     let warped = PerspectiveTransform.warpPerspective(
-      img, homography: h_trans, outputWidth: w, outputHeight: h)
+      img, homography: translatedHomography, outputWidth: w, outputHeight: h)
 
     #expect(warped.pixels[0] == 0)
   }
@@ -537,8 +543,9 @@ struct PerspectiveWarpTests {
       (1, 0), (6, 1), (7, 4), (0, 5),
     ]
 
-    let computedH = try #require(PerspectiveTransform.computeHomography(
-      srcPoints: src, dstPoints: dst))
+    let computedH = try #require(
+      PerspectiveTransform.computeHomography(
+        srcPoints: src, dstPoints: dst))
     let hardcodedH: [Float] = [
       1.1818181818181819, -0.2, 1.0,
       0.22077922077922077, 0.6363636363636365, 0.0,
@@ -583,14 +590,16 @@ struct PerspectiveWarpTests {
     line: Int = #line,
     column: Int = #column
   ) {
-    #expect(actual.count == expected.count, "Pixel count mismatch",
-            sourceLocation: Testing.SourceLocation(
-              fileID: fileID, filePath: filePath, line: line, column: column))
+    #expect(
+      actual.count == expected.count, "Pixel count mismatch",
+      sourceLocation: Testing.SourceLocation(
+        fileID: fileID, filePath: filePath, line: line, column: column))
 
     var largestDifference: UInt16 = 0
     var largestIndex = 0
     for i in actual.indices {
-      let diff = actual[i] > expected[i]
+      let diff =
+        actual[i] > expected[i]
         ? actual[i] - expected[i]
         : expected[i] - actual[i]
       if diff > largestDifference {

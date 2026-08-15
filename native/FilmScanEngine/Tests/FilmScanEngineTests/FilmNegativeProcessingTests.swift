@@ -277,8 +277,10 @@ struct FilmNegativeProcessingTests {
 
   @Test("Manual rebate measurement reports invalid and empty regions")
   func manualRebateMeasurementRegionValidation() throws {
-    let image = UInt16Image(width: 2, height: 2, channels: 3, pixels: [UInt16](repeating: 100, count: 12))
-    let flatField = UInt16Image(width: 2, height: 2, channels: 3, pixels: [UInt16](repeating: 1_000, count: 12))
+    let image = UInt16Image(
+      width: 2, height: 2, channels: 3, pixels: [UInt16](repeating: 100, count: 12))
+    let flatField = UInt16Image(
+      width: 2, height: 2, channels: 3, pixels: [UInt16](repeating: 1_000, count: 12))
 
     #expect(throws: FilmBaseMeasurementError.invalidRegion) {
       try FilmNegativeProcessing.measureBaseDensity(
@@ -1300,7 +1302,8 @@ struct FilmNegativeProcessingTests {
     #expect(builtIns.contains(FilmStockProfile.shanghaiGP3Alternate))
     #expect(builtIns.contains(FilmStockProfile.legacyBW))
     #expect(FilmStockProfile.genericBW.filmNegativeParams.rendering == .calibratedMonochrome)
-    #expect(FilmStockProfile.shanghaiGP3Alternate.filmNegativeParams.rendering == .calibratedMonochrome)
+    #expect(
+      FilmStockProfile.shanghaiGP3Alternate.filmNegativeParams.rendering == .calibratedMonochrome)
     #expect(
       FilmStockProfile.shanghaiGP3Alternate.filmNegativeParams.calibratedMonochromeProfile
         == .shanghaiGP3)
@@ -1329,9 +1332,10 @@ struct FilmNegativeProcessingTests {
     try store.saveCaptureProfile(CaptureProfile(id: CaptureProfileID(rawValue: "cap-a")))
     try store.saveCaptureProfile(CaptureProfile(id: CaptureProfileID(rawValue: "cap-b")))
     let ids = store.listCaptureProfiles()
-    #expect(ids.sorted(by: { $0.rawValue < $1.rawValue }) == [
-      CaptureProfileID(rawValue: "cap-a"), CaptureProfileID(rawValue: "cap-b"),
-    ])
+    #expect(
+      ids.sorted(by: { $0.rawValue < $1.rawValue }) == [
+        CaptureProfileID(rawValue: "cap-a"), CaptureProfileID(rawValue: "cap-b"),
+      ])
   }
 
   @Test("ProfileStore lists saved stock profile IDs")
@@ -1420,7 +1424,8 @@ struct FilmNegativeProcessingTests {
     pixels.reserveCapacity(width * height * 3)
     for y in 0..<height {
       for x in 0..<width {
-        let value = top.map { y == 0 ? $0 : center }
+        let value =
+          top.map { y == 0 ? $0 : center }
           ?? left.map { x == 0 ? $0 : center }
           ?? center
         pixels.append(contentsOf: [value, value, value])

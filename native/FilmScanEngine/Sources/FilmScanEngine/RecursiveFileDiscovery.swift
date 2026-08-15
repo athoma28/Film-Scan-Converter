@@ -15,11 +15,13 @@ public enum RecursiveFileDiscovery {
     else {
       throw CocoaError(.fileNoSuchFile)
     }
-    guard let enumerator = FileManager.default.enumerator(
-      at: root,
-      includingPropertiesForKeys: [.isRegularFileKey],
-      options: [.skipsHiddenFiles]
-    ) else {
+    guard
+      let enumerator = FileManager.default.enumerator(
+        at: root,
+        includingPropertiesForKeys: [.isRegularFileKey],
+        options: [.skipsHiddenFiles]
+      )
+    else {
       throw CocoaError(.fileReadUnknown)
     }
 

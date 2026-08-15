@@ -52,10 +52,11 @@ final class PerFileSettingsStore {
   }
 
   convenience init(applicationName: String) {
-    let root = FileManager.default.urls(
-      for: .applicationSupportDirectory,
-      in: .userDomainMask
-    ).first ?? FileManager.default.temporaryDirectory
+    let root =
+      FileManager.default.urls(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask
+      ).first ?? FileManager.default.temporaryDirectory
     self.init(baseDirectory: root.appendingPathComponent(applicationName, isDirectory: true))
   }
 
@@ -69,7 +70,8 @@ final class PerFileSettingsStore {
     }
     return State(
       settingsByPath: document.settingsByPath,
-      editedPaths: document.schemaVersion == 1 ? Set(document.settingsByPath.keys) : document.editedPaths
+      editedPaths: document.schemaVersion == 1
+        ? Set(document.settingsByPath.keys) : document.editedPaths
     )
   }
 
@@ -78,10 +80,11 @@ final class PerFileSettingsStore {
       at: fileURL.deletingLastPathComponent(),
       withIntermediateDirectories: true
     )
-    let data = try encoder.encode(Document(
-      settingsByPath: state.settingsByPath,
-      editedPaths: state.editedPaths
-    ))
+    let data = try encoder.encode(
+      Document(
+        settingsByPath: state.settingsByPath,
+        editedPaths: state.editedPaths
+      ))
     try data.write(to: fileURL, options: .atomic)
   }
 }

@@ -116,14 +116,16 @@ struct RawImageDecoderTests {
       calibratedErrors.append(calibratedError)
       legacyErrors.append(legacyError)
 
-      let alternateParams: FilmNegativeParams? = switch triplet.stockID {
-      case "fuji400-fresh": .fuji400FreshAlternate
-      case "fuji200-expired": .fuji200ExpiredAlternate
-      case "cinestill800t": .cinestill800TAlternate
-      case "harmanphoenixii": .harmanPhoenixIIAlternate
-      default: nil
-      }
-      let belongsToAlternateFit = calibratedAlternateFitStems[triplet.stockID]?
+      let alternateParams: FilmNegativeParams? =
+        switch triplet.stockID {
+        case "fuji400-fresh": .fuji400FreshAlternate
+        case "fuji200-expired": .fuji200ExpiredAlternate
+        case "cinestill800t": .cinestill800TAlternate
+        case "harmanphoenixii": .harmanPhoenixIIAlternate
+        default: nil
+        }
+      let belongsToAlternateFit =
+        calibratedAlternateFitStems[triplet.stockID]?
         .contains(triplet.stem) == true
       if var alternateParams, belongsToAlternateFit {
         genericFitErrorsByStock[triplet.stockID, default: []].append(calibratedError)
@@ -261,7 +263,8 @@ struct RawImageDecoderTests {
     for filename in ["DSCF2819.RAF", "DSCF2820.RAF", "DSCF2823.RAF"] {
       let rawURL = try #require(SampleRawCorpus.uniqueURL(named: filename))
       let image = try RawImageDecoder.decode(
-        rawURL, profile: .rawTherapeeCameraScan).image
+        rawURL, profile: .rawTherapeeCameraScan
+      ).image
       let proxy = image.resizedToFit(maxDimension: 640)
       var extremeGreenPixels = 0
       for pixelIndex in 0..<(proxy.width * proxy.height) {
@@ -556,10 +559,9 @@ struct RawImageDecoderTests {
     var componentCount = 0
     for y in stride(from: 0, to: reference.target.height, by: sampleStride) {
       for x in stride(from: 0, to: reference.target.width, by: sampleStride) {
-        let renderedBase = (
-          (reference.targetOriginY + y) * rendered.width
-            + reference.targetOriginX + x
-        ) * rendered.channels
+        let renderedBase =
+          ((reference.targetOriginY + y) * rendered.width
+            + reference.targetOriginX + x) * rendered.channels
         let targetBase = (y * reference.target.width + x) * reference.target.channels
         for channel in 0..<3 {
           let renderedValue = rendered.pixels[

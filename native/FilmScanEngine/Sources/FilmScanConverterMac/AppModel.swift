@@ -197,7 +197,8 @@ final class AppModel: ObservableObject {
     if let previewSource {
       return (
         previewSource.width, previewSource.height,
-        previewSourceKind != .rawDetail)
+        previewSourceKind != .rawDetail
+      )
     }
     return nil
   }
@@ -307,7 +308,8 @@ final class AppModel: ObservableObject {
 
     let existing = Set(files.map(\.standardizedFileURL.path))
     let newFiles = supported.filter { !existing.contains($0.standardizedFileURL.path) }
-    ImportLog.importAdded(path: "appending \(newFiles.count) new files (total will be \(files.count + newFiles.count))")
+    ImportLog.importAdded(
+      path: "appending \(newFiles.count) new files (total will be \(files.count + newFiles.count))")
     files.append(contentsOf: newFiles)
     selection = supported.first
     selectedFiles = selection.map { Set([$0]) } ?? []
@@ -465,7 +467,8 @@ final class AppModel: ObservableObject {
 
     let isRaw = FileDropPolicy.rawExtensions.contains(selection.pathExtension.lowercased())
 
-    let thumbnailInterval = isRaw
+    let thumbnailInterval =
+      isRaw
       ? AppPerformanceSignposts.begin(
         .thumbnailExtraction,
         correlationID: loadCorrelationID,
@@ -485,7 +488,8 @@ final class AppModel: ObservableObject {
           do {
             if isRaw {
               display = try RawImageDecoder.extractThumbnail(
-                selection, maxDimension: Self.displayPreviewMaxDimension).image
+                selection, maxDimension: Self.displayPreviewMaxDimension
+              ).image
               kind = .embeddedRAW
             } else {
               display = try StandardImageDecoder.decodePreview(
@@ -525,7 +529,8 @@ final class AppModel: ObservableObject {
         let analysisInterval = AppPerformanceSignposts.begin(
           .analysis, correlationID: loadCorrelationID,
           filename: selection.lastPathComponent)
-        self.applyPreviewSession(session, selection: selection, hasStoredSettings: hasStoredSettings)
+        self.applyPreviewSession(
+          session, selection: selection, hasStoredSettings: hasStoredSettings)
         AppPerformanceSignposts.end(analysisInterval)
         self.cacheSession(session, for: selection)
         self.scheduleRender(immediate: true)
@@ -607,7 +612,8 @@ final class AppModel: ObservableObject {
       sameRollFilmTypeHint = value
       reclassifyAutomaticBatchGuesses()
     }
-    let medians = value == .blackAndWhiteNegative || value == .colourNegative
+    let medians =
+      value == .blackAndWhiteNegative || value == .colourNegative
       ? computeFilmNegativeMedians()
       : nil
     if value == .blackAndWhiteNegative {
@@ -878,7 +884,8 @@ final class AppModel: ObservableObject {
         rollProfile: rollProfile,
         frameMeasurement: selectedRebateMeasurement?.baseDensity
       )
-      let currentMedians = computeFilmNegativeMedians()
+      let currentMedians =
+        computeFilmNegativeMedians()
         ?? parameters.filmNegativeParams.measuredMedians
       let usesDensityPipeline = resolved.stockProfile.filmNegativeParams.rendering == .powerLaw
       updateParameters(actionName: "Processing Profile") {
@@ -896,10 +903,12 @@ final class AppModel: ObservableObject {
       }
       let baseMessage = rebateStatus.isEmpty ? "" : rebateStatus + " "
       if usesDensityPipeline {
-        rebateStatus = baseMessage
+        rebateStatus =
+          baseMessage
           + "Density pipeline active (stock: \(resolved.stockProfile.displayName))."
       } else {
-        rebateStatus = baseMessage
+        rebateStatus =
+          baseMessage
           + "Calibrated negative profile active (stock: \(resolved.stockProfile.displayName))."
       }
     } catch {
@@ -1055,7 +1064,9 @@ final class AppModel: ObservableObject {
     _ profiles: [FilmStockProfile]
   ) -> [FilmStockProfile] {
     Dictionary(profiles.map { ($0.id, $0) }, uniquingKeysWith: { _, stored in stored })
-      .values.sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+      .values.sorted {
+        $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+      }
   }
 
   func resetCorrections() {
@@ -1657,29 +1668,31 @@ final class AppModel: ObservableObject {
         DustDetection.findMask(in: source)
       }.value
       guard !Task.isCancelled, self.selection == selectedURL else { return }
-      let croppedMask = displayParameters.perspectiveCrop.flatMap {
-        PerspectiveTransform.crop(
-          mask,
-          perspectiveCrop: $0,
-          borderPercent: displayParameters.borderCrop
-        )
-      } ?? displayParameters.cropRect.flatMap {
-        PerspectiveTransform.crop(
-          mask,
-          normalizedRect: $0,
-          coordinateSpace: displayParameters.cropRectCoordinateSpace,
-          borderPercent: displayParameters.borderCrop
-        )
-      } ?? mask
+      let croppedMask =
+        displayParameters.perspectiveCrop.flatMap {
+          PerspectiveTransform.crop(
+            mask,
+            perspectiveCrop: $0,
+            borderPercent: displayParameters.borderCrop
+          )
+        } ?? displayParameters.cropRect.flatMap {
+          PerspectiveTransform.crop(
+            mask,
+            normalizedRect: $0,
+            coordinateSpace: displayParameters.cropRectCoordinateSpace,
+            borderPercent: displayParameters.borderCrop
+          )
+        } ?? mask
       let orientedMask = croppedMask.rotated(
         quarterTurns: displayParameters.rotation,
         flipHorizontally: displayParameters.flip
       )
       let straightenedMask = PerspectiveTransform.rotate(
         orientedMask, clockwiseDegrees: -displayParameters.straightenAngle)
-      let finalMask = displayParameters.manualCrop.flatMap {
-        PerspectiveTransform.crop(straightenedMask, canvasRect: $0)
-      } ?? straightenedMask
+      let finalMask =
+        displayParameters.manualCrop.flatMap {
+          PerspectiveTransform.crop(straightenedMask, canvasRect: $0)
+        } ?? straightenedMask
       let displayMask = UInt16Image(
         width: finalMask.width,
         height: finalMask.height,
@@ -1696,7 +1709,8 @@ final class AppModel: ObservableObject {
       let detected = mask.pixels.reduce(into: 0) { count, value in
         if value != 0 { count += 1 }
       }
-      self.dustStatus = detected == 0
+      self.dustStatus =
+        detected == 0
         ? "No dust candidates found."
         : "Showing \(detected) dust-mask pixels."
     }
@@ -1727,12 +1741,13 @@ final class AppModel: ObservableObject {
 
   func beginPerspectiveCrop() {
     guard perspectiveCrop == nil else { return }
-    setPerspectiveCrop(PerspectiveCrop(
-      topLeft: .init(x: 0.06, y: 0.06),
-      topRight: .init(x: 0.94, y: 0.06),
-      bottomRight: .init(x: 0.94, y: 0.94),
-      bottomLeft: .init(x: 0.06, y: 0.94)
-    ))
+    setPerspectiveCrop(
+      PerspectiveCrop(
+        topLeft: .init(x: 0.06, y: 0.06),
+        topRight: .init(x: 0.94, y: 0.06),
+        bottomRight: .init(x: 0.94, y: 0.94),
+        bottomLeft: .init(x: 0.06, y: 0.94)
+      ))
   }
 
   func setPerspectiveCrop(_ crop: PerspectiveCrop?) {
@@ -1807,11 +1822,12 @@ final class AppModel: ObservableObject {
       setManualCrop(crop)
       return
     }
-    setManualCrop(NormalizedCropRect(
-      x: existing.x + crop.x * existing.width,
-      y: existing.y + crop.y * existing.height,
-      width: crop.width * existing.width,
-      height: crop.height * existing.height))
+    setManualCrop(
+      NormalizedCropRect(
+        x: existing.x + crop.x * existing.width,
+        y: existing.y + crop.y * existing.height,
+        width: crop.width * existing.width,
+        height: crop.height * existing.height))
   }
 
   func clearManualCrop() {
@@ -1962,7 +1978,8 @@ final class AppModel: ObservableObject {
       return
     }
     activeExportCorrelationIDs = urls.map { _ in UUID().uuidString }
-    activeExportQueueWaitIntervals = zip(urls, activeExportCorrelationIDs).map { url, correlationID in
+    activeExportQueueWaitIntervals = zip(urls, activeExportCorrelationIDs).map {
+      url, correlationID in
       AppPerformanceSignposts.begin(
         .queueWait,
         correlationID: correlationID,
@@ -2003,9 +2020,11 @@ final class AppModel: ObservableObject {
           self.activeExportFilename = firstURL.lastPathComponent
           self.exportQueueCount = max(0, self.activeExportQueue.count - index - 1)
         }
-        let nextIsFullResolutionRAW = index + 1 < self.activeExportQueue.count
+        let nextIsFullResolutionRAW =
+          index + 1 < self.activeExportQueue.count
           && Self.requiresFullResolutionExportDecode(self.activeExportQueue[index + 1])
-        let batchSize = Self.requiresFullResolutionExportDecode(firstURL) || nextIsFullResolutionRAW
+        let batchSize =
+          Self.requiresFullResolutionExportDecode(firstURL) || nextIsFullResolutionRAW
           ? 1 : 2
         let endIndex = min(index + batchSize, self.activeExportQueue.count)
         var requests: [ExportManager.ExportRequest] = []
@@ -2076,10 +2095,12 @@ final class AppModel: ObservableObject {
         if wasCancelled {
           self.exportErrors = []
           self.setStatus(
-            "Export cancelled after \(self.exportProgressCurrent) of \(self.exportProgressTotal) images.")
+            "Export cancelled after \(self.exportProgressCurrent) of \(self.exportProgressTotal) images."
+          )
         } else if failures.isEmpty {
           self.setStatus(
-            "Exported \(results.count) image\(results.count == 1 ? "" : "s") to \(destDir.lastPathComponent).")
+            "Exported \(results.count) image\(results.count == 1 ? "" : "s") to \(destDir.lastPathComponent)."
+          )
         } else {
           self.exportErrors = failures.compactMap { result in
             result.error.map { "\(result.sourceURL.lastPathComponent): \($0.localizedDescription)" }
@@ -2786,8 +2807,10 @@ final class AppModel: ObservableObject {
       let signpostID = OSSignpostID(log: Self.signpostLog)
       let renderStart = Date()
       let submitTime = request.submitTime
-      let result: RenderedPreview? = await Task.detached(priority: .userInitiated) { () -> RenderedPreview? in
-        let useGPU = request.renderer != nil
+      let result: RenderedPreview? = await Task.detached(priority: .userInitiated) {
+        () -> RenderedPreview? in
+        let useGPU =
+          request.renderer != nil
           && !request.parameters.densityPipelineEnabled
           && request.parameters.cropRect == nil
           && request.parameters.perspectiveCrop == nil
@@ -2894,7 +2917,8 @@ final class AppModel: ObservableObject {
           sourceLabel = "Fast preview"
         }
         setStatus(
-          "\(request.selection.lastPathComponent) • \(preview.width)×\(preview.height) \(result.rendererName) · \(sourceLabel)")
+          "\(request.selection.lastPathComponent) • \(preview.width)×\(preview.height) \(result.rendererName) · \(sourceLabel)"
+        )
       }
 
       lastRenderEnd = ContinuousClock.now
@@ -2972,7 +2996,8 @@ final class AppModel: ObservableObject {
     let kind: PreviewSourceKind
     if FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased()) {
       display = try RawImageDecoder.extractThumbnail(
-        url, maxDimension: displayPreviewMaxDimension).image
+        url, maxDimension: displayPreviewMaxDimension
+      ).image
       kind = .embeddedRAW
     } else {
       display = try StandardImageDecoder.decodePreview(

@@ -196,7 +196,8 @@ public enum DecodeLog {
     colorModel: String,
     bitsPerComponent: Int
   ) {
-    let msg = "Standard decode: \(path) .\(ext) \(width)×\(height) model=\(colorModel) bpc=\(bitsPerComponent)"
+    let msg =
+      "Standard decode: \(path) .\(ext) \(width)×\(height) model=\(colorModel) bpc=\(bitsPerComponent)"
     logger.info("\(msg, privacy: .public)")
     LogFile.write("[Decode] \(msg)")
   }
@@ -240,7 +241,8 @@ public enum DecodeLog {
     if processing.contains(.isoSharpen) { stages.append("iso-sharpen") }
     let profileText = profile.map { " profile=\($0.rawValue)" } ?? ""
     let stageText = stages.isEmpty ? "" : " stages=\(stages.joined(separator: ","))"
-    let msg = "RAW decode complete: \(path) \(width)×\(height) color=\(colorDescription) libraw=\(version)\(profileText)\(stageText)"
+    let msg =
+      "RAW decode complete: \(path) \(width)×\(height) color=\(colorDescription) libraw=\(version)\(profileText)\(stageText)"
     logger.info("\(msg, privacy: .public)")
     LogFile.write("[Decode] \(msg)")
   }

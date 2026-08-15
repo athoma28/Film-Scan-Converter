@@ -1,5 +1,6 @@
 import CoreGraphics
 import Testing
+
 @testable import FilmScanConverterMac
 
 @Suite("Preview viewport zoom")

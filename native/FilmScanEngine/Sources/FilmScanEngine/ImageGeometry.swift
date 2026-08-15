@@ -52,7 +52,8 @@ public enum ImageGeometry {
     dimensions = rotatedCanvasDimensions(
       dimensions, clockwiseDegrees: -parameters.straightenAngle)
     if let crop = parameters.manualCrop,
-      let bounds = pixelBounds(for: crop, imageWidth: dimensions.width, imageHeight: dimensions.height)
+      let bounds = pixelBounds(
+        for: crop, imageWidth: dimensions.width, imageHeight: dimensions.height)
     {
       dimensions = PixelDimensions(width: bounds.width, height: bounds.height)
     }
@@ -95,9 +96,11 @@ public enum ImageGeometry {
     let radians = normalized * .pi / 180
     let cosine = abs(cos(radians))
     let sine = abs(sin(radians))
-    let widthSpan = Double(max(0, source.width - 1)) * cosine
+    let widthSpan =
+      Double(max(0, source.width - 1)) * cosine
       + Double(max(0, source.height - 1)) * sine
-    let heightSpan = Double(max(0, source.width - 1)) * sine
+    let heightSpan =
+      Double(max(0, source.width - 1)) * sine
       + Double(max(0, source.height - 1)) * cosine
     return PixelDimensions(
       width: max(1, Int(widthSpan.rounded(.up)) + 1),
@@ -113,10 +116,16 @@ public enum ImageGeometry {
     guard crop.isValid, imageWidth > 0, imageHeight > 0 else { return nil }
     let minX = min(imageWidth - 1, max(0, Int((crop.x * Double(imageWidth)).rounded(.down))))
     let minY = min(imageHeight - 1, max(0, Int((crop.y * Double(imageHeight)).rounded(.down))))
-    let maxX = min(imageWidth, max(minX + 1,
-      Int(((crop.x + crop.width) * Double(imageWidth)).rounded(.up))))
-    let maxY = min(imageHeight, max(minY + 1,
-      Int(((crop.y + crop.height) * Double(imageHeight)).rounded(.up))))
+    let maxX = min(
+      imageWidth,
+      max(
+        minX + 1,
+        Int(((crop.x + crop.width) * Double(imageWidth)).rounded(.up))))
+    let maxY = min(
+      imageHeight,
+      max(
+        minY + 1,
+        Int(((crop.y + crop.height) * Double(imageHeight)).rounded(.up))))
     return (minX, minY, maxX - minX, maxY - minY)
   }
 
@@ -139,8 +148,14 @@ public enum ImageGeometry {
           (a.y - b.y) * Double(max(0, source.height - 1)))
       }
       return PixelDimensions(
-        width: max(1, Int(((distance(points[0], points[1]) + distance(points[3], points[2])) / 2).rounded()) + 1),
-        height: max(1, Int(((distance(points[0], points[3]) + distance(points[1], points[2])) / 2).rounded()) + 1)
+        width: max(
+          1,
+          Int(((distance(points[0], points[1]) + distance(points[3], points[2])) / 2).rounded()) + 1
+        ),
+        height: max(
+          1,
+          Int(((distance(points[0], points[3]) + distance(points[1], points[2])) / 2).rounded()) + 1
+        )
       )
     }
     if let crop = parameters.cropRect {

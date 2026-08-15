@@ -40,13 +40,18 @@ public struct PerspectiveCrop: Codable, Equatable, Sendable {
   public var points: [Point] { [topLeft, topRight, bottomRight, bottomLeft] }
 
   public var isValid: Bool {
-    guard points.allSatisfy({ $0.x.isFinite && $0.y.isFinite && $0.x >= 0 && $0.x <= 1 && $0.y >= 0 && $0.y <= 1 }) else {
+    guard
+      points.allSatisfy({
+        $0.x.isFinite && $0.y.isFinite && $0.x >= 0 && $0.x <= 1 && $0.y >= 0 && $0.y <= 1
+      })
+    else {
       return false
     }
     let ring = points + [topLeft]
-    let signedArea = zip(ring, ring.dropFirst()).reduce(0.0) { area, pair in
-      area + pair.0.x * pair.1.y - pair.1.x * pair.0.y
-    } / 2
+    let signedArea =
+      zip(ring, ring.dropFirst()).reduce(0.0) { area, pair in
+        area + pair.0.x * pair.1.y - pair.1.x * pair.0.y
+      } / 2
     guard signedArea > 0.000_1 else { return false }
     return (0..<4).allSatisfy { index in
       let a = points[index]
@@ -94,11 +99,13 @@ public struct PerspectiveCrop: Codable, Equatable, Sendable {
       projection(
         of: clamped,
         ontoLineThrough: current[next],
-        parallelTo: vector(from: current[previous], to: current[opposite]))
+        parallelTo: vector(from: current[previous], to: current[opposite])),
     ].compactMap { $0 }
-    guard let closest = candidates.min(by: {
-      squaredDistance($0, clamped) < squaredDistance($1, clamped)
-    }), squaredDistance(closest, clamped) <= threshold * threshold else {
+    guard
+      let closest = candidates.min(by: {
+        squaredDistance($0, clamped) < squaredDistance($1, clamped)
+      }), squaredDistance(closest, clamped) <= threshold * threshold
+    else {
       return replacing(corner, with: clamped)
     }
     return replacing(corner, with: closest)
@@ -108,7 +115,9 @@ public struct PerspectiveCrop: Codable, Equatable, Sendable {
     Point(x: end.x - start.x, y: end.y - start.y)
   }
 
-  private func projection(of point: Point, ontoLineThrough origin: Point, parallelTo direction: Point) -> Point? {
+  private func projection(
+    of point: Point, ontoLineThrough origin: Point, parallelTo direction: Point
+  ) -> Point? {
     let magnitudeSquared = direction.x * direction.x + direction.y * direction.y
     guard magnitudeSquared > 0.000_000_001 else { return nil }
     let offsetX = point.x - origin.x
@@ -127,7 +136,6 @@ public struct PerspectiveCrop: Codable, Equatable, Sendable {
 public enum PerspectiveTransform {
   static let warpParallelPixelThreshold = 1_000_000
 
-
   /// Applies a simple axis-aligned crop in the current canvas coordinate
   /// system. Unlike film-frame and perspective crops, this is intended to run
   /// after orientation and straightening.
@@ -135,8 +143,9 @@ public enum PerspectiveTransform {
     _ image: UInt16Image,
     canvasRect: NormalizedCropRect
   ) -> UInt16Image? {
-    guard let bounds = ImageGeometry.pixelBounds(
-      for: canvasRect, imageWidth: image.width, imageHeight: image.height)
+    guard
+      let bounds = ImageGeometry.pixelBounds(
+        for: canvasRect, imageWidth: image.width, imageHeight: image.height)
     else { return nil }
     var pixels = [UInt16]()
     pixels.reserveCapacity(bounds.width * bounds.height * image.channels)
@@ -229,8 +238,10 @@ public enum PerspectiveTransform {
     func distance(_ a: (x: Float, y: Float), _ b: (x: Float, y: Float)) -> Double {
       hypot(Double(a.x - b.x), Double(a.y - b.y))
     }
-    let outputWidth = max(1, Int(((distance(source[0], source[1]) + distance(source[3], source[2])) / 2).rounded()) + 1)
-    let outputHeight = max(1, Int(((distance(source[0], source[3]) + distance(source[1], source[2])) / 2).rounded()) + 1)
+    let outputWidth = max(
+      1, Int(((distance(source[0], source[1]) + distance(source[3], source[2])) / 2).rounded()) + 1)
+    let outputHeight = max(
+      1, Int(((distance(source[0], source[3]) + distance(source[1], source[2])) / 2).rounded()) + 1)
     let destination: [(x: Float, y: Float)] = [
       (0, 0),
       (Float(outputWidth - 1), 0),
@@ -301,8 +312,9 @@ public enum PerspectiveTransform {
     srcPoints: [(x: Float, y: Float)],
     dstPoints: [(x: Float, y: Float)]
   ) -> [Float]? {
-    precondition(srcPoints.count == 4 && dstPoints.count == 4,
-                 "Homography requires exactly 4 point correspondences")
+    precondition(
+      srcPoints.count == 4 && dstPoints.count == 4,
+      "Homography requires exactly 4 point correspondences")
 
     let n = 4
     let dim = 2 * n
@@ -341,14 +353,14 @@ public enum PerspectiveTransform {
       b[r1] = yp
     }
 
-    var n_ = Int32(dim)
+    var systemSize = Int32(dim)
     var nrhs = Int32(1)
-    var lda = n_
-    var ldb = n_
+    var lda = systemSize
+    var ldb = systemSize
     var ipiv = [Int32](repeating: 0, count: dim)
     var info: Int32 = 0
 
-    dgesv_(&n_, &nrhs, &a, &lda, &ipiv, &b, &ldb, &info)
+    dgesv_(&systemSize, &nrhs, &a, &lda, &ipiv, &b, &ldb, &info)
     guard info == 0 else { return nil }
 
     return [
@@ -365,8 +377,9 @@ public enum PerspectiveTransform {
     outputHeight: Int
   ) -> UInt16Image {
     precondition(homography.count == 9, "Homography must be a 3×3 matrix")
-    precondition(outputWidth > 0 && outputHeight > 0,
-                 "Output dimensions must be positive")
+    precondition(
+      outputWidth > 0 && outputHeight > 0,
+      "Output dimensions must be positive")
 
     guard let invH = invertHomographyDouble(homography) else {
       return UInt16Image(
@@ -439,13 +452,17 @@ public enum PerspectiveTransform {
         let outStart = (outY * outputWidth + outX) * channels
 
         for c in 0..<channels {
-          let v00 = x0In && y0In
+          let v00 =
+            x0In && y0In
             ? Double(image.pixels[(cy0 * srcWidth + cx0) * channels + c]) : 0
-          let v10 = x1In && y0In
+          let v10 =
+            x1In && y0In
             ? Double(image.pixels[(cy0 * srcWidth + cx1) * channels + c]) : 0
-          let v01 = x0In && y1In
+          let v01 =
+            x0In && y1In
             ? Double(image.pixels[(cy1 * srcWidth + cx0) * channels + c]) : 0
-          let v11 = x1In && y1In
+          let v11 =
+            x1In && y1In
             ? Double(image.pixels[(cy1 * srcWidth + cx1) * channels + c]) : 0
 
           let interp = iwx * iwy * v00 + wx * iwy * v10 + iwx * wy * v01 + wx * wy * v11
@@ -476,14 +493,21 @@ public enum PerspectiveTransform {
       }
     }
 
-    return UInt16Image(width: outputWidth, height: outputHeight,
-                       channels: channels, pixels: output)
+    return UInt16Image(
+      width: outputWidth, height: outputHeight,
+      channels: channels, pixels: output)
   }
 
   private static func invertHomographyDouble(_ h: [Float]) -> [Double]? {
-    let a = Double(h[0]), b = Double(h[1]), c = Double(h[2])
-    let d = Double(h[3]), e = Double(h[4]), f = Double(h[5])
-    let g = Double(h[6]), hh = Double(h[7]), i = Double(h[8])
+    let a = Double(h[0])
+    let b = Double(h[1])
+    let c = Double(h[2])
+    let d = Double(h[3])
+    let e = Double(h[4])
+    let f = Double(h[5])
+    let g = Double(h[6])
+    let hh = Double(h[7])
+    let i = Double(h[8])
 
     let det = a * (e * i - f * hh) - b * (d * i - f * g) + c * (d * hh - e * g)
     guard det.isFinite, det != 0 else { return nil }

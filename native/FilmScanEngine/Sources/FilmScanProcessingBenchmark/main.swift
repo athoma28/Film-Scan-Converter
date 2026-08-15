@@ -105,10 +105,12 @@ private func presets(for stem: String, filmType: FilmType) -> [(String, Processi
 
   return [
     colorPreset(name: "film_base_only"),
-    colorPreset(name: "tuned", gamma: base.gamma, shadows: base.shadows,
-                highlights: base.highlights, temp: base.temp, tint: base.tint),
-    colorPreset(name: "tuned_cooler", gamma: base.gamma, shadows: base.shadows,
-                highlights: base.highlights, temp: base.temp - 10, tint: base.tint),
+    colorPreset(
+      name: "tuned", gamma: base.gamma, shadows: base.shadows,
+      highlights: base.highlights, temp: base.temp, tint: base.tint),
+    colorPreset(
+      name: "tuned_cooler", gamma: base.gamma, shadows: base.shadows,
+      highlights: base.highlights, temp: base.temp - 10, tint: base.tint),
   ]
 }
 
@@ -330,7 +332,8 @@ let representatives = Dictionary(grouping: rafFiles, by: stockID(for:))
     let stem = fileURL.deletingPathExtension().lastPathComponent
     let xmpURL = fileURL.deletingPathExtension().appendingPathExtension("xmp")
     let xmp = (try? String(contentsOf: xmpURL, encoding: .utf8)) ?? ""
-    let inferredType: FilmType = xmp.contains("ConvertToGrayscale=\"True\"")
+    let inferredType: FilmType =
+      xmp.contains("ConvertToGrayscale=\"True\"")
       ? .blackAndWhiteNegative
       : .colourNegative
     let metadata = legacyCorpus[stem]

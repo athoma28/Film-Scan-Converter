@@ -162,7 +162,8 @@ public enum DustDetection {
       for x in 0..<width {
         let x0 = max(x - radius, 0)
         let x1 = min(x + radius + 1, width)
-        let foregroundCount = integral[y1 * stride + x1] - integral[y0 * stride + x1]
+        let foregroundCount =
+          integral[y1 * stride + x1] - integral[y0 * stride + x1]
           - integral[y1 * stride + x0] + integral[y0 * stride + x0]
         let inBoundsCount = (x1 - x0) * (y1 - y0)
         let isForeground = dilating ? foregroundCount > 0 : foregroundCount == inBoundsCount

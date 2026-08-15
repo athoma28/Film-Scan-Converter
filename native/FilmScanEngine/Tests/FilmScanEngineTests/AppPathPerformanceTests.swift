@@ -1,6 +1,6 @@
 import Darwin
-import Foundation
 import FilmScanEngine
+import Foundation
 import Testing
 
 @testable import FilmScanConverterMac
@@ -124,7 +124,8 @@ struct AppPathPerformanceTests {
       try await waitForDisplayedPreview(
         in: cachedModel, file: ordered[1], afterDisplayedCount: cachedDisplayedCount)
       cachedSamples.append(milliseconds(since: cachedStart))
-      maximumPreviewCacheBytes = max(maximumPreviewCacheBytes, cachedModel.previewCachePhysicalBytes)
+      maximumPreviewCacheBytes = max(
+        maximumPreviewCacheBytes, cachedModel.previewCachePhysicalBytes)
 
       let uncachedModel = makeModel(cacheLimit: 2)
       uncachedModel.importFiles(Array(ordered.prefix(4)))
@@ -173,7 +174,8 @@ struct AppPathPerformanceTests {
       memoryAfter: memorySample(),
       maximumPreviewCacheBytes: maximumPreviewCacheBytes,
       previewCacheDepths: previewCacheDepths,
-      note: "Browsing uses bounded embedded-RAW previews; configured cache depths can populate only up to the available file count and the 256 MiB cache cap. Export performs independent full-resolution decode. No benchmark exports are written."
+      note:
+        "Browsing uses bounded embedded-RAW previews; configured cache depths can populate only up to the available file count and the 256 MiB cache cap. Export performs independent full-resolution decode. No benchmark exports are written."
     )
 
     let encoder = JSONEncoder()
@@ -211,16 +213,17 @@ struct AppPathPerformanceTests {
       await Task.yield()
       try await Task.sleep(for: .milliseconds(50))
 
-      samples.append(PreviewCacheDepthSample(
-        configuredDepth: depth,
-        availableFiles: corpus.count,
-        populatedSessions: populatedSessions,
-        cachedPreviewBytes: cachedPreviewBytes,
-        fillMilliseconds: fillMilliseconds,
-        memoryBeforeFill: beforeFill,
-        memoryAtCapacity: atCapacity,
-        memoryAfterRelease: memorySample()
-      ))
+      samples.append(
+        PreviewCacheDepthSample(
+          configuredDepth: depth,
+          availableFiles: corpus.count,
+          populatedSessions: populatedSessions,
+          cachedPreviewBytes: cachedPreviewBytes,
+          fillMilliseconds: fillMilliseconds,
+          memoryBeforeFill: beforeFill,
+          memoryAtCapacity: atCapacity,
+          memoryAfterRelease: memorySample()
+        ))
     }
     return samples
   }

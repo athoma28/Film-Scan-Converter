@@ -104,9 +104,11 @@ extension UInt16Image {
     let stagingURL = exportStagingURL(for: url)
     defer { try? FileManager.default.removeItem(at: stagingURL) }
 
-    guard let destination = CGImageDestinationCreateWithURL(
-      stagingURL as CFURL, "public.jpeg" as CFString, 1, nil
-    ) else {
+    guard
+      let destination = CGImageDestinationCreateWithURL(
+        stagingURL as CFURL, "public.jpeg" as CFString, 1, nil
+      )
+    else {
       throw ExportError.destinationCreationFailed(url, .jpeg)
     }
 
@@ -140,9 +142,11 @@ extension UInt16Image {
     let stagingURL = exportStagingURL(for: url)
     defer { try? FileManager.default.removeItem(at: stagingURL) }
 
-    guard let destination = CGImageDestinationCreateWithURL(
-      stagingURL as CFURL, "public.tiff" as CFString, 1, nil
-    ) else {
+    guard
+      let destination = CGImageDestinationCreateWithURL(
+        stagingURL as CFURL, "public.tiff" as CFString, 1, nil
+      )
+    else {
       throw ExportError.destinationCreationFailed(url, .tiff)
     }
 
@@ -179,9 +183,11 @@ extension UInt16Image {
     let stagingURL = exportStagingURL(for: url)
     defer { try? FileManager.default.removeItem(at: stagingURL) }
 
-    guard let destination = CGImageDestinationCreateWithURL(
-      stagingURL as CFURL, "public.png" as CFString, 1, nil
-    ) else {
+    guard
+      let destination = CGImageDestinationCreateWithURL(
+        stagingURL as CFURL, "public.png" as CFString, 1, nil
+      )
+    else {
       throw ExportError.destinationCreationFailed(url, .png)
     }
 

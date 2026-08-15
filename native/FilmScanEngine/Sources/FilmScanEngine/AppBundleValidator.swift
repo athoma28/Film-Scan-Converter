@@ -16,13 +16,14 @@ public enum AppBundleValidator {
     "BUNDLED-LIBRARIES.txt",
   ]
 
-  private static let thirdPartyLicenseRequirements: [(libraryPrefix: String, licenses: [String])] = [
-    ("libraw", ["LibRaw-LGPL-2.1.txt", "LibRaw-CDDL-1.0.txt", "LibRaw-COPYRIGHT.txt"]),
-    ("libomp", ["LLVM-OpenMP-LICENSE.txt"]),
-    ("libjpeg", ["libjpeg-turbo-LICENSE.md"]),
-    ("libjasper", ["JasPer-LICENSE.txt", "JasPer-COPYRIGHT.txt"]),
-    ("liblcms2", ["Little-CMS-LICENSE.txt"]),
-  ]
+  private static let thirdPartyLicenseRequirements: [(libraryPrefix: String, licenses: [String])] =
+    [
+      ("libraw", ["LibRaw-LGPL-2.1.txt", "LibRaw-CDDL-1.0.txt", "LibRaw-COPYRIGHT.txt"]),
+      ("libomp", ["LLVM-OpenMP-LICENSE.txt"]),
+      ("libjpeg", ["libjpeg-turbo-LICENSE.md"]),
+      ("libjasper", ["JasPer-LICENSE.txt", "JasPer-COPYRIGHT.txt"]),
+      ("liblcms2", ["Little-CMS-LICENSE.txt"]),
+    ]
 
   public static func validate(
     bundleAt bundleURL: URL,
@@ -42,7 +43,9 @@ public enum AppBundleValidator {
     }
 
     var issues = requiredStringKeys.compactMap { key -> String? in
-      guard let value = info[key] as? String, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      guard let value = info[key] as? String,
+        !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      else {
         return "\(key) is missing"
       }
       return nil
@@ -56,10 +59,11 @@ public enum AppBundleValidator {
     }
 
     if let iconName = info["CFBundleIconFile"] as? String,
-       !iconName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      !iconName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     {
       let iconFilename = iconName.hasSuffix(".icns") ? iconName : "\(iconName).icns"
-      let iconURL = contentsURL
+      let iconURL =
+        contentsURL
         .appendingPathComponent("Resources", isDirectory: true)
         .appendingPathComponent(iconFilename)
       if !fileManager.fileExists(atPath: iconURL.path) {
@@ -87,7 +91,8 @@ public enum AppBundleValidator {
       isDirectory: true
     )
     let frameworksURL = contentsURL.appendingPathComponent("Frameworks", isDirectory: true)
-    let bundledLibraryNames = (try? fileManager.contentsOfDirectory(atPath: frameworksURL.path)) ?? []
+    let bundledLibraryNames =
+      (try? fileManager.contentsOfDirectory(atPath: frameworksURL.path)) ?? []
     let requiredThirdPartyLicenseFilenames = thirdPartyLicenseRequirements.flatMap {
       requirement in
       bundledLibraryNames.contains(where: { $0.hasPrefix(requirement.libraryPrefix) })
@@ -107,9 +112,10 @@ public enum AppBundleValidator {
     }
 
     let documentTypes = info["CFBundleDocumentTypes"] as? [[String: Any]]
-    let registeredContentTypes = documentTypes?.flatMap { documentType in
-      documentType["LSItemContentTypes"] as? [String] ?? []
-    } ?? []
+    let registeredContentTypes =
+      documentTypes?.flatMap { documentType in
+        documentType["LSItemContentTypes"] as? [String] ?? []
+      } ?? []
     if !registeredContentTypes.contains("public.image") {
       issues.append("CFBundleDocumentTypes must register public.image")
     }
@@ -125,7 +131,8 @@ public enum AppBundleValidator {
       return issues
     }
 
-    let executableURL = contentsURL
+    let executableURL =
+      contentsURL
       .appendingPathComponent("MacOS", isDirectory: true)
       .appendingPathComponent(executableName)
     guard fileManager.fileExists(atPath: executableURL.path) else {

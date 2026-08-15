@@ -84,10 +84,11 @@ final class NamedCorrectionPresetStore {
   }
 
   convenience init(applicationName: String) {
-    let root = FileManager.default.urls(
-      for: .applicationSupportDirectory,
-      in: .userDomainMask
-    ).first ?? FileManager.default.temporaryDirectory
+    let root =
+      FileManager.default.urls(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask
+      ).first ?? FileManager.default.temporaryDirectory
     self.init(baseDirectory: root.appendingPathComponent(applicationName, isDirectory: true))
   }
 
@@ -142,8 +143,10 @@ final class NamedCorrectionPresetStore {
 
 protocol CorrectionSettingsPasteboard: AnyObject {
   @discardableResult func clearContents() -> Int
-  @discardableResult func setData(_ data: Data?, forType dataType: NSPasteboard.PasteboardType) -> Bool
-  @discardableResult func setString(_ string: String, forType dataType: NSPasteboard.PasteboardType) -> Bool
+  @discardableResult func setData(_ data: Data?, forType dataType: NSPasteboard.PasteboardType)
+    -> Bool
+  @discardableResult func setString(_ string: String, forType dataType: NSPasteboard.PasteboardType)
+    -> Bool
   func data(forType dataType: NSPasteboard.PasteboardType) -> Data?
   func string(forType dataType: NSPasteboard.PasteboardType) -> String?
 }

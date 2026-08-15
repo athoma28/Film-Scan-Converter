@@ -88,6 +88,7 @@ public enum KodachromeLikeLook {
     let sampleCount = min(available, maximumSampleCount)
     var luminances: [Double] = []
     luminances.reserveCapacity(sampleCount)
+    let luminanceWeights = LuminanceStandards.rec709
     for sample in 0..<sampleCount {
       let linearIndex =
         sampleCount == 1
@@ -99,13 +100,17 @@ public enum KodachromeLikeLook {
       let blue = Double(displayImage.pixels[pixel]) / 65_535
       let green = Double(displayImage.pixels[pixel + 1]) / 65_535
       let red = Double(displayImage.pixels[pixel + 2]) / 65_535
-      luminances.append(0.0722 * blue + 0.7152 * green + 0.2126 * red)
+      luminances.append(
+        luminanceWeights.blue * blue
+          + luminanceWeights.green * green
+          + luminanceWeights.red * red
+      )
     }
     luminances.sort()
 
-    let shadow = percentile(luminances, fraction: 0.05)
-    let midtone = percentile(luminances, fraction: 0.50)
-    let highlight = percentile(luminances, fraction: 0.95)
+    let shadow = ScalarMath.percentile(inSorted: luminances, fraction: 0.05)
+    let midtone = ScalarMath.percentile(inSorted: luminances, fraction: 0.50)
+    let highlight = ScalarMath.percentile(inSorted: luminances, fraction: 0.95)
     guard shadow.isFinite, midtone.isFinite, highlight.isFinite,
       shadow < midtone, midtone < highlight
     else {
@@ -126,13 +131,5 @@ public enum KodachromeLikeLook {
       CurvePoint(input: x3, output: targetHighlight),
       CurvePoint(input: 1, output: 1),
     ]
-  }
-
-  private static func percentile(_ sorted: [Double], fraction: Double) -> Double {
-    let position = fraction * Double(sorted.count - 1)
-    let lower = Int(position.rounded(.down))
-    let upper = Int(position.rounded(.up))
-    let amount = position - Double(lower)
-    return sorted[lower] + (sorted[upper] - sorted[lower]) * amount
   }
 }

@@ -38,9 +38,9 @@ version of this document.
 
 | Disposition | Original finding IDs |
 |---|---|
-| Implemented | 2, 8, 9, 16, 17, 18, 35, 36, 38, 39, 40, 53, 67, 68 |
+| Implemented | 2, 8, 9, 16–18, 24–25, 35–36, 38–40, 53, 66–68 |
 | Partially implemented | 61 |
-| Confirmed, still open | 1, 5–7, 10–15, 24–25, 27–28, 30, 33, 47, 49–52, 59, 62–66 |
+| Confirmed, still open | 1, 5–7, 10–15, 27–28, 30, 33, 47, 49–52, 59, 62–65 |
 | Rejected or materially reframed | 22, 23, 26, 29, 31, 32, 34, 37, 48, 60 |
 | Python; intentionally not assessed | 3, 4, 19–21, 41–46, 54–58, 69 |
 
@@ -59,8 +59,8 @@ small and reviewable in one file.
 
 **Validated severity:** low.
 
-The four copies of aspect-fit and point-clamping logic are now shared file-level
-helpers in `ContentView.swift`.
+The four copies of aspect-fit and point-clamping logic now live in the tested
+`PreviewOverlayGeometry` utility beside the extracted overlay views.
 
 ### 16 and 18 — Serial correction and perspective loops
 
@@ -81,6 +81,15 @@ entire output.
 `channelMedian` no longer allocates and sorts one `UInt16` per sampled pixel.
 It accumulates a 65,536-bin histogram and selects the middle rank in linear time
 with fixed auxiliary memory.
+
+### 24 and 25 — Named color math and shared conversions
+
+**Validated severity:** readability and maintenance issue.
+
+Rec.2020, Rec.709, and BT.601 luminance weights are now named so similar-looking
+formulas cannot be mistaken for interchangeable standards. Identical percentile,
+smoothstep, finite-value, and Float/Double HSV conversion helpers now have one
+implementation with focused regression coverage.
 
 ### 35 — String-based status classification
 
@@ -149,6 +158,12 @@ Zero-byte variants would be redundant with these decoder entry paths. Filesystem
 full/permission and interrupted-commit tests still require a filesystem
 injection seam.
 
+### 66 — Formatting baseline and CI gate
+
+The native package source and tests now conform to `swift format`, and the
+macOS 15 CI lane runs strict recursive linting. The prior formatting baseline is
+therefore fixed rather than hidden behind disabled rules.
+
 ### 67 and 68 — Coverage and supported-macOS CI
 
 **Validated severity:** real CI coverage gaps.
@@ -164,13 +179,14 @@ only to avoid duplicating artifact work.
 
 - **1:** `AppModel.swift`, `ContentView.swift`, and
   `FilmNegativeProcessing.swift` remain large and multi-purpose. This is a
-  merge-conflict and reviewability cost, not a critical runtime issue.
+  merge-conflict and reviewability cost, not a critical runtime issue. Preview
+  overlays and their testable geometry have been extracted from `ContentView`;
+  further splits should remain feature-oriented.
 - **5–7, 10–15:** several pure helper and processing blocks remain duplicated.
   They should be consolidated opportunistically when those areas next change;
   a broad mechanical refactor has less value than the original audit claimed.
-- **24–25, 30:** named luminance standards, paired float conversion helpers, and
-  the already-documented Python-compatible coordinate truncation could be made
-  clearer. These are readability issues; current behavior is intentional.
+- **30:** the already-documented Python-compatible coordinate truncation could
+  be made clearer. Current behavior is intentional.
 - **27–28:** the morphology integral buffer and contour root pass have plausible
   memory/work reductions. Any narrower integer type must prove overflow bounds
   against maximum supported image dimensions before adoption.
@@ -198,11 +214,6 @@ only to avoid duplicating artifact work.
   subset or secured CI artifact is required.
 - **65:** benchmark executables exist but do not run on a scheduled, hardware-
   controlled regression lane.
-- **66:** no formatting/lint gate exists. `swift-format lint` currently reports
-  a large pre-existing baseline, so enabling it as a hard gate requires either a
-  baseline file or a separate formatting cleanup rather than hiding violations
-  with a permissive configuration.
-
 ## Rejected or reframed findings
 
 - **22:** force-unwrapping the platform sRGB color space is an invariant over a
@@ -231,6 +242,11 @@ only to avoid duplicating artifact work.
 
 ## Verification performed
 
+- Strict recursive `swift format lint` completed with zero diagnostics across
+  the package manifest, production sources, and tests.
+- The shared color-math, overlay-geometry, processing, render-ready image, and
+  protected-color focus run completed with **167 tests passed**; the focused
+  profile-store run completed with **31 tests passed**.
 - `swift build --package-path native/FilmScanEngine --product FilmScanConverterMac`
   completed successfully.
 - A focused native run covering exports, processing, negative processing,
@@ -249,9 +265,7 @@ only to avoid duplicating artifact work.
 
 1. Add injectable renderer and AVFoundation seams, then cover findings 62–63.
 2. Establish a redistributable RAW mini-corpus for CI (64).
-3. Create a formatting baseline and turn `swift-format lint` into a hard gate
-   (66).
-4. Add a scheduled benchmark lane with stable hardware and stored thresholds
+3. Add a scheduled benchmark lane with stable hardware and stored thresholds
    (65).
-5. Split `AppModel` and `ContentView` by feature only as those areas are changed,
+4. Split `AppModel` and `ContentView` by feature only as those areas are changed,
    keeping each extraction behavior-preserving and independently tested (1).

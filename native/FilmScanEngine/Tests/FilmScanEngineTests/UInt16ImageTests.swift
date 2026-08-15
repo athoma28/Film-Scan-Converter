@@ -53,7 +53,8 @@ struct UInt16ImageTests {
 
   @Test("Processing parameters without a crop coordinate marker migrate as legacy")
   func processingParametersMigratesLegacyCropCoordinates() throws {
-    let json = Data(#"{"cropRect":{"centerX":0.625,"centerY":0.4,"width":0.75,"height":0.4,"angle":0}}"#.utf8)
+    let json = Data(
+      #"{"cropRect":{"centerX":0.625,"centerY":0.4,"width":0.75,"height":0.4,"angle":0}}"#.utf8)
 
     let decoded = try JSONDecoder().decode(ProcessingParameters.self, from: json)
 

@@ -1,6 +1,6 @@
 import Darwin
-import Foundation
 import FilmScanEngine
+import Foundation
 import Testing
 
 @testable import FilmScanConverterMac
@@ -84,10 +84,11 @@ struct AppPathExportPerformanceTests {
     let queue = expandedQueue(from: corpus, targetCount: 10)
 
     #expect(queue.count == 10)
-    #expect(queue.map(\.lastPathComponent) == [
-      "scan-0.raf", "scan-1.raf", "scan-2.raf", "scan-3.raf", "scan-4.raf",
-      "scan-5.raf", "scan-0.raf", "scan-1.raf", "scan-2.raf", "scan-3.raf",
-    ])
+    #expect(
+      queue.map(\.lastPathComponent) == [
+        "scan-0.raf", "scan-1.raf", "scan-2.raf", "scan-3.raf", "scan-4.raf",
+        "scan-5.raf", "scan-0.raf", "scan-1.raf", "scan-2.raf", "scan-3.raf",
+      ])
   }
 
   @Test("Post-file footprint summaries preserve signed growth")
@@ -131,7 +132,8 @@ struct AppPathExportPerformanceTests {
       format: "tiff",
       sequentialExport: sequential,
       cancellation: cancellation,
-      note: "The app path imports the available local RAF corpus, starts Export All, and appends repeated source jobs only when fewer than ten unique RAFs are available. Every job independently performs the production full-resolution camera-scan decode, correction, geometry, and TIFF writer path. Completion observations may overlap the next decode; post-run and post-model-release physical footprint are the live-memory gates. Temporary outputs are removed after each observed completion and again at teardown. Cancellation is requested during the first full-resolution decode after the configured delay."
+      note:
+        "The app path imports the available local RAF corpus, starts Export All, and appends repeated source jobs only when fewer than ten unique RAFs are available. Every job independently performs the production full-resolution camera-scan decode, correction, geometry, and TIFF writer path. Completion observations may overlap the next decode; post-run and post-model-release physical footprint are the live-memory gates. Temporary outputs are removed after each observed completion and again at teardown. Cancellation is requested during the first full-resolution decode after the configured delay."
     )
 
     let encoder = JSONEncoder()
@@ -175,13 +177,14 @@ struct AppPathExportPerformanceTests {
       totalArtifactsRemoved += removed
       await Task.yield()
       try await Task.sleep(for: .milliseconds(25))
-      completions.append(QueueCompletionSample(
-        queueIndex: queueIndex + 1,
-        filename: queue[queueIndex].lastPathComponent,
-        completionMillisecondsSinceStart: milliseconds(since: start),
-        memoryAtProgressObservation: memorySample(),
-        outputArtifactsRemoved: removed
-      ))
+      completions.append(
+        QueueCompletionSample(
+          queueIndex: queueIndex + 1,
+          filename: queue[queueIndex].lastPathComponent,
+          completionMillisecondsSinceStart: milliseconds(since: start),
+          memoryAtProgressObservation: memorySample(),
+          outputArtifactsRemoved: removed
+        ))
     }
 
     try await waitUntil("sequential export completion", timeout: .seconds(30)) {

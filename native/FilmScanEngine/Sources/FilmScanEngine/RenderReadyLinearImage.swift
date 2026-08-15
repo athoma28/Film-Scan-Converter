@@ -47,7 +47,8 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
     _ parameters: PhotoAdjustmentParameters,
     referenceLuminance: Double = 0.18
   ) {
-    let hasToneAdjustment = parameters.exposureEV != 0
+    let hasToneAdjustment =
+      parameters.exposureEV != 0
       || parameters.brightness != 0
       || parameters.contrast != 0
       || parameters.highlights != 0
@@ -68,6 +69,7 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
     let highlightEnd = pivot * 6
     let shadowEnd = pivot * 2
     let minGain = 0.0005
+    let luminanceWeights = LuminanceStandards.rec2020
 
     let pixelCount = self.pixelCount
     pixels.withUnsafeMutableBufferPointer { buffer in
@@ -88,7 +90,10 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
         r += brightnessOffset
 
         if contrastActive {
-          let luminance = 0.2626983 * r + 0.6780 * g + 0.0593017 * b
+          let luminance =
+            luminanceWeights.red * r
+            + luminanceWeights.green * g
+            + luminanceWeights.blue * b
           if luminance > 0 {
             let normalized = luminance / pivot
             let adjustedLuminance = Self.powClamped(normalized, contrastGamma) * pivot
@@ -100,16 +105,19 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
         }
 
         if highlightsActive || shadowsActive {
-          let luminance = 0.2626983 * r + 0.6780 * g + 0.0593017 * b
+          let luminance =
+            luminanceWeights.red * r
+            + luminanceWeights.green * g
+            + luminanceWeights.blue * b
           if highlightsActive {
-            let highlightWeight = Self.smoothstep(highlightStart, highlightEnd, luminance)
+            let highlightWeight = ScalarMath.smoothstep(highlightStart, highlightEnd, luminance)
             let highlightGain = max(1 - highlightsScale * highlightWeight, minGain)
             b *= highlightGain
             g *= highlightGain
             r *= highlightGain
           }
           if shadowsActive {
-            let shadowWeight = 1 - Self.smoothstep(0, shadowEnd, luminance)
+            let shadowWeight = 1 - ScalarMath.smoothstep(0, shadowEnd, luminance)
             let shadowGain = max(1 + shadowsScale * shadowWeight, minGain)
             b *= shadowGain
             g *= shadowGain
@@ -122,11 +130,6 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
         sendable.baseAddress[base + 2] = r
       }
     }
-  }
-
-  private static func smoothstep(_ low: Double, _ high: Double, _ value: Double) -> Double {
-    let t = min(max((value - low) / (high - low), 0), 1)
-    return t * t * (3 - 2 * t)
   }
 
   private static func powClamped(_ base: Double, _ exponent: Double) -> Double {
@@ -192,13 +195,16 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
         let green = sendable.baseAddress[base + 1]
         let red = sendable.baseAddress[base + 2]
 
-        sendable.baseAddress[base] = blue
+        sendable.baseAddress[base] =
+          blue
           + mixing.blueFromRed * (red - blue)
           + mixing.blueFromGreen * (green - blue)
-        sendable.baseAddress[base + 1] = green
+        sendable.baseAddress[base + 1] =
+          green
           + mixing.greenFromRed * (red - green)
           + mixing.greenFromBlue * (blue - green)
-        sendable.baseAddress[base + 2] = red
+        sendable.baseAddress[base + 2] =
+          red
           + mixing.redFromGreen * (green - red)
           + mixing.redFromBlue * (blue - red)
       }
@@ -223,7 +229,8 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
   public mutating func applyProtectedColorAdjustments(
     _ parameters: PhotoAdjustmentParameters
   ) {
-    let hasColorAdjustment = parameters.temperatureShiftMired != 0
+    let hasColorAdjustment =
+      parameters.temperatureShiftMired != 0
       || parameters.tint != 0
       || parameters.saturation != 0
       || parameters.vibrance != 0
@@ -263,6 +270,8 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
     var lowClips = [Int](repeating: 0, count: 3)
     var highClips = [Int](repeating: 0, count: 3)
     let logFloor = exp2(-24.0)
+    let statisticsBound = exp2(24.0)
+    let luminanceWeights = LuminanceStandards.rec2020
 
     for sampleIndex in 0..<sampleCount {
       let pixelIndex: Int
@@ -272,9 +281,9 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
         pixelIndex = sampleIndex * (pixelCount - 1) / (sampleCount - 1)
       }
       let base = pixelIndex * 3
-      let blue = sanitized(pixels[base])
-      let green = sanitized(pixels[base + 1])
-      let red = sanitized(pixels[base + 2])
+      let blue = ScalarMath.finiteClamped(pixels[base], bound: statisticsBound)
+      let green = ScalarMath.finiteClamped(pixels[base + 1], bound: statisticsBound)
+      let red = ScalarMath.finiteClamped(pixels[base + 2], bound: statisticsBound)
       if blue <= 0 { lowClips[0] += 1 }
       if green <= 0 { lowClips[1] += 1 }
       if red <= 0 { lowClips[2] += 1 }
@@ -283,7 +292,10 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
       if red >= 1 { highClips[2] += 1 }
 
       // ITU-R BT.2020 linear-light luminance, with the buffer stored as BGR.
-      let luminance = 0.0593017 * blue + 0.6780 * green + 0.2626983 * red
+      let luminance =
+        luminanceWeights.blue * blue
+        + luminanceWeights.green * green
+        + luminanceWeights.red * red
       luminances.append(luminance)
       logLuminances.append(log2(max(luminance, logFloor)))
     }
@@ -291,17 +303,18 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
     luminances.sort()
     logLuminances.sort()
     let linear = PercentileTriplet(
-      p01: percentile(luminances, fraction: 0.01),
-      p50: percentile(luminances, fraction: 0.50),
-      p99: percentile(luminances, fraction: 0.99)
+      p01: ScalarMath.percentile(inSorted: luminances, fraction: 0.01),
+      p50: ScalarMath.percentile(inSorted: luminances, fraction: 0.50),
+      p99: ScalarMath.percentile(inSorted: luminances, fraction: 0.99)
     )
     let logarithmic = PercentileTriplet(
-      p01: percentile(logLuminances, fraction: 0.01),
-      p50: percentile(logLuminances, fraction: 0.50),
-      p99: percentile(logLuminances, fraction: 0.99)
+      p01: ScalarMath.percentile(inSorted: logLuminances, fraction: 0.01),
+      p50: ScalarMath.percentile(inSorted: logLuminances, fraction: 0.50),
+      p99: ScalarMath.percentile(inSorted: logLuminances, fraction: 0.99)
     )
     let logRange = logarithmic.p99 - logarithmic.p01
-    let normalizedMidtone = logRange > 0
+    let normalizedMidtone =
+      logRange > 0
       ? min(max((logarithmic.p50 - logarithmic.p01) / logRange, 0), 1)
       : 0.5
     let divisor = Double(sampleCount)
@@ -329,27 +342,12 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
     )
   }
 
-  private func sanitized(_ value: Double) -> Double {
-    let statisticsBound = exp2(24.0)
-    if value.isNaN || value == -.infinity { return 0 }
-    if value == .infinity { return statisticsBound }
-    return min(max(value, -statisticsBound), statisticsBound)
-  }
-
-  private func percentile(_ sorted: [Double], fraction: Double) -> Double {
-    guard sorted.count > 1 else { return sorted.first ?? 0 }
-    let position = fraction * Double(sorted.count - 1)
-    let lower = Int(position.rounded(.down))
-    let upper = Int(position.rounded(.up))
-    let amount = position - Double(lower)
-    return sorted[lower] + (sorted[upper] - sorted[lower]) * amount
-  }
 }
 
 public enum ProtectedColorAdjustment {
-  public static let blueLuminance = 0.0593017
-  public static let greenLuminance = 0.6780
-  public static let redLuminance = 0.2626983
+  public static let blueLuminance = LuminanceStandards.rec2020.blue
+  public static let greenLuminance = LuminanceStandards.rec2020.green
+  public static let redLuminance = LuminanceStandards.rec2020.red
   public static let opponentShiftScale = 0.08
 
   public static func apply(
@@ -359,9 +357,9 @@ public enum ProtectedColorAdjustment {
     parameters: PhotoAdjustmentParameters
   ) -> (blue: Double, green: Double, red: Double) {
     let finiteBound = exp2(24.0)
-    let b = finiteValue(blue, bound: finiteBound)
-    let g = finiteValue(green, bound: finiteBound)
-    let r = finiteValue(red, bound: finiteBound)
+    let b = ScalarMath.finiteClamped(blue, bound: finiteBound)
+    let g = ScalarMath.finiteClamped(green, bound: finiteBound)
+    let r = ScalarMath.finiteClamped(red, bound: finiteBound)
     let luminance = blueLuminance * b + greenLuminance * g + redLuminance * r
     guard luminance > 0 else { return (b, g, r) }
 
@@ -375,12 +373,13 @@ public enum ProtectedColorAdjustment {
     let maximum = max(b, g, r)
     let minimum = min(b, g, r)
     let saturationMetric = min(max((maximum - minimum) / max(abs(maximum), 1e-9), 0), 1)
-    let gamutRiskProtection = 1 - 0.75 * smoothstep(0.75, 1, saturationMetric)
-    let highlightProtection = 1 - 0.85 * smoothstep(0.75, 1.5, luminance)
+    let gamutRiskProtection = 1 - 0.75 * ScalarMath.smoothstep(0.75, 1, saturationMetric)
+    let highlightProtection = 1 - 0.85 * ScalarMath.smoothstep(0.75, 1.5, luminance)
 
     let saturation = min(max(parameters.saturation, -1), 1)
     let saturationFactor = exp2(saturation)
-    let protectedSaturationFactor = 1
+    let protectedSaturationFactor =
+      1
       + (saturationFactor - 1) * gamutRiskProtection * highlightProtection
 
     let vibrance = min(max(parameters.vibrance, -1), 1)
@@ -441,17 +440,6 @@ public enum ProtectedColorAdjustment {
       neutralG + chromaG * amount,
       neutralR + chromaR * amount
     )
-  }
-
-  private static func finiteValue(_ value: Double, bound: Double) -> Double {
-    if value.isNaN || value == -.infinity { return 0 }
-    if value == .infinity { return bound }
-    return min(max(value, -bound), bound)
-  }
-
-  private static func smoothstep(_ low: Double, _ high: Double, _ value: Double) -> Double {
-    let t = min(max((value - low) / (high - low), 0), 1)
-    return t * t * (3 - 2 * t)
   }
 
   private static func isInGamut(
