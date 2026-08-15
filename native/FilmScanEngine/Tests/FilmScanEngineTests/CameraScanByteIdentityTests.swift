@@ -1,4 +1,5 @@
 import CryptoKit
+import Darwin
 import Foundation
 import Testing
 
@@ -104,6 +105,8 @@ struct CameraScanByteIdentityTests {
 
     let rawURL = try #require(SampleRawCorpus.uniqueURL(named: reference.file))
     let dimensions = try RawImageDecoder.fullResolutionDimensions(rawURL)
+    xtransWorkerOverrideLock.lock()
+    defer { xtransWorkerOverrideLock.unlock() }
     let result = try RawImageDecoder.decode(
       rawURL,
       fullResolution: true,
@@ -119,6 +122,9 @@ struct CameraScanByteIdentityTests {
     #expect(
       result.processing.contains(.deterministicParallelXTrans)
         == (result.demosaicWorkerCount > 1))
+    #expect(result.unpackWorkerCount >= 1)
+    #expect(
+      result.processing.contains(.parallelFujiUnpack) == (result.unpackWorkerCount > 1))
     #expect(dimensions.width == reference.imageShape[1], "\(reference.file) full-resolution width")
     #expect(
       dimensions.height == reference.imageShape[0], "\(reference.file) full-resolution height")
@@ -164,4 +170,92 @@ struct CameraScanByteIdentityTests {
       imageSHA256 == reference.stageSHA256.swiftImage,
       "\(reference.file) pixel byte identity \(imageSHA256)")
   }
+
+  @Test(
+    "Wavefront X-Trans matches the serial one-worker oracle",
+    .enabled(
+      if: cameraScanRawAvailable,
+      "referenced sample-raw corpus unavailable; wavefront identity test skipped")
+  )
+  func wavefrontMatchesSerialOracle() throws {
+    let rawURL = try #require(SampleRawCorpus.uniqueURL(named: expectedCameraScanFile))
+
+    xtransWorkerOverrideLock.lock()
+    defer {
+      unsetenv("FSC_XTRANS_WORKERS")
+      xtransWorkerOverrideLock.unlock()
+    }
+
+    setenv("FSC_XTRANS_WORKERS", "1", 1)
+    let serial = try RawImageDecoder.decode(
+      rawURL,
+      fullResolution: true,
+      profile: .rawTherapeeCameraScan,
+      collectDiagnostics: true
+    )
+    unsetenv("FSC_XTRANS_WORKERS")
+    let wavefront = try RawImageDecoder.decode(
+      rawURL,
+      fullResolution: true,
+      profile: .rawTherapeeCameraScan,
+      collectDiagnostics: true
+    )
+
+    let serialDiagnostics = try #require(serial.diagnostics)
+    let wavefrontDiagnostics = try #require(wavefront.diagnostics)
+    #expect(serial.demosaicWorkerCount == 1)
+    #expect(wavefront.demosaicWorkerCount > 1)
+    #expect(serial.processing.contains(.xTransThreePass))
+    #expect(wavefront.processing.contains(.xTransThreePass))
+    #expect(wavefront.processing.contains(.deterministicParallelXTrans))
+    #expect(!serial.processing.contains(.deterministicParallelXTrans))
+    #expect(serialDiagnostics.demosaicedSHA256 == wavefrontDiagnostics.demosaicedSHA256)
+    #expect(serialDiagnostics.swiftImageSHA256 == wavefrontDiagnostics.swiftImageSHA256)
+  }
+
+  @Test(
+    "Parallel Fuji unpack matches the serial one-worker mosaic",
+    .enabled(
+      if: cameraScanRawAvailable,
+      "referenced sample-raw corpus unavailable; unpack identity test skipped")
+  )
+  func parallelFujiUnpackMatchesSerialOracle() throws {
+    let rawURL = try #require(SampleRawCorpus.uniqueURL(named: expectedCameraScanFile))
+
+    xtransWorkerOverrideLock.lock()
+    defer {
+      unsetenv("FSC_UNPACK_WORKERS")
+      xtransWorkerOverrideLock.unlock()
+    }
+
+    setenv("FSC_UNPACK_WORKERS", "1", 1)
+    let serial = try RawImageDecoder.decode(
+      rawURL,
+      fullResolution: true,
+      profile: .rawTherapeeCameraScan,
+      collectDiagnostics: true
+    )
+    unsetenv("FSC_UNPACK_WORKERS")
+    let parallel = try RawImageDecoder.decode(
+      rawURL,
+      fullResolution: true,
+      profile: .rawTherapeeCameraScan,
+      collectDiagnostics: true
+    )
+
+    let serialDiagnostics = try #require(serial.diagnostics)
+    let parallelDiagnostics = try #require(parallel.diagnostics)
+    #expect(serial.unpackWorkerCount == 1)
+    #expect(parallel.unpackWorkerCount > 1)
+    #expect(!serial.processing.contains(.parallelFujiUnpack))
+    #expect(parallel.processing.contains(.parallelFujiUnpack))
+    #expect(serialDiagnostics.unpackedMosaicSHA256 == parallelDiagnostics.unpackedMosaicSHA256)
+    #expect(serialDiagnostics.demosaicedSHA256 == parallelDiagnostics.demosaicedSHA256)
+    #expect(serialDiagnostics.swiftImageSHA256 == parallelDiagnostics.swiftImageSHA256)
+  }
 }
+
+/// Serializes `FSC_XTRANS_WORKERS` and `FSC_UNPACK_WORKERS` so diagnostic
+/// serial-oracle comparisons cannot interleave with another camera-scan decode
+/// in the same process.
+private let xtransWorkerOverrideLock = NSLock()

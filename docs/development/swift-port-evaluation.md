@@ -38,7 +38,9 @@ are now complete and should not be planned from this document:
 - automatic film-kind classification and rebate selection;
 - density-pipeline preview/export integration and profile separation;
 - semantic photographic adjustments, curves, and color wheels;
-- per-file persistence, named presets, and correction copy/paste.
+- per-file persistence, named presets, and correction copy/paste;
+- native pan/pinch preview navigation, per-file undo/redo, apply-to-selected,
+  and import-ordered previous/next.
 
 The standalone histogram-equalisation prototype, linear-capture diagnostics
 prototype, and unused density-display GPU prototype were removed because they
@@ -48,7 +50,8 @@ shared preview/export entry point with workflow-level tests.
 ## Current Boundary
 
 Dust-mask detection exists, but Telea inpainting and applied dust removal do
-not. Self-contained app/ZIP packaging is complete; Developer ID notarization,
-Gatekeeper/clean-machine validation, broader packaged-app corpus evidence, and
-essential editing-workflow work remain. The authoritative status page owns any
-changes to that boundary.
+not. Self-contained app/ZIP packaging is complete; Developer ID notarization
+and Gatekeeper/clean-machine validation remain. Remaining product coding is
+the inspect/re-export slice on the roadmap (preview-bound Load RAW Preview and
+last-decode retention), plus the representative-image and real-roll checks.
+The authoritative status page owns any changes to that boundary.

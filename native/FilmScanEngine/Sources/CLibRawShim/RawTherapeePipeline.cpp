@@ -8,6 +8,7 @@
 #include <libraw/libraw.h>
 #include <dispatch/dispatch.h>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cfloat>
 #include <cmath>
@@ -15,6 +16,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -72,12 +74,68 @@ T limited(T value, T lower, T upper) {
     return std::max(lower, std::min(value, upper));
 }
 
+int configuredWorkerCount(const char *environmentName) {
+    constexpr int maximumWorkers = 8;
+    int workers = limited(static_cast<int>(std::thread::hardware_concurrency()), 1, maximumWorkers);
+    const char *overrideValue = std::getenv(environmentName);
+    if (!overrideValue || !*overrideValue) { return workers; }
+    char *end = nullptr;
+    const long parsed = std::strtol(overrideValue, &end, 10);
+    if (end == overrideValue || *end != '\0' || parsed < 1 || parsed > maximumWorkers) {
+        return workers;
+    }
+    return static_cast<int>(parsed);
+}
+
+// LibRaw's stock file/buffer streams leave lock()/unlock() as no-ops. The
+// compressed Fuji decoder already calls those around seek+read, which is how
+// independent strips stay exact when OpenMP is off. This wrapper supplies the
+// missing critical section without enabling LIBRAW_FORCE_OPENMP.
+class FSCLockingDatastream final : public LibRaw_abstract_datastream {
+public:
+    FSCLockingDatastream(LibRaw_abstract_datastream *inner, bool ownsInner)
+        : inner_(inner), ownsInner_(ownsInner) {}
+
+    ~FSCLockingDatastream() override {
+        if (ownsInner_) { delete inner_; }
+    }
+
+    int valid() override { return inner_->valid(); }
+    int read(void *ptr, size_t size, size_t nmemb) override {
+        return inner_->read(ptr, size, nmemb);
+    }
+    int seek(INT64 offset, int whence) override { return inner_->seek(offset, whence); }
+    INT64 tell() override { return inner_->tell(); }
+    INT64 size() override { return inner_->size(); }
+    int get_char() override { return inner_->get_char(); }
+    char *gets(char *str, int size) override { return inner_->gets(str, size); }
+    int scanf_one(const char *fmt, void *value) override {
+        return inner_->scanf_one(fmt, value);
+    }
+    int eof() override { return inner_->eof(); }
+    int jpeg_src(void *jpegdata) override { return inner_->jpeg_src(jpegdata); }
+    void buffering_off() override { inner_->buffering_off(); }
+    int lock() override {
+        mutex_.lock();
+        return 1;
+    }
+    void unlock() override { mutex_.unlock(); }
+    const char *fname() override { return inner_->fname(); }
+
+private:
+    LibRaw_abstract_datastream *inner_;
+    bool ownsInner_;
+    std::mutex mutex_;
+};
+
 class FSCRawTherapeeDecoder final : public LibRaw {
 public:
     bool usedRCD = false;
     bool usedXTransThreePass = false;
     bool usedDeterministicParallelXTrans = false;
+    bool usedParallelFujiUnpack = false;
     int xtransWorkerCount = 1;
+    int unpackWorkerCount = 1;
     double demosaicSeconds = 0;
     double stageHashSeconds = 0;
     // Opt-in stage-boundary digest capture. When set, the demosaic callbacks
@@ -92,6 +150,7 @@ public:
 
 private:
     const int xtransPasses;
+    bool ioLockInstalled = false;
 
     static void rcdCallback(void *context) {
         static_cast<FSCRawTherapeeDecoder *>(context)->rcdDemosaic();
@@ -105,10 +164,9 @@ private:
         // LibRaw's X-Trans implementation is Markesteijn-derived. Three passes
         // trade decode time for the cleaner fine colour detail RawTherapee
         // recommends for final-quality X-Trans output. Preserve the upstream
-        // tile and interpolation order, then parallelize only the independent
-        // row ranges in its CIELab, derivative, homogeneity, and final-write
-        // phases. This avoids the overlapping-tile races in LibRaw's OpenMP
-        // path while retaining the approved serial pixels.
+        // pixel arithmetic and overlapping-tile dependence, including the
+        // 16-pixel halo that can read the above-right neighbor, then run
+        // independent 2*row+col wavefront diagonals concurrently.
         const auto start = std::chrono::steady_clock::now();
         deterministicParallelXTransInterpolate(xtransPasses);
         demosaicSeconds = std::chrono::duration<double>(
@@ -118,17 +176,93 @@ private:
     }
 
     static int configuredXTransWorkerCount() {
-        constexpr int maximumWorkers = 8;
-        int workers = static_cast<int>(std::thread::hardware_concurrency());
-        workers = limited(workers, 1, maximumWorkers);
-        const char *overrideValue = std::getenv("FSC_XTRANS_WORKERS");
-        if (!overrideValue || !*overrideValue) { return workers; }
-        char *end = nullptr;
-        const long parsed = std::strtol(overrideValue, &end, 10);
-        if (end == overrideValue || *end != '\0' || parsed < 1 || parsed > maximumWorkers) {
-            return workers;
+        return configuredWorkerCount("FSC_XTRANS_WORKERS");
+    }
+
+    void installIOLock() {
+        if (ioLockInstalled) { return; }
+        auto &id = libraw_internal_data.internal_data;
+        if (!id.input) { return; }
+        auto *wrapper = new FSCLockingDatastream(id.input, id.input_internal != 0);
+        id.input = wrapper;
+        id.input_internal = 1;
+        ioLockInstalled = true;
+    }
+
+    // LibRaw documents fuji_decode_loop as the public hook for a parallel
+    // Fuji compressed decoder. Independent strips write disjoint mosaic
+    // columns. Do not enable LIBRAW_FORCE_OPENMP: that also turns on the racy
+    // overlapping X-Trans tile loop.
+    void fuji_decode_loop(
+        fuji_compressed_params *common_info,
+        int count,
+        INT64 *offsets,
+        unsigned *sizes,
+        uchar *q_bases
+    ) override {
+        const int configured = configuredWorkerCount("FSC_UNPACK_WORKERS");
+        const int workerCount = limited(configured, 1, std::max(1, count));
+        unpackWorkerCount = workerCount;
+        usedParallelFujiUnpack = workerCount > 1;
+        if (!usedParallelFujiUnpack) {
+            LibRaw::fuji_decode_loop(common_info, count, offsets, sizes, q_bases);
+            return;
         }
-        return static_cast<int>(parsed);
+
+        installIOLock();
+        const int lineStep =
+            (libraw_internal_data.unpacker_data.fuji_total_lines + 0xF) & ~0xF;
+        std::atomic<int> errorCode{LIBRAW_EXCEPTION_NONE};
+        struct Context {
+            FSCRawTherapeeDecoder *decoder;
+            fuji_compressed_params *commonInfo;
+            int count;
+            int workerCount;
+            int lineStep;
+            INT64 *offsets;
+            unsigned *sizes;
+            uchar *qBases;
+            std::atomic<int> *errorCode;
+        } context = {
+            this, common_info, count, workerCount, lineStep,
+            offsets, sizes, q_bases, &errorCode
+        };
+        dispatch_apply_f(
+            static_cast<size_t>(workerCount),
+            dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0),
+            &context,
+            [](void *rawContext, size_t workerIndex) {
+                auto *context = static_cast<Context *>(rawContext);
+                for (int block = static_cast<int>(workerIndex);
+                     block < context->count;
+                     block += context->workerCount) {
+                    if (context->errorCode->load() != LIBRAW_EXCEPTION_NONE) {
+                        return;
+                    }
+                    try {
+                        context->decoder->fuji_decode_strip(
+                            context->commonInfo,
+                            block,
+                            context->offsets[block],
+                            context->sizes[block],
+                            context->qBases
+                                ? context->qBases + block * context->lineStep
+                                : nullptr);
+                    } catch (const LibRaw_exceptions exception) {
+                        int expected = LIBRAW_EXCEPTION_NONE;
+                        context->errorCode->compare_exchange_strong(
+                            expected, static_cast<int>(exception));
+                    } catch (...) {
+                        int expected = LIBRAW_EXCEPTION_NONE;
+                        context->errorCode->compare_exchange_strong(
+                            expected, LIBRAW_EXCEPTION_DECODE_RAW);
+                    }
+                }
+            });
+        const int error = errorCode.load();
+        if (error != LIBRAW_EXCEPTION_NONE) {
+            throw static_cast<LibRaw_exceptions>(error);
+        }
     }
 
     static char **allocateXTransBuffers(int count, size_t size) {
@@ -153,39 +287,98 @@ private:
         std::free(buffers);
     }
 
-    template <typename RowFunction>
-    void parallelXTransRows(int firstRow, int endRow, RowFunction function) {
-        const int rowCount = endRow - firstRow;
-        const int workerCount = std::min(xtransWorkerCount, rowCount);
-        if (workerCount <= 1) {
-            for (int row = firstRow; row < endRow; ++row) { function(row); }
+    template <typename TileFunction>
+    void parallelXTransWavefront(
+        const std::vector<int> &tops,
+        const std::vector<int> &lefts,
+        char **buffers,
+        int bufferCount,
+        TileFunction processTile
+    ) {
+        const int rowTiles = static_cast<int>(tops.size());
+        const int colTiles = static_cast<int>(lefts.size());
+        if (rowTiles <= 0 || colTiles <= 0 || bufferCount <= 0 || !buffers) {
             return;
         }
-        struct Context {
-            int firstRow;
-            int endRow;
-            int workerCount;
-            RowFunction *function;
-        } context = {firstRow, endRow, workerCount, &function};
-        dispatch_apply_f(
-            static_cast<size_t>(workerCount),
-            dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0),
-            &context,
-            [](void *rawContext, size_t workerIndex) {
-                auto *context = static_cast<Context *>(rawContext);
-                const int rowsPerWorker =
-                    (context->endRow - context->firstRow + context->workerCount - 1)
-                    / context->workerCount;
-                const int start = context->firstRow
-                    + static_cast<int>(workerIndex) * rowsPerWorker;
-                const int end = std::min(start + rowsPerWorker, context->endRow);
-                for (int row = start; row < end; ++row) { (*context->function)(row); }
-            });
+
+        const auto runTile = [&](int row, int col, int bufferIndex) {
+            processTile(tops[static_cast<size_t>(row)], lefts[static_cast<size_t>(col)],
+                buffers[bufferIndex]);
+        };
+
+        if (xtransWorkerCount <= 1 || bufferCount <= 1) {
+            for (int row = 0; row < rowTiles; ++row) {
+                for (int col = 0; col < colTiles; ++col) { runTile(row, col, 0); }
+            }
+            return;
+        }
+
+        std::vector<int> diagRows;
+        std::vector<int> diagCols;
+        diagRows.reserve(static_cast<size_t>(std::min(rowTiles, colTiles)));
+        diagCols.reserve(diagRows.capacity());
+        // Overlapping 512-pixel tiles step by 496, so each tile's 16-pixel halo
+        // can read the above-right neighbor's final write. A (row+col) diagonal
+        // would run those two together. 2*row+col keeps left, above, above-left,
+        // and above-right on earlier diagonals while still exposing independent
+        // tiles to the worker pool.
+        const int lastDiag = 2 * (rowTiles - 1) + (colTiles - 1);
+        for (int diag = 0; diag <= lastDiag; ++diag) {
+            diagRows.clear();
+            diagCols.clear();
+            for (int row = 0; row < rowTiles; ++row) {
+                const int col = diag - 2 * row;
+                if (col >= 0 && col < colTiles) {
+                    diagRows.push_back(row);
+                    diagCols.push_back(col);
+                }
+            }
+            const int tileCount = static_cast<int>(diagRows.size());
+            const int workerCount = std::min(
+                std::min(xtransWorkerCount, bufferCount), tileCount);
+            if (workerCount <= 1) {
+                for (int tile = 0; tile < tileCount; ++tile) {
+                    runTile(diagRows[static_cast<size_t>(tile)],
+                        diagCols[static_cast<size_t>(tile)], 0);
+                }
+                continue;
+            }
+            struct Context {
+                const std::vector<int> *diagRows;
+                const std::vector<int> *diagCols;
+                int workerCount;
+                int tileCount;
+                char **buffers;
+                TileFunction *processTile;
+                const std::vector<int> *tops;
+                const std::vector<int> *lefts;
+            } context = {
+                &diagRows, &diagCols, workerCount, tileCount, buffers,
+                &processTile, &tops, &lefts
+            };
+            dispatch_apply_f(
+                static_cast<size_t>(workerCount),
+                dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0),
+                &context,
+                [](void *rawContext, size_t workerIndex) {
+                    auto *context = static_cast<Context *>(rawContext);
+                    for (int tile = static_cast<int>(workerIndex);
+                         tile < context->tileCount;
+                         tile += context->workerCount) {
+                        const int row = (*context->diagRows)[static_cast<size_t>(tile)];
+                        const int col = (*context->diagCols)[static_cast<size_t>(tile)];
+                        (*context->processTile)(
+                            (*context->tops)[static_cast<size_t>(row)],
+                            (*context->lefts)[static_cast<size_t>(col)],
+                            context->buffers[workerIndex]);
+                    }
+                });
+        }
     }
 
-    // The included implementation preserves LibRaw 0.21.4's arithmetic,
-    // order-sensitive interpolation, and tile traversal. Its independent
-    // back-half row phases use the bounded helper above.
+    // The included implementation preserves LibRaw 0.21.4's arithmetic and the
+    // overlapping-tile dependence chain. Independent wavefront diagonals use
+    // the bounded helper above; work inside a tile stays serial.
     void deterministicParallelXTransInterpolate(int passes) {
         xtransWorkerCount = configuredXTransWorkerCount();
         usedDeterministicParallelXTrans = xtransWorkerCount > 1;
@@ -570,6 +763,7 @@ extern "C" int fsc_decode_rawtherapee_direct(
             raw->stageHashSeconds - stageHashSecondsBeforeProcess;
         output->demosaic_seconds = raw->demosaicSeconds;
         output->demosaic_workers = raw->xtransWorkerCount;
+        output->unpack_workers = raw->unpackWorkerCount;
         output->libraw_postprocess_seconds = std::max(
             0.0,
             processSeconds - output->demosaic_seconds - processStageHashSeconds);
@@ -612,6 +806,9 @@ extern "C" int fsc_decode_rawtherapee_direct(
     if (raw->usedXTransThreePass) { flags |= FSC_RAW_PROCESSING_XTRANS_THREE_PASS; }
     if (raw->usedDeterministicParallelXTrans) {
         flags |= FSC_RAW_PROCESSING_XTRANS_DETERMINISTIC_PARALLEL;
+    }
+    if (raw->usedParallelFujiUnpack) {
+        flags |= FSC_RAW_PROCESSING_PARALLEL_FUJI_UNPACK;
     }
     const auto isoPolicyStart = Clock::now();
     isoAdaptiveFilter(processed, raw->imgdata.other.iso_speed, flags);

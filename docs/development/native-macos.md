@@ -7,10 +7,13 @@ blocks a high-quality public release, and what is being worked on now. Use the
 [40 MP benchmark](../performance/40mp-export.md) for committed measurements.
 The audited
 [full-resolution performance guide](../../PERFORMANCE-OPPORTUNITIES-2026-07-27.md)
-records the active optimization evidence and implementation sequence.
+records the completed full-resolution export-latency evidence. The next
+bounded inspect/re-export work is owned by the
+[native product roadmap](../improvements/MacOS-Native-Roadmap.md), not by a
+continuation of that rewrite.
 
-**Last verified:** 2026-08-12 against the current working tree. The native test
-suite contains 443 tests across 32 files. Some representative-RAW tests require
+**Last verified:** 2026-08-14 against the current working tree. The native test
+suite contains 462 tests across 32 files. Some representative-RAW tests require
 the untracked local `sample-raw/` corpus and are explicitly disabled when it is
 absent.
 
@@ -43,7 +46,10 @@ profile/preset application, with one history step per continuous editing
 gesture and transient history restored independently for each selected scan.
 **Apply Look to Selected** now transfers the active frame's look to the
 import-ordered multi-selection while preserving each target's geometry and
-measured film base.
+measured film base. **Previous Scan** / **Next Scan** (Option-Command-Up/Down)
+move through import order, collapse a multi-selection to that file, and fit the
+new preview. Sidebar rows now distinguish edited, preview-ready, active-export,
+and pending-export states.
 
 A 2026-07-27 audit has reopened one bounded performance slice before broader
 roll-workflow expansion. Camera-scan stage hashes and the repeated determinism
@@ -57,12 +63,28 @@ adjusted-path memory peak. The adjusted correction passes were then made
 in-place and parallel on 2026-08-12, halving the measured process-lifetime peak
 while preserving the committed scenario digests byte-for-byte. The X-Trans
 repair completed the bounded performance slice later on 2026-08-12: the shim
-keeps LibRaw's serial tile/interpolation order and parallelizes only independent
+kept LibRaw's serial tile/interpolation order and parallelized only independent
 back-half rows, reproducing all approved digests across five eight-worker runs.
-Next complete the representative-image viewport check, then resume the real
-roll workflow. Do not begin a broad port, writer replacement,
-batch-prefetch design, or stock-look calibration without satisfying the
-roadmap gates.
+A 2026-08-13 follow-up keeps serial work inside each tile and the true overlap
+dependence, including the above-right 16-pixel halo, and runs independent
+`2*row+col` wavefront diagonals instead. Five eight-worker repetitions again
+matched every approved digest; warm demosaic on the same fixture fell from
+3.38–3.54 seconds to 2.85–2.86 seconds. That export-latency slice is closed.
+
+Roadmap item 5 slice 1 landed on 2026-08-14: camera-scan Fuji compressed unpack
+now runs independent strips concurrently through LibRaw's `fuji_decode_loop`
+hook, with a locking datastream wrapper for seek+read. `LIBRAW_FORCE_OPENMP`
+stays off. Five release repetitions reproduced every approved digest; a
+same-session eight-worker A/B reduced unpack from a 1.335-second serial median
+to 0.266 seconds. `FSC_UNPACK_WORKERS=1` remains the serial mosaic oracle.
+
+The next product coding slice is the rest of roadmap item 5: Load RAW Preview
+interpolation at the 2400px bound instead of full-sensor 1-pass then
+downscale, then retain the last full-resolution decode for the selected file.
+Verify the remaining roll workflow on a real roll while doing that work.
+Complete the representative-image viewport check in the same pass. Do not
+begin a three-pass Metal port, a new X-Trans interpolator, writer replacement,
+batch-prefetch of file N+1, or stock-look calibration.
 
 The current measurement evidence is:
 
@@ -104,12 +126,18 @@ The current measurement evidence is:
   physical footprint. This is a located opportunity and failed pixel candidate,
   not a production result;
 - the production repair does not enable LibRaw's overlapping OpenMP tile loop.
-  It preserves tile and order-sensitive interpolation order, while CIELab,
-  derivative, homogeneity, and final-write rows use at most eight workers. Five
-  release repetitions of `DSCF2833.RAF` reproduced all eight committed
-  boundaries and output bytes exactly. Warm demosaic measured 3.38–3.54 seconds
-  versus the stock 12.72–12.77-second baseline, with a 694.0 MB peak physical
-  footprint;
+  It preserves serial work inside each tile and the overlapping-tile dependence
+  chain, including the above-right 16-pixel halo, while independent
+  `2*row+col` wavefront diagonals use at most eight workers. Five release
+  repetitions of `DSCF2833.RAF` reproduced all eight committed boundaries and
+  output bytes exactly. Warm demosaic measured 2.85–2.86 seconds versus the
+  2026-08-12 row-parallel 3.38–3.54-second result and the stock 12.72–12.77-second
+  baseline, with a 700.2 MB peak physical footprint;
+- camera-scan Fuji compressed unpack now parallelizes independent strips
+  without `LIBRAW_FORCE_OPENMP`. Five release repetitions of `DSCF2833.RAF`
+  reproduced all eight committed boundaries. A same-session eight-worker A/B
+  reduced unpack from a 1.335-second serial median to 0.266 seconds, with
+  peak physical footprint 699.4–701.8 MB;
 - the closing 18-output format matrix removed every output; `DSCF2833.RAF`
   format medians were 6.33 seconds TIFF, 5.12 JPEG, 8.41 PNG, and 5.14 DNG.
   A separate ten-file TIFF sequence removed all ten outputs, held post-release
@@ -200,11 +228,11 @@ the follow-up.
 
 | Area | Current behavior |
 |---|---|
-| Import | Drag/drop, file picker, Finder Open With, standard PNG/JPEG/BMP/TIFF decode, and LibRaw-backed camera RAW decode. |
+| Import | Drag/drop, file picker, Finder Open With, standard PNG/JPEG/BMP/TIFF decode, and LibRaw-backed camera RAW decode. Optional AVFoundation live preview when macOS exposes the camera or capture adapter as a video device, with invert/exposure/saturation on the live toolbar. |
 | First paint | RAW embedded thumbnails and ImageIO standard-image thumbnails decode directly to at most 1000px off the main actor. A separate 256px proxy drives classification and median calibration before the first filtered render. |
-| Processing | Color/B&W negative and slide startup classification, RawTherapee-compatible power-law inversion, a reference-derived Kodachrome-like adaptive look, an optional density pipeline, film-base measurement, flat field, capture-profile 3x3-plus-offset density correction before curve inversion, a neutral-preserving six-control dye-crossover matrix shared by basic/power-law/density color-negative paths, protected color and tone controls with center-weighted UI response and pipeline-calibrated tone references, shape-preserving overall/per-channel curves, color wheels, neutral-white handling for clipped near-zero holder pixels, automatic frame detection, a centered two-click horizontal/vertical straighten guide, an immediately visible post-straighten drag-box crop with full-canvas replacement and reset, an independent four-corner perspective warp with targeting reticles, a 100×100-pixel drag loupe, soft parallel-edge assistance, and a visible grid, live full-resolution output dimensions, frame, and aspect ratio. |
-| Preview | First paint uses a bounded 16-bit 1000px display source plus a 256px analysis source. Embedded RAW pixels are fast previews, not authoritative RAW output. **Load RAW Preview** explicitly decodes the selected RAW through the app-facing camera-scan profile, builds an up-to-2400px display source, and recalibrates from those RAW pixels. A native scroll viewport supplies momentum pan, cursor-centered pinch zoom, Fit/step/100% commands, viewport-stable Original comparison, shared editing-overlay transforms, and an explicit source/dimension badge. The Core Image/Metal renderer uses latest-value-wins scheduling; CPU remains the reference and fallback. |
-| Editing state | Per-file settings plus session-local per-file Undo/Redo for processing, geometry, output framing, reset, paste, and profile/preset application. Continuous slider, curve, color-wheel, and perspective gestures coalesce to one step; the restored current state persists while history starts empty after relaunch. Named presets, a built-in Kodachrome-like Auto action, one-step preset removal, system-clipboard copy/paste, edited markers, apply-to-selected/all with per-frame geometry and measured-base preservation, and configurable 2/4/8/16/32-file lookahead are also implemented. Lookahead caches preview sessions only and is bounded by count and 256 MiB. |
+| Processing | Color/B&W negative and slide startup classification plus a selectable Original (no-inversion) film type; paired-scan-calibrated color and B&W inversion with legacy RawTherapee-compatible power-law presets and named stock alternates; a reference-derived Kodachrome-like adaptive look; an optional density pipeline, film-base measurement, flat field, capture-profile 3x3-plus-offset density correction before curve inversion; a neutral-preserving six-control dye-crossover matrix shared by basic/power-law/density color-negative paths; protected color and tone controls with center-weighted UI response and pipeline-calibrated tone references; shape-preserving overall/per-channel curves; color wheels; neutral-white handling for clipped near-zero holder pixels; automatic frame detection; a centered two-click horizontal/vertical straighten guide; an immediately visible post-straighten drag-box crop with full-canvas replacement and reset; an independent four-corner perspective warp with targeting reticles, a 100×100-pixel drag loupe, soft parallel-edge assistance, and a visible grid; live full-resolution output dimensions, frame, and aspect ratio. |
+| Preview | First paint uses a bounded 16-bit 1000px display source plus a 256px analysis source. Embedded RAW pixels are fast previews, not authoritative RAW output. **Load RAW Preview** explicitly decodes the selected RAW through the app-facing camera-scan profile with 1-pass X-Trans at full sensor size, then downscales to an up-to-2400px display source and recalibrates from those RAW pixels. A native scroll viewport supplies momentum pan, cursor-centered pinch zoom, Fit/step/100% commands, viewport-stable Original comparison, shared editing-overlay transforms, and an explicit source/dimension badge. The Core Image/Metal renderer uses latest-value-wins scheduling; CPU remains the reference and fallback. |
+| Editing state | Per-file settings plus session-local per-file Undo/Redo for processing, geometry, output framing, reset, paste, and profile/preset application. Continuous slider, curve, color-wheel, and perspective gestures coalesce to one step; the restored current state persists while history starts empty after relaunch. Named presets, a built-in Kodachrome-like Auto action, one-step preset removal, system-clipboard copy/paste, edited/preview-ready/active-export/pending-export markers, import-ordered previous/next scan, apply-to-selected/all with per-frame geometry and measured-base preservation, and configurable 2/4/8/16/32-file lookahead are also implemented. Lookahead caches preview sessions only and is bounded by count and 256 MiB. |
 | Export | Named-sRGB TIFF, JPEG, and PNG plus output-referred linear-sRGB processed DNG; individual, ordered multi-selection, and lazy memory-bounded batch-all workflows; collision-safe names; partial-file cleanup; progress, per-file errors, queued cancellation, and duplicate-friendly append-selected jobs with per-addition export-setting snapshots during an active sequential run. |
 | Dust | Native parity-tested candidate-mask detection and a non-destructive aligned overlay. Dust removal is not applied to preview or export. |
 | Packaging | Self-contained app/ZIP/checksum assembly, embedded non-system libraries, bundle-relative load paths, licenses/notices/library manifest, icon/document registration, ad-hoc beta signing, gated Developer ID/notary support, local bundle validation, archive extraction/revalidation, and local packaged launch. |
@@ -233,8 +261,10 @@ The 2026-07-27 audit added a bounded follow-up with this order:
 The standing contract is:
 
 - prompt bounded corrected feedback;
-- no overlapping authoritative full-resolution decode buffers;
-- one full-resolution RAW export at a time;
+- one full-resolution RAW export at a time; the completed decode is discarded
+  after each job (roadmap item 5 slice 3 will retain the selected file’s last
+  decode for settings-only re-export);
+- no overlapping in-flight authoritative full-resolution decode buffers;
 - no sustained physical-footprint growth through a representative batch;
 - stable output and metadata across optimizations;
 - documented p50/p95 latency and peak-live-memory baselines that future changes
@@ -258,15 +288,20 @@ Still required before calling the application high quality:
 
 - complete a direct representative-image workflow check for focus, grain,
   dust, crop-edge, overlay-drag, comparison, and clipping-diagnostic behavior;
+- make Load RAW Preview interpolate at the 2400px bound instead of full-sensor
+  1-pass then downscale;
+- reuse the last full-resolution decode for settings-only re-export of the
+  selected file;
 - preserve the explicit bounded-preview versus full-resolution-export contract.
 
 ### 3. Roll And Batch Workflow
 
 Exercise a real roll workflow: choose an anchor frame, establish a look, apply
 it to selected or all open frames, correct exceptions, choose intended exports,
-and complete the batch. Verify immediate visible application, preserved
-per-frame geometry/base measurements, edited and queue state, and import-ordered
-selection/export.
+and complete the batch. Import-ordered previous/next, Apply Look to Selected,
+and edited/preview-ready/export sidebar states are implemented. Still verify
+immediate visible application, preserved per-frame geometry/base measurements,
+and import-ordered selection/export in a realistic roll.
 
 Sidebar reordering, ratings, or a larger queue become requirements only when
 this workflow demonstrates a need.
@@ -278,8 +313,8 @@ Exercise the actual packaged app, not only engine entry points:
 - import representative standard images and RAWs;
 - verify bounded corrected-preview orientation against reopened
   full-resolution exports;
-- apply default power-law, density/flat-field, crop/perspective/frame, preset,
-  batch, and relaunch workflows;
+- apply default calibrated inversion, legacy power-law, density/flat-field,
+  crop/perspective/frame, preset, batch, and relaunch workflows;
 - export TIFF, JPEG, PNG, and DNG, then inspect dimensions, pixels, orientation,
   depth, metadata, and color interpretation;
 - preserve the named-sRGB contract for TIFF/JPEG/PNG and the explicit
@@ -325,14 +360,22 @@ fail-closed `public` path. The following remain for the notarized build:
   not be presented as camera-scan proof.
 - LibRaw's forced-OpenMP path first changes pixels at tiled X-Trans demosaic,
   as isolated by the 2026-07-30 worker-count sweep. It remains disabled. The
-  production shim instead parallelizes only independent rows within each
-  serially ordered tile and reproduces the approved pixels. This retains an
-  adapted LibRaw 0.21.4 algorithm body that must be reviewed when LibRaw is
-  upgraded.
+  production shim instead runs independent overlapping-tile wavefront diagonals
+  and reproduces the approved pixels. This retains an adapted LibRaw 0.21.4
+  algorithm body that must be reviewed when LibRaw is upgraded.
 - The available real RAW corpus is X-Trans and does not provide a committed
   real-file gate for the Bayer RCD path.
-- Camera-scan ISO denoise/sharpen policy is a bounded native approximation, not
-  an exact RawTherapee kernel port.
+- **Load RAW Preview** still unpacks the RAF and runs 1-pass X-Trans at full
+  sensor size, then downscales to 2400px. Export always re-decodes the
+  full-resolution three-pass path and discards the buffer. Roadmap item 5
+  slices 2 and 3 are the planned repairs.
+- Fuji compressed unpack runs independent strips concurrently through
+  LibRaw's `fuji_decode_loop` hook. `LIBRAW_FORCE_OPENMP` and overlapping-tile
+  X-Trans OpenMP remain disabled. `FSC_UNPACK_WORKERS=1` is the serial mosaic
+  oracle.
+- The camera-scan export oracle is a frozen LibRaw 0.21.4 integer three-pass,
+  not live RawTherapee X-Trans. Camera-scan ISO denoise/sharpen policy is a
+  bounded native approximation, not an exact RawTherapee kernel port.
 - TIFF, JPEG, and PNG use named sRGB profiles. Processed DNG uses
   output-referred linear-sRGB DNG metadata and may not open in applications
   that only support known-camera sensor DNGs; use TIFF for broad interchange.
@@ -355,7 +398,9 @@ fail-closed `public` path. The following remain for the notarized build:
 
 ## Verification Summary
 
-- 456 native tests across 32 files in the current working tree.
+- 462 native tests across 32 files in the current working tree, including
+  import-order previous/next, sidebar export-state, wavefront-vs-serial X-Trans
+  identity, and parallel-vs-serial Fuji unpack identity.
 - The camera-scan byte-identity fixture
   (`camera_scan_decode_reference.json` plus `CameraScanByteIdentityTests`)
   pins the full-resolution X-Trans decode of `fuji400-fresh/DSCF2833.RAF` to
@@ -376,10 +421,17 @@ fail-closed `public` path. The following remain for the notarized build:
   accelerate the tested Fuji workload. The completed six-count follow-up
   isolated tiled X-Trans demosaic as the first changed boundary, proved
   threaded unpack remains exact for the fixture, and confirmed that enabling
-  the candidate wholesale fails determinism and exactness. The completed
-  production repair preserves the serial dependency chain, parallelizes only
-  independent back-half rows, and passes the original exact-output fixture.
-  The detailed experiment is in the full-resolution performance guide.
+  the candidate wholesale fails determinism and exactness. Production X-Trans
+  keeps serial work inside each tile and the overlapping-tile dependence
+  chain, including the above-right 16-pixel halo, then runs independent
+  `2*row+col` wavefront diagonals and reproduces the approved exact-output
+  fixture. The 2026-08-13 wavefront follow-up reduced the same-fixture warm
+  demosaic from the 2026-08-12 row-parallel 3.38–3.54 seconds to 2.85–2.86
+  seconds. Camera-scan Fuji compressed unpack now runs independent strips
+  concurrently without `LIBRAW_FORCE_OPENMP`; five release repetitions still
+  match every approved digest, and a same-session eight-worker A/B reduced
+  unpack from 1.335 to 0.266 seconds. The detailed experiment is in the
+  full-resolution performance guide and the 40 MP notes.
 - Local packaging validates the assembled app and extracted ZIP copy, bundled
   license/notice/manifest resources, dependency closure, signature, and
   checksum-oriented archive contract.
@@ -396,9 +448,12 @@ fail-closed `public` path. The following remain for the notarized build:
    product contract. New native behavior gets a deterministic Swift CPU
    authority and focused regression fixtures.
 4. Profile before optimizing. Compare identical stage sets and quality
-   contracts; never trade export fidelity for an unnamed speed mode.
+   contracts; never trade export fidelity for an unnamed speed mode. Preview
+   may use a cheaper already-known interpolator at the preview bound; that is
+   a named preview/export split, not an unnamed quality cut.
 5. Keep preview and export memory bounded. Do not retain a full import batch of
-   decoded RAW buffers.
+   decoded RAW buffers. One selected-file full-resolution decode may be kept
+   for settings-only re-export when the inspect/re-export slice lands.
 6. Treat implementation and documentation as one change. Update this page,
    Features, the roadmap, and specialized evidence pages only where their owned
    facts changed.
@@ -445,7 +500,8 @@ measurement contract.
 - [40 MP benchmark](../performance/40mp-export.md): commands, measurements, and
   performance acceptance evidence.
 - [Full-resolution performance guide](../../PERFORMANCE-OPPORTUNITIES-2026-07-27.md):
-  audited optimization priorities, rejected shortcuts, and developer handoff.
+  closed export-latency evidence, rejected shortcuts, and the completed
+  developer handoff. Next inspect/re-export work lives on the roadmap.
 - [Legacy Python](../legacy-python.md): maintenance boundary and retirement
   gates.
 - [Film-processing research](../film-processing-research.md): scientific and

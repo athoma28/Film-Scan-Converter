@@ -6,18 +6,23 @@
 The native application is the primary product. It provides:
 
 - Drag-and-drop import of RAW and standard image files.
-- Per-file correction controls: film mode (color negative, B&W negative, slide),
-  paired-scan-calibrated color and monochrome inversion plus legacy exponent presets,
-  orientation, white balance, exposure, shadows, highlights, saturation,
-  RGB tone curves, highlight/midtone/shadow color wheels.
+- Per-file correction controls: film mode (color negative, B&W negative, slide,
+  or Original with no inversion), paired-scan-calibrated color and monochrome
+  inversion plus legacy exponent presets, orientation, white balance, exposure,
+  shadows, highlights, saturation, RGB tone curves, highlight/midtone/shadow
+  color wheels.
 - Camera-scan RAW processing with ISO-tier noise/detail filtering. Browsing
   starts with the camera's embedded preview, bounded to a 1000px long edge.
   **Load RAW Preview** explicitly replaces it with a demosaiced preview up to
-  2400px, recalibrated from RAW pixels for unusual film bases. Export still
-  re-decodes RAW files at full resolution, using RCD for Bayer data or
-  three-pass Markesteijn interpolation for X-Trans.
+  2400px, recalibrated from RAW pixels for unusual film bases. That action
+  currently unpacks the RAF and runs 1-pass X-Trans at full sensor size, then
+  downscales; export still re-decodes RAW files at full resolution, using RCD
+  for Bayer data or three-pass Markesteijn interpolation for X-Trans.
 - Interactive GPU-accelerated preview that updates during slider drags, with
   native pan/pinch navigation plus Fit, step-zoom, and 100% commands.
+- Optional live camera preview when macOS exposes the camera or capture adapter
+  as a video device, with invert, exposure, and saturation controls on the
+  live toolbar.
 - Export to named-sRGB TIFF (16-bit, optional LZW), JPEG (8-bit, configurable
   quality), and PNG (16-bit lossless), plus processed 16-bit RGB DNG encoded as
   output-referred linear sRGB. Prefer TIFF when another application has limited
@@ -36,16 +41,26 @@ The native application is the primary product. It provides:
    updates after crop, rotation, and straightening; it does not report the
    preview proxy size. For a camera RAW, choose **Load RAW Preview** in the
    toolbar when the embedded preview's color is untrustworthy or more detail is
-   useful. Full-resolution RAW decoding still happens independently during
-   export. The badge over the preview names the current source and its displayed
-   pixel dimensions, so an embedded RAW thumbnail is not mistaken for export
-   evidence.
+   useful. That decode currently works at full sensor size before downscaling
+   to 2400px, so it can take several seconds on a 40 MP RAF. Full-resolution
+   RAW decoding still happens independently during export. The badge over the
+   preview names the current source and its displayed pixel dimensions, so an
+   embedded RAW thumbnail is not mistaken for export evidence.
    Use a two-finger trackpad gesture or mouse wheel to pan, pinch to zoom, or use
    the toolbar's minus/plus buttons and Fit/100% menu. Command-0 fits the image,
    Command-1 shows one preview pixel per point, and Command-plus/minus changes
-   magnification in steps.
+   magnification in steps. The toolbar chevrons and **Previous Scan** /
+   **Next Scan** (Option-Command-Up/Down) move through import order, collapse a
+   multi-selection to that one file, and fit the new preview. Those shortcuts
+   work while a slider or other inspector control has focus.
+   **Live Camera** is available when macOS exposes the camera or capture adapter
+   as a video device. Invert Negative, Exposure, and Saturation on the live
+   toolbar affect only that preview; imported stills still use the 16-bit
+   pipeline.
 3. New files are automatically classified as color negative, B&W negative, or
    slide. Review and adjust the film mode and film negative preset as needed.
+   Choose **Original** when the file is already a positive and should skip
+   inversion and tone/color corrections.
    **Color Negative** uses paired RAF/JPEG/XMP Camera Raw curves with partial
    exposure and channel-ratio adaptation. It stabilizes tone across negative
    densities while retaining more scene color than full median balancing;
@@ -75,7 +90,10 @@ The native application is the primary product. It provides:
    while dragging.
    Grade-page clipping statistics are available from the first displayed render.
    Corrections are saved automatically for that source file and restored the
-   next time the same path is imported.
+   next time the same path is imported. Command-Z / Command-Shift-Z undo and
+   redo the last edit for the current file; slider, curve, wheel, and
+   perspective drags count as one step. Undo history is session-local and
+   starts empty after relaunch, while the saved current look is restored.
 5. For a color negative whose dye records do not separate cleanly, open
    **Film Setup > Dye crossover**. Each slider says which source channel is
    being mixed into a destination channel. Use a small negative value to
@@ -89,6 +107,11 @@ The native application is the primary product. It provides:
    its **Remove** action to restore the adjustments from immediately before the
    preset without resetting crop or orientation. Transferred looks keep the
    destination scan's rotation, crop, and measured film-base state.
+   Command-click or Shift-click sidebar rows, then **Apply Look to Selected**,
+   to copy the current look onto the import-ordered multi-selection while
+   preserving each target's crop, orientation, perspective, and measured film
+   base. **Apply Settings to All Open Files** does the same for every imported
+   file.
 7. In **Processing Profiles**, a saved Film-Stock Profile captures the current
    negative exponents, dye-crossover matrix, density response, and display
    rendering settings. The generic color and B&W profiles are calibrated from
@@ -129,14 +152,30 @@ The native application is the primary product. It provides:
     selected file. Duplicate jobs are allowed, and each addition snapshots the
     format, destination, JPEG quality, TIFF compression, frame, and aspect-ratio
     settings currently shown. Collision-safe suffixes keep every requested
-    copy. Standard images retain source resolution; RAW files are re-decoded at
-    full resolution one at a time so batch memory remains bounded.
+    copy. The sidebar marks the file currently writing with an export icon and
+    later queue entries with a clock. Standard images retain source resolution;
+    RAW files are re-decoded at full resolution one at a time so batch memory
+    remains bounded.
 
 The native app can display dust-mask candidates, but it does not apply dust
 removal. Applied dust removal is an evidence-driven post-release candidate, not
 an active implementation step. Use the legacy Python application when automatic
 removal is required. See
 [Native macOS Development](development/native-macos.md) for the current status.
+
+### Keyboard Shortcuts
+
+| Action | Shortcut |
+|---|---|
+| Import files | Command-O |
+| Previous / next scan | Option-Command-Up / Down |
+| Fit preview | Command-0 |
+| 100% preview pixels | Command-1 |
+| Zoom in / out | Command-plus / minus |
+| Undo / redo | Command-Z / Command-Shift-Z |
+| Copy / paste correction settings | Option-Command-C / V |
+| Export selected | Command-E |
+| Export all | Command-Shift-E |
 
 ## Legacy Python Application (Maintenance Only)
 

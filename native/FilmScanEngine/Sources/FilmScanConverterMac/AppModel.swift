@@ -252,6 +252,39 @@ final class AppModel: ObservableObject {
     editedKeys.contains(settingsKey(url))
   }
 
+  var canSelectPreviousScan: Bool { adjacentScan(offset: -1) != nil }
+  var canSelectNextScan: Bool { adjacentScan(offset: 1) != nil }
+
+  /// Moves the primary file to the previous or next import-ordered scan and
+  /// collapses the sidebar selection to that one file so review stays fast.
+  @discardableResult
+  func selectAdjacentScan(offset: Int) -> Bool {
+    guard let next = adjacentScan(offset: offset) else { return false }
+    selectedFiles = [next]
+    guard sidebarSelectionDidChange() else { return false }
+    loadSelection()
+    return true
+  }
+
+  func isActiveExport(for url: URL) -> Bool {
+    guard isExporting, activeExportQueue.indices.contains(exportProgressCurrent) else {
+      return false
+    }
+    return activeExportQueue[exportProgressCurrent] == url
+  }
+
+  func isPendingExport(for url: URL) -> Bool {
+    guard isExporting else { return false }
+    return activeExportQueue.dropFirst(exportProgressCurrent + 1).contains(url)
+  }
+
+  private func adjacentScan(offset: Int) -> URL? {
+    guard let selection, let index = files.firstIndex(of: selection) else { return nil }
+    let nextIndex = index + offset
+    guard files.indices.contains(nextIndex) else { return nil }
+    return files[nextIndex]
+  }
+
   func setPreviewCacheLimit(_ limit: Int) {
     previewCacheLimit = max(2, limit)
     preferences.set(previewCacheLimit, forKey: "previewCacheLimit")

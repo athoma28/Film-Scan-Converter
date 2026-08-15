@@ -61,6 +61,19 @@ struct ContentView: View {
               .frame(width: 16, height: 16)
           }
           Spacer(minLength: 4)
+          if model.isActiveExport(for: url) {
+            Image(systemName: "square.and.arrow.up")
+              .foregroundStyle(Color.accentColor)
+              .font(.caption2)
+              .help("Exporting")
+              .accessibilityLabel("Exporting")
+          } else if model.isPendingExport(for: url) {
+            Image(systemName: "clock")
+              .foregroundStyle(.secondary)
+              .font(.caption2)
+              .help("Waiting to export")
+              .accessibilityLabel("Waiting to export")
+          }
           if model.hasCachedPreview(for: url) {
             Image(systemName: "bolt.fill")
               .foregroundStyle(.secondary)
@@ -83,6 +96,10 @@ struct ContentView: View {
         endActiveOverlay()
         requestPreviewZoom(.fit)
         model.loadSelection()
+      }
+      .onChange(of: model.selection) {
+        endActiveOverlay()
+        requestPreviewZoom(.fit)
       }
     } detail: {
       VStack(spacing: 0) {
@@ -137,6 +154,26 @@ struct ContentView: View {
         Label("Import", systemImage: "plus")
       }
       .keyboardShortcut("o")
+
+      Button {
+        model.selectAdjacentScan(offset: -1)
+      } label: {
+        Image(systemName: "chevron.up")
+          .frame(width: 18)
+      }
+      .disabled(!model.canSelectPreviousScan)
+      .help("Previous scan (Option-Command-Up)")
+      .accessibilityLabel("Previous scan")
+
+      Button {
+        model.selectAdjacentScan(offset: 1)
+      } label: {
+        Image(systemName: "chevron.down")
+          .frame(width: 18)
+      }
+      .disabled(!model.canSelectNextScan)
+      .help("Next scan (Option-Command-Down)")
+      .accessibilityLabel("Next scan")
 
       Divider()
         .frame(height: 18)

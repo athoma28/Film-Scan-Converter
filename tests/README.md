@@ -27,8 +27,12 @@ ImageIO and OpenCV use different lossy JPEG decoders.
 color descriptions, and SHA-256 pixel hashes for the five representative
 half-size RAF decodes plus one full-resolution decode. The Swift LibRaw tests
 consume that manifest and require exact RawPy equality when `sample-raw/` is
-present. When the untracked RAF corpus is absent, corpus-specific Swift tests
-are reported as disabled with an explicit reason rather than silently passing.
+present. A separate camera-scan fixture,
+`native/FilmScanEngine/Tests/FilmScanEngineTests/Fixtures/camera_scan_decode_reference.json`,
+pins the full-resolution `rawTherapeeCameraScan` decode of
+`fuji400-fresh/DSCF2833.RAF` (stage digests plus Swift pixels). When the
+untracked RAF corpus is absent, corpus-specific Swift tests are reported as
+disabled with an explicit reason rather than silently passing.
 The RAF files remain outside version control. Discovery is recursive so the
 corpus can be organized by film stock; manifests and benchmark reports store
 root-relative paths, and ambiguous historical basenames are rejected.

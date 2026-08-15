@@ -1697,6 +1697,90 @@ struct AppModelTests {
     #expect(model.status.localizedCaseInsensitiveContains("cancel"))
   }
 
+  @Test("Next and previous scan follow import order and do not wrap")
+  func selectAdjacentScanFollowsImportOrder() async throws {
+    let fixture = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"))
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-adjacent-scan-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let first = workDir.appendingPathComponent("first.png")
+    let second = workDir.appendingPathComponent("second.png")
+    let third = workDir.appendingPathComponent("third.png")
+    for destination in [first, second, third] {
+      try FileManager.default.copyItem(at: fixture, to: destination)
+    }
+
+    let empty = AppModel()
+    #expect(!empty.canSelectPreviousScan)
+    #expect(!empty.canSelectNextScan)
+    #expect(!empty.selectAdjacentScan(offset: 1))
+
+    let model = AppModel()
+    model.importFiles([first, second, third])
+    try await waitUntil { model.decodedImage != nil && model.selection == first }
+    #expect(!model.canSelectPreviousScan)
+    #expect(model.canSelectNextScan)
+
+    model.selectedFiles = [first, third]
+    #expect(model.selectAdjacentScan(offset: 1))
+    #expect(model.selection == second)
+    #expect(model.selectedFiles == Set([second]))
+    try await waitUntil { model.decodedImage != nil && model.selection == second }
+
+    #expect(model.selectAdjacentScan(offset: 1))
+    #expect(model.selection == third)
+    #expect(!model.canSelectNextScan)
+    #expect(!model.selectAdjacentScan(offset: 1))
+    #expect(model.selection == third)
+
+    #expect(model.selectAdjacentScan(offset: -1))
+    #expect(model.selection == second)
+    #expect(model.selectAdjacentScan(offset: -1))
+    #expect(model.selection == first)
+    #expect(!model.selectAdjacentScan(offset: -1))
+  }
+
+  @Test("Sidebar export state distinguishes the active file from waiting files")
+  func sidebarExportStateTracksActiveAndPendingJobs() async throws {
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"))
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-export-state-\(UUID().uuidString)", isDirectory: true)
+    let sourceDir = workDir.appendingPathComponent("source", isDirectory: true)
+    let destination = workDir.appendingPathComponent("destination", isDirectory: true)
+    try FileManager.default.createDirectory(at: sourceDir, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+
+    let files = (0..<6).map { sourceDir.appendingPathComponent("scan-\($0).png") }
+    for file in files { try FileManager.default.copyItem(at: input, to: file) }
+
+    let model = AppModel()
+    model.importFiles(files)
+    try await waitUntil { model.decodedImage != nil }
+    model.setExportDestinationDirectory(destination)
+    model.exportAll()
+
+    #expect(model.isExporting)
+    #expect(model.isActiveExport(for: files[0]))
+    #expect(!model.isPendingExport(for: files[0]))
+    #expect(model.isPendingExport(for: files[files.count - 1]))
+    for file in files.dropFirst() {
+      #expect(!model.isActiveExport(for: file))
+    }
+
+    model.cancelExport()
+    try await waitUntil { !model.isExporting }
+    #expect(!model.isActiveExport(for: files[0]))
+    #expect(!model.isPendingExport(for: files[files.count - 1]))
+  }
+
   @Test("Version-one settings migrate existing paths to edited markers")
   func editedPathMigration() throws {
     let workDir = FileManager.default.temporaryDirectory

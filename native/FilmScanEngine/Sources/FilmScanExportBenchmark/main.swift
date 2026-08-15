@@ -74,6 +74,7 @@ struct DeterminismSample: Codable {
   let repetition: Int
   let runClass: String
   let demosaicWorkerCount: Int
+  let unpackWorkerCount: Int
   let sourceShape: [Int]
   let writerInputShape: [Int]
   let decodeSeconds: Double
@@ -870,6 +871,7 @@ private func measureDeterminismSample(
     repetition: repetition,
     runClass: repetition == 1 ? "first-run" : "warm-filesystem-cache",
     demosaicWorkerCount: decodeResult.demosaicWorkerCount,
+    unpackWorkerCount: decodeResult.unpackWorkerCount,
     sourceShape: [decoded.height, decoded.width, decoded.channels],
     writerInputShape: [output.height, output.width, output.channels],
     decodeSeconds: decodeSeconds,
@@ -894,6 +896,7 @@ private func measureDeterminismSample(
     + "decode=\(formatted(decodeSeconds))s "
     + "[open=\(formatted(decodeResult.timings.openSeconds))s "
     + "unpack=\(formatted(decodeResult.timings.unpackSeconds))s "
+    + "unpackWorkers=\(decodeResult.unpackWorkerCount) "
     + "demosaic=\(formatted(decodeResult.timings.demosaicSeconds))s "
     + "xtransWorkers=\(decodeResult.demosaicWorkerCount) "
     + "post=\(formatted(decodeResult.timings.libRawPostprocessSeconds))s "
@@ -1046,6 +1049,7 @@ private func measureExport(
     + "decode=\(formatted(timings.decodeSeconds))s "
     + "[open=\(formatted(decodeResult.timings.openSeconds))s "
     + "unpack=\(formatted(decodeResult.timings.unpackSeconds))s "
+    + "unpackWorkers=\(decodeResult.unpackWorkerCount) "
     + "demosaic=\(formatted(decodeResult.timings.demosaicSeconds))s "
     + "post=\(formatted(decodeResult.timings.libRawPostprocessSeconds))s "
     + "image=\(formatted(decodeResult.timings.processedImageSeconds))s "

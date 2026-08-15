@@ -32,19 +32,22 @@ reproducible problems.
   bundle validation now document both output correctness and bounded memory.
 
 The existing 0.1 workflow remains: camera RAW and standard-image import;
-color-negative, black-and-white, slide, and crop-only workflows; film-base
-measurement; curves and color controls; crop, straighten, and perspective;
-presets; roll-wide application; and TIFF, JPEG, PNG, and processed-RGB DNG
-export.
+color-negative, black-and-white, slide, and Original (no-inversion) workflows;
+film-base measurement; curves and color controls; crop, straighten, and
+perspective; presets; roll-wide application; and TIFF, JPEG, PNG, and
+processed-RGB DNG export.
 
 ## What’s next
 
-The next milestone is to complete the representative-image viewport check, so
-photographers can confidently judge focus, framing, and corrections at useful
-detail. From there, development returns to the real-roll workflow: validating
-the complete import-to-export experience on varied camera scans before opening
-new processing research. Apple notarization and an independent-Mac installation
-check remain required before this can become a general signed release.
+Since this beta, development added import-ordered previous/next, active/pending
+export sidebar status, and parallel Fuji compressed unpack. The next coding
+work is to make **Load RAW Preview** interpolate at the 2400px bound instead of
+demosaicing the full sensor and downscaling, then retain the selected file’s
+last full-resolution decode so a settings-only re-export does not repeat unpack
+and demosaic. Verify that inspect-and-roll workflow on a real roll, including
+the representative-image viewport check, while doing that work. Apple
+notarization and an independent-Mac installation check remain required before
+this can become a general signed release.
 
 ## Known limitations
 

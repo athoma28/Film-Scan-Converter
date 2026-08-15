@@ -10,13 +10,21 @@ measurements live in the
 [40 MP benchmark notes](../performance/40mp-export.md). The audited
 [full-resolution performance guide](../../PERFORMANCE-OPPORTUNITIES-2026-07-27.md)
 records the evidence, rejected shortcuts, and implementation handoff for the
-active export-latency work. Processing research is background material, not a
-competing delivery plan.
+completed full-resolution export-latency slice. The next performance work is
+the bounded inspect/re-export slice below, not a continuation of that rewrite.
+Processing research is background material, not a competing delivery plan.
 
 ## Current Product Direction
 
-The active goal is a fast, flexible, trustworthy film-scanning workflow—not a
-large film-stock-learning project.
+The active goal is a fast, flexible, trustworthy film-scanning workflow that a
+RawTherapee-style user can open and judge without waiting on final-quality CFA
+work. It is a home side project. It is not a large film-stock-learning project,
+and it is not new image-quality frontier research.
+
+Known techniques, already-measured seams, and preview/export splits are in
+scope. A new X-Trans interpolator, a Metal port of three-pass Markesteijn, a
+live RawTherapee float demosaic, or any other “match Adobe at 100% with novel
+CFA math” effort is out of scope.
 
 Film Scan Converter should help a photographer:
 
@@ -26,6 +34,13 @@ Film Scan Converter should help a photographer:
 4. carry a look across a roll while keeping exceptions easy;
 5. export predictable files without risking sources, partial outputs, or
    runaway memory.
+
+Export pixels stay on the frozen camera-scan oracle (LibRaw 0.21.4 integer
+three-pass, same-machine SHA-256) until the owner explicitly replaces that
+lock. That oracle is a decoder regression harness, not a claim of live
+RawTherapee parity. Interactive preview is already allowed to differ (embedded
+JPEG, 1-pass, 2/255 GPU). Determinism—same app version, same settings, same
+bytes—remains a product promise.
 
 Stock/capture fitting remains documented and its small deterministic
 infrastructure stays in the repository, but further dataset preparation,
@@ -97,8 +112,10 @@ Acceptance:
 - no output, metadata, or demosaic-quality regression;
 - measured artifacts continue to be removed after each run.
 
-Optimize again only when profiling exposes a user-visible latency or
-resource-safety problem.
+That cycle’s “optimize again only when profiling exposes a problem” gate was
+met: remaining user-visible waits are Load RAW Preview (full-sensor 1-pass
+then downscale) and every RAW export re-decoding from scratch. Item 5 owns
+those seams. Do not reopen item 1 as an unrestricted demosaic rewrite.
 
 ### 1. Resolve Measured Full-Resolution RAW Export Bottlenecks — Completed 2026-08-12
 
@@ -145,10 +162,11 @@ Work in this order:
    dye-mixing run in-place and in parallel, the adjusted-scenario
    process-lifetime peak fell from 1.984 GB to 1.017 GB, and the committed
    correction-scenario digests reproduce byte-for-byte. X-Trans keeps LibRaw's
-   serial tile/interpolation order but uses bounded row parallelism in the
-   independent CIELab, derivative, homogeneity, and final-write phases. Five
-   eight-worker runs reproduced every approved digest; warm demosaic measured
-   3.38–3.54 seconds versus the 12.72–12.77-second stock baseline.
+   serial work inside each tile and the overlapping-tile dependence chain,
+   then runs independent `2*row+col` wavefront diagonals. Five eight-worker
+   runs reproduced every approved digest; the 2026-08-13 wavefront follow-up
+   reduced warm demosaic from 3.38–3.54 seconds to 2.85–2.86 seconds versus
+   the 12.72–12.77-second stock baseline.
 
 Do not start by porting RawTherapee X-Trans, running dependent X-Trans passes
 concurrently, reducing final-quality passes, replacing scalar `pow` in
@@ -224,31 +242,100 @@ Acceptance:
 - relaunch behavior remains explicit: saved current state is restored, while
   transient undo history need not be.
 
-### 4. Tune The Roll And Batch Workflow — Next After The Bounded Performance Slice
+### 4. Tune The Roll And Batch Workflow — Implementation Complete; Verify In Use
 
 Run a realistic photographer workflow rather than designing batch features in
 isolation: import a roll, establish an anchor look, apply it, correct outliers,
 select intended frames, and export them.
 
-First improvement implemented:
+Improvements implemented:
 
 - **Apply Look to Selected** now sits alongside the existing explicit
   **Apply Settings to All Open Files**, preserving each frame's crop, orientation,
   perspective, and measured film base.
+- **Previous Scan** / **Next Scan** follow import order, collapse a
+  multi-selection to the adjacent file, and fit the new preview. Option-Command-Up
+  and Option-Command-Down remain available while the inspector has focus.
+- Sidebar rows show edited, preview-ready, active-export, and pending-export
+  states in addition to native selection highlighting.
 
 The usability pass must also verify:
 
-- rapid next/previous and multi-selection review;
+- multi-selection review still feels immediate;
 - immediate visible preset/copy/paste/apply results;
-- clear edited, preview-ready, selected, active-export, and pending-export
-  states;
 - easy per-frame exceptions after a roll-wide look;
 - import-ordered Export Selected and duplicate-friendly queue behavior.
 
 Only promote sidebar reordering, a larger export queue, ratings, or other
 organization features if this real workflow demonstrates the need.
 
-### 5. Prove Output Trust And Color Semantics — Beta Contract Implemented
+Verify the remaining usability items while exercising item 5 on a real roll.
+Do not insert a separate organization-features phase before the feel slice.
+
+### 5. Make Open, Inspect, And Re-Export Feel Fast — Next
+
+Use known techniques to remove the waits a RawTherapee-style user still hits
+after the completed three-pass wavefront work. Do not invent a new demosaic.
+Do not change export pixels.
+
+The interactive path already shows an embedded JPEG in tens of milliseconds
+and applies settings on the GPU in a few milliseconds. The remaining feels-slow
+seams are:
+
+- **Load RAW Preview** still unpacks the RAF and runs 1-pass X-Trans at full
+  sensor size, then downscales to 2400px;
+- every RAW export calls a fresh full-resolution three-pass decode and discards
+  the buffer.
+
+Fuji compressed unpack is no longer serial. Independent strips run across at
+most eight workers through LibRaw's `fuji_decode_loop` hook, with a locking
+datastream wrapper for seek+read. `LIBRAW_FORCE_OPENMP` stays off.
+
+Work in this order, as small slices:
+
+1. **Parallel Fuji unpack without enabling LibRaw’s racy X-Trans tiles.** —
+   completed 2026-08-14: camera-scan overrides `fuji_decode_loop` with GCD
+   over independent compressed strips, installs a mutex on LibRaw's existing
+   `lock()`/`unlock()` I/O seam, and leaves overlapping-tile X-Trans OpenMP
+   disabled. Five release repetitions reproduced every approved digest;
+   same-session unpack fell from a 1.335-second serial median to 0.266 seconds
+   at eight workers. `FSC_UNPACK_WORKERS=1` remains the serial mosaic oracle.
+2. **Demosaic Load RAW Preview at the preview bound.** Interpolate at most
+   2400px of work, using the existing 1-pass camera-scan interpolator or
+   another already-shipped path—not a new CFA algorithm. Browsing stays on the
+   embedded JPEG. The source badge stays honest. Export stays three-pass full
+   resolution. Metal is allowed here only if preview-sized CPU work is still
+   too slow; it is not a three-pass Markesteijn port.
+3. **Retain the last full-resolution decode for the selected file.**
+   Settings-only re-export of that file skips CFA work. Drop the buffer on
+   selection change, reset, and teardown. Keep one authoritative full-resolution
+   RAW in flight. This is not prefetch of file N+1 and not a roll-sized decode
+   cache. Budget about 241 MB of 16-bit RGB for a 40 MP frame.
+
+Stop after each slice if the photographer-visible wait is gone. Do not continue
+into 100% viewport tiling, writer replacement, or two-file decode overlap as
+part of this item.
+
+Acceptance:
+
+- Load RAW Preview no longer interpolates the full 40 MP mosaic as a means of
+  producing a 2400px display source;
+- a settings-only re-export of the current RAW does not repeat unpack+demosaic;
+- the camera-scan three-pass fixture still reproduces every approved digest;
+- physical footprint stays bounded; cancellation still writes no output;
+- each claimed speedup uses the same file, settings, quality, and release
+  build with at least three timed repetitions, recorded in the 40 MP notes.
+
+Out of this item:
+
+- a new X-Trans interpolator, learned demosaic, or “beat Adobe at 100%”;
+- Metal or Accelerate ports of three-pass Markesteijn;
+- porting current RawTherapee float X-Trans;
+- accepting numeric tolerance on export pixels;
+- two authoritative full-resolution RAWs in flight;
+- speculative full-resolution decode of the next file or the whole roll.
+
+### 6. Prove Output Trust And Color Semantics — Beta Contract Implemented
 
 Exercise the actual packaged app, not only engine entry points.
 
@@ -256,8 +343,8 @@ Deliver:
 
 - representative standard-image and RAW import;
 - corrected-preview orientation matching reopened full-resolution export;
-- power-law, density/flat-field, crop/straighten/perspective, preset, batch,
-  and relaunch workflows;
+- default calibrated inversion, legacy power-law, density/flat-field,
+  crop/straighten/perspective, preset, batch, and relaunch workflows;
 - TIFF, JPEG, PNG, and processed-RGB DNG export and reopen;
 - cancellation, collisions, corrupt settings, invalid input, unwritable
   destinations, and partial-output cleanup;
@@ -281,7 +368,7 @@ Acceptance:
   interpretation;
 - no failed job leaves a file that appears successful.
 
-### 6. Complete Distribution Proof
+### 7. Complete Distribution Proof
 
 After the editing and output contracts stabilize:
 
@@ -296,37 +383,44 @@ After the editing and output contracts stabilize:
 
 ## First-Release Gates At A Glance
 
-1. The measured RAW-threading and adjusted-correction follow-up preserves
-   deterministic final-quality pixels, bounded physical footprint,
+1. Closed: the measured RAW-threading and adjusted-correction follow-up
+   preserves deterministic final-quality pixels, bounded physical footprint,
    cancellation, cleanup, and packaged dependency closure.
 2. Zoom/pan makes the preview useful for photographic inspection.
 3. Closed: editing-state changes have reliable per-file undo/redo with
    gesture coalescing and transient relaunch semantics.
 4. A real roll workflow validates anchor-look, selected/all application,
    per-frame exceptions, selection, and export.
-5. Packaged outputs pass correctness, color-space, reopen, failure, and cleanup
+5. Open, inspect, and settings-only re-export no longer wait on a full-sensor
+   1-pass or a repeated three-pass decode. Export pixels stay on the frozen
+   camera-scan oracle.
+6. Packaged outputs pass correctness, color-space, reopen, failure, and cleanup
    checks.
-6. The signed/notarized app passes Gatekeeper and clean-machine use.
+7. The signed/notarized app passes Gatekeeper and clean-machine use.
 
-Do not delay these gates for stock-specific calibration, speculative
-processing models, or a larger advanced-control surface.
+Do not delay these gates for stock-specific calibration, a new demosaic, or a
+larger advanced-control surface. Do not delay notarization for 100% viewport
+tiling or writer replacement.
 
 ## Evidence-Driven Candidates After First Release
 
 These are ordered by likely photographic value, but each still needs real use
 evidence:
 
-1. **Applied dust removal** when representative scans demonstrate safe masks,
+1. **Viewport-tiled 100% preview demosaic** using an already-known interpolator
+   (preview 1-pass or equivalent), only if inspecting grain at 100% is still
+   slow after item 5. This is tiling and caching, not a new CFA algorithm.
+2. **Applied dust removal** when representative scans demonstrate safe masks,
    acceptable restoration, and an explicit preview/enable contract.
-2. **Film-frame edge assistance** when holder/rebate fixtures can provide a
+3. **Film-frame edge assistance** when holder/rebate fixtures can provide a
    visible starting quadrilateral without overriding manual reticles.
-3. **Broader batch organization**—sidebar reordering, ratings, or a fuller
+4. **Broader batch organization**—sidebar reordering, ratings, or a fuller
    export queue—when roll workflows outgrow import order and current selection.
-4. **Proofing and contact sheets** when photographers identify a concrete
+5. **Proofing and contact sheets** when photographers identify a concrete
    review, client, or darkroom-style selection workflow.
-5. **Geometric calibration beyond one planar perspective warp** when real scans
+6. **Geometric calibration beyond one planar perspective warp** when real scans
    show repeatable lens distortion or film-plane/sensor-plane misalignment.
-6. **Progress estimates** when measured stage histories can outperform the
+7. **Progress estimates** when measured stage histories can outperform the
    current honest determinate/indeterminate reporting.
 
 ## Parked: Stock And Capture Look Calibration
@@ -364,10 +458,15 @@ resume.
 
 ## Not Currently Planned
 
+- new image-quality frontier research: novel X-Trans interpolators, learned
+  demosaic, or “match Adobe/Capture One at 100%” CFA work;
+- Metal or Accelerate ports of three-pass Markesteijn, or porting current
+  RawTherapee float X-Trans, in order to keep or chase export identity;
+- replacing measured code with Metal or Accelerate solely for architecture;
+- two authoritative full-resolution RAWs in flight, or prefetch of file N+1;
 - deep-learning or large-scale stock-look training;
 - exhaustive reproduction of every Python intermediate and parameter;
 - arbitrary “3×/5× faster than Python” targets across incompatible stages;
-- replacing measured code with Metal or Accelerate solely for architecture;
 - GPU perspective warp or dust inpainting before profiling shows a problem;
 - exact RawTherapee denoise/sharpen ports without photographic evidence;
 - persistent unfinished export jobs before security-scoped destination
@@ -387,11 +486,13 @@ Maintain this foundation rather than repeatedly replanning it:
 - frozen compatibility fixtures and deterministic native CPU contracts;
 - automatic frame detection, straighten, manual crop, four-corner perspective,
   loupe, alignment assistance, rotation, flip, frame, and aspect ratio;
-- power-law color-negative inversion and an optional capture-aware density path;
+- paired-scan-calibrated color and B&W inversion, legacy power-law presets,
+  named stock alternates, and an optional capture-aware density path;
 - generic dye-crossover, protected semantic color/tone controls, curves, color
   wheels, clipping diagnostics, and a reference-derived adaptive look;
 - bounded latest-value-wins GPU preview with CPU/GPU regression coverage;
-- per-file settings, presets, clipboard transfer, apply-to-all, edit markers,
+- per-file settings, presets, clipboard transfer, apply-to-selected/all,
+  import-ordered previous/next, edited/preview-ready/export markers,
   multi-selection, and adjustable preview lookahead;
 - per-file, session-local undo/redo with gesture coalescing, standard Mac
   commands, persisted current state, and exact parameter restoration;
@@ -399,7 +500,10 @@ Maintain this foundation rather than repeatedly replanning it:
   batch export with cancellation, cleanup, progress, and per-file errors;
 - native dust candidate detection and aligned diagnostic overlay;
 - self-contained local app/ZIP assembly and archive validation;
-- staged RAW/export benchmarks and app-path signposts.
+- staged RAW/export benchmarks, camera-scan byte-identity fixtures, and
+  app-path signposts;
+- deterministic parallel X-Trans wavefront demosaic and parallel Fuji
+  compressed unpack, both gated by the frozen camera-scan oracle.
 
 Detailed implementation claims belong in [Features](../features.md), not here.
 

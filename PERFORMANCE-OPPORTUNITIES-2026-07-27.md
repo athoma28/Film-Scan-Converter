@@ -1,8 +1,13 @@
 # Full-Resolution RAW Decode And Export Performance
 
-**Status:** Audited implementation guide; threaded boundary isolated 2026-07-30;
-adjusted-correction evidence completed 2026-08-03; adjusted-correction repair
-completed 2026-08-12; deterministic X-Trans repair completed 2026-08-12
+**Status:** Closed full-resolution export-latency guide; threaded boundary
+isolated 2026-07-30; adjusted-correction evidence completed 2026-08-03;
+adjusted-correction repair completed 2026-08-12; deterministic X-Trans repair
+completed 2026-08-12; deterministic X-Trans wavefront follow-up completed
+2026-08-13; parallel Fuji unpack completed 2026-08-14 as roadmap item 5
+slice 1. Remaining inspect/re-export work (preview-bound Load RAW Preview,
+last-decode retention) is owned by
+`docs/improvements/MacOS-Native-Roadmap.md` item 5.
 
 **Date:** 2026-07-27  
 **Production baseline:** `main` at `3d8456f`, plus the measurements in
@@ -23,19 +28,22 @@ proven before an optimization can ship.
 The two measured areas have completed bounded repairs:
 
 1. **Final-quality X-Trans decode had a safe parallel seam.** LibRaw's
-   order-sensitive interpolation and tile traversal remain serial; only the
-   independent CIELab, derivative, homogeneity, and final-write row ranges run
-   across at most eight workers. Five release repetitions reproduced all eight
-   approved stage/output digests, while warm demosaic fell from the stock
-   12.72–12.77-second range to 3.38–3.54 seconds.
+   overlapping OpenMP tiles remain disabled. Work inside each tile stays
+   serial; independent `2*row+col` wavefront diagonals run across at most
+   eight workers so the 16-pixel halo, including the above-right neighbor,
+   stays ordered. Five release repetitions reproduced all eight approved
+   stage/output digests. Warm demosaic fell from the stock 12.72–12.77-second
+   range to 3.38–3.54 seconds in the 2026-08-12 row-parallel repair and to
+   2.85–2.86 seconds in the 2026-08-13 wavefront follow-up.
 2. **Adjusted full-resolution correction had avoidable passes and allocations.**
    The 2026-08-12 in-place parallel repair preserved every scenario digest,
    reduced the adjusted-path peak from 1.984 GB to 1.017 GB, and materially
    reduced all four adjusted scenario intervals.
 
-Do **not** begin with a RawTherapee X-Trans port, a TIFF dependency, batch
-prefetch, or broad micro-optimization. The first implementation slice is
-instrumentation and determinism evidence.
+This page remains the evidence record for that closed slice. Do **not** reopen
+it as an unrestricted rewrite, a RawTherapee X-Trans port, a TIFF dependency,
+or batch prefetch. Preview-sized inspect and last-decode retention remain
+product-roadmap item 5. Parallel Fuji unpack landed 2026-08-14.
 
 ## Evidence Rules
 
@@ -183,10 +191,13 @@ This is the first work to land.
    was adopted. If the application ships one later, packaging, notices, load
    paths, and clean-Mac validation remain part of the same change.
 4. Locate and remove the first nondeterministic boundary — completed
-   2026-08-12. Rather than enabling LibRaw's overlapping OpenMP tiles, the shim
-   preserves its serial tile/interpolation order and parallelizes only proven
-   independent back-half rows. The committed demosaic and final pixels remain
-   exact across five eight-worker repetitions.
+   2026-08-12, with a 2026-08-13 wavefront follow-up. Rather than enabling
+   LibRaw's overlapping OpenMP tiles, the shim keeps serial work inside each
+   tile and the true overlap dependence, including the 16-pixel halo that can
+   read the above-right neighbor. Independent `2*row+col` wavefront diagonals
+   run across at most eight workers. The committed demosaic and final pixels
+   remain exact across five eight-worker repetitions, and `FSC_XTRANS_WORKERS=1`
+   still matches that oracle.
 5. Re-run the documented three-repetition 40 MP format matrix and ten-file
    memory/cancellation checks — completed 2026-08-12. All 18 format-matrix
    outputs and all ten sequential TIFF outputs were removed, engine footprint
@@ -205,7 +216,7 @@ Acceptance:
 
 No custom LibRaw library or new packaged dependency was adopted. The isolated
 6.9× OpenMP result remains historical opportunity evidence, not a shipped
-claim; the production row-parallel measurements are recorded separately.
+claim; the production wavefront measurements are recorded separately.
 
 ### P1 — Measure and repair adjusted full-resolution correction
 
@@ -404,7 +415,8 @@ responsible implementation.
 ## Source Map
 
 - `native/FilmScanEngine/Sources/CLibRawShim/RawTherapeePipeline.cpp`:
-  camera-scan open/decode, X-Trans, RCD, ISO policy.
+  camera-scan open/decode, X-Trans wavefront, parallel Fuji compressed unpack,
+  RCD, ISO policy.
 - `native/FilmScanEngine/Sources/CLibRawShim/CLibRawShim.c`:
   compatibility-profile mmap shim and profile dispatch.
 - `native/FilmScanEngine/Sources/FilmScanEngine/RawImageDecoder.swift`:
@@ -425,6 +437,9 @@ responsible implementation.
   decoded-image count heuristic.
 - `native/FilmScanEngine/Tests/FilmScanEngineTests/RawImageDecoderTests.swift`:
   current RAW profile and quality coverage.
+- `native/FilmScanEngine/Tests/FilmScanEngineTests/CameraScanByteIdentityTests.swift`:
+  full-resolution camera-scan stage digests, wavefront-vs-serial X-Trans
+  identity, and parallel-vs-serial Fuji unpack identity.
 - `docs/performance/40mp-export.md`:
   authoritative committed benchmark procedure and results.
 

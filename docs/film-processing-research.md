@@ -3,11 +3,13 @@
 > **Parked research reference, not the active roadmap.** The native app now wires an
 > optional density pipeline through preview and export with capture
 > normalization, flat field, film-base measurement, roll profiles, and generic
-> capture/stock profile types. The default color-negative path remains the
-> RawTherapee-oriented power-law model. Calibrated per-stock curves, fitted
-> capture matrices, and residual LUTs remain evidence-driven research
-> candidates. Further corpus preparation, named-stock fitting, residual LUTs,
-> or ML work is paused until the project owner explicitly reactivates it. See
+> capture/stock profile types. The default color-negative path is a
+> paired-scan-calibrated curve with partial exposure and channel-ratio
+> adaptation; the former RawTherapee-oriented power-law model remains available
+> as **Color Negative (Legacy)**. Fitted capture matrices, residual LUTs, and
+> further named-stock work remain evidence-driven research candidates. Further
+> corpus preparation, named-stock fitting, residual LUTs, or ML work is paused
+> until the project owner explicitly reactivates it. See
 > [Native macOS Development Status](development/native-macos.md)
 > for current behavior and the
 > [Product Roadmap](improvements/MacOS-Native-Roadmap.md) for delivery priority.

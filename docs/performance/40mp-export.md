@@ -644,12 +644,102 @@ progress, and returned to 62.13 MB after model release. A cancellation request
 4.744 seconds, reported cancellation after the active first item with nine
 items unstarted, left no output, and returned to 62.46 MB after model release.
 
+## 2026-08-13 Deterministic X-Trans Wavefront Follow-Up
+
+The 2026-08-12 repair kept tiles serial and parallelized only independent
+back-half rows inside each 512-pixel tile. That left the order-sensitive
+interpolation as a serial chain. LibRaw's overlapping tiles step by 496
+pixels, so a later tile can read the 16-pixel halo of its left, above,
+above-left, and above-right neighbors. A `row+col` wavefront races with the
+above-right tile; `2*row+col` keeps those four neighbors on earlier diagonals.
+
+The production path now runs those independent diagonals across at most eight
+workers, with one tile buffer per worker and serial work inside each tile.
+`FSC_XTRANS_WORKERS=1` remains the serial oracle. Working tree at this
+measurement: `24c298b` plus the wavefront change.
+
+The release determinism command used the committed `DSCF2833.RAF` fixture:
+
+```sh
+native/FilmScanEngine/.build/release/FilmScanExportBenchmark \
+  sample-raw /tmp/film-scan-xtrans-wavefront.json 5 \
+  --determinism --file=fuji400-fresh/DSCF2833.RAF
+```
+
+All eight boundaries agreed across five eight-worker repetitions and matched
+the 2026-07-28 stock reference byte-for-byte, including demosaiced image, Swift
+pixels, and final LZW TIFF. Process-lifetime peak physical footprint was
+700,220,664 bytes. Every TIFF was removed. A separate one-worker oracle
+repetition reproduced the same TIFF hash; its demosaic took 12.376 seconds.
+
+A three-repetition LZW TIFF run on the same file, without diagnostic hashing,
+measured:
+
+| Interval | Rep 1 | Rep 2 | Rep 3 | Median |
+|---|---:|---:|---:|---:|
+| Total | 5.746 s | 5.599 s | 5.628 s | 5.628 s |
+| Decode | 4.332 s | 4.211 s | 4.207 s | 4.211 s |
+| Demosaic | 2.985 s | 2.859 s | 2.848 s | 2.859 s |
+
+Warm demosaic is 2.848–2.859 seconds versus 3.38–3.54 seconds for the
+2026-08-12 row-parallel repair and 12.72–12.77 seconds for the stock serial
+reference. This is a same-fixture follow-up, not a replacement of the 18-output
+format matrix. Unpack was still about 0.89–0.91 seconds in that session.
+Writer and batch-overlap work stay deferred. Preview-bound Load RAW Preview
+and last-decode retention remain the next product work; parallel Fuji unpack
+landed on 2026-08-14, below.
+
+## 2026-08-14 Parallel Fuji Compressed Unpack
+
+Roadmap item 5 slice 1 parallelizes independent Fuji compressed strips without
+enabling LibRaw's overlapping-tile X-Trans OpenMP. Camera-scan overrides
+`fuji_decode_loop` with GCD, caps workers at eight, and wraps the datastream
+so LibRaw's existing `lock()`/`unlock()` I/O seam is a real mutex. Serial
+`fuji_decode_strip` arithmetic is unchanged. `FSC_UNPACK_WORKERS=1` remains
+the serial mosaic oracle.
+
+Working tree at this measurement: `24c298b` plus the unpack change. Release
+determinism on `DSCF2833.RAF`:
+
+```sh
+native/FilmScanEngine/.build/release/FilmScanExportBenchmark \
+  sample-raw /tmp/film-scan-parallel-unpack-determinism.json 5 \
+  --determinism --file=fuji400-fresh/DSCF2833.RAF
+```
+
+All eight boundaries agreed across five eight-worker repetitions and matched
+the 2026-07-28 stock reference byte-for-byte, including unpacked mosaic,
+demosaiced image, Swift pixels, and final LZW TIFF
+`7be6f460d7d47e46a41f1196c88dc4bce00a22c14583c0f64e5fdd7f6311007a`.
+Process-lifetime peak physical footprint was 699,450,592 bytes. Every TIFF
+was removed. A debug-build camera-scan identity test on the same fixture also
+matched, and `FSC_UNPACK_WORKERS=1` reproduced the same mosaic, demosaic, and
+Swift-pixel digests as the eight-worker path.
+
+A same-session three-repetition LZW TIFF A/B on the same file, without
+diagnostic hashing, isolates the unpack saving. Demosaic in this session was
+slower than the 2026-08-13 wavefront 2.85-second band, so totals are not
+compared to that earlier run.
+
+| Unpack workers | Unpack median | Unpack p95 | Demosaic median | Decode median | Total median | Peak physical |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 (`FSC_UNPACK_WORKERS=1`) | 1.335 s | 1.338 s | 4.854 s | 6.829 s | 8.921 s | 699.4 MB |
+| 8 (default) | 0.266 s | 0.300 s | 4.813 s | 5.720 s | 7.807 s | 701.8 MB |
+
+Warm eight-worker unpack was 0.2664–0.2665 seconds. Both A/B arms wrote the
+same TIFF hash and removed all six outputs. This is a same-fixture unpack
+follow-up, not a replacement of the 18-output format matrix. Preview-bound
+Load RAW Preview and last-decode retention remain the next product work; see
+roadmap item 5.
+
 ## Closed Baseline Cycle And Bounded Follow-Up
 
 These milestones were run in order so each optimization decision had a measured
 input and a regression gate. The original baseline cycle is closed and remains
-regression evidence. The isolated audit above supplied the measured reason for
-one bounded follow-up; it does not reopen an unrestricted performance rewrite.
+regression evidence. Parallel Fuji unpack (2026-08-14) is recorded above as
+roadmap item 5 slice 1; it is not a reopening of this cycle. The isolated audit
+above supplied the measured reason for one bounded follow-up; it does not reopen
+an unrestricted performance rewrite.
 
 1. **Repeated format baseline.** Complete. Three TIFF/JPEG/PNG/DNG runs for
    `DSCF0669.RAF` plus three TIFF runs for `DSCF0718.RAF` and `DSCF0729.RAF`
@@ -691,10 +781,12 @@ one bounded follow-up; it does not reopen an unrestricted performance rewrite.
 6. **Optimization slice.** Three safe measured slices are complete:
    multicore fused power-law correction is 74.9% faster at the measured median,
    and compact TIFF packing removes 80.37 MB while cutting the ten-file median
-   interval 23.0%. Deterministic X-Trans row parallelism reduces the warm
-   three-pass demosaic from 12.72–12.77 seconds to 3.38–3.54 seconds without
-   changing any approved stage or output digest. Do not substitute a one-pass
-   X-Trans quality mode or enable the failed overlapping-tile OpenMP path.
+   interval 23.0%. Deterministic X-Trans row parallelism reduced the warm
+   three-pass demosaic from 12.72–12.77 seconds to 3.38–3.54 seconds; the
+   2026-08-13 wavefront follow-up further reduced the same-fixture warm
+   demosaic to 2.85–2.86 seconds without changing any approved stage or output
+   digest. Do not substitute a one-pass X-Trans quality mode or enable the
+   failed overlapping-tile OpenMP path.
 7. **Batch confirmation.** Complete. Engine confirmation covers ten sequential
    TIFF exports with output contracts and physical memory. The app-path run adds
    ten queue completions, preview-cache effects, post-batch physical footprint,

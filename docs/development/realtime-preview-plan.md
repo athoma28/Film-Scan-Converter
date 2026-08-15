@@ -4,7 +4,7 @@
 complete. The proposed idle full-resolution replacement was retired when
 browsing moved to a preview-only contract.
 
-**Last verified:** 2026-07-17
+**Last verified:** 2026-08-14
 
 This page records the design outcome of the real-time preview work. It is not
 the active roadmap. Current product priority belongs in the
@@ -21,11 +21,16 @@ app-path latency measurements belong in
 - A separate 256px source drives classification and median calibration.
 - Browsing keeps that bounded source. It does not start a speculative
   full-resolution RAW decode or later replace the displayed image.
+- **Load RAW Preview** is the explicit higher-quality action: it decodes the
+  selected RAW through the camera-scan profile with 1-pass X-Trans at full
+  sensor size, then downscales to at most 2400px and recalibrates from those
+  pixels. Interpolating at the 2400px bound instead is roadmap item 5 slice 2.
 - Lookahead prepares preview sessions only and is bounded by both the selected
   2/4/8/16/32-file limit and a 256 MiB byte limit.
 - Export independently decodes camera RAW at full resolution with the
-  `rawTherapeeCameraScan` profile and recalibrates power-law film-base medians
-  from the export pixels.
+  `rawTherapeeCameraScan` profile (three-pass X-Trans) and recalibrates film-base
+  medians from the export pixels. That full-resolution buffer is discarded after
+  the job; retaining it for settings-only re-export is roadmap item 5 slice 3.
 - The Core Image/Metal correction renderer is the normal interactive path on
   supported MacBook Pro hardware. The Swift CPU pipeline remains the
   deterministic reference, export authority, CI/headless path, and fallback.
@@ -102,6 +107,8 @@ the roadmap and native status rather than by this historical outcome document.
 ## Durable Rules
 
 - Keep the 1000px display source and 256px analysis source explicit.
+- Keep **Load RAW Preview** an explicit on-demand action, not a browsing
+  replacement.
 - Never prefetch full-resolution RAW buffers for browsing or lookahead.
 - Keep only the newest pending render snapshot.
 - Preserve the CPU processing path as the deterministic pixel authority.

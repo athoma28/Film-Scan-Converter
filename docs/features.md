@@ -31,12 +31,16 @@ features.
 - An on-canvas badge identifies embedded RAW, demosaiced RAW-detail, and bounded
   standard-image preview sources and reports the displayed pixel dimensions.
 - Optional AVFoundation live camera preview when macOS exposes the camera or
-  capture adapter as a video device.
+  capture adapter as a video device. The live toolbar can invert a negative
+  preview and adjust exposure and saturation; captured stills still use the
+  16-bit import and export pipeline.
 
 ### Film Processing And Editing
 
 - Automatic initial classification as color negative, B&W negative, or slide,
-  without overwriting saved per-file choices.
+  without overwriting saved per-file choices. A fourth film type, **Original**,
+  skips inversion and tone/color corrections for crop-and-export of already
+  positive images.
 - A default color-negative inversion calibrated from paired RAF/JPEG/XMP
   Camera Raw edits. It uses a half-strength per-frame exposure anchor and a
   quarter-strength channel-ratio anchor: enough adaptation to keep differently
@@ -87,12 +91,12 @@ features.
 ### Batch And Settings Workflow
 
 - Per-file correction settings persisted across launches.
-- Standard macOS Edit-menu Undo/Redo for tone, color, inversion, curves,
-  grading wheels, crop, straighten, perspective, rotation, flip, output frame,
-  reset, paste, and profile/preset application. Histories are isolated per
-  file, slider/curve/wheel/perspective drags coalesce to one step, and the
-  currently restored state is saved even though transient history starts empty
-  after relaunch.
+- Standard macOS Edit-menu Undo/Redo (Command-Z / Command-Shift-Z) for tone,
+  color, inversion, curves, grading wheels, crop, straighten, perspective,
+  rotation, flip, output frame, reset, paste, and profile/preset application.
+  Histories are isolated per file, slider/curve/wheel/perspective drags
+  coalesce to one step, and the currently restored state is saved even though
+  transient history starts empty after relaunch.
 - User film-stock profiles preserve the current negative rendering, calibrated
   color variant, exponents, dye-crossover correction, density response, and
   display rendering settings.
@@ -120,7 +124,11 @@ features.
 - Apply the current look to the import-ordered multi-selection or to all open
   files while preserving each target's crop, orientation, perspective, and
   measured film-base state.
-- Edited and preview-ready indicators in the browser.
+- Previous/Next scan commands follow import order, collapse a multi-selection
+  to the adjacent file, and fit the new preview. Option-Command-Up/Down work
+  even when the inspector has keyboard focus.
+- Edited, preview-ready, active-export, and pending-export indicators in the
+  browser.
 - Configurable 2/4/8/16/32-session preview cache and forward lookahead.
 - Immediate Edit/Grade/Export inspector switching.
 
@@ -157,6 +165,9 @@ features.
 ## Native Limitations
 
 - No applied dust removal or Telea inpainting.
+- **Load RAW Preview** still unpacks the RAF and runs 1-pass X-Trans at full
+  sensor size, then downscales to 2400px. Export always re-decodes the
+  full-resolution three-pass path and discards the buffer.
 - Sidebar order remains import order. Manual reordering is unavailable and is
   not a first-release gate unless the roll workflow demonstrates a need.
 - No lens-distortion model or calibrated correction for film-plane/sensor-plane

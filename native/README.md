@@ -30,8 +30,11 @@ elsewhere:
   frame-level held-out validation gate.
 
 The package requires macOS 14 or later and Homebrew LibRaw. `CLibRawShim`
-provides the narrow C/C++ boundary used by Swift. No LibRaw-owned buffer or
-lifetime is exposed to the application.
+provides the narrow C/C++ boundary used by Swift. Camera-scan X-Trans keeps
+LibRaw 0.21.4's integer arithmetic and overlapping-tile dependence, then runs
+independent `2*row+col` wavefront diagonals. Fuji compressed unpack runs
+independent strips concurrently through `fuji_decode_loop`. `LIBRAW_FORCE_OPENMP`
+stays off. No LibRaw-owned buffer or lifetime is exposed to the application.
 
 ## Build And Test
 
@@ -133,6 +136,8 @@ to diverge. Each repetition prints all eight full digests plus peak and
 post-release physical footprint before final report assembly, preserving
 diagnostic evidence if report finalization fails. The mode defaults to five
 repetitions and rejects fewer; `--formats` is not accepted in this mode.
+`FSC_UNPACK_WORKERS` and `FSC_XTRANS_WORKERS` cap camera-scan unpack and
+X-Trans workers at 1–8; `1` selects the serial oracle.
 
 Run the full-resolution correction-scenario matrix:
 
@@ -214,9 +219,13 @@ RUN_PERFORMANCE_TESTS=1 swift test \
 Swift tests consume committed `.npy` and standard-image fixtures. When the
 required files in the untracked `sample-raw/` corpus exist, RAW tests also
 verify five RawPy-compatible half-size RAF decodes and one full-resolution
-decode against recorded hashes. The X-T5 regression trio additionally guards
-camera-scan previews against leaked X-Trans mosaic pixels. Each corpus-dependent
-test is explicitly disabled unless all files it needs are present.
+decode against recorded hashes. The camera-scan byte-identity fixture
+(`camera_scan_decode_reference.json`) separately pins the full-resolution
+`rawTherapeeCameraScan` decode of `fuji400-fresh/DSCF2833.RAF`, including
+wavefront X-Trans and parallel Fuji unpack oracles. The X-T5 regression trio
+additionally guards camera-scan previews against leaked X-Trans mosaic pixels.
+Each corpus-dependent test is explicitly disabled unless all files it needs are
+present.
 The corpus may be organized recursively by film stock. See
 [Reference Negative Calibration](../docs/development/reference-negative-calibration.md)
 for paired-triplet naming, fitting, and held-out stock-profile gates.
@@ -285,7 +294,8 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   paths that are not GPU-integrated yet.
 - Serialize fallback/detail decode work and full-resolution RAW export decode;
   check cancellation before entering synchronous LibRaw/ImageIO calls.
-- Keep full-resolution RAW export one-file-at-a-time.
+- Keep full-resolution RAW export one-file-at-a-time. Do not retain that
+  decode after the job until the selected-file re-export slice lands.
 - Give export priority over speculative lookahead work and check cancellation
   between decode, correction, geometry, and write stages.
 - Preserve PNG's staged commit, collision-safe naming, and destination cleanup

@@ -36,6 +36,22 @@ struct FilmScanConverterMacApp: App {
     .commands {
       PreviewViewCommands()
 
+      CommandGroup(after: .sidebar) {
+        Button("Previous Scan") {
+          model.selectAdjacentScan(offset: -1)
+        }
+        .keyboardShortcut(.upArrow, modifiers: [.option, .command])
+        .disabled(!model.canSelectPreviousScan)
+        .help("Move to the previous imported scan")
+
+        Button("Next Scan") {
+          model.selectAdjacentScan(offset: 1)
+        }
+        .keyboardShortcut(.downArrow, modifiers: [.option, .command])
+        .disabled(!model.canSelectNextScan)
+        .help("Move to the next imported scan")
+      }
+
       CommandGroup(replacing: .undoRedo) {
         Button(model.undoMenuTitle) {
           model.undo()

@@ -11,14 +11,17 @@
 
 Film Scan Converter is a Swift desktop app that processes RAW scans of film negatives and slides. In the legacy design, the initial "inversion" step for colour negative film was mathematically trivial: `65535 - pixel_value` (a simple per-pixel negation in 16-bit), followed by generic color adjustments applied identically regardless of film stock.
 
-**Implemented boundary, updated 2026-07-15.** The default inversion step uses
-`output = multiplier × pixel^-(greenExp × ratio)`, 20%-border-cut references,
-RawTherapee's `1/24` output reference, and the two bundled Film Negative tone
-curves. Reference resolution and inversion run in linear Rec.2020 after
-LibRaw's sRGB conversion, then return to display sRGB. The separate density
-pipeline is now wired through preview and export with film-base measurement,
-flat field, and generic capture/stock/roll profiles. A manual,
-neutral-preserving six-parameter crossover matrix now corrects channel
+**Implemented boundary, updated 2026-08-14.** The default color-negative
+inversion uses paired RAF/JPEG/XMP Camera Raw curves with a half-strength
+per-frame exposure anchor and a quarter-strength channel-ratio anchor.
+**Color Negative (Legacy)** retains the former RawTherapee-derived
+`output = multiplier × pixel^-(greenExp × ratio)` renderer, 20%-border-cut
+references, RawTherapee's `1/24` output reference, and the two bundled Film
+Negative tone curves. Reference resolution and inversion run in linear Rec.2020
+after LibRaw's sRGB conversion, then return to display sRGB. The separate
+density pipeline is wired through preview and export with film-base
+measurement, flat field, and generic capture/stock/roll profiles. A manual,
+neutral-preserving six-parameter crossover matrix corrects channel
 relationships on the shared scene-linear seam across basic, power-law, and
 density inversion; user film-stock profiles can persist it alongside exponent
 and density settings. It is not a fitted density-space capture matrix, full
@@ -112,7 +115,7 @@ The reference library is our calibration asset. Approach:
 These projects have already solved pieces of this problem. Read their source code:
 
 - **darktable negadoctor** (`src/iop/negadoctor.c`): Per-channel black point from rebate, automatic mask detection, D-log E curve approximation.
-- **RawTherapee Film Negative tool** (`rtengine/filmnegativeproc.cc`): Per-channel power-law model adopted for the operational front-end. Swift now includes working-space reference placement, the bundled output reference/tone curves, and CPU/GPU/Metal parity. The physically grounded density/display path is app-wired, and an offline density-matrix fitter reports frame-level held-out error against identity; preparing the real paired corpus and validating per-stock profiles remain unfinished.
+- **RawTherapee Film Negative tool** (`rtengine/filmnegativeproc.cc`): Per-channel power-law model retained as **Color Negative (Legacy)**. The current default uses paired-scan-calibrated curves. Swift includes working-space reference placement, the bundled output reference/tone curves, and CPU/GPU/Metal parity. The physically grounded density/display path is app-wired, and an offline density-matrix fitter reports frame-level held-out error against identity; preparing the real paired corpus and validating further per-stock profiles remain unfinished.
 - **filmulator** (`github.com/CarVac/filmulator-gui`): Approaches the problem from the other direction — simulates film development from a digital image. The forward model might be invertible.
 - **Grain2Pixel** (Photoshop plugin, closed source but worth studying the output/methodology): Reportedly uses a large database of per-stock calibration shots.
 - **Negative Lab Pro** (Lightroom plugin, closed source): The most popular commercial tool. Any technical blog posts, interviews with the developer, or reverse-engineering writeups?

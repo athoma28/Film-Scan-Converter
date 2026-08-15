@@ -17,13 +17,16 @@ starting native work, read
 source for verified progress, limitations, and release position. Use the
 [product roadmap](improvements/MacOS-Native-Roadmap.md) for ordered work.
 
-The bounded app-path export measurement is closed, the still-preview viewport
-is implemented, and packaged output contracts are covered. The current native
-priority is beta feedback, direct representative-image judgment, undo/redo,
-and real roll/batch workflow refinement. Stock-look learning, corpus
-preparation, named-stock fitting, and ML experiments are explicitly parked
-until the project owner reactivates them. Additional processing or SwiftUI
-controls must close a roadmap gate or be supported by concrete user evidence.
+The bounded export-latency slice, still-preview viewport, undo/redo, and
+import-ordered previous/next and apply-to-selected roll commands are
+implemented. The current native coding work is roadmap item 5: interpolate
+Load RAW Preview at the 2400px bound instead of full-sensor 1-pass then
+downscale, then retain the selected file's last full-resolution decode for
+settings-only re-export. Verify a real roll and the representative-image
+viewport in the same pass. Stock-look learning, corpus preparation,
+named-stock fitting, and ML experiments are explicitly parked until the
+project owner reactivates them. Additional processing or SwiftUI controls
+must close a roadmap gate or be supported by concrete user evidence.
 Standalone prototypes are not product progress.
 
 Useful contribution areas:

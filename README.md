@@ -15,14 +15,15 @@ The beta currently includes:
 
 - Camera RAW, TIFF, PNG, JPEG, and BMP import with fast bounded previews and an
   optional higher-detail demosaiced RAW preview.
-- Color-negative, black-and-white-negative, slide, and crop-only workflows with
-  film-base measurement, inversion, tone and color controls, curves, and color
-  wheels.
+- Color-negative, black-and-white-negative, slide, and Original (no-inversion)
+  workflows with film-base measurement, inversion, tone and color controls,
+  curves, and color wheels.
 - Automatic frame detection, straighten, crop, four-corner perspective
   correction, original/corrected comparison, and pan/zoom inspection.
 - Per-file settings and session-local undo/redo, presets, copy/paste,
-  apply-to-selected/all, ordered batch export, and full-resolution TIFF, JPEG,
-  PNG, and processed-RGB DNG output.
+  apply-to-selected/all, import-ordered previous/next, ordered batch export
+  with active/pending sidebar status, and full-resolution TIFF, JPEG, PNG, and
+  processed-RGB DNG output.
 
 This is an ad-hoc-signed technical beta, not yet an Apple-notarized general
 release. Applied dust removal is not yet available; native dust detection is

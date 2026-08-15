@@ -2,8 +2,9 @@
  * Adapted from LibRaw 0.21.4 src/demosaic/xtrans_demosaic.cpp.
  * Copyright 2019-2021 LibRaw LLC; incorporates dcraw work by Dave Coffin.
  * Licensed by LibRaw under LGPL-2.1-only or CDDL-1.0. Film Scan Converter
- * keeps the original pixel arithmetic and serial tile/interpolation order,
- * with bounded row parallelism only where each output range is independent.
+ * keeps the original pixel arithmetic and overlapping-tile dependence chain.
+ * Neighboring tiles still complete in serial order; independent wavefront
+ * diagonals may run concurrently with per-worker tile buffers.
  */
 
   int cstat[4] = {0, 0, 0, 0};
@@ -147,15 +148,18 @@
 		  }
 	  }
 
-  int buffer_count = 1;
+  std::vector<int> tops;
+  std::vector<int> lefts;
+  for (int top = 3; top < height - 19; top += LIBRAW_AHD_TILE - 16)
+      tops.push_back(top);
+  for (int left = 3; left < width - 19; left += LIBRAW_AHD_TILE - 16)
+      lefts.push_back(left);
 
+  int buffer_count = std::max(1, xtransWorkerCount);
   size_t buffer_size = LIBRAW_AHD_TILE * LIBRAW_AHD_TILE * (ndir * 11 + 6);
   char** buffers = malloc_omp_buffers(buffer_count, buffer_size);
 
-    for (int top = 3; top < height - 19; top += LIBRAW_AHD_TILE - 16)
-    {
-        char* buffer = buffers[0];
-
+  auto processTile = [&](int top, int left, char* buffer) {
         ushort(*rgb)[LIBRAW_AHD_TILE][LIBRAW_AHD_TILE][3], (*rix)[3];
         short(*lab)[LIBRAW_AHD_TILE][3], (*lix)[3];
         float(*drv)[LIBRAW_AHD_TILE][LIBRAW_AHD_TILE];
@@ -169,8 +173,6 @@
         homo = (char(*)[LIBRAW_AHD_TILE][LIBRAW_AHD_TILE])(
             buffer + LIBRAW_AHD_TILE * LIBRAW_AHD_TILE * (ndir * 10 + 6));
 
-        for (int left = 3; left < width - 19; left += LIBRAW_AHD_TILE - 16)
-        {
             int mrow = MIN(top + LIBRAW_AHD_TILE, height - 3);
             int mcol = MIN(left + LIBRAW_AHD_TILE, width - 3);
             for (int row = top; row < mrow; row++)
@@ -322,29 +324,24 @@
             // no effect
             for (int d = 0; d < ndir; d++)
             {
-                parallelXTransRows(2, mrow - 2, [&](int row) {
+                for (int row = 2; row < mrow - 2; row++)
                     for (int col = 2; col < mcol - 2; col++)
                         cielab(rgb[d][row][col], lab[row][col]);
-                });
-                const int f = dir[d & 3];
-                parallelXTransRows(3, mrow - 3, [&](int row) {
+                for (int f = dir[d & 3], row = 3; row < mrow - 3; row++)
                     for (int col = 3; col < mcol - 3; col++)
                     {
-                        short (*local_lix)[3] = &lab[row][col];
-                        int g = 2 * local_lix[0][0] - local_lix[f][0] - local_lix[-f][0];
+                        lix = &lab[row][col];
+                        int g = 2 * lix[0][0] - lix[f][0] - lix[-f][0];
                         drv[d][row][col] =
                             SQR(g) +
-                            SQR((2 * local_lix[0][1] - local_lix[f][1]
-                                - local_lix[-f][1] + g * 500 / 232)) +
-                            SQR((2 * local_lix[0][2] - local_lix[f][2]
-                                - local_lix[-f][2] - g * 500 / 580));
+                            SQR((2 * lix[0][1] - lix[f][1] - lix[-f][1] + g * 500 / 232)) +
+                            SQR((2 * lix[0][2] - lix[f][2] - lix[-f][2] - g * 500 / 580));
                     }
-                });
             }
 
             /* Build homogeneity maps from the derivatives:			*/
             memset(homo, 0, ndir * LIBRAW_AHD_TILE * LIBRAW_AHD_TILE);
-            parallelXTransRows(4, mrow - 4, [&](int row) {
+            for (int row = 4; row < mrow - 4; row++)
                 for (int col = 4; col < mcol - 4; col++)
                 {
                     int d;
@@ -359,14 +356,13 @@
                                 if (drv[dd][row + v][col + h] <= tr)
                                     homo[dd][row][col]++;
                 }
-            });
 
             /* Average the most homogeneous pixels for the final result:	*/
             if (height - top < LIBRAW_AHD_TILE + 4)
                 mrow = height - top + 2;
             if (width - left < LIBRAW_AHD_TILE + 4)
                 mcol = width - left + 2;
-            parallelXTransRows(MIN(top, 8), mrow - 8, [&](int row) {
+            for (int row = MIN(top, 8); row < mrow - 8; row++)
                 for (int col = MIN(left, 8); col < mcol - 8; col++)
                 {
                     int v;
@@ -392,18 +388,15 @@
                     for (int dd = 0; dd < ndir; dd++)
                         if (hm[dd] >= max)
                         {
-                            for (int channel = 0; channel < 3; channel++)
-                                avg[channel] += rgb[dd][row][col][channel];
+                            FORC3 avg[c] += rgb[dd][row][col][c];
                             avg[3]++;
                         }
-                    for (int channel = 0; channel < 3; channel++)
-                        image[(row + top) * width + col + left][channel]
-                            = avg[channel] / avg[3];
+                    FORC3 image[(row + top) * width + col + left][c] = avg[c] / avg[3];
                 }
-            });
-        }
-    }
-  
+  };
+
+  parallelXTransWavefront(tops, lefts, buffers, buffer_count, processTile);
+
     free_omp_buffers(buffers, buffer_count);
 
     border_interpolate(8);

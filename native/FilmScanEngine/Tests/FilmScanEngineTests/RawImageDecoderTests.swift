@@ -293,6 +293,7 @@ struct RawImageDecoderTests {
     #expect(RawDecodeProfile.rawPyCompatibility.rawValue == 0)
     #expect(RawDecodeProfile.rawTherapeeCameraScan.rawValue == 1)
     #expect(RawProcessingStages.deterministicParallelXTrans.rawValue == 1 << 5)
+    #expect(RawProcessingStages.parallelFujiUnpack.rawValue == 1 << 6)
   }
 
   @Test("RAW decode timing totals preserve their measured components")
@@ -454,6 +455,9 @@ struct RawImageDecoderTests {
     #expect(
       result.processing.contains(.deterministicParallelXTrans)
         == (result.demosaicWorkerCount > 1))
+    #expect(result.unpackWorkerCount >= 1)
+    #expect(
+      result.processing.contains(.parallelFujiUnpack) == (result.unpackWorkerCount > 1))
     #expect(dimensions.width == result.image.width)
     #expect(dimensions.height == result.image.height)
     #expect(result.image.width > 3_876)
