@@ -56,10 +56,16 @@ A stock directory is not enough evidence to replace the generic default or
 drive automatic stock selection. Require at least three varied frames and a
 material held-out improvement (currently 5% relative) for that.
 
-- Harman Phoenix II now has 12 varied references. Its stock fit reaches `0.090`
-  leave-one-frame-out MAE versus `0.159` for the current generic rendering, a
-  roughly 43% reduction. It ships as an explicit alternate, without automatic
-  stock detection.
+- Harman Phoenix II now has 12 varied references. Its Camera Raw LUT fit
+  reaches `0.090` leave-one-frame-out MAE versus `0.159` for the current generic
+  rendering, a roughly 43% reduction. That LUT still ships as **Alternate —
+  Harman Phoenix II**. Cyan/purple camera scans auto-select **Physical —
+  Harman Phoenix II**, a log-density invert (independent channel stretch,
+  Fujicolor Crystal Archive paper, 20% rebate inset) tuned toward a same-scene
+  phone JPEG of a dusk plaza photographed at a different time of day. The
+  physical profile is not a Camera Raw LUT; sampled MAE versus the ACR JPEGs
+  is a collapse check (`physical ≈ 0.090` on three frames), not the color
+  target.
 - CineStill 800T now has two references. Refitting both moves its matching-set
   MAE from `0.116` to `0.093`; it remains labeled experimental because two
   frames cannot provide an independent held-out result.

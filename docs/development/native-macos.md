@@ -12,10 +12,9 @@ bounded inspect/re-export work is owned by the
 [native product roadmap](../improvements/MacOS-Native-Roadmap.md), not by a
 continuation of that rewrite.
 
-**Last verified:** 2026-08-14 against the current working tree. The native test
-suite contains 462 tests across 32 files. Some representative-RAW tests require
-the untracked local `sample-raw/` corpus and are explicitly disabled when it is
-absent.
+**Last verified:** 2026-08-15 against the current working tree. Some
+representative-RAW tests require the untracked local `sample-raw/` corpus and
+are explicitly disabled when it is absent.
 
 ## Release Position
 
@@ -77,6 +76,12 @@ hook, with a locking datastream wrapper for seek+read. `LIBRAW_FORCE_OPENMP`
 stays off. Five release repetitions reproduced every approved digest; a
 same-session eight-worker A/B reduced unpack from a 1.335-second serial median
 to 0.266 seconds. `FSC_UNPACK_WORKERS=1` remains the serial mosaic oracle.
+
+Colour-negative **Physical** profiles landed on 2026-08-15: NegPy-style
+log-density unmix, independent channel stretch, H&D paper, and RA4 paper
+characters, with GPU/CPU preview parity. Cyan/purple camera scans auto-select
+**Physical — Harman Phoenix II** (Crystal Archive paper, 20% rebate inset)
+instead of the orange-mask Camera Raw LUT.
 
 The next product coding slice is the rest of roadmap item 5: Load RAW Preview
 interpolation at the 2400px bound instead of full-sensor 1-pass then
@@ -230,7 +235,7 @@ the follow-up.
 |---|---|
 | Import | Drag/drop, file picker, Finder Open With, standard PNG/JPEG/BMP/TIFF decode, and LibRaw-backed camera RAW decode. Optional AVFoundation live preview when macOS exposes the camera or capture adapter as a video device, with invert/exposure/saturation on the live toolbar. |
 | First paint | RAW embedded thumbnails and ImageIO standard-image thumbnails decode directly to at most 1000px off the main actor. A separate 256px proxy drives classification and median calibration before the first filtered render. |
-| Processing | Color/B&W negative and slide startup classification plus a selectable Original (no-inversion) film type; paired-scan-calibrated color and B&W inversion with legacy RawTherapee-compatible power-law presets and named stock alternates; a reference-derived Kodachrome-like adaptive look; an optional density pipeline, film-base measurement, flat field, capture-profile 3x3-plus-offset density correction before curve inversion; a neutral-preserving six-control dye-crossover matrix shared by basic/power-law/density color-negative paths; protected color and tone controls with center-weighted UI response and pipeline-calibrated tone references; shape-preserving overall/per-channel curves; color wheels; neutral-white handling for clipped near-zero holder pixels; automatic frame detection; a centered two-click horizontal/vertical straighten guide; an immediately visible post-straighten drag-box crop with full-canvas replacement and reset; an independent four-corner perspective warp with targeting reticles, a 100×100-pixel drag loupe, soft parallel-edge assistance, and a visible grid; live full-resolution output dimensions, frame, and aspect ratio. |
+| Processing | Color/B&W negative and slide startup classification plus a selectable Original (no-inversion) film type; paired-scan-calibrated color and B&W inversion with legacy RawTherapee-compatible power-law presets and named stock alternates; physical log-density invert (dye unmix, independent channel stretch, H&D paper, Neutral/Endura/Crystal Archive) with cyan/purple-mask auto-select onto **Physical — Harman Phoenix II**; a reference-derived Kodachrome-like adaptive look; an optional density pipeline, film-base measurement, flat field, capture-profile 3x3-plus-offset density correction before curve inversion; a neutral-preserving six-control dye-crossover matrix shared by basic/power-law/physical/density color-negative paths; protected color and tone controls with center-weighted UI response and pipeline-calibrated tone references; shape-preserving overall/per-channel curves; color wheels; neutral-white handling for clipped near-zero holder pixels; automatic frame detection; a centered two-click horizontal/vertical straighten guide; an immediately visible post-straighten drag-box crop with full-canvas replacement and reset; an independent four-corner perspective warp with targeting reticles, a 100×100-pixel drag loupe, soft parallel-edge assistance, and a visible grid; live full-resolution output dimensions, frame, and aspect ratio. |
 | Preview | First paint uses a bounded 16-bit 1000px display source plus a 256px analysis source. Embedded RAW pixels are fast previews, not authoritative RAW output. **Load RAW Preview** explicitly decodes the selected RAW through the app-facing camera-scan profile with 1-pass X-Trans at full sensor size, then downscales to an up-to-2400px display source and recalibrates from those RAW pixels. A native scroll viewport supplies momentum pan, cursor-centered pinch zoom, Fit/step/100% commands, viewport-stable Original comparison, shared editing-overlay transforms, and an explicit source/dimension badge. The Core Image/Metal renderer uses latest-value-wins scheduling; CPU remains the reference and fallback. |
 | Editing state | Per-file settings plus session-local per-file Undo/Redo for processing, geometry, output framing, reset, paste, and profile/preset application. Continuous slider, curve, color-wheel, and perspective gestures coalesce to one step; the restored current state persists while history starts empty after relaunch. Named presets, a built-in Kodachrome-like Auto action, one-step preset removal, system-clipboard copy/paste, edited/preview-ready/active-export/pending-export markers, import-ordered previous/next scan, apply-to-selected/all with per-frame geometry and measured-base preservation, and configurable 2/4/8/16/32-file lookahead are also implemented. Lookahead caches preview sessions only and is bounded by count and 256 MiB. |
 | Export | Named-sRGB TIFF, JPEG, and PNG plus output-referred linear-sRGB processed DNG; individual, ordered multi-selection, and lazy memory-bounded batch-all workflows; collision-safe names; partial-file cleanup; progress, per-file errors, queued cancellation, and duplicate-friendly append-selected jobs with per-addition export-setting snapshots during an active sequential run. |

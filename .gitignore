@@ -12,3 +12,4 @@ sample-raw/
 hdr_white
 .build/
 dist/
+NegPy/

@@ -57,6 +57,9 @@ public enum FilmNegativeRendering: String, Codable, Equatable, Sendable {
 
   /// A monochrome-only curve calibrated from manually inverted Camera Raw pairs.
   case calibratedMonochrome
+
+  /// Density-domain inversion: dye unmix, independent channel stretch, H&D print.
+  case densityPrint
 }
 
 /// Selects the paired-reference curve and film-base anchor used by the
@@ -89,6 +92,15 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
   /// Exposure applied to the scan before a calibrated decreasing curve.
   /// Positive values therefore produce a darker positive image.
   public var monochromeExposureEV: Double
+  /// Bundled or user density-print profile id. Ignored unless `rendering` is
+  /// `densityPrint`.
+  public var densityProfileID: String
+  /// Optional baked 3×3 RGB unmix (9 row-major entries). Empty uses the catalog.
+  public var densityUnmixRGB: [Double]
+  /// Dye-unmix blend in `[0, 1]`. Negative means "use the catalog default".
+  public var densityUnmixStrength: Double
+  /// Bundled RA4 / Neutral paper id. Ignored unless `rendering` is `densityPrint`.
+  public var densityPaperID: String
 
   public var measuredMedians: BGRChannelValues?
 
@@ -101,6 +113,10 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     case calibratedColorProfile
     case calibratedMonochromeProfile
     case monochromeExposureEV
+    case densityProfileID
+    case densityUnmixRGB
+    case densityUnmixStrength
+    case densityPaperID
   }
 
   public init(
@@ -112,6 +128,10 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     calibratedColorProfile: CalibratedColorNegativeProfile = .generic,
     calibratedMonochromeProfile: CalibratedMonochromeProfile = .generic,
     monochromeExposureEV: Double = 0,
+    densityProfileID: String = "generic_c41",
+    densityUnmixRGB: [Double] = [],
+    densityUnmixStrength: Double = -1,
+    densityPaperID: String = DensityPaperProfileCatalog.neutral.id.rawValue,
     measuredMedians: BGRChannelValues? = nil
   ) {
     precondition(monochromeExposureEV.isFinite, "Monochrome exposure must be finite")
@@ -123,6 +143,10 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     self.calibratedColorProfile = calibratedColorProfile
     self.calibratedMonochromeProfile = calibratedMonochromeProfile
     self.monochromeExposureEV = monochromeExposureEV
+    self.densityProfileID = densityProfileID
+    self.densityUnmixRGB = densityUnmixRGB
+    self.densityUnmixStrength = densityUnmixStrength
+    self.densityPaperID = densityPaperID
     self.measuredMedians = measuredMedians
   }
 
@@ -150,6 +174,16 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
       try container.decodeIfPresent(
         Double.self, forKey: .monochromeExposureEV
       ) ?? 0
+    densityProfileID =
+      try container.decodeIfPresent(String.self, forKey: .densityProfileID)
+      ?? NegativeDensityProfileCatalog.genericC41.id.rawValue
+    densityUnmixRGB =
+      try container.decodeIfPresent([Double].self, forKey: .densityUnmixRGB) ?? []
+    densityUnmixStrength =
+      try container.decodeIfPresent(Double.self, forKey: .densityUnmixStrength) ?? -1
+    densityPaperID =
+      try container.decodeIfPresent(String.self, forKey: .densityPaperID)
+      ?? DensityPaperProfileCatalog.neutral.id.rawValue
     measuredMedians = nil
   }
 
@@ -163,6 +197,24 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     try container.encode(calibratedColorProfile, forKey: .calibratedColorProfile)
     try container.encode(calibratedMonochromeProfile, forKey: .calibratedMonochromeProfile)
     try container.encode(monochromeExposureEV, forKey: .monochromeExposureEV)
+    try container.encode(densityProfileID, forKey: .densityProfileID)
+    try container.encode(densityUnmixRGB, forKey: .densityUnmixRGB)
+    try container.encode(densityUnmixStrength, forKey: .densityUnmixStrength)
+    try container.encode(densityPaperID, forKey: .densityPaperID)
+  }
+
+  public static func densityPrint(
+    _ profile: NegativeDensityProfile,
+    paper: DensityPaperProfile = DensityPaperProfileCatalog.neutral
+  ) -> FilmNegativeParams {
+    FilmNegativeParams(
+      enabled: true,
+      rendering: .densityPrint,
+      densityProfileID: profile.id.rawValue,
+      densityUnmixRGB: profile.unmixRGBFlat,
+      densityUnmixStrength: profile.unmixStrength,
+      densityPaperID: paper.id.rawValue
+    )
   }
 
   public static let legacyColourNegative = FilmNegativeParams(
@@ -195,6 +247,16 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     rendering: .calibratedColor,
     calibratedColorProfile: .harmanPhoenixII
   )
+  public static let densityPrintGenericC41 = FilmNegativeParams.densityPrint(
+    NegativeDensityProfileCatalog.genericC41
+  )
+  public static let densityPrintHarmanPhoenixII = FilmNegativeParams.densityPrint(
+    NegativeDensityProfileCatalog.harmanPhoenixII,
+    paper: DensityPaperProfileCatalog.fujiCrystalArchive
+  )
+  public static let densityPrintFuji400 = FilmNegativeParams.densityPrint(
+    NegativeDensityProfileCatalog.fujicolor400
+  )
   public static let legacyBlackAndWhite = FilmNegativeParams(
     enabled: true, redRatio: 1.0, greenExp: 1.5, blueRatio: 1.0
   )
@@ -219,6 +281,9 @@ public enum FilmNegativePreset: Int, CaseIterable, Hashable, Sendable {
   case fuji200ExpiredAlternate
   case cinestill800TAlternate
   case harmanPhoenixIIAlternate
+  case densityPrintGenericC41
+  case densityPrintHarmanPhoenixII
+  case densityPrintFuji400
   case legacyColourNegative
   case blackAndWhite
   case shanghaiGP3Alternate
@@ -232,6 +297,9 @@ public enum FilmNegativePreset: Int, CaseIterable, Hashable, Sendable {
     case .fuji200ExpiredAlternate: "Alternate — Fuji 200 Expired"
     case .cinestill800TAlternate: "Alternate — CineStill 800T"
     case .harmanPhoenixIIAlternate: "Alternate — Harman Phoenix II"
+    case .densityPrintGenericC41: "Physical — Generic C-41"
+    case .densityPrintHarmanPhoenixII: "Physical — Harman Phoenix II"
+    case .densityPrintFuji400: "Physical — Fujicolor 400"
     case .legacyColourNegative: "Color Negative (Legacy)"
     case .blackAndWhite: "Black & White"
     case .shanghaiGP3Alternate: "Alternate — Shanghai GP3"

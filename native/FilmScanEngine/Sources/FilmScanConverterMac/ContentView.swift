@@ -469,7 +469,7 @@ struct ContentView: View {
           let bexp = -(fn.greenExp * fn.blueRatio)
 
           DisclosureGroup("Advanced profile tuning") {
-            if fn.rendering != .powerLaw {
+            if fn.rendering == .calibratedColor || fn.rendering == .calibratedMonochrome {
               VStack(alignment: .leading, spacing: 10) {
                 Text(
                   "Adjust the scan before inversion. Positive values make the resulting positive darker, matching Camera Raw's pre-curve exposure behavior."
@@ -488,7 +488,7 @@ struct ContentView: View {
                 )
               }
               .padding(.top, 8)
-            } else {
+            } else if fn.rendering != .densityPrint {
               VStack(spacing: 10) {
                 AdjustmentSlider(
                   "Red Ratio",
@@ -522,7 +522,47 @@ struct ContentView: View {
             }
           }
 
-          if fn.rendering != .powerLaw {
+          if fn.rendering == .densityPrint {
+            Text(densityPrintProfileDescription(fn.densityProfileID, paperID: fn.densityPaperID))
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+            Picker(
+              "Film stock",
+              selection: Binding(
+                get: { fn.densityProfileID },
+                set: { model.setDensityProfileID($0) }
+              )
+            ) {
+              ForEach(NegativeDensityProfileCatalog.bundled, id: \.id.rawValue) { profile in
+                Text(profile.displayName).tag(profile.id.rawValue)
+              }
+            }
+            Picker(
+              "Print paper",
+              selection: Binding(
+                get: { fn.densityPaperID },
+                set: { model.setDensityPaperID($0) }
+              )
+            ) {
+              ForEach(DensityPaperProfileCatalog.bundled, id: \.id.rawValue) { paper in
+                Text(paper.displayName).tag(paper.id.rawValue)
+              }
+            }
+            AdjustmentSlider(
+              "Dye Unmix",
+              value: Binding(
+                get: {
+                  fn.densityUnmixStrength >= 0
+                    ? fn.densityUnmixStrength
+                    : DensityPrintProcessing.resolvedProfile(from: fn).unmixStrength
+                },
+                set: { model.setDensityUnmixStrength($0) }
+              ),
+              range: 0...1, neutral: 0.5, valueFormat: "%.2f",
+              responseExponent: 1.0
+            )
+          } else if fn.rendering != .powerLaw {
             Text(
               fn.rendering == .calibratedColor
                 ? calibratedColorProfileDescription(fn.calibratedColorProfile)
@@ -1569,6 +1609,16 @@ struct ContentView: View {
       case .harmanPhoenixII: return .harmanPhoenixIIAlternate
       }
     }
+    if fn.rendering == .densityPrint {
+      switch fn.densityProfileID {
+      case NegativeDensityProfileCatalog.harmanPhoenixII.id.rawValue:
+        return .densityPrintHarmanPhoenixII
+      case NegativeDensityProfileCatalog.fujicolor400.id.rawValue:
+        return .densityPrintFuji400
+      default:
+        return .densityPrintGenericC41
+      }
+    }
     if fn.rendering == FilmNegativeParams.legacyColourNegative.rendering
       && fn.redRatio == FilmNegativeParams.legacyColourNegative.redRatio
       && fn.greenExp == FilmNegativeParams.legacyColourNegative.greenExp
@@ -1615,6 +1665,13 @@ struct ContentView: View {
     }
   }
 
+  private func densityPrintProfileDescription(_ profileID: String, paperID: String) -> String {
+    let profile = NegativeDensityProfileCatalog.profile(id: profileID)
+    let paper = DensityPaperProfileCatalog.profile(id: paperID)
+    return
+      "Density-domain print (NegPy-style). \(profile.displayName) unmix, independent channel stretch, \(paper.displayName) H&D paper, chroma-gated bounds and quadratic cast removal."
+  }
+
   private func supportsFilmNegative(filmType: FilmType) -> Bool {
     filmType == .colourNegative || filmType == .blackAndWhiteNegative
   }
@@ -1629,6 +1686,9 @@ struct ContentView: View {
         .fuji200ExpiredAlternate,
         .cinestill800TAlternate,
         .harmanPhoenixIIAlternate,
+        .densityPrintGenericC41,
+        .densityPrintHarmanPhoenixII,
+        .densityPrintFuji400,
         .legacyColourNegative,
       ]
     case .blackAndWhiteNegative:

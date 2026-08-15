@@ -8,7 +8,8 @@ The native application is the primary product. It provides:
 - Drag-and-drop import of RAW and standard image files.
 - Per-file correction controls: film mode (color negative, B&W negative, slide,
   or Original with no inversion), paired-scan-calibrated color and monochrome
-  inversion plus legacy exponent presets, orientation, white balance, exposure,
+  inversion, physical log-density invert for cyan/purple-mask stocks, legacy
+  exponent presets, orientation, white balance, exposure,
   shadows, highlights, saturation, RGB tone curves, highlight/midtone/shadow
   color wheels.
 - Camera-scan RAW processing with ISO-tier noise/detail filtering. Browsing
@@ -69,9 +70,23 @@ The native application is the primary product. It provides:
    families: **Alternate — Fuji 400 Fresh** uses the eight-frame fresh C-41
    fit, **Alternate — Fuji 200 Expired** takes a warm expired-base direction,
    **Alternate — CineStill 800T** takes an experimental two-frame
-   tungsten-base direction, and **Alternate — Harman Phoenix II** uses a
-   twelve-frame held-out-validated stock curve. The Fuji 200 and CineStill
+   tungsten-base direction, and **Alternate — Harman Phoenix II** is a
+   twelve-frame held-out-validated Camera Raw LUT. The Fuji 200 and CineStill
    profiles remain starting looks rather than general stock characterizations.
+   **Physical — Harman Phoenix II** is the invert to use on this stock: log
+   density, independent per-channel stretch, and an H&D paper curve, which is
+   the right model for Phoenix's cyan/purple mask. Generic Color Negative and
+   the Phoenix LUT treat it like orange-mask C-41 and usually go magenta or
+   cyan. Cyan/purple camera scans auto-select the physical profile, which was
+   tuned toward a same-scene phone JPEG as a general color target (the pair is
+   not the same time, angle, or lighting) on Fujicolor Crystal Archive paper.
+   **Physical — Generic C-41** and **Physical — Fujicolor 400** use the same
+   invert with different unmix defaults. Under **Advanced profile tuning**,
+   pick any bundled film stock unmix (Portra, Ektar, Aerocolor, Superia, and
+   the rest of NegPy's spec-sheet gallery) and a print paper (**Neutral**,
+   **Kodak Endura Premier**, or **Fujicolor Crystal Archive**). Additional
+   physical stocks can be dropped in as JSON under the profile store's
+   `NegativeDensityProfiles/` folder.
    **Black & White** uses a paired-scan calibrated monochrome curve with full
    exposure anchoring so frames from one roll do not sit on an overexposed
    highlight plateau. **Alternate — Shanghai GP3** is a six-frame
@@ -79,7 +94,7 @@ The native application is the primary product. It provides:
    **Black & White (Legacy)** preserves the old rendering.
    Under **Advanced profile tuning**, **Negative Exposure** moves a calibrated
    color or B&W scan before inversion; positive values make the resulting
-   positive darker.
+   positive darker. Physical profiles expose a **Dye Unmix** slider instead.
 4. Adjust corrections in the inspector panel: orientation, white balance,
    semantic exposure/brightness/contrast/highlights/shadows, temperature/tint,
    saturation, vibrance, curves, and color wheels.
@@ -117,9 +132,11 @@ The native application is the primary product. It provides:
    rendering settings. The generic color and B&W profiles are calibrated from
    paired RAW/JPEG/XMP references, while user-created profiles remain the route
    for individual capture setups and stocks without a measured built-in
-   alternate. Harman Phoenix II is the only built-in color stock curve with a
-   material improvement on a varied held-out set; **Alternate — Shanghai GP3**
-   offers a measured B&W stock curve alongside the generic B&W default.
+   alternate. Cyan/purple-mask scans such as Harman Phoenix II auto-select
+   **Physical — Harman Phoenix II** rather than a Camera Raw LUT.
+   **Alternate — Harman Phoenix II** remains the LUT comparison; **Alternate —
+   Shanghai GP3** offers a measured B&W stock curve alongside the generic B&W
+   default.
 8. In Film Base, optionally load a matching flat field and measure a clear,
    unexposed film edge automatically or by dragging over it. This enables the
    measured density pipeline for negative conversion and replaces the generic

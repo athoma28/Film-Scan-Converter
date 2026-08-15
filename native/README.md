@@ -261,7 +261,7 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
 - Treat `FilmDyeMixingParameters` as a neutral-preserving, linear-light film
   response operator, not a display white-balance replacement. Apply it after
   inversion and before semantic tone/protected color, curves, and grading in
-  the basic, power-law, and density paths. Keep its CPU and Core Image kernels
+  the basic, power-law, physical density-print, and density paths. Keep its CPU and Core Image kernels
   in parity, and keep the exact-neutral fast path bit-for-bit unchanged.
 - User film-stock profiles persist exponent, dye-mixing, density-response, and
   display-rendering priors. Do not add named stock matrices until held-out

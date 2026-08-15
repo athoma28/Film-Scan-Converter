@@ -38,7 +38,9 @@ features.
 ### Film Processing And Editing
 
 - Automatic initial classification as color negative, B&W negative, or slide,
-  without overwriting saved per-file choices. A fourth film type, **Original**,
+  without overwriting saved per-file choices. Orange-mask C-41 selects the
+  generic Camera Raw colour curve; cyan/purple masks such as Harman Phoenix II
+  select **Physical — Harman Phoenix II**. A fourth film type, **Original**,
   skips inversion and tone/color corrections for crop-and-export of already
   positive images.
 - A default color-negative inversion calibrated from paired RAF/JPEG/XMP
@@ -51,9 +53,23 @@ features.
   base anchors and curves: fresh Fuji 400 (eight fit references plus three
   validation additions), expired Fuji 200 (one reference), CineStill 800T
   (two references), and Harman Phoenix II (twelve references). The Fuji 200
-  and CineStill fits remain experimental; Harman is leave-one-frame-out
-  validated, but remains an explicit choice and does not replace the generic
-  default.
+  and CineStill fits remain experimental; the Harman LUT is leave-one-frame-out
+  validated, but remains an explicit choice. Cyan/purple Phoenix scans auto-select
+  the physical density-print profile below instead of this LUT.
+- Selectable **Physical** colour-negative profiles invert in log density
+  (dye unmix, chroma-gated independent per-channel stretch, quadratic cast
+  removal, H&D paper curve). This is the inversion that matches cyan/purple-mask
+  stocks such as Harman Phoenix II. Built-in physical unmix stocks cover Generic
+  C-41, Harman Phoenix II, Fujicolor 400/200/C200/Superia X-TRA 400/Natura 1600/
+  Pro 400H, Kodak Portra 160/400/800, Gold 200, Ektar 100, Ultra Max 400,
+  Aerocolor IV, and VISION3 250D/500T. Print character can be Neutral, Kodak
+  Endura Premier, or Fujicolor Crystal Archive (RA4 dye coupling and channel
+  gamma). Further stocks load as JSON from `NegativeDensityProfiles/`.
+  Cyan/purple camera scans auto-select **Physical — Harman Phoenix II**, which
+  uses a same-scene phone-JPEG unmix (different time, angle, and lighting) on
+  Fujicolor Crystal Archive paper. Camera-scan rebate is inset 20% during
+  analysis so sprocket holes do not crush the invert. These profiles are a
+  physical rendering model, not a Camera Raw LUT fit.
 - An optional capture-aware density pipeline with film-base measurement,
   flat-field calibration, capture/stock/roll profiles, and a 3x3-plus-offset
   density-correction slot stored in capture profiles. An offline
@@ -61,8 +77,8 @@ features.
   no stock-specific matrix is built in without measured evidence.
 - A neutral-preserving six-control dye-crossover matrix for color negatives.
   It corrects cross-channel dye contamination in linear light before tone,
-  curves, and grading, and works with basic, power-law, and measured-density
-  inversion. The neutral default leaves existing scans unchanged.
+  curves, and grading, and works with basic, power-law, physical density-print,
+  and measured-density inversion. The neutral default leaves existing scans unchanged.
 - Semantic Exposure, Brightness, Contrast, Highlights, Shadows, Temperature,
   Tint, Saturation, and Vibrance controls. Tone response is calibrated to the
   active inversion pipeline, with finer slider control around neutral.

@@ -815,6 +815,29 @@ final class AppModel: ObservableObject {
     }
   }
 
+  func setDensityUnmixStrength(_ value: Double) {
+    updateParameters(actionName: "Dye Unmix") {
+      $0.filmNegativeParams.densityUnmixStrength = min(max(value, 0), 1)
+    }
+  }
+
+  func setDensityProfileID(_ id: String) {
+    updateParameters(actionName: "Physical Stock") {
+      let profile = NegativeDensityProfileCatalog.profile(id: id)
+      $0.filmNegativeParams.rendering = .densityPrint
+      $0.filmNegativeParams.enabled = true
+      $0.filmNegativeParams.densityProfileID = profile.id.rawValue
+      $0.filmNegativeParams.densityUnmixRGB = profile.unmixRGBFlat
+    }
+  }
+
+  func setDensityPaperID(_ id: String) {
+    updateParameters(actionName: "Print Paper") {
+      $0.filmNegativeParams.densityPaperID =
+        DensityPaperProfileCatalog.profile(id: id).id.rawValue
+    }
+  }
+
   func setFilmNegativePreset(_ preset: FilmNegativePreset) {
     let medians = preset != .off ? computeFilmNegativeMedians() : nil
     updateParameters(actionName: "Negative Profile") {
@@ -831,6 +854,16 @@ final class AppModel: ObservableObject {
         $0.filmNegativeParams = FilmNegativeParams.cinestill800TAlternate
       case .harmanPhoenixIIAlternate:
         $0.filmNegativeParams = FilmNegativeParams.harmanPhoenixIIAlternate
+      case .densityPrintGenericC41:
+        let paper = $0.filmNegativeParams.densityPaperID
+        $0.filmNegativeParams = FilmNegativeParams.densityPrintGenericC41
+        $0.filmNegativeParams.densityPaperID = paper
+      case .densityPrintHarmanPhoenixII:
+        $0.filmNegativeParams = FilmNegativeParams.densityPrintHarmanPhoenixII
+      case .densityPrintFuji400:
+        let paper = $0.filmNegativeParams.densityPaperID
+        $0.filmNegativeParams = FilmNegativeParams.densityPrintFuji400
+        $0.filmNegativeParams.densityPaperID = paper
       case .legacyColourNegative:
         $0.filmNegativeParams = FilmNegativeParams.legacyColourNegative
       case .blackAndWhite:
@@ -887,6 +920,7 @@ final class AppModel: ObservableObject {
       let currentMedians =
         computeFilmNegativeMedians()
         ?? parameters.filmNegativeParams.measuredMedians
+      let usesPhysicalDensity = resolved.stockProfile.filmNegativeParams.rendering == .densityPrint
       let usesDensityPipeline = resolved.stockProfile.filmNegativeParams.rendering == .powerLaw
       updateParameters(actionName: "Processing Profile") {
         $0.filmType = resolved.stockProfile.filmType
@@ -902,7 +936,11 @@ final class AppModel: ObservableObject {
         $0.filmDyeMixing = resolved.stockProfile.dyeMixing
       }
       let baseMessage = rebateStatus.isEmpty ? "" : rebateStatus + " "
-      if usesDensityPipeline {
+      if usesPhysicalDensity {
+        rebateStatus =
+          baseMessage
+          + "Physical density profile active (stock: \(resolved.stockProfile.displayName))."
+      } else if usesDensityPipeline {
         rebateStatus =
           baseMessage
           + "Density pipeline active (stock: \(resolved.stockProfile.displayName))."
@@ -2324,6 +2362,16 @@ final class AppModel: ObservableObject {
     case .harmanPhoenixIIAlternate:
       next.filmNegativeParams = FilmNegativeParams.harmanPhoenixIIAlternate
       next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
+    case .densityPrintGenericC41:
+      let paper = next.filmNegativeParams.densityPaperID
+      next.filmNegativeParams = FilmNegativeParams.densityPrintGenericC41
+      next.filmNegativeParams.densityPaperID = paper
+    case .densityPrintHarmanPhoenixII:
+      next.filmNegativeParams = FilmNegativeParams.densityPrintHarmanPhoenixII
+    case .densityPrintFuji400:
+      let paper = next.filmNegativeParams.densityPaperID
+      next.filmNegativeParams = FilmNegativeParams.densityPrintFuji400
+      next.filmNegativeParams.densityPaperID = paper
     case .legacyColourNegative:
       next.filmNegativeParams = FilmNegativeParams.legacyColourNegative
       next.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)

@@ -44,6 +44,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       return nil
     }
 
+    analysisImage = image
     source = CIImage(
       bitmapData: rgba,
       bytesPerRow: image.width * 4 * MemoryLayout<UInt16>.stride,
@@ -54,6 +55,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
     correctionKernel = kernel
   }
 
+  private let analysisImage: UInt16Image
   private let correctionKernel: CIKernel
 
   public func render(parameters: ProcessingParameters, showOriginal: Bool) -> CGImage? {
@@ -73,15 +75,20 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       let usesCalibratedColor =
         parameters.filmType == .colourNegative
         && fnp.rendering == .calibratedColor
+      let usesDensityPrint =
+        parameters.filmType == .colourNegative
+        && fnp.rendering == .densityPrint
       let fnEnabled =
         parameters.filmNegativeParams.enabled
         && (parameters.filmType == .colourNegative || parameters.filmType == .blackAndWhiteNegative)
-        && (usesCalibratedMonochrome || usesCalibratedColor || fnp.measuredMedians != nil)
+        && (usesCalibratedMonochrome || usesCalibratedColor || usesDensityPrint
+          || fnp.measuredMedians != nil)
       let renderingMode: Float =
         switch fnp.rendering {
         case .powerLaw: 0
         case .calibratedMonochrome: 1
         case .calibratedColor: 2
+        case .densityPrint: 3
         }
       let calibratedColorProfile: Float =
         switch fnp.calibratedColorProfile {
@@ -145,6 +152,13 @@ public final class StillPreviewRenderer: @unchecked Sendable {
           fnRMult = gain
           fnGMult = gain
           fnBMult = gain
+        case .densityPrint:
+          fnRExp = 0
+          fnGExp = 0
+          fnBExp = 0
+          fnRMult = 1
+          fnGMult = 1
+          fnBMult = 1
         }
       } else {
         fnRExp = 0
@@ -154,6 +168,17 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         fnGMult = 1
         fnBMult = 1
       }
+
+      let densityAnalysis =
+        usesDensityPrint && fnEnabled
+        ? DensityPrintProcessing.analyze(
+          image: analysisImage,
+          profile: DensityPrintProcessing.resolvedProfile(from: fnp),
+          paper: DensityPrintProcessing.resolvedPaper(from: fnp)
+        )
+        : nil
+      let dp = densityAnalysis
+      func densityFloat(_ value: Double) -> Float { Float(value) }
 
       guard
         let corrected = correctionKernel.apply(
@@ -208,6 +233,50 @@ public final class StillPreviewRenderer: @unchecked Sendable {
             fnRMult,
             fnGMult,
             fnBMult,
+            densityFloat(dp?.unmixBlue.blue ?? 1),
+            densityFloat(dp?.unmixBlue.green ?? 0),
+            densityFloat(dp?.unmixBlue.red ?? 0),
+            densityFloat(dp?.unmixGreen.blue ?? 0),
+            densityFloat(dp?.unmixGreen.green ?? 1),
+            densityFloat(dp?.unmixGreen.red ?? 0),
+            densityFloat(dp?.unmixRed.blue ?? 0),
+            densityFloat(dp?.unmixRed.green ?? 0),
+            densityFloat(dp?.unmixRed.red ?? 1),
+            densityFloat(dp?.floors.blue ?? 0),
+            densityFloat(dp?.floors.green ?? 0),
+            densityFloat(dp?.floors.red ?? 0),
+            densityFloat(dp?.ceils.blue ?? 1),
+            densityFloat(dp?.ceils.green ?? 1),
+            densityFloat(dp?.ceils.red ?? 1),
+            densityFloat(dp?.slopes.blue ?? 2.9),
+            densityFloat(dp?.slopes.green ?? 2.9),
+            densityFloat(dp?.slopes.red ?? 2.9),
+            densityFloat(dp?.pivots.blue ?? 0.2),
+            densityFloat(dp?.pivots.green ?? 0.2),
+            densityFloat(dp?.pivots.red ?? 0.2),
+            densityFloat(dp?.curvatures.blue ?? 0),
+            densityFloat(dp?.curvatures.green ?? 0),
+            densityFloat(dp?.curvatures.red ?? 0),
+            densityFloat(dp?.paperDMin.blue ?? 0),
+            densityFloat(dp?.paperDMin.green ?? 0),
+            densityFloat(dp?.paperDMin.red ?? 0),
+            densityFloat(dp?.paperDMax ?? 2.3),
+            densityFloat(dp?.paperMidtoneGamma ?? 0.15),
+            densityFloat(dp?.paperGammaWidth ?? 0.6),
+            densityFloat(dp?.toeSharpnessBase ?? 4.0),
+            densityFloat(dp?.shoulderSharpnessBase ?? 3.0),
+            densityFloat(dp?.toeHeight ?? 0.90),
+            densityFloat(dp?.shoulderHeight ?? 0.35),
+            densityFloat(dp?.referenceLinear ?? 0.75),
+            densityFloat(dp?.dyeMixBlue.blue ?? 1),
+            densityFloat(dp?.dyeMixBlue.green ?? 0),
+            densityFloat(dp?.dyeMixBlue.red ?? 0),
+            densityFloat(dp?.dyeMixGreen.blue ?? 0),
+            densityFloat(dp?.dyeMixGreen.green ?? 1),
+            densityFloat(dp?.dyeMixGreen.red ?? 0),
+            densityFloat(dp?.dyeMixRed.blue ?? 0),
+            densityFloat(dp?.dyeMixRed.green ?? 0),
+            densityFloat(dp?.dyeMixRed.red ?? 1),
           ]
         )
       else {
@@ -775,6 +844,124 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       return rgb;
     }
 
+    float densityLog10(float x) {
+      return log(max(x, 1e-6)) / log(10.0);
+    }
+
+    float densitySoftplus(float x) {
+      if (x > 20.0) return x;
+      if (x < -20.0) return exp(x);
+      return log(1.0 + exp(x));
+    }
+
+    float densityTanh(float x) {
+      float e2 = exp(clamp(2.0 * x, -40.0, 40.0));
+      return (e2 - 1.0) / (e2 + 1.0);
+    }
+
+    float densityNormalizeLog(float value, float floorV, float ceilV) {
+      float delta = ceilV - floorV;
+      if (abs(delta) < 1e-6) {
+        delta = delta >= 0.0 ? 1e-6 : -1e-6;
+      }
+      return (value - floorV) / delta;
+    }
+
+    float densityPrintCurve(
+      float x,
+      float slope,
+      float pivot,
+      float curv,
+      float dMin,
+      float dMax,
+      float midGamma,
+      float gammaWidth,
+      float toeSharp,
+      float shSharp,
+      float toeH,
+      float shH,
+      float vStar
+    ) {
+      float slopeMin = 2.0;
+      float slopeMax = 10.0;
+      float slopeNorm = clamp((slope - slopeMin) / (slopeMax - slopeMin), 0.0, 1.0);
+      float toe = (0.15 * 0.35 / 0.90) * slopeNorm;
+      float shoulder = 0.12 * slopeNorm;
+      float ts = 0.85;
+      float width = 2.5;
+      float aHL = shSharp * width / max(width, 1e-6);
+      float aSHBase = toeSharp * width / max(width, 1e-6);
+      float dMinEff = max(0.0, dMin + shoulder * ts * shH);
+      float toeEff = toe * ts;
+      float dMaxEff = toeEff >= 0.0 ? dMax - toeEff * toeH : dMax;
+      float aSH = toeEff >= 0.0 ? aSHBase : aSHBase * (1.0 - toeEff * 4.0);
+      float dMaxBound = max(dMaxEff, dMinEff + 0.1);
+      float v = slope * (x - pivot) + curv * x * x;
+      v += midGamma * gammaWidth * densityTanh((v - vStar) / gammaWidth);
+      float v1 = dMinEff + densitySoftplus(aHL * (v - dMinEff)) / aHL;
+      return dMaxBound - densitySoftplus(aSH * (dMaxBound - v1)) / aSH;
+    }
+
+    float densityEncodeReflectance(float density, float dMax) {
+      float transmittance = pow(10.0, -density);
+      float black = pow(10.0, -dMax);
+      transmittance = (transmittance - black) / (1.0 - black);
+      return filmNegativeLinearToSrgb(clamp(transmittance, 0.0, 1.0));
+    }
+
+    vec3 densityPrintInvert(
+      vec3 rgb,
+      vec3 umB,
+      vec3 umG,
+      vec3 umR,
+      vec3 floors,
+      vec3 ceils,
+      vec3 slopes,
+      vec3 pivots,
+      vec3 curvs,
+      vec3 dMin,
+      vec3 dyeB,
+      vec3 dyeG,
+      vec3 dyeR,
+      float dMax,
+      float midGamma,
+      float gammaWidth,
+      float toeSharp,
+      float shSharp,
+      float toeH,
+      float shH,
+      float vStar
+    ) {
+      float linR = max(filmNegativeSrgbToLinear(rgb.r), 1e-6);
+      float linG = max(filmNegativeSrgbToLinear(rgb.g), 1e-6);
+      float linB = max(filmNegativeSrgbToLinear(rgb.b), 1e-6);
+      vec3 logs = vec3(densityLog10(linB), densityLog10(linG), densityLog10(linR));
+      float uB = dot(umB, logs);
+      float uG = dot(umG, logs);
+      float uR = dot(umR, logs);
+      float nB = densityNormalizeLog(uB, floors.x, ceils.x);
+      float nG = densityNormalizeLog(uG, floors.y, ceils.y);
+      float nR = densityNormalizeLog(uR, floors.z, ceils.z);
+      float densB = densityPrintCurve(
+        nB, slopes.x, pivots.x, curvs.x, dMin.x, dMax,
+        midGamma, gammaWidth, toeSharp, shSharp, toeH, shH, vStar);
+      float densG = densityPrintCurve(
+        nG, slopes.y, pivots.y, curvs.y, dMin.y, dMax,
+        midGamma, gammaWidth, toeSharp, shSharp, toeH, shH, vStar);
+      float densR = densityPrintCurve(
+        nR, slopes.z, pivots.z, curvs.z, dMin.z, dMax,
+        midGamma, gammaWidth, toeSharp, shSharp, toeH, shH, vStar);
+      vec3 excess = vec3(densB - dMin.x, densG - dMin.y, densR - dMin.z);
+      densB = dMin.x + dot(dyeB, excess);
+      densG = dMin.y + dot(dyeG, excess);
+      densR = dMin.z + dot(dyeR, excess);
+      return vec3(
+        densityEncodeReflectance(densR, dMax),
+        densityEncodeReflectance(densG, dMax),
+        densityEncodeReflectance(densB, dMax)
+      );
+    }
+
     kernel vec4 correction(
       sampler image,
       sampler lutImage,
@@ -817,7 +1004,51 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       float fnBExp,
       float fnRMult,
       float fnGMult,
-      float fnBMult
+      float fnBMult,
+      float dpUmBb,
+      float dpUmBg,
+      float dpUmBr,
+      float dpUmGb,
+      float dpUmGg,
+      float dpUmGr,
+      float dpUmRb,
+      float dpUmRg,
+      float dpUmRr,
+      float dpFloorB,
+      float dpFloorG,
+      float dpFloorR,
+      float dpCeilB,
+      float dpCeilG,
+      float dpCeilR,
+      float dpSlopeB,
+      float dpSlopeG,
+      float dpSlopeR,
+      float dpPivotB,
+      float dpPivotG,
+      float dpPivotR,
+      float dpCurvB,
+      float dpCurvG,
+      float dpCurvR,
+      float dpDMinB,
+      float dpDMinG,
+      float dpDMinR,
+      float dpDMax,
+      float dpMidGamma,
+      float dpGammaWidth,
+      float dpToeSharp,
+      float dpShSharp,
+      float dpToeH,
+      float dpShH,
+      float dpVStar,
+      float dpDyeBb,
+      float dpDyeBg,
+      float dpDyeBr,
+      float dpDyeGb,
+      float dpDyeGg,
+      float dpDyeGr,
+      float dpDyeRb,
+      float dpDyeRg,
+      float dpDyeRr
     ) {
       vec4 pixel = sample(image, samplerCoord(image));
       vec3 rgb = pixel.rgb;
@@ -839,6 +1070,8 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       bool useCalibratedMonochrome = isBW && filmNegativeRendering == 1.0;
       bool useCalibratedColor = !isBW && filmType == 1.0
         && filmNegativeRendering == 2.0;
+      bool useDensityPrint = !isBW && filmType == 1.0
+        && filmNegativeRendering == 3.0;
       if (filmNegativeEnabled == 1.0 && useCalibratedMonochrome) {
         float gray = dot(rgb, vec3(0.299, 0.587, 0.114));
         rgb = vec3(
@@ -855,6 +1088,50 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         rgb = calibratedColorCurve(
           rgb, vec3(fnRMult, fnGMult, fnBMult), monochromeExposureEV,
           calibratedColorProfile);
+        if (useDyeMixing || useLinearTone || useProtectedColor) {
+          vec3 linear = displayLinearValue(rgb);
+          if (useDyeMixing) {
+            linear = filmDyeMixing(
+              linear,
+              dyeRedFromGreen, dyeRedFromBlue,
+              dyeGreenFromRed, dyeGreenFromBlue,
+              dyeBlueFromRed, dyeBlueFromGreen);
+          }
+          if (useLinearTone) {
+            linear = linearToneAdjustments(
+              linear, photoExposureEV, photoBrightness, photoContrast,
+              photoHighlights, photoShadows, photoToneReference);
+          }
+          if (useProtectedColor) {
+            linear = protectedColor(
+              linear, photoTemperatureMired, photoTint, photoSaturation, photoVibrance);
+          }
+          rgb = displayFromLinear(linear);
+        }
+      } else if (filmNegativeEnabled == 1.0 && useDensityPrint) {
+        rgb = densityPrintInvert(
+          rgb,
+          vec3(dpUmBb, dpUmBg, dpUmBr),
+          vec3(dpUmGb, dpUmGg, dpUmGr),
+          vec3(dpUmRb, dpUmRg, dpUmRr),
+          vec3(dpFloorB, dpFloorG, dpFloorR),
+          vec3(dpCeilB, dpCeilG, dpCeilR),
+          vec3(dpSlopeB, dpSlopeG, dpSlopeR),
+          vec3(dpPivotB, dpPivotG, dpPivotR),
+          vec3(dpCurvB, dpCurvG, dpCurvR),
+          vec3(dpDMinB, dpDMinG, dpDMinR),
+          vec3(dpDyeBb, dpDyeBg, dpDyeBr),
+          vec3(dpDyeGb, dpDyeGg, dpDyeGr),
+          vec3(dpDyeRb, dpDyeRg, dpDyeRr),
+          dpDMax,
+          dpMidGamma,
+          dpGammaWidth,
+          dpToeSharp,
+          dpShSharp,
+          dpToeH,
+          dpShH,
+          dpVStar
+        );
         if (useDyeMixing || useLinearTone || useProtectedColor) {
           vec3 linear = displayLinearValue(rgb);
           if (useDyeMixing) {

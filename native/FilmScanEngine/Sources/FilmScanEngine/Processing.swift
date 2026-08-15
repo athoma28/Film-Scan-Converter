@@ -64,7 +64,7 @@ public enum FilmProcessing {
             )
             usedLinearToneSeam = true
           }
-        case .powerLaw, .calibratedColor:
+        case .powerLaw, .calibratedColor, .densityPrint:
           if parameters.photoAdjustments.hasToneAdjustment {
             var renderReady = FilmNegativeProcessing.powerLawRenderReadyLinear(
               image: working, params: parameters.filmNegativeParams
@@ -95,6 +95,21 @@ public enum FilmProcessing {
         switch parameters.filmNegativeParams.rendering {
         case .calibratedColor:
           working = FilmNegativeProcessing.applyCalibratedColorInversion(
+            image: working,
+            params: parameters.filmNegativeParams
+          )
+          if needsLinearSeam {
+            working = applySemanticLinearAdjustmentsToDisplayImage(
+              working,
+              parameters: parameters.photoAdjustments,
+              dyeMixing: needsDyeMixing ? parameters.filmDyeMixing : nil,
+              applyColorAdjustments: parameters.photoAdjustments.hasColorAdjustment
+            )
+            usedLinearToneSeam = parameters.photoAdjustments.hasToneAdjustment
+            usedLinearColorSeam = parameters.photoAdjustments.hasColorAdjustment
+          }
+        case .densityPrint:
+          working = DensityPrintProcessing.apply(
             image: working,
             params: parameters.filmNegativeParams
           )

@@ -16,8 +16,9 @@ The beta currently includes:
 - Camera RAW, TIFF, PNG, JPEG, and BMP import with fast bounded previews and an
   optional higher-detail demosaiced RAW preview.
 - Color-negative, black-and-white-negative, slide, and Original (no-inversion)
-  workflows with film-base measurement, inversion, tone and color controls,
-  curves, and color wheels.
+  workflows with film-base measurement, inversion (including a physical
+  log-density path that auto-selects for cyan/purple-mask stocks such as
+  Harman Phoenix II), tone and color controls, curves, and color wheels.
 - Automatic frame detection, straighten, crop, four-corner perspective
   correction, original/corrected comparison, and pan/zoom inspection.
 - Per-file settings and session-local undo/redo, presets, copy/paste,

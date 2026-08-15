@@ -1939,6 +1939,15 @@ struct AppModelTests {
     model.setFilmNegativePreset(.harmanPhoenixIIAlternate)
     #expect(model.parameters.filmNegativeParams.calibratedColorProfile == .harmanPhoenixII)
 
+    model.setFilmNegativePreset(.densityPrintHarmanPhoenixII)
+    #expect(model.parameters.filmNegativeParams.rendering == .densityPrint)
+    #expect(
+      model.parameters.filmNegativeParams.densityProfileID
+        == NegativeDensityProfileCatalog.harmanPhoenixII.id.rawValue)
+    #expect(
+      model.parameters.filmNegativeParams.densityPaperID
+        == DensityPaperProfileCatalog.fujiCrystalArchive.id.rawValue)
+
     model.selectedFilmStockProfileID = FilmStockProfile.harmanPhoenixIIAlternate.id
     model.applySelectedPipelineProfiles()
     #expect(model.parameters.filmNegativeParams.calibratedColorProfile == .harmanPhoenixII)
@@ -1955,6 +1964,32 @@ struct AppModelTests {
     model.applySelectedPipelineProfiles()
     #expect(model.parameters.filmNegativeParams.rendering == .calibratedColor)
     #expect(!model.parameters.densityPipelineEnabled)
+  }
+
+  @Test("Physical Phoenix applies Crystal Archive paper; other physical presets keep the current paper")
+  func physicalPhoenixAppliesCrystalArchivePaper() {
+    let model = AppModel()
+    model.setFilmType(.colourNegative)
+    model.setFilmNegativePreset(.densityPrintGenericC41)
+    model.setDensityPaperID(DensityPaperProfileCatalog.kodakEnduraPremier.id.rawValue)
+    #expect(
+      model.parameters.filmNegativeParams.densityPaperID
+        == DensityPaperProfileCatalog.kodakEnduraPremier.id.rawValue)
+
+    model.setFilmNegativePreset(.densityPrintFuji400)
+    #expect(
+      model.parameters.filmNegativeParams.densityPaperID
+        == DensityPaperProfileCatalog.kodakEnduraPremier.id.rawValue)
+
+    model.setFilmNegativePreset(.densityPrintHarmanPhoenixII)
+    #expect(
+      model.parameters.filmNegativeParams.densityPaperID
+        == DensityPaperProfileCatalog.fujiCrystalArchive.id.rawValue)
+
+    model.setFilmNegativePreset(.densityPrintGenericC41)
+    #expect(
+      model.parameters.filmNegativeParams.densityPaperID
+        == DensityPaperProfileCatalog.fujiCrystalArchive.id.rawValue)
   }
 
   @Test("App applies calibrated density correction from the capture profile")

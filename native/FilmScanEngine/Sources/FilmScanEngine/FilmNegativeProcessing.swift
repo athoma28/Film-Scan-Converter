@@ -1493,6 +1493,18 @@ public enum FilmNegativeProcessing {
         filmNegativePreset: .colourNegative,
         confidence: orangeMaskScore
       )
+    } else if let cyanMask = cyanOrPurpleMaskScore(
+      image: image,
+      medians: medians,
+      maxSamples: maxSamples,
+      borderPercent: borderPercent
+    ), cyanMask >= 0.45
+    {
+      classification = FilmClassification(
+        filmType: .colourNegative,
+        filmNegativePreset: .densityPrintHarmanPhoenixII,
+        confidence: cyanMask
+      )
     } else {
       classification = FilmClassification(
         filmType: .slide,
@@ -1534,6 +1546,90 @@ public enum FilmNegativeProcessing {
 
 private func channelDominanceScore(ratio: Double, threshold: Double, span: Double) -> Double {
   min(max((ratio - threshold) / span, 0), 1)
+}
+
+private func cyanOrPurpleMaskScore(
+  image: UInt16Image,
+  medians: BGRChannelValues,
+  maxSamples: Int,
+  borderPercent: Double
+) -> Double? {
+  let r = max(medians.red, 1)
+  let g = max(medians.green, 1)
+  let b = max(medians.blue, 1)
+  let purpleDeficit = ((r + b) / 2 - g) / max(r, b, g)
+  let purpleBalance = min(r, b) / g
+  let purple = purpleDeficit > 0.05 && purpleBalance > 1.05
+  let cyanRatio = b / r
+  let cyan = cyanRatio > 1.22 && r / g < 1.02
+  guard cyan || purple else { return nil }
+
+  // Holder/background pixels are near-black and mixed-hue slides can still
+  // have cyan-looking *medians*. Require a global cast on the exposed interior.
+  let stats = sampledMaskStats(
+    image: image,
+    cyan: cyan,
+    maxSamples: maxSamples,
+    borderPercent: borderPercent
+  )
+  guard stats.chromaMean >= 0.08, stats.agreement >= 0.55 else { return nil }
+
+  let strength: Double
+  if cyan {
+    strength = min(max((cyanRatio - 1.22) / 0.40, 0), 1)
+  } else {
+    strength = min(max((purpleBalance - 1.05) / 0.30, 0), 1)
+  }
+  return 0.45 + 0.55 * min(strength, stats.agreement)
+}
+
+private func sampledMaskStats(
+  image: UInt16Image,
+  cyan: Bool,
+  maxSamples: Int,
+  borderPercent: Double
+) -> (agreement: Double, chromaMean: Double) {
+  let insetX = Int(Double(image.width) * min(max(borderPercent, 0), 40) / 100)
+  let insetY = Int(Double(image.height) * min(max(borderPercent, 0), 40) / 100)
+  let minX = min(insetX, max(image.width / 2 - 1, 0))
+  let minY = min(insetY, max(image.height / 2 - 1, 0))
+  let maxX = max(image.width - minX, minX + 1)
+  let maxY = max(image.height - minY, minY + 1)
+  let usableW = max(maxX - minX, 1)
+  let usableH = max(maxY - minY, 1)
+  let stride = max(1, Int((Double(usableW * usableH) / Double(max(maxSamples, 1))).squareRoot()))
+  var matched = 0
+  var counted = 0
+  var chromaSum = 0.0
+  var y = minY
+  while y < maxY {
+    var x = minX
+    while x < maxX {
+      let base = (y * image.width + x) * 3
+      let blue = Double(image.pixels[base])
+      let green = Double(image.pixels[base + 1])
+      let red = Double(image.pixels[base + 2])
+      let peak = max(blue, green, red)
+      // Skip holder / unexposed sensor black; ratios there are noise.
+      if peak >= 4_096 {
+        let r = max(red, 1)
+        let g = max(green, 1)
+        let b = max(blue, 1)
+        let isCyan = b / r > 1.08 && r / g < 1.15
+        let purpleDeficit = ((r + b) / 2 - g) / max(r, b, g)
+        let isPurple = purpleDeficit > 0.05 && min(r, b) / g > 1.05
+        if cyan ? isCyan : isPurple {
+          matched += 1
+        }
+        chromaSum += (peak - min(blue, green, red)) / max(peak, 1)
+        counted += 1
+      }
+      x += stride
+    }
+    y += stride
+  }
+  guard counted > 0 else { return (0, 0) }
+  return (Double(matched) / Double(counted), chromaSum / Double(counted))
 }
 
 private func sampledChroma(image: UInt16Image, maxSamples: Int) -> (mean: Double, median: Double) {

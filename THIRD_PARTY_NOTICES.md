@@ -13,6 +13,19 @@ versions and install names are recorded by the release packager in
 versions are included in `ThirdPartyLicenses/` at archive root and inside the
 application bundle.
 
+## NegPy density-print algorithms
+
+Colour-negative **Physical** profiles adapt NegPy's log-density dye unmix,
+independent per-channel stretch, chroma-gated highlight colour refs, quadratic
+neutral-axis cast removal, H&D paper curve, and RA4 paper dye-coupling
+(GPL-3.0). Dye-unmix matrices for named stocks and the Endura / Crystal Archive
+paper characters come from NegPy's published spec-sheet estimates. This project
+does not vendor NegPy's source; it reimplements those inversion steps in Swift
+for camera-scan sRGB data.
+
+- Project: <https://github.com/marcinz606/NegPy>
+- License: GPL-3.0
+
 ## RawTherapee RCD demosaic
 
 `native/FilmScanEngine/Sources/CLibRawShim/RawTherapeePipeline.cpp` contains an

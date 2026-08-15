@@ -223,6 +223,31 @@ public struct FilmStockProfile: Codable, Equatable, Sendable {
     notes: "Twelve-frame stock-specific fit with leave-one-frame-out validation"
   )
 
+  public static let densityPrintGenericC41 = FilmStockProfile(
+    id: FilmStockProfileID(rawValue: "physical_generic_c41"),
+    displayName: "Physical — Generic C-41",
+    filmType: .colourNegative,
+    filmNegativeParams: .densityPrintGenericC41,
+    notes: "NegPy-style log-density stretch and H&D print with the Generic C41 unmix"
+  )
+
+  public static let densityPrintHarmanPhoenixII = FilmStockProfile(
+    id: FilmStockProfileID(rawValue: "physical_harman_phoenix_ii"),
+    displayName: "Physical — Harman Phoenix II",
+    filmType: .colourNegative,
+    filmNegativeParams: .densityPrintHarmanPhoenixII,
+    notes:
+      "Independent channel stretch for Phoenix's cyan/purple mask, a same-scene phone-JPEG unmix, and Fujicolor Crystal Archive paper"
+  )
+
+  public static let densityPrintFuji400 = FilmStockProfile(
+    id: FilmStockProfileID(rawValue: "physical_fujicolor_400"),
+    displayName: "Physical — Fujicolor 400",
+    filmType: .colourNegative,
+    filmNegativeParams: .densityPrintFuji400,
+    notes: "NegPy-style density print with the Fujicolor 400 spec-sheet unmix"
+  )
+
   public static let genericBW = FilmStockProfile(
     id: FilmStockProfileID(rawValue: "generic_bw_negative_camera_raw"),
     displayName: "Generic B&W Negative",
@@ -453,17 +478,39 @@ public final class ProfileStore: Sendable {
   }
 
   public func builtInFilmStockProfiles() -> [FilmStockProfile] {
-    [
-      .genericColorNegative,
+    let bundled = [
+      FilmStockProfile.genericColorNegative,
       .fuji400FreshAlternate,
       .fuji200ExpiredAlternate,
       .cinestill800TAlternate,
       .harmanPhoenixIIAlternate,
+      .densityPrintGenericC41,
+      .densityPrintHarmanPhoenixII,
+      .densityPrintFuji400,
       .legacyColorNegative,
       .genericBW,
       .shanghaiGP3Alternate,
       .legacyBW,
     ]
+    let bundledIDs = Set(bundled.map(\.id))
+    let userPhysical = userNegativeDensityProfiles().compactMap { profile -> FilmStockProfile? in
+      let id = FilmStockProfileID(rawValue: "physical_" + profile.id.rawValue)
+      guard !bundledIDs.contains(id) else { return nil }
+      return FilmStockProfile(
+        id: id,
+        displayName: "Physical — \(profile.displayName)",
+        filmType: .colourNegative,
+        filmNegativeParams: .densityPrint(profile),
+        notes: profile.notes.isEmpty ? profile.attribution : profile.notes
+      )
+    }
+    return bundled + userPhysical
+  }
+
+  public func userNegativeDensityProfiles() -> [NegativeDensityProfile] {
+    NegativeDensityProfileCatalog.load(
+      from: baseDirectory.appendingPathComponent("NegativeDensityProfiles", isDirectory: true)
+    )
   }
 
   // MARK: - Resolution
