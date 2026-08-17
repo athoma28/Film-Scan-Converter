@@ -258,13 +258,18 @@ Improvements implemented:
   and Option-Command-Down remain available while the inspector has focus.
 - Sidebar rows show edited, preview-ready, active-export, and pending-export
   states in addition to native selection highlighting.
+- Conservative repeated-capture proposals now appear for adjacent, same-size
+  imports. Opt-in translation-only stacking supports Auto, Noise, and HDR
+  modes, with preview and full-resolution export rebuilt from the captures.
 
 The usability pass must also verify:
 
 - multi-selection review still feels immediate;
 - immediate visible preset/copy/paste/apply results;
 - easy per-frame exceptions after a roll-wide look;
-- import-ordered Export Selected and duplicate-friendly queue behavior.
+- import-ordered Export Selected and duplicate-friendly queue behavior;
+- stack preview/export behavior on a realistic roll, including the one-output
+  anchor-name rule and the flat-field restriction.
 
 Only promote sidebar reordering, a larger export queue, ratings, or other
 organization features if this real workflow demonstrates the need.

@@ -20,6 +20,19 @@ features.
   action replaces an embedded thumbnail with a demosaiced, RAW-calibrated
   preview up to 2400px when color or detail needs closer inspection;
   full-resolution decoding remains reserved for export.
+- A visual **Scans** sidebar with independently bounded 192px source
+  thumbnails, filenames, edit/cache/export state, native multi-selection, and
+  stack badges. Thumbnail loading does not pin the larger interactive previews
+  in memory.
+- Automatic high-confidence detection of adjacent, same-size captures of the
+  same negative. Repeated captures are proposed as an opt-in aligned stack:
+  **Auto** selects exposure fusion when the measured bracket spans at least
+  0.5 EV and otherwise uses exposure-normalized robust averaging for lower
+  sensor noise. **HDR** and **Noise** can also be forced explicitly. Detection
+  and alignment are exposure-invariant, reject low-texture or ambiguous
+  frames, and currently correct translation only. The bounded preview and
+  full-resolution export are rebuilt independently; an enabled stack exports
+  once under its first capture's filename and settings.
 - A bounded Core Image/Metal correction preview fed by the 16-bit preview
   source, with latest-value-wins scheduling. This GPU path is the primary
   interactive target on supported MacBook Pro hardware; CPU rendering remains
@@ -40,23 +53,29 @@ features.
 - Automatic initial classification as color negative, B&W negative, or slide,
   without overwriting saved per-file choices. Orange-mask C-41 selects the
   generic Camera Raw colour curve; cyan/purple masks such as Harman Phoenix II
-  select **Physical — Harman Phoenix II**. A fourth film type, **Original**,
-  skips inversion and tone/color corrections for crop-and-export of already
-  positive images.
+  select the **Darkroom** conversion with Harman Phoenix II stock. A fourth
+  film type, **Original**, skips inversion and tone/color corrections for
+  crop-and-export of already positive images.
+- A goal-oriented **Film & Conversion** panel replaces the former nested
+  profile menus. Choose the scan type first, then choose **Natural** for a
+  reference-based starting point, **Darkroom** for film-and-paper rendering,
+  **Classic** for the original exponent response, or **Bypass** for comparison.
+  Stock and paper choices appear as visible, described options only when they
+  apply; technical channel mixing remains in a clearly labeled advanced area.
 - A default color-negative inversion calibrated from paired RAF/JPEG/XMP
   Camera Raw edits. It uses a half-strength per-frame exposure anchor and a
   quarter-strength channel-ratio anchor: enough adaptation to keep differently
   exposed negatives usable without forcing mixed-light and dusk frames fully
   neutral. The former RawTherapee-compatible exponent rendering remains
-  available as **Color Negative (Legacy)**.
-- Four selectable alternate color-negative profiles use separate measured
-  base anchors and curves: fresh Fuji 400 (eight fit references plus three
-  validation additions), expired Fuji 200 (one reference), CineStill 800T
+  available through the **Classic** conversion.
+- Natural conversion offers four measured color-negative starting looks after
+  the Balanced default: fresh Fujicolor 400 (eight fit references plus three
+  validation additions), expired Fujicolor 200 (one reference), CineStill 800T
   (two references), and Harman Phoenix II (twelve references). The Fuji 200
-  and CineStill fits remain experimental; the Harman LUT is leave-one-frame-out
-  validated, but remains an explicit choice. Cyan/purple Phoenix scans auto-select
-  the physical density-print profile below instead of this LUT.
-- Selectable **Physical** colour-negative profiles invert in log density
+  and CineStill fits remain experimental; the Harman look is leave-one-frame-out
+  validated, but remains an explicit choice. Cyan/purple Phoenix scans
+  auto-select the Darkroom conversion instead of this Natural look.
+- Selectable **Darkroom** colour-negative profiles invert in log density
   (dye unmix, chroma-gated independent per-channel stretch, quadratic cast
   removal, H&D paper curve). This is the inversion that matches cyan/purple-mask
   stocks such as Harman Phoenix II. Built-in physical unmix stocks cover Generic
@@ -65,7 +84,7 @@ features.
   Aerocolor IV, and VISION3 250D/500T. Print character can be Neutral, Kodak
   Endura Premier, or Fujicolor Crystal Archive (RA4 dye coupling and channel
   gamma). Further stocks load as JSON from `NegativeDensityProfiles/`.
-  Cyan/purple camera scans auto-select **Physical — Harman Phoenix II**, which
+  Cyan/purple camera scans auto-select **Darkroom** with Harman Phoenix II, which
   uses a same-scene phone-JPEG unmix (different time, angle, and lighting) on
   Fujicolor Crystal Archive paper. Camera-scan rebate is inset 20% during
   analysis so sprocket holes do not crush the invert. These profiles are a
@@ -118,15 +137,14 @@ features.
   display rendering settings.
   The app does not use the alternate base fits as automatic stock detection or
   as validated density-correction matrices.
-- The generic B&W profile uses a paired RAW/JPEG/XMP-calibrated decreasing
-  curve, full per-frame exposure anchoring, and a negative-side exposure
-  control. The former B&W power-law rendering remains selectable as
-  **Generic B&W Negative (Legacy)**. A stock-specific
-  **Alternate — Shanghai GP3** curve is fitted from six paired references and
-  uses a half-strength exposure anchor for a softer per-frame response.
-- The generic color profile likewise uses paired Camera Raw color curves and a
-  negative-side exposure control. Its legacy profile retains the former
-  scene-median-normalized exponent rendering for existing looks.
+- Natural B&W uses a paired RAW/JPEG/XMP-calibrated decreasing curve, full
+  per-frame exposure anchoring, and a negative-side exposure control. Its
+  visible starting looks are Balanced and Shanghai GP3, fitted from six paired
+  references; Classic preserves the former B&W power-law rendering.
+- Natural color likewise uses paired Camera Raw color curves and a negative-side
+  exposure control. Its visible starting looks are Balanced plus the measured
+  stock references above; Classic retains the former scene-median-normalized
+  exponent rendering for existing looks.
 - Named presets and versioned system-clipboard copy/paste, with a one-step
   remove action that restores the adjustments from before the last applied
   preset while retaining frame-specific geometry.
@@ -145,6 +163,8 @@ features.
   even when the inspector has keyboard focus.
 - Edited, preview-ready, active-export, and pending-export indicators in the
   browser.
+- Enabled scan stacks use the first capture's settings and filename, and count
+  as one export item while the other captures remain available in the sidebar.
 - Configurable 2/4/8/16/32-session preview cache and forward lookahead.
 - Immediate Edit/Grade/Export inspector switching.
 
@@ -186,6 +206,11 @@ features.
   full-resolution three-pass path and discards the buffer.
 - Sidebar order remains import order. Manual reordering is unavailable and is
   not a first-release gate unless the roll workflow demonstrates a need.
+- Repeated-capture proposals are limited to adjacent, same-size imports and
+  translation-only alignment. Detection is conservative and opt-in; low-detail
+  or ambiguous captures remain separate. A loaded flat field must be cleared
+  before stacking because sensor-coordinate correction is not yet applied per
+  capture before alignment.
 - No lens-distortion model or calibrated correction for film-plane/sensor-plane
   non-alignment beyond the current perspective crop.
 - The real RAW test corpus is Fujifilm X-Trans-focused and partly local-only;

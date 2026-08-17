@@ -6,10 +6,9 @@
 The native application is the primary product. It provides:
 
 - Drag-and-drop import of RAW and standard image files.
-- Per-file correction controls: film mode (color negative, B&W negative, slide,
-  or Original with no inversion), paired-scan-calibrated color and monochrome
-  inversion, physical log-density invert for cyan/purple-mask stocks, legacy
-  exponent presets, orientation, white balance, exposure,
+- Per-file correction controls: scan type (color negative, B&W negative, slide,
+  or Original with no inversion), Natural/Darkroom/Classic/Bypass conversion
+  choices, film-stock and paper options, orientation, white balance, exposure,
   shadows, highlights, saturation, RGB tone curves, highlight/midtone/shadow
   color wheels.
 - Camera-scan RAW processing with ISO-tier noise/detail filtering. Browsing
@@ -54,47 +53,58 @@ The native application is the primary product. It provides:
    **Next Scan** (Option-Command-Up/Down) move through import order, collapse a
    multi-selection to that one file, and fit the new preview. Those shortcuts
    work while a slider or other inspector control has focus.
+   The **Scans** sidebar shows a source thumbnail and edit/cache/export state
+   for every import. When adjacent, same-size files look like repeated captures
+   of one negative, a stack card appears below the thumbnails. Leave
+   **Combine for** on **Auto** to choose HDR for an exposure bracket or robust
+   averaging for same-exposure captures, or force **Noise** or **HDR**. Turn on
+   **Use aligned stack** only after reviewing the proposal. The preview is
+   aligned from bounded sources; export repeats the alignment and combination
+   from the full-resolution files. An enabled stack exports one image using
+   the first capture's filename and edits. Translation-only matching is
+   deliberately conservative, so low-detail or ambiguous captures remain
+   separate rather than being merged automatically. Clear any loaded flat
+   field before enabling a stack; sensor-coordinate flat-field correction is
+   intentionally kept separate until it can be applied to each capture before
+   alignment.
    **Live Camera** is available when macOS exposes the camera or capture adapter
    as a video device. Invert Negative, Exposure, and Saturation on the live
    toolbar affect only that preview; imported stills still use the 16-bit
    pipeline.
 3. New files are automatically classified as color negative, B&W negative, or
-   slide. Review and adjust the film mode and film negative preset as needed.
+   slide. In **Film & Conversion**, first review **Scan type**, then choose the
+   conversion intent that matches the result you want.
    Choose **Original** when the file is already a positive and should skip
    inversion and tone/color corrections.
-   **Color Negative** uses paired RAF/JPEG/XMP Camera Raw curves with partial
+   **Natural** uses paired RAF/JPEG/XMP Camera Raw curves with partial
    exposure and channel-ratio adaptation. It stabilizes tone across negative
    densities while retaining more scene color than full median balancing;
-   **Color Negative (Legacy)** retains the former exponent renderer.
-   Four deliberately non-default alternatives explore the measured base
-   families: **Alternate — Fuji 400 Fresh** uses the eight-frame fresh C-41
-   fit, **Alternate — Fuji 200 Expired** takes a warm expired-base direction,
-   **Alternate — CineStill 800T** takes an experimental two-frame
-   tungsten-base direction, and **Alternate — Harman Phoenix II** is a
-   twelve-frame held-out-validated Camera Raw LUT. The Fuji 200 and CineStill
-   profiles remain starting looks rather than general stock characterizations.
-   **Physical — Harman Phoenix II** is the invert to use on this stock: log
-   density, independent per-channel stretch, and an H&D paper curve, which is
-   the right model for Phoenix's cyan/purple mask. Generic Color Negative and
-   the Phoenix LUT treat it like orange-mask C-41 and usually go magenta or
-   cyan. Cyan/purple camera scans auto-select the physical profile, which was
-   tuned toward a same-scene phone JPEG as a general color target (the pair is
-   not the same time, angle, or lighting) on Fujicolor Crystal Archive paper.
-   **Physical — Generic C-41** and **Physical — Fujicolor 400** use the same
-   invert with different unmix defaults. Under **Advanced profile tuning**,
-   pick any bundled film stock unmix (Portra, Ektar, Aerocolor, Superia, and
-   the rest of NegPy's spec-sheet gallery) and a print paper (**Neutral**,
-   **Kodak Endura Premier**, or **Fujicolor Crystal Archive**). Additional
-   physical stocks can be dropped in as JSON under the profile store's
-   `NegativeDensityProfiles/` folder.
-   **Black & White** uses a paired-scan calibrated monochrome curve with full
+   **Classic** retains the former exponent renderer. Natural presents a
+   **Balanced** starting look plus visible Fujicolor 400, expired Fujicolor 200,
+   CineStill 800T, and Harman Phoenix II reference looks. The Fuji 200 and
+   CineStill profiles remain starting looks rather than general stock
+   characterizations.
+   **Darkroom** with Harman Phoenix II selected is the invert to use on this
+   stock: log density, independent per-channel stretch, and an H&D paper curve,
+   which is the right model for Phoenix's cyan/purple mask. The Balanced and
+   Phoenix Natural looks treat it like orange-mask C-41 and usually go magenta
+   or cyan. Cyan/purple camera scans auto-select this Darkroom setup,
+   which was tuned toward a same-scene phone JPEG as a general color target
+   (the pair is not the same time, angle, or lighting) on Fujicolor Crystal
+   Archive paper.
+   All bundled negative stocks are shown directly in the Darkroom panel
+   (Portra, Ektar, Aerocolor, Superia, and the rest of NegPy's spec-sheet
+   gallery), followed by described paper choices (**Neutral**, **Kodak Endura
+   Premier**, or **Fujicolor Crystal Archive**) and a visible **Color
+   Separation** control. Additional physical stocks can be dropped in as JSON
+   under the profile store's `NegativeDensityProfiles/` folder.
+   B&W **Natural** uses a paired-scan calibrated monochrome curve with full
    exposure anchoring so frames from one roll do not sit on an overexposed
-   highlight plateau. **Alternate — Shanghai GP3** is a six-frame
-   stock-specific monochrome curve with a half-strength exposure anchor.
-   **Black & White (Legacy)** preserves the old rendering.
-   Under **Advanced profile tuning**, **Negative Exposure** moves a calibrated
-   color or B&W scan before inversion; positive values make the resulting
-   positive darker. Physical profiles expose a **Dye Unmix** slider instead.
+   highlight plateau. The Shanghai GP3 starting look is a six-frame
+   stock-specific monochrome curve with a half-strength exposure anchor, while
+   **Classic** preserves the old rendering. The visible **Negative Exposure**
+   control moves a Natural color or B&W scan before inversion; positive values
+   make the resulting positive darker.
 4. Adjust corrections in the inspector panel: orientation, white balance,
    semantic exposure/brightness/contrast/highlights/shadows, temperature/tint,
    saturation, vibrance, curves, and color wheels.
@@ -110,8 +120,9 @@ The native application is the primary product. It provides:
    perspective drags count as one step. Undo history is session-local and
    starts empty after relaunch, while the saved current look is restored.
 5. For a color negative whose dye records do not separate cleanly, open
-   **Film Setup > Dye crossover**. Each slider says which source channel is
-   being mixed into a destination channel. Use a small negative value to
+   **Film & Conversion > Advanced color science**. Each slider says which
+   source channel is being mixed into a destination channel. Use a small
+   negative value to
    subtract an unwanted crossover cast, or a positive value to add that source
    channel. The matrix operates before tone and grading and preserves neutral
    gray, so it can correct relationships that Temperature/Tint or the three
@@ -127,16 +138,17 @@ The native application is the primary product. It provides:
    preserving each target's crop, orientation, perspective, and measured film
    base. **Apply Settings to All Open Files** does the same for every imported
    file.
-7. In **Processing Profiles**, a saved Film-Stock Profile captures the current
+7. In **Workflow Profiles > Scanner & roll profiles**, a saved Film-Response
+   Profile captures the current
    negative exponents, dye-crossover matrix, density response, and display
    rendering settings. The generic color and B&W profiles are calibrated from
    paired RAW/JPEG/XMP references, while user-created profiles remain the route
    for individual capture setups and stocks without a measured built-in
-   alternate. Cyan/purple-mask scans such as Harman Phoenix II auto-select
-   **Physical — Harman Phoenix II** rather than a Camera Raw LUT.
-   **Alternate — Harman Phoenix II** remains the LUT comparison; **Alternate —
-   Shanghai GP3** offers a measured B&W stock curve alongside the generic B&W
-   default.
+   alternate. Cyan/purple-mask scans such as Harman Phoenix II auto-select the
+   **Darkroom** conversion with the matching stock rather than a Camera Raw LUT.
+   The Harman Phoenix II Natural look remains the LUT comparison; the Shanghai
+   GP3 Natural look offers a measured B&W stock curve alongside the Balanced
+   B&W default.
 8. In Film Base, optionally load a matching flat field and measure a clear,
    unexposed film edge automatically or by dragging over it. This enables the
    measured density pipeline for negative conversion and replaces the generic

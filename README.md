@@ -16,11 +16,15 @@ The beta currently includes:
 - Camera RAW, TIFF, PNG, JPEG, and BMP import with fast bounded previews and an
   optional higher-detail demosaiced RAW preview.
 - Color-negative, black-and-white-negative, slide, and Original (no-inversion)
-  workflows with film-base measurement, inversion (including a physical
-  log-density path that auto-selects for cyan/purple-mask stocks such as
-  Harman Phoenix II), tone and color controls, curves, and color wheels.
+  workflows with the Film & Conversion panel, Natural/Darkroom/Classic/Bypass
+  conversion choices, visible film-stock and paper options, film-base
+  measurement, tone and color controls, curves, and color wheels.
 - Automatic frame detection, straighten, crop, four-corner perspective
   correction, original/corrected comparison, and pan/zoom inspection.
+- A Scans sidebar with bounded thumbnails, multi-selection, export state, and
+  opt-in aligned stacks for repeated captures. Auto chooses HDR for exposure
+  brackets or noise-reducing averaging for same-exposure captures; an enabled
+  stack exports once under its first capture's name.
 - Per-file settings and session-local undo/redo, presets, copy/paste,
   apply-to-selected/all, import-ordered previous/next, ordered batch export
   with active/pending sidebar status, and full-resolution TIFF, JPEG, PNG, and

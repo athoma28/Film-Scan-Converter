@@ -47,50 +47,91 @@ struct ContentView: View {
     }
   }
 
+  private enum NegativeConversionMode: String, CaseIterable, Identifiable {
+    case natural
+    case darkroom
+    case classic
+    case bypass
+
+    var id: Self { self }
+
+    var title: String {
+      switch self {
+      case .natural: "Natural"
+      case .darkroom: "Darkroom"
+      case .classic: "Classic"
+      case .bypass: "Bypass"
+      }
+    }
+
+    var subtitle: String {
+      switch self {
+      case .natural: "Reference-based starting point"
+      case .darkroom: "Film and paper character"
+      case .classic: "Original converter response"
+      case .bypass: "Leave the scan uninverted"
+      }
+    }
+
+    var systemImage: String {
+      switch self {
+      case .natural: "camera.filters"
+      case .darkroom: "photo.artframe"
+      case .classic: "clock.arrow.circlepath"
+      case .bypass: "forward.end"
+      }
+    }
+
+    static func available(for filmType: FilmType) -> [Self] {
+      switch filmType {
+      case .colourNegative: [.natural, .darkroom, .classic, .bypass]
+      case .blackAndWhiteNegative: [.natural, .classic, .bypass]
+      case .slide, .cropOnly: []
+      }
+    }
+  }
+
   var body: some View {
     NavigationSplitView {
-      List(model.files, id: \.self, selection: $model.selectedFiles) { url in
-        HStack(spacing: 8) {
-          Image(systemName: "photo")
-            .foregroundStyle(.secondary)
-          Text(url.lastPathComponent)
-            .lineLimit(1)
-          if model.selection == url && (model.isLoading || model.isRendering) {
-            ProgressView()
-              .controlSize(.mini)
-              .frame(width: 16, height: 16)
-          }
-          Spacer(minLength: 4)
-          if model.isActiveExport(for: url) {
-            Image(systemName: "square.and.arrow.up")
-              .foregroundStyle(Color.accentColor)
-              .font(.caption2)
-              .help("Exporting")
-              .accessibilityLabel("Exporting")
-          } else if model.isPendingExport(for: url) {
-            Image(systemName: "clock")
-              .foregroundStyle(.secondary)
-              .font(.caption2)
-              .help("Waiting to export")
-              .accessibilityLabel("Waiting to export")
-          }
-          if model.hasCachedPreview(for: url) {
-            Image(systemName: "bolt.fill")
-              .foregroundStyle(.secondary)
-              .font(.caption2)
-              .help("Ready to preview")
-          }
-          if model.hasEdits(for: url) {
-            Image(systemName: "slider.horizontal.3")
-              .foregroundStyle(Color.accentColor)
-              .font(.caption2)
-              .help("Edited")
+      VStack(spacing: 0) {
+        List(model.files, id: \.self, selection: $model.selectedFiles) { url in
+          ScanSidebarRow(
+            url: url,
+            thumbnail: model.thumbnail(for: url),
+            isThumbnailLoading: model.isThumbnailLoading(for: url),
+            isCurrentLoadingOrRendering: model.selection == url
+              && (model.isLoading || model.isRendering),
+            isActiveExport: model.isActiveExport(for: url),
+            isPendingExport: model.isPendingExport(for: url),
+            hasCachedPreview: model.hasCachedPreview(for: url),
+            hasEdits: model.hasEdits(for: url),
+            stackBadge: scanStackBadge(for: url)
+          )
+          .tag(url)
+          .task(id: model.thumbnail(for: url) == nil) {
+            model.requestThumbnail(for: url)
           }
         }
-        .tag(url)
+
+        if let stack = model.selectedDetectedScanStack {
+          Divider()
+          scanStackProposal(stack)
+        } else if model.isAnalyzingScanStacks, model.files.count > 1 {
+          Divider()
+          HStack(spacing: 8) {
+            ProgressView()
+              .controlSize(.small)
+              .accessibilityHidden(true)
+            Text("Checking for repeated captures...")
+              .font(.caption)
+              .foregroundStyle(.secondary)
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(12)
+        }
       }
       .navigationTitle("Scans")
-      .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
+      .navigationSplitViewColumnWidth(min: 220, ideal: 270, max: 340)
       .onChange(of: model.selectedFiles) {
         guard model.sidebarSelectionDidChange() else { return }
         endActiveOverlay()
@@ -148,12 +189,138 @@ struct ContentView: View {
     }
   }
 
+  private func scanStackBadge(for url: URL) -> ScanSidebarRow.StackBadgeData? {
+    guard let stack = model.detectedScanStack(containing: url) else { return nil }
+    return ScanSidebarRow.StackBadgeData(
+      memberCount: stack.members.count,
+      isEnabled: model.isScanStackEnabled(stack))
+  }
+
+  private func scanStackProposal(_ stack: DetectedScanStack) -> some View {
+    VStack(alignment: .leading, spacing: 9) {
+      HStack(spacing: 7) {
+        Image(systemName: "square.stack.3d.up.fill")
+          .foregroundStyle(Color.accentColor)
+        Text("\(stack.members.count)-capture stack")
+          .font(.headline)
+        Spacer()
+        Text("\(Int((stack.confidence * 100).rounded()))% match")
+          .font(.caption2.monospacedDigit())
+          .foregroundStyle(.secondary)
+      }
+
+      Text(scanStackProposalDescription(stack))
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+
+      if model.isAnalyzingScanStacks {
+        HStack(spacing: 7) {
+          ProgressView()
+            .controlSize(.small)
+            .accessibilityHidden(true)
+          Text("Checking the remaining imports before this group can be enabled...")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+      }
+
+      Picker(
+        "Combine for",
+        selection: Binding(
+          get: { model.scanStackMode(for: stack) },
+          set: { model.setScanStackMode($0, for: stack) }
+        )
+      ) {
+        Text("Auto").tag(ScanStackMode.automatic)
+        Text("Noise").tag(ScanStackMode.noiseReduction)
+        Text("HDR").tag(ScanStackMode.hdr)
+      }
+      .pickerStyle(.segmented)
+      .disabled(model.isExporting || model.isAnalyzingScanStacks || model.isLoading)
+
+      Toggle(
+        "Use aligned stack",
+        isOn: Binding(
+          get: { model.isScanStackEnabled(stack) },
+          set: { model.setScanStackEnabled($0, for: stack) }
+        )
+      )
+      .toggleStyle(.switch)
+      .disabled(
+        model.isExporting || model.isAnalyzingScanStacks || model.isLoading
+          || model.flatFieldImage != nil)
+
+      if model.flatFieldImage != nil {
+        Text(
+          "Clear the flat field before stacking so each capture keeps correct sensor coordinates."
+        )
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+      }
+
+      if model.isScanStackEnabled(stack) {
+        Text("The stack exports once using the first capture's name and edits.")
+          .font(.caption2)
+          .foregroundStyle(.tertiary)
+      }
+
+      if model.scanStackStatusID == stack.id,
+        model.isBuildingScanStack,
+        model.isScanStackEnabled(stack)
+      {
+        HStack(spacing: 7) {
+          ProgressView()
+            .controlSize(.small)
+            .accessibilityHidden(true)
+          Text(model.scanStackStatus)
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+      } else if model.scanStackStatusID == stack.id,
+        model.isScanStackEnabled(stack),
+        !model.scanStackStatus.isEmpty
+      {
+        Text(model.scanStackStatus)
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+    }
+    .padding(12)
+    .background(Color(nsColor: .controlBackgroundColor))
+  }
+
+  private func scanStackProposalDescription(_ stack: DetectedScanStack) -> String {
+    if stack.exposureSpreadEV >= 0.5 {
+      let spread = String(format: "%.1f", stack.exposureSpreadEV)
+      return
+        "These adjacent scans appear to be one negative with about \(spread) EV of bracketing. Auto will verify the full-resolution exposures before HDR fusion."
+    }
+    return
+      "These adjacent scans appear to be the same negative. Auto will verify the full-resolution exposures, then normally align and average them to reduce sensor noise."
+  }
+
+  private var exportSelectionButtonTitle: String {
+    if let stack = model.selectedDetectedScanStack,
+      model.isScanStackEnabled(stack),
+      model.selectedExportItemCount == 1
+    {
+      return "Export Stack (\(stack.members.count) captures)"
+    }
+    if model.selectedExportItemCount > 1 {
+      return "Export Selected (\(model.selectedExportItemCount) outputs)"
+    }
+    return "Export Selected"
+  }
+
   private var toolbar: some View {
     HStack(spacing: 10) {
       Button(action: model.showImportPanel) {
         Label("Import", systemImage: "plus")
       }
       .keyboardShortcut("o")
+      .disabled(model.isExporting)
 
       Button {
         model.selectAdjacentScan(offset: -1)
@@ -336,6 +503,325 @@ struct ContentView: View {
     .accessibilityHidden(inspectorPage != page)
   }
 
+  private var filmConversionSection: some View {
+    InspectorSection("Film & Conversion", systemImage: "film.stack") {
+      VStack(alignment: .leading, spacing: 6) {
+        Text("Scan type")
+          .font(.caption.weight(.medium))
+        Picker(
+          "Scan type",
+          selection: Binding(
+            get: { model.parameters.filmType },
+            set: { model.setFilmType($0) }
+          )
+        ) {
+          ForEach(FilmType.allCases, id: \.self) { type in
+            Text(type.compactDisplayName).tag(type)
+          }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+
+        Text(filmTypeDescription(model.parameters.filmType))
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+
+      if supportsFilmNegative(filmType: model.parameters.filmType) {
+        Divider()
+
+        VStack(alignment: .leading, spacing: 8) {
+          Text("Conversion")
+            .font(.caption.weight(.medium))
+          LazyVGrid(
+            columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible())],
+            spacing: 8
+          ) {
+            ForEach(NegativeConversionMode.available(for: model.parameters.filmType)) { mode in
+              InspectorChoiceCard(
+                title: mode.title,
+                subtitle: mode.subtitle,
+                systemImage: mode.systemImage,
+                isSelected: negativeConversionMode(for: model.parameters) == mode
+              ) {
+                setNegativeConversionMode(mode)
+              }
+            }
+          }
+        }
+
+        conversionDetailControls
+
+        if model.parameters.filmType == .colourNegative
+          && negativeConversionMode(for: model.parameters) != .bypass
+        {
+          advancedColorScienceControls
+        }
+      }
+    }
+  }
+
+  @ViewBuilder
+  private var conversionDetailControls: some View {
+    switch negativeConversionMode(for: model.parameters) {
+    case .natural:
+      naturalConversionControls
+    case .darkroom:
+      darkroomConversionControls
+    case .classic:
+      classicConversionControls
+    case .bypass:
+      Text(
+        "The negative stays uninverted while the scan type remains available for comparison. Choose Original above for a normal positive-image workflow."
+      )
+      .font(.caption2)
+      .foregroundStyle(.secondary)
+      .fixedSize(horizontal: false, vertical: true)
+    }
+  }
+
+  private var naturalConversionControls: some View {
+    let fn = model.parameters.filmNegativeParams
+    let selectedPreset = filmNegativePreset(for: model.parameters)
+    return VStack(alignment: .leading, spacing: 10) {
+      Text("Starting look")
+        .font(.caption.weight(.medium))
+
+      VStack(spacing: 6) {
+        ForEach(naturalPresets(for: model.parameters.filmType), id: \.self) { preset in
+          InspectorChoiceRow(
+            title: naturalPresetTitle(preset),
+            subtitle: naturalPresetSubtitle(preset),
+            isSelected: selectedPreset == preset
+          ) {
+            model.setFilmNegativePreset(preset)
+          }
+        }
+      }
+
+      AdjustmentSlider(
+        "Negative Exposure",
+        value: Binding(
+          get: { fn.monochromeExposureEV },
+          set: { model.setCalibratedNegativeExposure($0) }
+        ),
+        range: -4...4, neutral: 0, valueFormat: "%+.2f", unitSuffix: "EV",
+        responseExponent: 1.5
+      )
+      HStack {
+        Text("Lighter positive")
+        Spacer()
+        Text("Darker positive")
+      }
+      .font(.caption2)
+      .foregroundStyle(.tertiary)
+    }
+  }
+
+  private var darkroomConversionControls: some View {
+    let fn = model.parameters.filmNegativeParams
+    let profile = NegativeDensityProfileCatalog.profile(id: fn.densityProfileID)
+    let defaultStrength = profile.unmixStrength * 100
+    return VStack(alignment: .leading, spacing: 10) {
+      Text(
+        "Build the positive like a darkroom print: choose the negative stock, then choose the paper character."
+      )
+      .font(.caption2)
+      .foregroundStyle(.secondary)
+      .fixedSize(horizontal: false, vertical: true)
+
+      Text("Negative stock")
+        .font(.caption.weight(.medium))
+      LazyVGrid(
+        columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible())],
+        spacing: 6
+      ) {
+        ForEach(NegativeDensityProfileCatalog.bundled, id: \.id.rawValue) { option in
+          InspectorChoiceChip(
+            title: option.displayName,
+            isSelected: fn.densityProfileID == option.id.rawValue
+          ) {
+            model.setDensityProfileID(option.id.rawValue)
+          }
+        }
+      }
+
+      Text("Paper character")
+        .font(.caption.weight(.medium))
+        .padding(.top, 2)
+      VStack(spacing: 6) {
+        ForEach(DensityPaperProfileCatalog.bundled, id: \.id.rawValue) { paper in
+          InspectorChoiceRow(
+            title: paper.displayName,
+            subtitle: paperDescription(paper),
+            isSelected: fn.densityPaperID == paper.id.rawValue
+          ) {
+            model.setDensityPaperID(paper.id.rawValue)
+          }
+        }
+      }
+
+      AdjustmentSlider(
+        "Color Separation",
+        value: Binding(
+          get: {
+            (fn.densityUnmixStrength >= 0 ? fn.densityUnmixStrength : profile.unmixStrength) * 100
+          },
+          set: { model.setDensityUnmixStrength($0 / 100) }
+        ),
+        range: 0...100, neutral: defaultStrength, valueFormat: "%.0f", unitSuffix: "%"
+      )
+      HStack {
+        Text("Gentle")
+        Spacer()
+        Text("Stronger dye separation")
+      }
+      .font(.caption2)
+      .foregroundStyle(.tertiary)
+    }
+  }
+
+  private var classicConversionControls: some View {
+    let fn = model.parameters.filmNegativeParams
+    let neutral =
+      model.parameters.filmType == .blackAndWhiteNegative
+      ? FilmNegativeParams.legacyBlackAndWhite : FilmNegativeParams.legacyColourNegative
+    let rexp = -(fn.greenExp * fn.redRatio)
+    let gexp = -fn.greenExp
+    let bexp = -(fn.greenExp * fn.blueRatio)
+    return VStack(alignment: .leading, spacing: 8) {
+      Text(
+        "The original Film Scan Converter response is kept for older edits and for scans that already match it well."
+      )
+      .font(.caption2)
+      .foregroundStyle(.secondary)
+      .fixedSize(horizontal: false, vertical: true)
+
+      DisclosureGroup("Technical channel response") {
+        VStack(alignment: .leading, spacing: 10) {
+          AdjustmentSlider(
+            "Red Ratio",
+            value: Binding(
+              get: { fn.redRatio },
+              set: { model.setFilmNegativeRedRatio($0) }
+            ),
+            range: 0.8...1.8, neutral: neutral.redRatio,
+            valueFormat: "%.3f", responseExponent: 1.5
+          )
+          AdjustmentSlider(
+            "Green Exponent",
+            value: Binding(
+              get: { fn.greenExp },
+              set: { model.setFilmNegativeGreenExp($0) }
+            ),
+            range: 1.0...2.0, neutral: 1.5, valueFormat: "%.3f",
+            responseExponent: 1.5
+          )
+          AdjustmentSlider(
+            "Blue Ratio",
+            value: Binding(
+              get: { fn.blueRatio },
+              set: { model.setFilmNegativeBlueRatio($0) }
+            ),
+            range: 0.6...1.4, neutral: neutral.blueRatio,
+            valueFormat: "%.3f", responseExponent: 1.5
+          )
+          Text(
+            "Channel exponents: R \(String(format: "%.2f", rexp))  G \(String(format: "%.2f", gexp))  B \(String(format: "%.2f", bexp))"
+          )
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+        }
+        .padding(.top, 8)
+      }
+    }
+  }
+
+  private var advancedColorScienceControls: some View {
+    let mixing = model.parameters.filmDyeMixing
+    return DisclosureGroup {
+      VStack(alignment: .leading, spacing: 10) {
+        Text(
+          "Use this only when one dye record is visibly contaminating another. It is applied before the everyday Color controls below."
+        )
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+
+        AdjustmentSlider(
+          "Red from Green",
+          value: Binding(
+            get: { model.parameters.filmDyeMixing.redFromGreen * 100 },
+            set: { model.setFilmDyeMixing(\.redFromGreen, to: $0 / 100) }
+          ),
+          range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+          responseExponent: 1.7
+        )
+        AdjustmentSlider(
+          "Red from Blue",
+          value: Binding(
+            get: { model.parameters.filmDyeMixing.redFromBlue * 100 },
+            set: { model.setFilmDyeMixing(\.redFromBlue, to: $0 / 100) }
+          ),
+          range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+          responseExponent: 1.7
+        )
+        AdjustmentSlider(
+          "Green from Red",
+          value: Binding(
+            get: { model.parameters.filmDyeMixing.greenFromRed * 100 },
+            set: { model.setFilmDyeMixing(\.greenFromRed, to: $0 / 100) }
+          ),
+          range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+          responseExponent: 1.7
+        )
+        AdjustmentSlider(
+          "Green from Blue",
+          value: Binding(
+            get: { model.parameters.filmDyeMixing.greenFromBlue * 100 },
+            set: { model.setFilmDyeMixing(\.greenFromBlue, to: $0 / 100) }
+          ),
+          range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+          responseExponent: 1.7
+        )
+        AdjustmentSlider(
+          "Blue from Red",
+          value: Binding(
+            get: { model.parameters.filmDyeMixing.blueFromRed * 100 },
+            set: { model.setFilmDyeMixing(\.blueFromRed, to: $0 / 100) }
+          ),
+          range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+          responseExponent: 1.7
+        )
+        AdjustmentSlider(
+          "Blue from Green",
+          value: Binding(
+            get: { model.parameters.filmDyeMixing.blueFromGreen * 100 },
+            set: { model.setFilmDyeMixing(\.blueFromGreen, to: $0 / 100) }
+          ),
+          range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+          responseExponent: 1.7
+        )
+
+        Button("Reset Dye Crossover", action: model.resetFilmDyeMixing)
+          .controlSize(.small)
+          .disabled(mixing.isNeutral)
+      }
+      .padding(.top, 8)
+    } label: {
+      HStack {
+        Label("Advanced color science", systemImage: "waveform.path")
+        Spacer()
+        if !mixing.isNeutral {
+          Text("Adjusted")
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(Color.accentColor)
+        }
+      }
+    }
+  }
+
   private var editInspector: some View {
     Group {
       InspectorSection("Settings", systemImage: "slider.horizontal.2.square") {
@@ -435,233 +921,7 @@ struct ContentView: View {
         }
       }
 
-      InspectorSection("Film Setup", systemImage: "film.stack") {
-        Picker(
-          "Film Type",
-          selection: Binding(
-            get: { model.parameters.filmType },
-            set: { model.setFilmType($0) }
-          )
-        ) {
-          ForEach(FilmType.allCases, id: \.self) { type in
-            Text(type.displayName).tag(type)
-          }
-        }
-        Picker(
-          "Negative Profile",
-          selection: Binding(
-            get: { filmNegativePreset(for: model.parameters) },
-            set: { model.setFilmNegativePreset($0) }
-          )
-        ) {
-          ForEach(filmNegativePresets(for: model.parameters.filmType), id: \.self) { preset in
-            Text(preset.displayName).tag(preset)
-          }
-        }
-        .disabled(!supportsFilmNegative(filmType: model.parameters.filmType))
-
-        if model.parameters.filmNegativeParams.enabled
-          && supportsFilmNegative(filmType: model.parameters.filmType)
-        {
-          let fn = model.parameters.filmNegativeParams
-          let rexp = -(fn.greenExp * fn.redRatio)
-          let gexp = -fn.greenExp
-          let bexp = -(fn.greenExp * fn.blueRatio)
-
-          DisclosureGroup("Advanced profile tuning") {
-            if fn.rendering == .calibratedColor || fn.rendering == .calibratedMonochrome {
-              VStack(alignment: .leading, spacing: 10) {
-                Text(
-                  "Adjust the scan before inversion. Positive values make the resulting positive darker, matching Camera Raw's pre-curve exposure behavior."
-                )
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-                AdjustmentSlider(
-                  "Negative Exposure",
-                  value: Binding(
-                    get: { fn.monochromeExposureEV },
-                    set: { model.setCalibratedNegativeExposure($0) }
-                  ),
-                  range: -4...4, neutral: 0, valueFormat: "%+.2f", unitSuffix: " EV",
-                  responseExponent: 1.5
-                )
-              }
-              .padding(.top, 8)
-            } else if fn.rendering != .densityPrint {
-              VStack(spacing: 10) {
-                AdjustmentSlider(
-                  "Red Ratio",
-                  value: Binding(
-                    get: { fn.redRatio },
-                    set: { model.setFilmNegativeRedRatio($0) }
-                  ),
-                  range: 0.8...1.8, neutral: FilmNegativeParams.colourNegative.redRatio,
-                  valueFormat: "%.3f", responseExponent: 1.5
-                )
-                AdjustmentSlider(
-                  "Green Exponent",
-                  value: Binding(
-                    get: { fn.greenExp },
-                    set: { model.setFilmNegativeGreenExp($0) }
-                  ),
-                  range: 1.0...2.0, neutral: 1.5, valueFormat: "%.3f",
-                  responseExponent: 1.5
-                )
-                AdjustmentSlider(
-                  "Blue Ratio",
-                  value: Binding(
-                    get: { fn.blueRatio },
-                    set: { model.setFilmNegativeBlueRatio($0) }
-                  ),
-                  range: 0.6...1.4, neutral: FilmNegativeParams.colourNegative.blueRatio,
-                  valueFormat: "%.3f", responseExponent: 1.5
-                )
-              }
-              .padding(.top, 8)
-            }
-          }
-
-          if fn.rendering == .densityPrint {
-            Text(densityPrintProfileDescription(fn.densityProfileID, paperID: fn.densityPaperID))
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-              .fixedSize(horizontal: false, vertical: true)
-            Picker(
-              "Film stock",
-              selection: Binding(
-                get: { fn.densityProfileID },
-                set: { model.setDensityProfileID($0) }
-              )
-            ) {
-              ForEach(NegativeDensityProfileCatalog.bundled, id: \.id.rawValue) { profile in
-                Text(profile.displayName).tag(profile.id.rawValue)
-              }
-            }
-            Picker(
-              "Print paper",
-              selection: Binding(
-                get: { fn.densityPaperID },
-                set: { model.setDensityPaperID($0) }
-              )
-            ) {
-              ForEach(DensityPaperProfileCatalog.bundled, id: \.id.rawValue) { paper in
-                Text(paper.displayName).tag(paper.id.rawValue)
-              }
-            }
-            AdjustmentSlider(
-              "Dye Unmix",
-              value: Binding(
-                get: {
-                  fn.densityUnmixStrength >= 0
-                    ? fn.densityUnmixStrength
-                    : DensityPrintProcessing.resolvedProfile(from: fn).unmixStrength
-                },
-                set: { model.setDensityUnmixStrength($0) }
-              ),
-              range: 0...1, neutral: 0.5, valueFormat: "%.2f",
-              responseExponent: 1.0
-            )
-          } else if fn.rendering != .powerLaw {
-            Text(
-              fn.rendering == .calibratedColor
-                ? calibratedColorProfileDescription(fn.calibratedColorProfile)
-                : "Paired-scan calibrated monochrome curve"
-            )
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-          } else {
-            VStack(alignment: .leading, spacing: 2) {
-              Text(
-                "Exponents: R \(String(format: "%.2f", rexp))  G \(String(format: "%.2f", gexp))  B \(String(format: "%.2f", bexp))"
-              )
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-              if let medians = fn.measuredMedians {
-                Text(
-                  "Medians: R \(Int(medians.red))  G \(Int(medians.green))  B \(Int(medians.blue))"
-                )
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-              }
-            }
-          }
-        }
-
-        if model.parameters.filmType == .colourNegative {
-          let mixing = model.parameters.filmDyeMixing
-          DisclosureGroup("Dye crossover") {
-            VStack(alignment: .leading, spacing: 10) {
-              Text(
-                "Correct cross-channel dye contamination before tone and color grading. Positive values blend the named source channel in; negative values subtract it. Neutral gray stays neutral."
-              )
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-              .fixedSize(horizontal: false, vertical: true)
-
-              AdjustmentSlider(
-                "Red from Green",
-                value: Binding(
-                  get: { model.parameters.filmDyeMixing.redFromGreen * 100 },
-                  set: { model.setFilmDyeMixing(\.redFromGreen, to: $0 / 100) }
-                ),
-                range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
-                responseExponent: 1.7
-              )
-              AdjustmentSlider(
-                "Red from Blue",
-                value: Binding(
-                  get: { model.parameters.filmDyeMixing.redFromBlue * 100 },
-                  set: { model.setFilmDyeMixing(\.redFromBlue, to: $0 / 100) }
-                ),
-                range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
-                responseExponent: 1.7
-              )
-              AdjustmentSlider(
-                "Green from Red",
-                value: Binding(
-                  get: { model.parameters.filmDyeMixing.greenFromRed * 100 },
-                  set: { model.setFilmDyeMixing(\.greenFromRed, to: $0 / 100) }
-                ),
-                range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
-                responseExponent: 1.7
-              )
-              AdjustmentSlider(
-                "Green from Blue",
-                value: Binding(
-                  get: { model.parameters.filmDyeMixing.greenFromBlue * 100 },
-                  set: { model.setFilmDyeMixing(\.greenFromBlue, to: $0 / 100) }
-                ),
-                range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
-                responseExponent: 1.7
-              )
-              AdjustmentSlider(
-                "Blue from Red",
-                value: Binding(
-                  get: { model.parameters.filmDyeMixing.blueFromRed * 100 },
-                  set: { model.setFilmDyeMixing(\.blueFromRed, to: $0 / 100) }
-                ),
-                range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
-                responseExponent: 1.7
-              )
-              AdjustmentSlider(
-                "Blue from Green",
-                value: Binding(
-                  get: { model.parameters.filmDyeMixing.blueFromGreen * 100 },
-                  set: { model.setFilmDyeMixing(\.blueFromGreen, to: $0 / 100) }
-                ),
-                range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
-                responseExponent: 1.7
-              )
-
-              Button("Reset Dye Crossover", action: model.resetFilmDyeMixing)
-                .controlSize(.small)
-                .disabled(mixing.isNeutral)
-            }
-            .padding(.top, 8)
-          }
-        }
-      }
+      filmConversionSection
 
       InspectorSection("Light", systemImage: "sun.max") {
         AdjustmentSlider(
@@ -743,47 +1003,59 @@ struct ContentView: View {
       }
       .disabled(!model.parameters.filmType.supportsColorCorrections)
 
-      InspectorSection("Processing Profiles", systemImage: "square.stack.3d.up") {
-        Picker("Capture", selection: $model.selectedCaptureProfileID) {
-          ForEach(model.availableCaptureProfiles, id: \.id) { profile in
-            Text(profile.id.rawValue).tag(profile.id)
-          }
-        }
-        Picker("Film Stock", selection: $model.selectedFilmStockProfileID) {
-          ForEach(model.availableFilmStockProfiles, id: \.id) { profile in
-            Text(profile.displayName).tag(profile.id)
-          }
-        }
-        Picker(
-          "Roll",
-          selection: Binding(
-            get: { model.selectedRollProfileID ?? "" },
-            set: { model.selectedRollProfileID = $0.isEmpty ? nil : $0 }
-          )
-        ) {
-          Text("None").tag("")
-          ForEach(model.availableRollProfiles, id: \.rollID) { profile in
-            Text(profile.rollID).tag(profile.rollID)
-          }
-        }
-        Button("Apply Selected Profiles", action: model.applySelectedPipelineProfiles)
+      InspectorSection("Workflow Profiles", systemImage: "square.stack.3d.up") {
+        Text(
+          "Reusable scanner, film-response, and roll measurements for calibrated batches. Applying one can replace the entire conversion; use Darkroom above for one-off stock and paper choices."
+        )
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
 
-        HStack {
-          TextField("New profile name", text: $profileName)
-            .textFieldStyle(.roundedBorder)
-          Menu("Save") {
-            Button("Capture Profile") {
-              model.saveCurrentCaptureProfile(named: profileName)
-              profileName = ""
+        DisclosureGroup("Scanner & roll profiles") {
+          VStack(alignment: .leading, spacing: 10) {
+            Picker("Scanner / capture", selection: $model.selectedCaptureProfileID) {
+              ForEach(model.availableCaptureProfiles, id: \.id) { profile in
+                Text(profile.id.rawValue).tag(profile.id)
+              }
             }
-            Button("Film-Stock Profile") {
-              model.saveCurrentFilmStockProfile(named: profileName)
-              profileName = ""
+            Picker("Film response", selection: $model.selectedFilmStockProfileID) {
+              ForEach(model.availableFilmStockProfiles, id: \.id) { profile in
+                Text(profile.displayName).tag(profile.id)
+              }
             }
+            Picker(
+              "Measured roll",
+              selection: Binding(
+                get: { model.selectedRollProfileID ?? "" },
+                set: { model.selectedRollProfileID = $0.isEmpty ? nil : $0 }
+              )
+            ) {
+              Text("None").tag("")
+              ForEach(model.availableRollProfiles, id: \.rollID) { profile in
+                Text(profile.rollID).tag(profile.rollID)
+              }
+            }
+            Button("Apply Workflow Profiles", action: model.applySelectedPipelineProfiles)
+
+            HStack {
+              TextField("New profile name", text: $profileName)
+                .textFieldStyle(.roundedBorder)
+              Menu("Save") {
+                Button("Capture Profile") {
+                  model.saveCurrentCaptureProfile(named: profileName)
+                  profileName = ""
+                }
+                Button("Film-Response Profile") {
+                  model.saveCurrentFilmStockProfile(named: profileName)
+                  profileName = ""
+                }
+              }
+              .disabled(profileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .controlSize(.small)
           }
-          .disabled(profileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          .padding(.top, 8)
         }
-        .controlSize(.small)
 
         if !model.profileStatus.isEmpty {
           Text(model.profileStatus)
@@ -1366,27 +1638,23 @@ struct ContentView: View {
         }
 
         HStack(spacing: 8) {
-          Button(
-            model.selectedFileCount > 1
-              ? "Export Selected (\(model.selectedFileCount))"
-              : "Export Selected",
-            action: model.exportSelected
-          )
-          .buttonStyle(.borderedProminent)
-          .frame(maxWidth: .infinity)
+          Button(exportSelectionButtonTitle, action: model.exportSelected)
+            .buttonStyle(.borderedProminent)
+            .frame(maxWidth: .infinity)
           Button("Export All", action: model.exportAll)
             .buttonStyle(.bordered)
             .frame(maxWidth: .infinity)
         }
         .disabled(
           model.exportParameters.destinationDirectory == nil || model.isExporting || model.isLoading
+            || model.isBuildingScanStack
         )
 
         if model.isExporting {
           HStack(spacing: 8) {
             Button(
-              model.selectedFileCount > 1
-                ? "Add Selected (\(model.selectedFileCount))"
+              model.selectedExportItemCount > 1
+                ? "Add Selected (\(model.selectedExportItemCount))"
                 : "Add Selected",
               action: model.addSelectedToExportQueue
             )
@@ -1398,7 +1666,7 @@ struct ContentView: View {
           }
           Text(
             model.exportQueueCount == 1
-              ? "1 file waiting" : "\(model.exportQueueCount) files waiting"
+              ? "1 output waiting" : "\(model.exportQueueCount) outputs waiting"
           )
           .font(.caption)
           .foregroundStyle(.secondary)
@@ -1562,6 +1830,12 @@ struct ContentView: View {
       icon = "viewfinder"
       tint = .white
       help = "A bounded preview used for interaction. Export uses the full-resolution source image."
+    case .alignedStack:
+      label = "Aligned stack preview · \(dimensions)"
+      icon = "square.stack.3d.up.fill"
+      tint = .white
+      help =
+        "An aligned multi-capture preview. Export rebuilds the stack from the full-resolution sources."
     case nil:
       label = "Preview · \(dimensions)"
       icon = "viewfinder"
@@ -1597,6 +1871,116 @@ struct ContentView: View {
     }
   }
 
+  private func filmTypeDescription(_ filmType: FilmType) -> String {
+    switch filmType {
+    case .colourNegative:
+      "A color negative that needs inversion and orange-mask correction."
+    case .blackAndWhiteNegative:
+      "A monochrome negative that needs inversion."
+    case .slide:
+      "A positive transparency; no negative conversion is applied."
+    case .cropOnly:
+      "An already-positive image; only framing and export are applied."
+    }
+  }
+
+  private func negativeConversionMode(for params: ProcessingParameters) -> NegativeConversionMode {
+    let fn = params.filmNegativeParams
+    guard fn.enabled else { return .bypass }
+    switch fn.rendering {
+    case .calibratedColor, .calibratedMonochrome: return .natural
+    case .densityPrint: return .darkroom
+    case .powerLaw: return .classic
+    }
+  }
+
+  private func setNegativeConversionMode(_ mode: NegativeConversionMode) {
+    guard mode != negativeConversionMode(for: model.parameters) else { return }
+    switch mode {
+    case .natural:
+      model.setFilmNegativePreset(
+        model.parameters.filmType == .blackAndWhiteNegative ? .blackAndWhite : .colourNegative)
+    case .darkroom:
+      let preset: FilmNegativePreset
+      switch model.parameters.filmNegativeParams.calibratedColorProfile {
+      case .harmanPhoenixII:
+        preset = .densityPrintHarmanPhoenixII
+      case .fuji400Fresh:
+        preset = .densityPrintFuji400
+      case .generic, .fuji200Expired, .cinestill800T:
+        preset = .densityPrintGenericC41
+      }
+      model.setFilmNegativePreset(preset)
+    case .classic:
+      model.setFilmNegativePreset(
+        model.parameters.filmType == .blackAndWhiteNegative
+          ? .legacyBlackAndWhite : .legacyColourNegative)
+    case .bypass:
+      model.setFilmNegativePreset(.off)
+    }
+  }
+
+  private func naturalPresets(for filmType: FilmType) -> [FilmNegativePreset] {
+    switch filmType {
+    case .colourNegative:
+      [
+        .colourNegative,
+        .fuji400FreshAlternate,
+        .fuji200ExpiredAlternate,
+        .cinestill800TAlternate,
+        .harmanPhoenixIIAlternate,
+      ]
+    case .blackAndWhiteNegative:
+      [.blackAndWhite, .shanghaiGP3Alternate]
+    case .slide, .cropOnly:
+      []
+    }
+  }
+
+  private func naturalPresetTitle(_ preset: FilmNegativePreset) -> String {
+    switch preset {
+    case .colourNegative, .blackAndWhite: "Balanced"
+    case .fuji400FreshAlternate: "Fujicolor 400"
+    case .fuji200ExpiredAlternate: "Fujicolor 200 · expired"
+    case .cinestill800TAlternate: "CineStill 800T"
+    case .harmanPhoenixIIAlternate: "Harman Phoenix II"
+    case .shanghaiGP3Alternate: "Shanghai GP3"
+    default: preset.displayName
+    }
+  }
+
+  private func naturalPresetSubtitle(_ preset: FilmNegativePreset) -> String {
+    switch preset {
+    case .colourNegative:
+      "Neutral, flexible color for most negatives"
+    case .blackAndWhite:
+      "Neutral monochrome starting point"
+    case .fuji400FreshAlternate:
+      "Fresh-base reference from eight scans"
+    case .fuji200ExpiredAlternate:
+      "Warmer response for an aged film base"
+    case .cinestill800TAlternate:
+      "Tungsten-balanced reference response"
+    case .harmanPhoenixIIAlternate:
+      "Stock-specific curve for Phoenix color"
+    case .shanghaiGP3Alternate:
+      "Stock-specific monochrome response"
+    default:
+      ""
+    }
+  }
+
+  private func paperDescription(_ paper: DensityPaperProfile) -> String {
+    switch paper.id.rawValue {
+    case DensityPaperProfileCatalog.kodakEnduraPremier.id.rawValue:
+      "Deeper blacks with slightly cooler shadows"
+    case DensityPaperProfileCatalog.fujiCrystalArchive.id.rawValue:
+      "Brilliant whites with a crisp, cool response"
+    default:
+      "Clean contrast without added paper color"
+    }
+  }
+
   private func filmNegativePreset(for params: ProcessingParameters) -> FilmNegativePreset {
     guard params.filmNegativeParams.enabled else { return .off }
     let fn = params.filmNegativeParams
@@ -1628,14 +2012,8 @@ struct ContentView: View {
     }
     if fn.rendering == FilmNegativeParams.blackAndWhite.rendering {
       switch fn.calibratedMonochromeProfile {
-      case .generic:
-        if fn.monochromeExposureEV == FilmNegativeParams.blackAndWhite.monochromeExposureEV {
-          return .blackAndWhite
-        }
-      case .shanghaiGP3:
-        if fn.monochromeExposureEV == FilmNegativeParams.shanghaiGP3Alternate.monochromeExposureEV {
-          return .shanghaiGP3Alternate
-        }
+      case .generic: return .blackAndWhite
+      case .shanghaiGP3: return .shanghaiGP3Alternate
       }
     }
     if fn.rendering == FilmNegativeParams.legacyBlackAndWhite.rendering
@@ -1648,54 +2026,8 @@ struct ContentView: View {
     return .off
   }
 
-  private func calibratedColorProfileDescription(
-    _ profile: CalibratedColorNegativeProfile
-  ) -> String {
-    switch profile {
-    case .generic:
-      "Paired-scan adaptive Camera Raw colour curves"
-    case .fuji400Fresh:
-      "Alternate fresh-base curve fitted from eight Fuji 400 references"
-    case .fuji200Expired:
-      "Experimental warm expired-base curve fitted from one Fuji 200 reference"
-    case .cinestill800T:
-      "Experimental tungsten-base curve fitted from two CineStill 800T references"
-    case .harmanPhoenixII:
-      "Stock-specific curve validated across twelve Harman Phoenix II references"
-    }
-  }
-
-  private func densityPrintProfileDescription(_ profileID: String, paperID: String) -> String {
-    let profile = NegativeDensityProfileCatalog.profile(id: profileID)
-    let paper = DensityPaperProfileCatalog.profile(id: paperID)
-    return
-      "Density-domain print (NegPy-style). \(profile.displayName) unmix, independent channel stretch, \(paper.displayName) H&D paper, chroma-gated bounds and quadratic cast removal."
-  }
-
   private func supportsFilmNegative(filmType: FilmType) -> Bool {
     filmType == .colourNegative || filmType == .blackAndWhiteNegative
-  }
-
-  private func filmNegativePresets(for filmType: FilmType) -> [FilmNegativePreset] {
-    switch filmType {
-    case .colourNegative:
-      [
-        .off,
-        .colourNegative,
-        .fuji400FreshAlternate,
-        .fuji200ExpiredAlternate,
-        .cinestill800TAlternate,
-        .harmanPhoenixIIAlternate,
-        .densityPrintGenericC41,
-        .densityPrintHarmanPhoenixII,
-        .densityPrintFuji400,
-        .legacyColourNegative,
-      ]
-    case .blackAndWhiteNegative:
-      [.off, .blackAndWhite, .shanghaiGP3Alternate, .legacyBlackAndWhite]
-    case .slide, .cropOnly:
-      [.off]
-    }
   }
 
   private func densityRow(_ label: String, _ value: Double) -> some View {
@@ -1850,6 +2182,139 @@ private struct InspectorSection<Content: View>: View {
   }
 }
 
+private struct InspectorChoiceCard: View {
+  let title: String
+  let subtitle: String
+  let systemImage: String
+  let isSelected: Bool
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      VStack(alignment: .leading, spacing: 5) {
+        HStack(spacing: 6) {
+          Image(systemName: systemImage)
+            .frame(width: 15)
+          Text(title)
+            .font(.caption.weight(.semibold))
+          Spacer(minLength: 0)
+          if isSelected {
+            Image(systemName: "checkmark.circle.fill")
+              .font(.caption)
+          }
+        }
+        Text(subtitle)
+          .font(.caption2)
+          .foregroundStyle(isSelected ? Color.primary.opacity(0.8) : Color.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+      .foregroundStyle(isSelected ? Color.accentColor : .primary)
+      .padding(9)
+      .frame(maxWidth: .infinity, minHeight: 68, alignment: .topLeading)
+      .background(
+        RoundedRectangle(cornerRadius: 7, style: .continuous)
+          .fill(isSelected ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.035))
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 7, style: .continuous)
+          .stroke(
+            isSelected ? Color.accentColor.opacity(0.8) : Color.primary.opacity(0.09),
+            lineWidth: isSelected ? 1.5 : 1
+          )
+      )
+      .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+    }
+    .buttonStyle(.plain)
+    .accessibilityValue(isSelected ? "Selected" : "")
+  }
+}
+
+private struct InspectorChoiceRow: View {
+  let title: String
+  let subtitle: String
+  let isSelected: Bool
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      HStack(alignment: .top, spacing: 8) {
+        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+          .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.55))
+          .padding(.top, 1)
+        VStack(alignment: .leading, spacing: 2) {
+          Text(title)
+            .font(.caption.weight(.medium))
+            .foregroundStyle(.primary)
+          if !subtitle.isEmpty {
+            Text(subtitle)
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+        }
+        Spacer(minLength: 0)
+      }
+      .padding(.horizontal, 9)
+      .padding(.vertical, 7)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+          .fill(isSelected ? Color.accentColor.opacity(0.09) : Color.primary.opacity(0.025))
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+          .stroke(
+            isSelected ? Color.accentColor.opacity(0.55) : Color.primary.opacity(0.07),
+            lineWidth: 1
+          )
+      )
+      .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+    .buttonStyle(.plain)
+    .accessibilityValue(isSelected ? "Selected" : "")
+  }
+}
+
+private struct InspectorChoiceChip: View {
+  let title: String
+  let isSelected: Bool
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: 6) {
+        if isSelected {
+          Image(systemName: "checkmark")
+            .font(.caption2.weight(.bold))
+        }
+        Text(title)
+          .font(.caption)
+          .lineLimit(2)
+          .multilineTextAlignment(.leading)
+        Spacer(minLength: 0)
+      }
+      .foregroundStyle(isSelected ? Color.accentColor : .primary)
+      .padding(.horizontal, 8)
+      .padding(.vertical, 6)
+      .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
+      .background(
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+          .fill(isSelected ? Color.accentColor.opacity(0.1) : Color.primary.opacity(0.025))
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 6, style: .continuous)
+          .stroke(
+            isSelected ? Color.accentColor.opacity(0.65) : Color.primary.opacity(0.07),
+            lineWidth: 1
+          )
+      )
+      .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+    }
+    .buttonStyle(.plain)
+    .accessibilityValue(isSelected ? "Selected" : "")
+  }
+}
+
 private struct ToolbarSlider: View {
   let title: String
   @Binding var value: Double
@@ -1872,10 +2337,10 @@ private struct ToolbarSlider: View {
 }
 
 extension FilmType {
-  fileprivate var displayName: String {
+  fileprivate var compactDisplayName: String {
     switch self {
-    case .blackAndWhiteNegative: "B&W Negative"
-    case .colourNegative: "Color Negative"
+    case .blackAndWhiteNegative: "B&W Neg."
+    case .colourNegative: "Color Neg."
     case .slide: "Slide"
     case .cropOnly: "Original"
     }

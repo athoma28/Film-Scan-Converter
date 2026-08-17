@@ -9,6 +9,15 @@ final class AppModel: ObservableObject {
   @Published var selection: URL?
   @Published var selectedFiles: Set<URL> = []
   @Published private(set) var previewImage: NSImage?
+  @Published private(set) var thumbnailImages: [String: NSImage] = [:]
+  @Published private(set) var thumbnailLoadingPaths: Set<String> = []
+  @Published private(set) var detectedScanStacks: [DetectedScanStack] = []
+  @Published private(set) var enabledScanStackIDs: Set<String> = []
+  @Published private(set) var scanStackModes: [String: ScanStackMode] = [:]
+  @Published private(set) var isAnalyzingScanStacks = false
+  @Published private(set) var isBuildingScanStack = false
+  @Published private(set) var scanStackStatus = ""
+  @Published private(set) var scanStackStatusID: String?
   @Published private(set) var decodedImage: UInt16Image?
   @Published private(set) var parameters = ProcessingParameters()
   @Published private(set) var isRendering = false
@@ -163,6 +172,16 @@ final class AppModel: ObservableObject {
   private var loadTask: Task<Void, Never>?
   private var authoritativeDecodeTask: Task<Void, Never>?
   private var predecodeTask: Task<Void, Never>?
+  private var thumbnailTasks: [String: Task<Void, Never>] = [:]
+  private var thumbnailCacheOrder: [String] = []
+  private var thumbnailCacheBytes = 0
+  private var thumbnailByteCounts: [String: Int] = [:]
+  private var failedThumbnailPaths: Set<String> = []
+  private var scanAnalysisRecords: [String: ScanDetectionRecord] = [:]
+  private var scanAnalysisTask: Task<Void, Never>?
+  private var scanAnalysisGeneration = 0
+  private var scanStackPreviewTask: Task<Void, Never>?
+  private var scanStackPreviewGeneration = 0
   private var rebateTask: Task<Void, Never>?
   private var cropDetectionTask: Task<Void, Never>?
   private var dustDetectionTask: Task<Void, Never>?
@@ -186,6 +205,10 @@ final class AppModel: ObservableObject {
   nonisolated static let rawDetailPreviewMaxDimension = 2_400
   nonisolated static let analysisPreviewMaxDimension = 256
   nonisolated static let previewCacheByteLimit = 256 * 1_024 * 1_024
+  nonisolated static let thumbnailMaxDimension = 192
+  nonisolated static let thumbnailCacheCountLimit = 256
+  nonisolated static let thumbnailCacheByteLimit = 48 * 1_024 * 1_024
+  nonisolated static let maximumScanStackMembers = 8
 
   var previewCacheSessionCount: Int {
     previewCache.count
@@ -220,10 +243,15 @@ final class AppModel: ObservableObject {
     orderedSelectedFiles.count
   }
 
+  var selectedExportItemCount: Int {
+    consolidatedExportURLs(orderedSelectedFiles).count
+  }
+
   var canLoadRawDetailPreview: Bool {
     guard let selection else { return false }
     return FileDropPolicy.rawExtensions.contains(selection.pathExtension.lowercased())
       && previewSourceKind != .rawDetail
+      && previewSourceKind != .alignedStack
       && !isLoading
       && !isExporting
   }
@@ -245,12 +273,150 @@ final class AppModel: ObservableObject {
     return files.filter { selectedFiles.contains($0) }
   }
 
+  private func enabledScanStack(containing url: URL) -> DetectedScanStack? {
+    guard let stack = detectedScanStack(containing: url),
+      enabledScanStackIDs.contains(stack.id)
+    else { return nil }
+    return stack
+  }
+
+  private func consolidatedExportURLs(_ urls: [URL]) -> [URL] {
+    var result: [URL] = []
+    var includedStackIDs: Set<String> = []
+    var includedPaths: Set<String> = []
+    for url in urls {
+      if let stack = enabledScanStack(containing: url) {
+        guard includedStackIDs.insert(stack.id).inserted else { continue }
+        let path = settingsKey(stack.anchor)
+        if includedPaths.insert(path).inserted { result.append(stack.anchor) }
+      } else {
+        let path = settingsKey(url)
+        if includedPaths.insert(path).inserted { result.append(url) }
+      }
+    }
+    return result
+  }
+
   func hasCachedPreview(for url: URL) -> Bool {
     previewCache[settingsKey(url)] != nil
   }
 
   func hasEdits(for url: URL) -> Bool {
     editedKeys.contains(settingsKey(url))
+  }
+
+  func thumbnail(for url: URL) -> NSImage? {
+    thumbnailImages[settingsKey(url)]
+  }
+
+  func isThumbnailLoading(for url: URL) -> Bool {
+    thumbnailLoadingPaths.contains(settingsKey(url))
+  }
+
+  /// Starts one small, independent thumbnail decode for a visible sidebar row.
+  /// These images do not retain the much larger interactive preview sessions.
+  func requestThumbnail(for url: URL) {
+    let key = settingsKey(url)
+    guard thumbnailImages[key] == nil,
+      thumbnailTasks[key] == nil,
+      !thumbnailLoadingPaths.contains(key),
+      !failedThumbnailPaths.contains(key)
+    else {
+      if thumbnailImages[key] != nil { touchThumbnailCache(key) }
+      return
+    }
+
+    thumbnailLoadingPaths.insert(key)
+    let task = Task { [weak self] in
+      let worker = Task.detached(priority: .utility) {
+        try? Self.makeSidebarScanAnalysis(for: url)
+      }
+      let analysis = await withTaskCancellationHandler {
+        await worker.value
+      } onCancel: {
+        worker.cancel()
+      }
+      guard let self else { return }
+      self.thumbnailTasks[key] = nil
+      self.thumbnailLoadingPaths.remove(key)
+      guard let analysis else {
+        self.failedThumbnailPaths.insert(key)
+        return
+      }
+      self.publishSidebarScanAnalysis(analysis, for: url)
+    }
+    thumbnailTasks[key] = task
+  }
+
+  var selectedDetectedScanStack: DetectedScanStack? {
+    guard let selection else { return nil }
+    return detectedScanStack(containing: selection)
+  }
+
+  func detectedScanStack(containing url: URL) -> DetectedScanStack? {
+    detectedScanStacks.first { $0.contains(url) }
+  }
+
+  func isScanStackEnabled(_ stack: DetectedScanStack) -> Bool {
+    enabledScanStackIDs.contains(stack.id)
+  }
+
+  func scanStackMode(for stack: DetectedScanStack) -> ScanStackMode {
+    scanStackModes[stack.id] ?? .automatic
+  }
+
+  func setScanStackEnabled(_ enabled: Bool, for stack: DetectedScanStack) {
+    guard !isExporting else {
+      scanStackStatus = "Wait for the active export to finish before changing stacks."
+      scanStackStatusID = stack.id
+      return
+    }
+    if enabled {
+      guard !isAnalyzingScanStacks else {
+        scanStackStatus = "Wait for repeated-capture analysis to finish."
+        scanStackStatusID = stack.id
+        return
+      }
+      guard !isLoading else {
+        scanStackStatus = "Wait for the source preview to finish loading."
+        scanStackStatusID = stack.id
+        return
+      }
+      guard flatFieldImage == nil else {
+        scanStackStatus =
+          "Clear the flat field before stacking; sensor-coordinate correction must happen per capture."
+        scanStackStatusID = stack.id
+        return
+      }
+      enabledScanStackIDs.insert(stack.id)
+      if scanStackModes[stack.id] == nil {
+        scanStackModes[stack.id] = .automatic
+      }
+      scanStackStatusID = stack.id
+      if selection != stack.anchor || selectedFiles != [stack.anchor] {
+        selection = stack.anchor
+        selectedFiles = [stack.anchor]
+        loadSelection()
+      } else {
+        buildScanStackPreview(stack)
+      }
+    } else {
+      enabledScanStackIDs.remove(stack.id)
+      scanStackPreviewGeneration += 1
+      scanStackPreviewTask?.cancel()
+      scanStackPreviewTask = nil
+      isBuildingScanStack = false
+      scanStackStatus = "Stack disabled; showing the reference capture."
+      scanStackStatusID = stack.id
+      if selection.map(stack.contains) == true { loadSelection() }
+    }
+  }
+
+  func setScanStackMode(_ mode: ScanStackMode, for stack: DetectedScanStack) {
+    guard !isExporting, !isAnalyzingScanStacks else { return }
+    scanStackModes[stack.id] = mode
+    guard enabledScanStackIDs.contains(stack.id) else { return }
+    buildScanStackPreview(stack)
   }
 
   var canSelectPreviousScan: Bool { adjacentScan(offset: -1) != nil }
@@ -271,19 +437,30 @@ final class AppModel: ObservableObject {
     guard isExporting, activeExportQueue.indices.contains(exportProgressCurrent) else {
       return false
     }
-    return activeExportQueue[exportProgressCurrent] == url
+    let active = activeExportQueue[exportProgressCurrent]
+    if active == url { return true }
+    return enabledScanStack(containing: url)?.anchor == active
   }
 
   func isPendingExport(for url: URL) -> Bool {
     guard isExporting else { return false }
-    return activeExportQueue.dropFirst(exportProgressCurrent + 1).contains(url)
+    let pending = activeExportQueue.dropFirst(exportProgressCurrent + 1)
+    if pending.contains(url) { return true }
+    guard let anchor = enabledScanStack(containing: url)?.anchor else { return false }
+    return pending.contains(anchor)
   }
 
   private func adjacentScan(offset: Int) -> URL? {
-    guard let selection, let index = files.firstIndex(of: selection) else { return nil }
+    let reviewFiles = files.filter { url in
+      guard let stack = enabledScanStack(containing: url) else { return true }
+      return stack.anchor == url
+    }
+    guard let selection else { return nil }
+    let canonical = enabledScanStack(containing: selection)?.anchor ?? selection
+    guard let index = reviewFiles.firstIndex(of: canonical) else { return nil }
     let nextIndex = index + offset
-    guard files.indices.contains(nextIndex) else { return nil }
-    return files[nextIndex]
+    guard reviewFiles.indices.contains(nextIndex) else { return nil }
+    return reviewFiles[nextIndex]
   }
 
   func setPreviewCacheLimit(_ limit: Int) {
@@ -299,6 +476,10 @@ final class AppModel: ObservableObject {
     subsystem: "film.scan.converter", category: "Signpost")
 
   func importFiles(_ urls: [URL]) {
+    guard !isExporting else {
+      setStatus("Wait for the active export to finish before importing more scans.", kind: .error)
+      return
+    }
     let supported = FileDropPolicy.supportedFiles(from: urls)
     guard !supported.isEmpty else {
       ImportLog.error("No supported files in import batch")
@@ -311,6 +492,7 @@ final class AppModel: ObservableObject {
     ImportLog.importAdded(
       path: "appending \(newFiles.count) new files (total will be \(files.count + newFiles.count))")
     files.append(contentsOf: newFiles)
+    scheduleScanStackAnalysis()
     selection = supported.first
     selectedFiles = selection.map { Set([$0]) } ?? []
     loadSelection()
@@ -327,7 +509,13 @@ final class AppModel: ObservableObject {
       return false
     }
     endEditingGesture()
-    selection = files.first { selectedFiles.contains($0) }
+    let requested = files.first { selectedFiles.contains($0) }
+    if let requested, let stack = enabledScanStack(containing: requested) {
+      selection = stack.anchor
+      selectedFiles = [stack.anchor]
+    } else {
+      selection = requested
+    }
     return selection != previous
   }
 
@@ -394,6 +582,10 @@ final class AppModel: ObservableObject {
   func loadSelection() {
     endEditingGesture()
     refreshHistoryAvailability()
+    scanStackPreviewGeneration += 1
+    scanStackPreviewTask?.cancel()
+    scanStackPreviewTask = nil
+    isBuildingScanStack = false
     if let interval = pendingFirstPreviewInterval {
       AppPerformanceSignposts.end(interval)
       pendingFirstPreviewInterval = nil
@@ -581,6 +773,7 @@ final class AppModel: ObservableObject {
         cacheCurrentSession(for: selection)
         scheduleRender(immediate: true)
         scheduleLookaheadPredecode(after: selection)
+        scheduleEnabledScanStackPreview(for: selection)
       } catch is CancellationError {
         ImportLog.loadSelectionCancelled(path: selection.lastPathComponent)
         return
@@ -1327,7 +1520,7 @@ final class AppModel: ObservableObject {
   }
 
   func exportSelected() {
-    let urls = orderedSelectedFiles
+    let urls = consolidatedExportURLs(orderedSelectedFiles)
     guard !urls.isEmpty else {
       setStatus("No image selected for export.", kind: .error)
       return
@@ -1340,11 +1533,11 @@ final class AppModel: ObservableObject {
       setStatus("No images to export.", kind: .error)
       return
     }
-    exportFiles(files)
+    exportFiles(consolidatedExportURLs(files))
   }
 
   func addSelectedToExportQueue() {
-    let urls = orderedSelectedFiles
+    let urls = consolidatedExportURLs(orderedSelectedFiles)
     guard isExporting, !urls.isEmpty,
       let destinationDirectory = exportParameters.destinationDirectory
     else {
@@ -1618,6 +1811,10 @@ final class AppModel: ObservableObject {
   }
 
   func setFlatField(_ image: UInt16Image?, url: URL? = nil) {
+    guard !isExporting else {
+      rebateStatus = "Wait for the active export to finish before changing the flat field."
+      return
+    }
     guard let image else {
       flatFieldImage = nil
       flatFieldURL = nil
@@ -1640,7 +1837,19 @@ final class AppModel: ObservableObject {
     flatFieldImage = image
     flatFieldURL = url
     rebateStatus = "Flat-field loaded\(url.map { ": \($0.lastPathComponent)" } ?? ".")"
-    scheduleRender(immediate: true)
+    if !enabledScanStackIDs.isEmpty {
+      enabledScanStackIDs.removeAll()
+      scanStackPreviewGeneration += 1
+      scanStackPreviewTask?.cancel()
+      scanStackPreviewTask = nil
+      isBuildingScanStack = false
+      scanStackStatus =
+        "Stack disabled because flat-field correction must be applied before alignment."
+      scanStackStatusID = nil
+      loadSelection()
+    } else {
+      scheduleRender(immediate: true)
+    }
   }
 
   func detectCrop() {
@@ -1979,6 +2188,12 @@ final class AppModel: ObservableObject {
 
   private func exportFiles(_ urls: [URL]) {
     guard !urls.isEmpty else { return }
+    guard !isBuildingScanStack else {
+      setStatus(
+        "Wait for the aligned stack preview to finish before exporting.",
+        kind: .error)
+      return
+    }
     guard !isLoading else {
       setStatus(
         "Wait for the active preview decode to finish before exporting.",
@@ -2061,8 +2276,13 @@ final class AppModel: ObservableObject {
         let nextIsFullResolutionRAW =
           index + 1 < self.activeExportQueue.count
           && Self.requiresFullResolutionExportDecode(self.activeExportQueue[index + 1])
+        let currentIsStack = self.enabledScanStack(containing: firstURL) != nil
+        let nextIsStack =
+          index + 1 < self.activeExportQueue.count
+          && self.enabledScanStack(containing: self.activeExportQueue[index + 1]) != nil
         let batchSize =
           Self.requiresFullResolutionExportDecode(firstURL) || nextIsFullResolutionRAW
+            || currentIsStack || nextIsStack
           ? 1 : 2
         let endIndex = min(index + batchSize, self.activeExportQueue.count)
         var requests: [ExportManager.ExportRequest] = []
@@ -2190,7 +2410,13 @@ final class AppModel: ObservableObject {
       .decode, correlationID: correlationID, filename: url.lastPathComponent)
     let decoded: UInt16Image
     do {
-      decoded = try await decodedImageForExport(url)
+      if let stack = enabledScanStack(containing: url) {
+        decoded = try await decodedScanStackForExport(
+          stack,
+          mode: scanStackMode(for: stack))
+      } else {
+        decoded = try await decodedImageForExport(url)
+      }
       AppPerformanceSignposts.end(decodeInterval)
     } catch {
       AppPerformanceSignposts.end(decodeInterval)
@@ -2271,6 +2497,55 @@ final class AppModel: ObservableObject {
     return try await Task.detached(priority: .userInitiated) {
       return try Self.decodeImage(url)
     }.value
+  }
+
+  private func decodedScanStackForExport(
+    _ stack: DetectedScanStack,
+    mode: ScanStackMode
+  ) async throws -> UInt16Image {
+    scanStackStatusID = stack.id
+    guard let firstMember = stack.members.first else {
+      throw ScanStackError.insufficientImages
+    }
+    scanStackStatus =
+      "Decoding stack capture 1 of \(stack.members.count): \(firstMember.lastPathComponent)"
+    var composite = try await decodedImageForExport(firstMember)
+    var effectiveMode = mode == .automatic ? ScanStackMode.noiseReduction : mode
+    var automaticUsedHDR = false
+
+    for (index, member) in stack.members.enumerated().dropFirst() {
+      try Task.checkCancellation()
+      scanStackStatus =
+        "Decoding stack capture \(index + 1) of \(stack.members.count): \(member.lastPathComponent)"
+      let candidate = try await decodedImageForExport(member)
+      try Task.checkCancellation()
+      scanStackStatus =
+        "Aligning and combining capture \(index + 1) of \(stack.members.count)..."
+      // Weight the existing composite by the number of captures it already
+      // represents. Array copies share the immutable UInt16 pixel storage, so
+      // only the composite, current candidate, and new output are resident.
+      let accumulated = composite
+      let worker = Task.detached(priority: .userInitiated) {
+        let weightedComposite = Array(repeating: accumulated, count: index)
+        return try MultiScanStacker.combine(
+          images: weightedComposite + [candidate],
+          mode: mode)
+      }
+      let result = try await withTaskCancellationHandler {
+        try await worker.value
+      } onCancel: {
+        worker.cancel()
+      }
+      composite = result.image
+      if mode == .automatic {
+        automaticUsedHDR = automaticUsedHDR || result.effectiveMode == .hdr
+        effectiveMode = automaticUsedHDR ? .hdr : .noiseReduction
+      }
+    }
+    try Task.checkCancellation()
+    scanStackStatus =
+      "Built full-resolution \(Self.scanStackModeLabel(effectiveMode)) stack from \(stack.members.count) captures."
+    return composite
   }
 
   nonisolated static func requiresFullResolutionExportDecode(_ url: URL) -> Bool {
@@ -2630,6 +2905,7 @@ final class AppModel: ObservableObject {
     } else {
       applyAutomaticFilmClassification(from: session.analysisSource)
     }
+    scheduleEnabledScanStackPreview(for: selection)
   }
 
   private func scheduleLookaheadPredecode(after selection: URL) {
@@ -2736,6 +3012,241 @@ final class AppModel: ObservableObject {
   private func touchPreviewCache(_ key: String) {
     previewCacheOrder.removeAll { $0 == key }
     previewCacheOrder.append(key)
+  }
+
+  private func trimThumbnailCache() {
+    while thumbnailCacheOrder.count > Self.thumbnailCacheCountLimit
+      || thumbnailCacheBytes > Self.thumbnailCacheByteLimit
+    {
+      let evicted = thumbnailCacheOrder.removeFirst()
+      thumbnailImages.removeValue(forKey: evicted)
+      thumbnailCacheBytes -= thumbnailByteCounts.removeValue(forKey: evicted) ?? 0
+    }
+  }
+
+  private func touchThumbnailCache(_ key: String) {
+    thumbnailCacheOrder.removeAll { $0 == key }
+    thumbnailCacheOrder.append(key)
+  }
+
+  private func publishSidebarScanAnalysis(_ analysis: SidebarScanAnalysis, for url: URL) {
+    let key = settingsKey(url)
+    scanAnalysisRecords[key] = analysis.detectionRecord
+    failedThumbnailPaths.remove(key)
+
+    if thumbnailImages[key] == nil,
+      let cgImage = analysis.thumbnailSource.makePreviewCGImage()
+    {
+      let byteCount = analysis.thumbnailSource.width * analysis.thumbnailSource.height * 4
+      thumbnailImages[key] = NSImage(cgImage: cgImage, size: .zero)
+      thumbnailByteCounts[key] = byteCount
+      thumbnailCacheBytes += byteCount
+    }
+    if thumbnailImages[key] != nil {
+      touchThumbnailCache(key)
+      trimThumbnailCache()
+    }
+  }
+
+  private func scheduleScanStackAnalysis() {
+    scanAnalysisGeneration += 1
+    let generation = scanAnalysisGeneration
+    scanAnalysisTask?.cancel()
+    let targets = files
+    let needsAnalysis = targets.contains { scanAnalysisRecords[settingsKey($0)] == nil }
+    if needsAnalysis, !enabledScanStackIDs.isEmpty {
+      enabledScanStackIDs.removeAll()
+      scanStackPreviewGeneration += 1
+      scanStackPreviewTask?.cancel()
+      scanStackPreviewTask = nil
+      isBuildingScanStack = false
+      scanStackStatus = "Stack disabled while newly imported captures are analyzed."
+      scanStackStatusID = nil
+    }
+    isAnalyzingScanStacks = targets.count > 1 && needsAnalysis
+
+    scanAnalysisTask = Task { [weak self] in
+      guard let self else { return }
+      for url in targets {
+        guard !Task.isCancelled, generation == self.scanAnalysisGeneration else { return }
+        let key = self.settingsKey(url)
+        if self.scanAnalysisRecords[key] != nil { continue }
+        // Thumbnail rendering and repeated-scan analysis share one per-path
+        // decode. A superseded analysis generation may stop waiting, while the
+        // small decode can finish once and be reused by its replacement.
+        self.requestThumbnail(for: url)
+        if let thumbnailTask = self.thumbnailTasks[key] {
+          await thumbnailTask.value
+        }
+      }
+      guard generation == self.scanAnalysisGeneration else { return }
+      let records = self.scanAnalysisRecords
+      let proposalWorker = Task.detached(priority: .utility) {
+        Self.detectedScanStackProposals(
+          files: targets,
+          records: records)
+      }
+      let proposals = await withTaskCancellationHandler {
+        await proposalWorker.value
+      } onCancel: {
+        proposalWorker.cancel()
+      }
+      guard !Task.isCancelled, generation == self.scanAnalysisGeneration else { return }
+      self.applyDetectedScanStackProposals(proposals)
+      self.isAnalyzingScanStacks = false
+      self.scanAnalysisTask = nil
+    }
+  }
+
+  nonisolated private static func detectedScanStackProposals(
+    files: [URL],
+    records: [String: ScanDetectionRecord]
+  ) -> [DetectedScanStack] {
+    var proposals: [DetectedScanStack] = []
+    var currentURLs: [URL] = []
+    var currentMatches: [SameNegativeMatch] = []
+
+    func record(for url: URL) -> ScanDetectionRecord? {
+      records[url.standardizedFileURL.path]
+    }
+
+    func finishCurrentGroup() {
+      guard currentURLs.count >= 2 else {
+        currentURLs = []
+        currentMatches = []
+        return
+      }
+      let exposureValues = currentURLs.compactMap {
+        record(for: $0)?.exposureEV
+      }
+      let exposureSpread = (exposureValues.max() ?? 0) - (exposureValues.min() ?? 0)
+      proposals.append(
+        DetectedScanStack(
+          members: currentURLs,
+          confidence: currentMatches.map(\.confidence).min() ?? 0,
+          exposureSpreadEV: exposureSpread,
+          recommendedMode: exposureSpread >= 0.5 ? .hdr : .noiseReduction
+        ))
+      currentURLs = []
+      currentMatches = []
+    }
+
+    for url in files {
+      guard !Task.isCancelled else { return [] }
+      guard let analysis = record(for: url) else {
+        finishCurrentGroup()
+        continue
+      }
+      guard let anchorURL = currentURLs.first,
+        let anchor = record(for: anchorURL)
+      else {
+        currentURLs = [url]
+        continue
+      }
+      let dimensionsMatch = anchor.fullResolutionDimensions == analysis.fullResolutionDimensions
+      let match = SameNegativeDetector.match(
+        anchor.fingerprint,
+        analysis.fingerprint,
+        minimumConfidence: 0.88)
+      if dimensionsMatch, match.isMatch {
+        if currentURLs.count >= maximumScanStackMembers {
+          finishCurrentGroup()
+          currentURLs = [url]
+        } else {
+          currentURLs.append(url)
+          currentMatches.append(match)
+        }
+      } else {
+        finishCurrentGroup()
+        currentURLs = [url]
+      }
+    }
+    finishCurrentGroup()
+    return proposals
+  }
+
+  private func applyDetectedScanStackProposals(_ proposals: [DetectedScanStack]) {
+    detectedScanStacks = proposals
+
+    let validIDs = Set(proposals.map(\.id))
+    enabledScanStackIDs.formIntersection(validIDs)
+    scanStackModes = scanStackModes.filter { validIDs.contains($0.key) }
+  }
+
+  private func scheduleEnabledScanStackPreview(for url: URL) {
+    guard let stack = detectedScanStack(containing: url),
+      enabledScanStackIDs.contains(stack.id)
+    else { return }
+    buildScanStackPreview(stack)
+  }
+
+  private func buildScanStackPreview(_ stack: DetectedScanStack) {
+    guard let selectedURL = selection, stack.contains(selectedURL),
+      enabledScanStackIDs.contains(stack.id)
+    else { return }
+    scanStackPreviewGeneration += 1
+    let generation = scanStackPreviewGeneration
+    scanStackPreviewTask?.cancel()
+    let mode = scanStackMode(for: stack)
+    isBuildingScanStack = true
+    scanStackStatus = "Aligning \(stack.members.count) captures..."
+    scanStackStatusID = stack.id
+
+    scanStackPreviewTask = Task { [weak self] in
+      guard let self else { return }
+      do {
+        let worker = Task.detached(priority: .userInitiated) {
+          var images: [UInt16Image] = []
+          images.reserveCapacity(stack.members.count)
+          for url in stack.members {
+            try Task.checkCancellation()
+            images.append(try Self.makeStackPreviewSource(for: url))
+          }
+          try Task.checkCancellation()
+          return try MultiScanStacker.combine(images: images, mode: mode)
+        }
+        let result = try await withTaskCancellationHandler {
+          try await worker.value
+        } onCancel: {
+          worker.cancel()
+        }
+        try Task.checkCancellation()
+        guard generation == self.scanStackPreviewGeneration,
+          self.selection == selectedURL,
+          self.enabledScanStackIDs.contains(stack.id)
+        else { return }
+        guard let renderer = StillPreviewRenderer(image: result.image) else {
+          throw CocoaError(.coderInvalidValue)
+        }
+        self.decodedImage = result.image
+        self.previewSource = result.image
+        self.previewRenderer = renderer
+        self.previewSourceKind = .alignedStack
+        self.populateFilmNegativeMedians(
+          from: result.image.resizedToFit(maxDimension: Self.analysisPreviewMaxDimension))
+        self.isBuildingScanStack = false
+        self.scanStackPreviewTask = nil
+        self.scanStackStatus =
+          "Aligned \(stack.members.count) captures for \(Self.scanStackModeLabel(result.effectiveMode))."
+        self.scheduleRender(immediate: true)
+      } catch is CancellationError {
+        return
+      } catch {
+        guard generation == self.scanStackPreviewGeneration else { return }
+        self.isBuildingScanStack = false
+        self.scanStackPreviewTask = nil
+        self.scanStackStatus = "Stack could not be built: \(error.localizedDescription)"
+        self.setStatus(self.scanStackStatus, kind: .error)
+      }
+    }
+  }
+
+  nonisolated private static func scanStackModeLabel(_ mode: ScanStackMode) -> String {
+    switch mode {
+    case .automatic: "automatic stacking"
+    case .noiseReduction: "noise reduction"
+    case .hdr: "HDR"
+    }
   }
 
   private func scheduleRender(immediate: Bool = false) {
@@ -2961,6 +3472,9 @@ final class AppModel: ObservableObject {
           sourceLabel = "High-detail demosaiced RAW preview · full resolution used for export"
         case .standardThumbnail:
           sourceLabel = "Fast image preview · full resolution used for export"
+        case .alignedStack:
+          sourceLabel =
+            "Aligned multi-capture preview · stack rebuilt at full resolution for export"
         case nil:
           sourceLabel = "Fast preview"
         }
@@ -3062,6 +3576,70 @@ final class AppModel: ObservableObject {
       previewRenderer: renderer,
       sourcePixelDimensions: fullResolutionDimensions(of: url))
   }
+
+  nonisolated private static func makeThumbnailSource(for url: URL) throws -> UInt16Image {
+    if FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased()) {
+      return try RawImageDecoder.extractThumbnail(
+        url, maxDimension: thumbnailMaxDimension
+      ).image
+    }
+    return try StandardImageDecoder.decodePreview(
+      url, maxDimension: thumbnailMaxDimension)
+  }
+
+  nonisolated private static func makeSidebarScanAnalysis(
+    for url: URL
+  ) throws -> SidebarScanAnalysis {
+    let source = try makeThumbnailSource(for: url)
+    return SidebarScanAnalysis(
+      thumbnailSource: source,
+      fingerprint: try ScanFingerprint(image: source),
+      fullResolutionDimensions: fullResolutionDimensions(of: url),
+      exposureEV: approximateExposureEV(source))
+  }
+
+  nonisolated private static func makeStackPreviewSource(for url: URL) throws -> UInt16Image {
+    if FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased()) {
+      return try RawImageDecoder.extractThumbnail(
+        url, maxDimension: displayPreviewMaxDimension
+      ).image
+    }
+    return try StandardImageDecoder.decodePreview(
+      url, maxDimension: displayPreviewMaxDimension)
+  }
+
+  nonisolated private static func approximateExposureEV(_ image: UInt16Image) -> Double {
+    let pixelCount = image.width * image.height
+    let step = max(1, pixelCount / 4_096)
+    var luminances: [Double] = []
+    luminances.reserveCapacity(min(pixelCount, 4_096))
+    for pixelIndex in stride(from: 0, to: pixelCount, by: step) {
+      let base = pixelIndex * image.channels
+      let encoded: Double
+      if image.channels == 1 {
+        encoded = Double(image.pixels[base]) / Double(UInt16.max)
+      } else {
+        let blue = Double(image.pixels[base]) / Double(UInt16.max)
+        let green = Double(image.pixels[base + 1]) / Double(UInt16.max)
+        let red = Double(image.pixels[base + 2]) / Double(UInt16.max)
+        encoded = 0.0722 * blue + 0.7152 * green + 0.2126 * red
+      }
+      guard encoded > 0.001, encoded < 0.999 else { continue }
+      let linear =
+        encoded <= 0.04045
+        ? encoded / 12.92
+        : pow((encoded + 0.055) / 1.055, 2.4)
+      luminances.append(linear)
+    }
+    guard !luminances.isEmpty else { return 0 }
+    luminances.sort()
+    let middle = luminances.count / 2
+    let median =
+      luminances.count.isMultiple(of: 2)
+      ? (luminances[middle - 1] + luminances[middle]) / 2
+      : luminances[middle]
+    return log2(max(median, 1e-9))
+  }
 }
 
 actor AuthoritativeImageDecoder {
@@ -3091,10 +3669,31 @@ private struct PreviewRenderRequest: Sendable {
   let flatField: UInt16Image?
 }
 
+private struct SidebarScanAnalysis: Sendable {
+  let thumbnailSource: UInt16Image
+  let fingerprint: ScanFingerprint
+  let fullResolutionDimensions: PixelDimensions?
+  let exposureEV: Double
+
+  var detectionRecord: ScanDetectionRecord {
+    ScanDetectionRecord(
+      fingerprint: fingerprint,
+      fullResolutionDimensions: fullResolutionDimensions,
+      exposureEV: exposureEV)
+  }
+}
+
+private struct ScanDetectionRecord: Sendable {
+  let fingerprint: ScanFingerprint
+  let fullResolutionDimensions: PixelDimensions?
+  let exposureEV: Double
+}
+
 enum PreviewSourceKind: String, Sendable {
   case embeddedRAW
   case standardThumbnail
   case rawDetail
+  case alignedStack
 }
 
 private struct CachedPreviewSession: Sendable {

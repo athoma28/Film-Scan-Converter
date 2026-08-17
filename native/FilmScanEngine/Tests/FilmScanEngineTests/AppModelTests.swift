@@ -208,6 +208,28 @@ struct AppModelTests {
     #expect(model.hasCachedPreview(for: secondCopy))
   }
 
+  @Test("Sidebar thumbnails decode independently from the interactive preview cache")
+  func sidebarThumbnailDecodeIsBoundedAndIndependent() async throws {
+    let model = AppModel()
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input",
+        withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"
+      )
+    )
+
+    model.requestThumbnail(for: input)
+    try await waitUntil { model.thumbnail(for: input) != nil }
+
+    let thumbnail = try #require(model.thumbnail(for: input))
+    let representation = try #require(thumbnail.representations.first)
+    #expect(representation.pixelsWide <= AppModel.thumbnailMaxDimension)
+    #expect(representation.pixelsHigh <= AppModel.thumbnailMaxDimension)
+    #expect(!model.isThumbnailLoading(for: input))
+    #expect(model.previewCacheSessionCount == 0)
+  }
+
   @Test("Explicit first-file film identity becomes a weak hint for ambiguous later files")
   func firstFileFilmIdentityHintsLaterAutomaticClassification() async throws {
     let workDir = FileManager.default.temporaryDirectory
@@ -1966,7 +1988,9 @@ struct AppModelTests {
     #expect(!model.parameters.densityPipelineEnabled)
   }
 
-  @Test("Physical Phoenix applies Crystal Archive paper; other physical presets keep the current paper")
+  @Test(
+    "Physical Phoenix applies Crystal Archive paper; other physical presets keep the current paper"
+  )
   func physicalPhoenixAppliesCrystalArchivePaper() {
     let model = AppModel()
     model.setFilmType(.colourNegative)
