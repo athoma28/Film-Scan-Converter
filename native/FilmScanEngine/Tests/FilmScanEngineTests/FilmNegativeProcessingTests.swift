@@ -1324,7 +1324,8 @@ struct FilmNegativeProcessingTests {
     #expect(
       FilmStockProfile.harmanPhoenixIIAlternate.filmNegativeParams.calibratedColorProfile
         == .harmanPhoenixII)
-    #expect(FilmStockProfile.densityPrintHarmanPhoenixII.filmNegativeParams.rendering == .densityPrint)
+    #expect(
+      FilmStockProfile.densityPrintHarmanPhoenixII.filmNegativeParams.rendering == .densityPrint)
     #expect(FilmStockProfile.legacyColorNegative.filmNegativeParams.rendering == .powerLaw)
   }
 

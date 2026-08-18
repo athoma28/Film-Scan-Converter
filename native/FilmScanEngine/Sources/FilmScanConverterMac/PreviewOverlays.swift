@@ -414,9 +414,7 @@ private struct CornerLoupe: View {
       )
       ZStack {
         Color.black
-        Image(nsImage: image)
-          .resizable()
-          .interpolation(.none)
+        RasterImage(image: image, interpolation: .none)
           .frame(width: scaledSize.width, height: scaledSize.height)
           .offset(
             x: (0.5 - normalizedPoint.x) * scaledSize.width,

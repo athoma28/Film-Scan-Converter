@@ -348,7 +348,9 @@ public enum ProtectedColorAdjustment {
   public static let blueLuminance = LuminanceStandards.rec2020.blue
   public static let greenLuminance = LuminanceStandards.rec2020.green
   public static let redLuminance = LuminanceStandards.rec2020.red
-  public static let opponentShiftScale = 0.08
+  /// Relative opponent-chroma shift at full temperature or tint. Mid-gray
+  /// samples need about this magnitude before a white-balance move is obvious.
+  public static let opponentShiftScale = 0.375
 
   public static func apply(
     blue: Double,

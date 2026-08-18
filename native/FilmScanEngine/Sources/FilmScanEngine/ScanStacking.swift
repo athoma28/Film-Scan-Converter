@@ -53,17 +53,18 @@ public struct ScanFingerprint: Equatable, Sendable {
   public let values: [Int16]
   public let textureScore: Double
 
-  public init(image: UInt16Image, maximumDimension: Int = 64) throws {
+  public init(image: UInt16Image, maximumDimension: Int = 64, borderPercent: Double = 20) throws {
     guard image.channels == 1 || image.channels == 3 else {
       throw ScanStackError.unsupportedChannelCount(image.channels)
     }
+    let interior = StackAnalysis.inset(image, borderPercent: borderPercent)
     let dimensions = StackAnalysis.scaledDimensions(
-      width: image.width,
-      height: image.height,
+      width: interior.width,
+      height: interior.height,
       maximumDimension: max(8, maximumDimension)
     )
     let plane = StackAnalysis.normalizedLogLuminance(
-      image,
+      interior,
       width: dimensions.width,
       height: dimensions.height
     )
@@ -108,7 +109,7 @@ public enum SameNegativeDetector {
   public static func match(
     _ reference: ScanFingerprint,
     _ candidate: ScanFingerprint,
-    minimumConfidence: Double = 0.82
+    minimumConfidence: Double = 0.92
   ) -> SameNegativeMatch {
     guard reference.width == candidate.width,
       reference.height == candidate.height,
@@ -137,8 +138,9 @@ public enum SameNegativeDetector {
       peakGap: search.peakGap,
       overlap: search.overlap)
     let accepted =
-      search.correlation >= 0.80
-      && search.overlap >= 0.72
+      search.correlation >= 0.88
+      && search.overlap >= 0.78
+      && search.peakGap >= 0.008
       && confidence >= min(max(minimumConfidence, 0), 1)
     return SameNegativeMatch(
       isMatch: accepted,
@@ -154,7 +156,7 @@ public enum SameNegativeDetector {
   /// group. This avoids false groups caused by transitive A≈B≈C chaining.
   public static func groupAdjacent(
     _ fingerprints: [ScanFingerprint],
-    minimumConfidence: Double = 0.82
+    minimumConfidence: Double = 0.92
   ) -> [[Int]] {
     guard !fingerprints.isEmpty else { return [] }
     var groups: [[Int]] = [[0]]
@@ -379,6 +381,31 @@ private enum StackAnalysis {
       lock.unlock()
       return result
     }
+  }
+
+  static func inset(_ image: UInt16Image, borderPercent: Double) -> UInt16Image {
+    let fraction = min(max(borderPercent, 0), 40) / 100
+    let insetX = min(
+      Int((Double(image.width) * fraction).rounded()),
+      max(image.width / 2 - 1, 0))
+    let insetY = min(
+      Int((Double(image.height) * fraction).rounded()),
+      max(image.height / 2 - 1, 0))
+    let width = max(1, image.width - insetX * 2)
+    let height = max(1, image.height - insetY * 2)
+    guard width != image.width || height != image.height else { return image }
+
+    var pixels = [UInt16](repeating: 0, count: width * height * image.channels)
+    for y in 0..<height {
+      let sourceStart = ((y + insetY) * image.width + insetX) * image.channels
+      let destinationStart = y * width * image.channels
+      let count = width * image.channels
+      pixels.replaceSubrange(
+        destinationStart..<(destinationStart + count),
+        with: image.pixels[sourceStart..<(sourceStart + count)])
+    }
+    return UInt16Image(
+      width: width, height: height, channels: image.channels, pixels: pixels)
   }
 
   static func scaledDimensions(

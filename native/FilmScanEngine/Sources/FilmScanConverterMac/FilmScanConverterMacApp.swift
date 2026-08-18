@@ -33,6 +33,7 @@ struct FilmScanConverterMacApp: App {
           model.importFiles([url])
         }
     }
+    .defaultSize(width: 1320, height: 860)
     .commands {
       PreviewViewCommands()
 

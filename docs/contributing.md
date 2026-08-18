@@ -19,9 +19,9 @@ source for verified progress, limitations, and release position. Use the
 
 The bounded export-latency slice, still-preview viewport, undo/redo, and
 import-ordered previous/next and apply-to-selected roll commands are
-implemented. The current native coding work is roadmap item 5: interpolate
-Load RAW Preview at the 2400px bound instead of full-sensor 1-pass then
-downscale, then retain the selected file's last full-resolution decode for
+implemented. Camera RAW browsing now demosaics a colour-accurate draft and
+upgrades to 2400px in idle time. The current native coding work is roadmap
+item 5 slice 3: retain the selected file's last full-resolution decode for
 settings-only re-export. Verify a real roll and the representative-image
 viewport in the same pass. Stock-look learning, corpus preparation,
 named-stock fitting, and ML experiments are explicitly parked until the

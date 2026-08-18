@@ -175,7 +175,7 @@ struct AppPathPerformanceTests {
       maximumPreviewCacheBytes: maximumPreviewCacheBytes,
       previewCacheDepths: previewCacheDepths,
       note:
-        "Browsing uses bounded embedded-RAW previews; configured cache depths can populate only up to the available file count and the 256 MiB cache cap. Export performs independent full-resolution decode. No benchmark exports are written."
+        "Browsing uses colour-accurate bounded RAW drafts and upgrades them to 2400px demosaiced previews in idle time; configured cache depths can populate only up to the available file count and the 256 MiB cache cap. Export performs independent full-resolution decode. No benchmark exports are written."
     )
 
     let encoder = JSONEncoder()

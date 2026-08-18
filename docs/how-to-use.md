@@ -12,12 +12,12 @@ The native application is the primary product. It provides:
   shadows, highlights, saturation, RGB tone curves, highlight/midtone/shadow
   color wheels.
 - Camera-scan RAW processing with ISO-tier noise/detail filtering. Browsing
-  starts with the camera's embedded preview, bounded to a 1000px long edge.
-  **Load RAW Preview** explicitly replaces it with a demosaiced preview up to
-  2400px, recalibrated from RAW pixels for unusual film bases. That action
-  currently unpacks the RAF and runs 1-pass X-Trans at full sensor size, then
-  downscales; export still re-decodes RAW files at full resolution, using RCD
-  for Bayer data or three-pass Markesteijn interpolation for X-Trans.
+  ignores the camera JPEG and first shows a colour-accurate demosaiced draft
+  (about 640px) so slider work matches RAW colour. A 2400px 1-pass preview
+  then loads in the background, and idle lookahead prepares the next files
+  (8 kept ready by default) the same way. Export still re-decodes RAW files
+  at full resolution, using RCD for Bayer data or three-pass Markesteijn
+  interpolation for X-Trans.
 - Interactive GPU-accelerated preview that updates during slider drags, with
   native pan/pinch navigation plus Fit, step-zoom, and 100% commands.
 - Optional live camera preview when macOS exposes the camera or capture adapter
@@ -39,13 +39,12 @@ The native application is the primary product. It provides:
    A bounded preview appears first for large files, while the inspector header
    reports full-resolution output dimensions from file metadata. That readout
    updates after crop, rotation, and straightening; it does not report the
-   preview proxy size. For a camera RAW, choose **Load RAW Preview** in the
-   toolbar when the embedded preview's color is untrustworthy or more detail is
-   useful. That decode currently works at full sensor size before downscaling
-   to 2400px, so it can take several seconds on a 40 MP RAF. Full-resolution
-   RAW decoding still happens independently during export. The badge over the
-   preview names the current source and its displayed pixel dimensions, so an
-   embedded RAW thumbnail is not mistaken for export evidence.
+   preview proxy size. Camera RAW files show a slightly soft colour-accurate
+   draft almost immediately, with **Loading…** on the canvas until the 2400px
+   demosaic replaces it. You can edit colour as soon as the draft appears.
+   Full-resolution RAW decoding still happens independently during export. The
+   badge over the preview names the current source and its displayed pixel
+   dimensions.
    Use a two-finger trackpad gesture or mouse wheel to pan, pinch to zoom, or use
    the toolbar's minus/plus buttons and Fit/100% menu. Command-0 fits the image,
    Command-1 shows one preview pixel per point, and Command-plus/minus changes

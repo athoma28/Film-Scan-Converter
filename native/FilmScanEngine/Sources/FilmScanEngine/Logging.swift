@@ -236,6 +236,7 @@ public enum DecodeLog {
     if processing.contains(.rcdDemosaic) { stages.append("rcd") }
     if processing.contains(.xTransThreePass) { stages.append("xtrans-3-pass") }
     if processing.contains(.parallelFujiUnpack) { stages.append("fuji-unpack-parallel") }
+    if processing.contains(.previewBound) { stages.append("preview-bound") }
     if processing.contains(.rec2020WorkingSpace) { stages.append("rec2020") }
     if processing.contains(.isoDenoise) { stages.append("iso-denoise") }
     if processing.contains(.isoSharpen) { stages.append("iso-sharpen") }

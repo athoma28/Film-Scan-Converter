@@ -7,10 +7,10 @@ target for new features. Start with
 [Native macOS Development Status](development/native-macos.md) for implemented
 scope, evidence, limitations, and release position. The
 [Native macOS Product Roadmap](improvements/MacOS-Native-Roadmap.md) is the
-single ordered plan. Parallel Fuji unpack is complete; the next coding slice is
-Load RAW Preview interpolation at the 2400px bound, then retaining the last
-full-resolution decode for settings-only re-export. Stock-look learning is
-explicitly parked until the project owner chooses to resume it.
+single ordered plan. Parallel Fuji unpack and preview-bound RAW demosaic are
+complete; the next coding slice is retaining the last full-resolution decode
+for settings-only re-export. Stock-look learning is explicitly parked until
+the project owner chooses to resume it.
 
 The Python/Tkinter application is retained as a maintenance-only legacy
 workflow because dust removal remains Python-only and fixture tools still use

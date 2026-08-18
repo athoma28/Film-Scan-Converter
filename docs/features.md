@@ -15,11 +15,12 @@ features.
 - Drag/drop, file picker, and Finder Open With import.
 - Standard PNG, JPEG, BMP, and TIFF decoding.
 - LibRaw-backed camera RAW decoding.
-- Fast bounded previews from ImageIO thumbnails for standard images and
-  embedded thumbnails for camera RAW files. An explicit **Load RAW Preview**
-  action replaces an embedded thumbnail with a demosaiced, RAW-calibrated
-  preview up to 2400px when color or detail needs closer inspection;
-  full-resolution decoding remains reserved for export.
+- Fast bounded previews from ImageIO thumbnails for standard images. Camera
+  RAW files ignore the embedded JPEG and decode a colour-accurate demosaiced
+  draft (about 640px, ~0.3s) so edits match RAW colour immediately. A
+  2400px 1-pass demosaic then replaces that draft in the background, and idle
+  lookahead prepares the next files (8 kept ready by default) the same way.
+  Full-resolution three-pass decoding remains reserved for export.
 - A visual **Scans** sidebar with independently bounded 192px source
   thumbnails, filenames, edit/cache/export state, native multi-selection, and
   stack badges. Thumbnail loading does not pin the larger interactive previews
@@ -41,8 +42,10 @@ features.
   cursor-centered pinch magnification, Fit, zoom-in/out, and 100% preview-pixel
   commands. Image, dust, crop, straighten, and perspective overlays share the
   same viewport transform.
-- An on-canvas badge identifies embedded RAW, demosaiced RAW-detail, and bounded
-  standard-image preview sources and reports the displayed pixel dimensions.
+- An on-canvas badge identifies RAW colour drafts, demosaiced RAW-detail, and
+  bounded standard-image preview sources and reports the displayed pixel
+  dimensions. A **Loading…** caption stays on a RAW draft until the 2400px
+  preview arrives.
 - Optional AVFoundation live camera preview when macOS exposes the camera or
   capture adapter as a video device. The live toolbar can invert a negative
   preview and adjust exposure and saturation; captured stills still use the
@@ -152,6 +155,10 @@ features.
   inversion, then derives a per-frame tone curve from a bounded center-frame
   analysis and adds modest protected saturation/vibrance. It preserves the
   current rotation, flip, straighten, and crop geometry.
+- Experimental **Prototype Looks** (Night Cinema, Golden Cream, Daylight Print,
+  Blue Hour) use the same adaptive-curve inversion, with tone envelopes and
+  split-tones sampled from finished JPEGs rather than paired emulsion
+  measurements. They are starting points, not stock detection.
 - Manual crop updates the preview canvas immediately. Re-entering Crop reveals
   the whole straightened canvas for a replacement selection, and Reset Crop
   removes the committed crop.
@@ -201,9 +208,10 @@ features.
 ## Native Limitations
 
 - No applied dust removal or Telea inpainting.
-- **Load RAW Preview** still unpacks the RAF and runs 1-pass X-Trans at full
-  sensor size, then downscales to 2400px. Export always re-decodes the
-  full-resolution three-pass path and discards the buffer.
+- Camera-scan RAW browsing unpacks the RAF, bins the mosaic to the preview
+  bound, and interpolates there: a ~640px colour-accurate draft in about 0.3s,
+  then a 2400px 1-pass X-Trans upgrade in under a second. Export still
+  re-decodes the full-resolution three-pass path and discards the buffer.
 - Sidebar order remains import order. Manual reordering is unavailable and is
   not a first-release gate unless the roll workflow demonstrates a need.
 - Repeated-capture proposals are limited to adjacent, same-size imports and

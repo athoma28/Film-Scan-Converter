@@ -81,6 +81,10 @@ let package = Package(
       dependencies: ["FilmScanEngine"]
     ),
     .executableTarget(
+      name: "FilmScanLookbook",
+      dependencies: ["FilmScanEngine"]
+    ),
+    .executableTarget(
       name: "FilmScanConverterMac",
       dependencies: ["FilmScanEngine", "FilmScanPreviewRenderer"],
       exclude: ["Info.plist", "FilmScanConverter.entitlements", "Resources"],

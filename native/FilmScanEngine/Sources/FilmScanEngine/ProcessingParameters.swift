@@ -540,6 +540,14 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     perspectiveCrop = try container.decodeIfPresent(PerspectiveCrop.self, forKey: .perspectiveCrop)
     manualCrop = try container.decodeIfPresent(NormalizedCropRect.self, forKey: .manualCrop)
   }
+
+  /// Keeps the frozen integer color fields aligned with semantic intent so the
+  /// display-referred fallback path still has a usable temperature/tint/sat.
+  public mutating func syncLegacyColorFieldsFromPhotoAdjustments() {
+    temperature = Int(photoAdjustments.temperatureShiftMired.rounded())
+    tint = Int((photoAdjustments.tint * 100).rounded())
+    saturation = Int((photoAdjustments.saturation * 100).rounded()) + 100
+  }
 }
 
 public struct RenderParameters: Codable, Equatable, Sendable {

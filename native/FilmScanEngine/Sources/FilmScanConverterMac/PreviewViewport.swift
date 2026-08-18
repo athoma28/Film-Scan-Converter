@@ -128,6 +128,7 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
     scrollView.documentView = context.coordinator.hostingView
     scrollView.drawsBackground = false
     scrollView.borderType = .noBorder
+    scrollView.contentView.clipsToBounds = true
     scrollView.hasHorizontalScroller = true
     scrollView.hasVerticalScroller = true
     scrollView.autohidesScrollers = true
@@ -169,6 +170,7 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
     init(rootView: Content, onZoomChanged: @escaping (Int, Bool) -> Void) {
       hostingView = NSHostingView(rootView: rootView)
       hostingView.sizingOptions = []
+      hostingView.clipsToBounds = true
       self.onZoomChanged = onZoomChanged
     }
 
@@ -192,10 +194,26 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
     func updateDocumentSize(_ size: CGSize) {
       let validSize = CGSize(width: max(1, size.width), height: max(1, size.height))
       guard validSize != documentSize else { return }
+      let previousSize = documentSize
       documentSize = validSize
       hostingView.frame = CGRect(origin: .zero, size: validSize)
       if isFitMode {
         applyFit(force: true)
+      } else if let scrollView, previousSize.width > 1, previousSize.height > 1 {
+        let factor = min(
+          previousSize.width / validSize.width,
+          previousSize.height / validSize.height)
+        let visible = scrollView.documentVisibleRect
+        let normalizedCenter = CGPoint(
+          x: visible.midX / previousSize.width,
+          y: visible.midY / previousSize.height)
+        let newCenter = CGPoint(
+          x: normalizedCenter.x * validSize.width,
+          y: normalizedCenter.y * validSize.height)
+        scrollView.setMagnification(
+          PreviewViewportZoom.clamped(scrollView.magnification * factor),
+          centeredAt: newCenter)
+        reportZoom()
       } else if let scrollView {
         scrollView.reflectScrolledClipView(scrollView.contentView)
       }

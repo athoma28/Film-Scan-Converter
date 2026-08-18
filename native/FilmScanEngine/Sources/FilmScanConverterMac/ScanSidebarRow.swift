@@ -66,9 +66,7 @@ struct ScanSidebarRow: View {
           .fill(Color.secondary.opacity(0.11))
 
         if let thumbnail {
-          Image(nsImage: thumbnail)
-            .resizable()
-            .interpolation(.medium)
+          RasterImage(image: thumbnail, interpolation: .medium)
             .scaledToFill()
             .frame(width: 88, height: 66)
             .clipped()

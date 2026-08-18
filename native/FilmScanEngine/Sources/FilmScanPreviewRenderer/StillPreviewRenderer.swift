@@ -735,7 +735,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
 
       float temperature = clamp(temperatureMired / 100.0, -1.0, 1.0);
       float boundedTint = clamp(tint, -1.0, 1.0);
-      float shift = 0.08 * luminance * highlightProtection;
+      float shift = \(ProtectedColorAdjustment.opponentShiftScale) * luminance * highlightProtection;
       float temperatureGreen = -(0.2626983 - 0.0593017) / 0.6780;
       float tintGreen = -(0.2626983 + 0.0593017) / 0.6780;
       chroma += vec3(temperature, temperature * temperatureGreen, -temperature) * shift;

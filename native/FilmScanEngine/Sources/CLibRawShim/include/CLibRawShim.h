@@ -38,7 +38,9 @@ enum {
     FSC_RAW_PROCESSING_ISO_SHARPEN = 1u << 3,
     FSC_RAW_PROCESSING_XTRANS_THREE_PASS = 1u << 4,
     FSC_RAW_PROCESSING_XTRANS_DETERMINISTIC_PARALLEL = 1u << 5,
-    FSC_RAW_PROCESSING_PARALLEL_FUJI_UNPACK = 1u << 6
+    FSC_RAW_PROCESSING_PARALLEL_FUJI_UNPACK = 1u << 6,
+    // Mosaic was binned to the requested preview bound before interpolation.
+    FSC_RAW_PROCESSING_PREVIEW_BOUND = 1u << 7
 };
 
 typedef enum {
@@ -49,6 +51,7 @@ typedef enum {
 int fsc_decode_raw_direct_with_profile(
     const char *path,
     int full_resolution,
+    int max_dimension,
     fsc_raw_decode_profile profile,
     fsc_raw_direct *output,
     char *error_message,
@@ -89,6 +92,7 @@ typedef struct {
 int fsc_decode_raw_direct_with_profile_diagnostics(
     const char *path,
     int full_resolution,
+    int max_dimension,
     fsc_raw_decode_profile profile,
     fsc_raw_direct *output,
     fsc_raw_stage_hashes *stage_hashes,

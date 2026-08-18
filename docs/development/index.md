@@ -8,9 +8,9 @@ target for new features. Start with
 limitations, release position, and the bounded current work.
 
 The [native product roadmap](../improvements/MacOS-Native-Roadmap.md) is the
-single ordered plan. The next coding slice is Load RAW Preview interpolation
-at the 2400px bound, then retaining the last full-resolution decode for
-settings-only re-export. Parallel Fuji unpack is complete. The plan separates
+single ordered plan. The next coding slice is retaining the last
+full-resolution decode for settings-only re-export. Preview-bound RAW demosaic
+and parallel Fuji unpack are complete. The plan separates
 work required before the first public release from evidence-driven
 post-release candidates and explicitly unplanned ideas.
 

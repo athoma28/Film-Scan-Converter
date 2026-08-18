@@ -297,6 +297,7 @@ struct RawImageDecoderTests {
     #expect(RawDecodeProfile.rawTherapeeCameraScan.rawValue == 1)
     #expect(RawProcessingStages.deterministicParallelXTrans.rawValue == 1 << 5)
     #expect(RawProcessingStages.parallelFujiUnpack.rawValue == 1 << 6)
+    #expect(RawProcessingStages.previewBound.rawValue == 1 << 7)
   }
 
   @Test("RAW decode timing totals preserve their measured components")
@@ -475,6 +476,108 @@ struct RawImageDecoderTests {
   }
 
   @Test(
+    "Camera-scan preview bound interpolates a CFA-shrunk mosaic instead of the full sensor",
+    .enabled(
+      if: representativeRawAvailable,
+      "sample-raw corpus unavailable; preview-bound demosaic test skipped")
+  )
+  func cameraScanPreviewBoundShrinksMosaicBeforeDemosaic() throws {
+    let rawURL = try #require(representativeRawURL)
+    let bound = 800
+    let result = try RawImageDecoder.decode(
+      rawURL,
+      profile: .rawTherapeeCameraScan,
+      maxDimension: bound
+    )
+    let full = try RawImageDecoder.fullResolutionDimensions(rawURL)
+
+    #expect(result.processing.contains(.previewBound))
+    #expect(!result.processing.contains(.xTransThreePass))
+    #expect(max(result.image.width, result.image.height) <= bound)
+    #expect(max(result.image.width, result.image.height) >= bound / 3)
+    #expect(result.image.channels == 3)
+    #expect(full.width > result.image.width)
+    #expect(full.height > result.image.height)
+    #expect(result.image.makePreviewCGImage() != nil)
+  }
+
+  @Test(
+    "Camera-scan 2400px preview bound interpolates below the full sensor",
+    .enabled(
+      if: representativeRawAvailable,
+      "sample-raw corpus unavailable; 2400px preview-bound test skipped")
+  )
+  func cameraScan2400PreviewBoundShrinksMosaicBeforeDemosaic() throws {
+    let rawURL = try #require(representativeRawURL)
+    let bound = 2_400
+    let result = try RawImageDecoder.decode(
+      rawURL,
+      profile: .rawTherapeeCameraScan,
+      maxDimension: bound
+    )
+    let full = try RawImageDecoder.fullResolutionDimensions(rawURL)
+
+    #expect(result.processing.contains(.previewBound))
+    #expect(!result.processing.contains(.xTransThreePass))
+    #expect(max(result.image.width, result.image.height) <= bound)
+    #expect(max(result.image.width, result.image.height) > 1_200)
+    #expect(full.width > result.image.width)
+  }
+
+  @Test(
+    "Camera-scan 400px preview bound decodes",
+    .enabled(
+      if: representativeRawAvailable,
+      "sample-raw corpus unavailable; 400px preview-bound test skipped")
+  )
+  func cameraScan400PreviewBoundDecodes() throws {
+    let rawURL = try #require(representativeRawURL)
+    let result = try RawImageDecoder.decode(
+      rawURL,
+      profile: .rawTherapeeCameraScan,
+      maxDimension: 400
+    )
+    #expect(result.processing.contains(.previewBound))
+    #expect(max(result.image.width, result.image.height) <= 400)
+    #expect(result.image.channels == 3)
+  }
+
+  @Test(
+    "Camera-scan preview-bound latency sweep",
+    .enabled(
+      if: representativeRawAvailable
+        && ProcessInfo.processInfo.environment["FSC_PREVIEW_BOUND_SWEEP"] == "1",
+      "set FSC_PREVIEW_BOUND_SWEEP=1 with the sample-raw corpus to measure preview-bound decode")
+  )
+  func cameraScanPreviewBoundLatencySweep() throws {
+    let rawURL = try #require(representativeRawURL)
+    _ = try RawImageDecoder.decode(
+      rawURL, profile: .rawTherapeeCameraScan, maxDimension: 400)
+    let bounds = [400, 640, 800, 1_000, 1_200, 1_600, 2_400]
+    for bound in bounds {
+      var walls: [Double] = []
+      var last: RawDecodeResult?
+      for _ in 0..<3 {
+        let start = ContinuousClock.now
+        last = try RawImageDecoder.decode(
+          rawURL, profile: .rawTherapeeCameraScan, maxDimension: bound)
+        walls.append(rawDecodeSweepSeconds(start.duration(to: .now)))
+      }
+      let result = try #require(last)
+      let median = walls.sorted()[walls.count / 2]
+      print(
+        "preview-bound \(bound): \(result.image.width)×\(result.image.height) "
+          + "wallMedian=\(String(format: "%.3f", median))s "
+          + "unpack=\(String(format: "%.3f", result.timings.unpackSeconds))s "
+          + "demosaic=\(String(format: "%.3f", result.timings.demosaicSeconds))s "
+          + "total=\(String(format: "%.3f", result.timings.totalSeconds))s"
+      )
+      #expect(max(result.image.width, result.image.height) <= bound)
+      #expect(result.processing.contains(.previewBound))
+    }
+  }
+
+  @Test(
     "Representative RAF embedded thumbnail decodes into a 3-channel preview image",
     .enabled(
       if: representativeRawAvailable,
@@ -594,4 +697,9 @@ struct RawImageDecoderTests {
       SHA256.hash(data: $0).map { String(format: "%02x", $0) }.joined()
     }
   }
+}
+
+private func rawDecodeSweepSeconds(_ duration: Duration) -> Double {
+  let components = duration.components
+  return Double(components.seconds) + Double(components.attoseconds) / 1e18
 }

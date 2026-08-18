@@ -14,6 +14,7 @@
 int fsc_decode_rawtherapee_direct(
     const char *path,
     int full_resolution,
+    int max_dimension,
     fsc_raw_direct *output,
     fsc_raw_stage_hashes *stage_hashes,
     char *error_message,
@@ -158,12 +159,15 @@ typedef struct {
 int fsc_decode_raw_direct_with_profile(
     const char *path,
     int full_resolution,
+    int max_dimension,
     fsc_raw_decode_profile profile,
     fsc_raw_direct *output,
     char *error_message,
     size_t error_message_capacity
 ) {
-    FSC_LOG("decode_raw_direct start: path=%s fullRes=%d profile=%d", path ? path : "(null)", full_resolution, profile);
+    FSC_LOG(
+        "decode_raw_direct start: path=%s fullRes=%d maxDim=%d profile=%d",
+        path ? path : "(null)", full_resolution, max_dimension, profile);
 
     if (path == NULL || output == NULL) {
         FSC_LOG("decode_raw_direct FAIL: null arguments");
@@ -173,7 +177,7 @@ int fsc_decode_raw_direct_with_profile(
 
     if (profile == FSC_RAW_DECODE_PROFILE_RAWTHERAPEE_CAMERA_SCAN) {
         return fsc_decode_rawtherapee_direct(
-            path, full_resolution, output, NULL, error_message, error_message_capacity
+            path, full_resolution, max_dimension, output, NULL, error_message, error_message_capacity
         );
     }
 
@@ -241,7 +245,7 @@ int fsc_decode_raw_direct_with_profile(
         const char *message = image_error == LIBRAW_SUCCESS
             ? "LibRaw did not return a processed image."
             : libraw_strerror(image_error);
-        FSC_LOG("decode_raw_direct FAIL: make_mem_image error %d ‚Äî %s", image_error, message);
+        FSC_LOG("decode_raw_direct FAIL: make_mem_image error %d ù %s", image_error, message);
         code = fail(
             image_error == LIBRAW_SUCCESS ? -1 : image_error,
             message,
@@ -306,6 +310,7 @@ int fsc_decode_raw_direct_with_profile(
 int fsc_decode_raw_direct_with_profile_diagnostics(
     const char *path,
     int full_resolution,
+    int max_dimension,
     fsc_raw_decode_profile profile,
     fsc_raw_direct *output,
     fsc_raw_stage_hashes *stage_hashes,
@@ -321,13 +326,13 @@ int fsc_decode_raw_direct_with_profile_diagnostics(
         }
         memset(output, 0, sizeof(*output));
         return fsc_decode_rawtherapee_direct(
-            path, full_resolution, output, stage_hashes, error_message, error_message_capacity
+            path, full_resolution, max_dimension, output, stage_hashes, error_message, error_message_capacity
         );
     }
     // Stage-boundary digests are a camera-scan contract. Other profiles decode
     // normally and leave every digest empty.
     return fsc_decode_raw_direct_with_profile(
-        path, full_resolution, profile, output, error_message, error_message_capacity
+        path, full_resolution, max_dimension, profile, output, error_message, error_message_capacity
     );
 }
 
@@ -468,7 +473,7 @@ int fsc_extract_thumbnail(
 
     code = check_libraw(libraw_unpack_thumb(raw), error_message, error_message_capacity);
     if (code != LIBRAW_SUCCESS) {
-        FSC_LOG("extract_thumbnail FAIL: libraw_unpack_thumb error %d ‚Äî no embedded preview", code);
+        FSC_LOG("extract_thumbnail FAIL: libraw_unpack_thumb error %d ù no embedded preview", code);
         libraw_close(raw);
         munmap(mapped, (size_t)st.st_size);
         return code;

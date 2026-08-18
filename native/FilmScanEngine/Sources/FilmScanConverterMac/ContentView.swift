@@ -112,6 +112,8 @@ struct ContentView: View {
             model.requestThumbnail(for: url)
           }
         }
+        .listStyle(.sidebar)
+        .frame(maxHeight: .infinity)
 
         if let stack = model.selectedDetectedScanStack {
           Divider()
@@ -148,12 +150,15 @@ struct ContentView: View {
         Divider()
         HStack(spacing: 0) {
           preview
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
           if !showLivePreview, model.previewImage != nil {
             Divider()
             inspector
               .frame(width: 390)
+              .frame(maxHeight: .infinity)
           }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         Divider()
         HStack(spacing: 6) {
           Text(showLivePreview ? camera.status : model.status)
@@ -166,6 +171,7 @@ struct ContentView: View {
         .padding(.vertical, 8)
         .font(.caption)
       }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(dropTargeted ? Color.accentColor.opacity(0.12) : Color.clear)
       .dropDestination(for: URL.self) { urls, _ in
         model.importFiles(urls)
@@ -174,6 +180,7 @@ struct ContentView: View {
         dropTargeted = targeted
       }
     }
+    .navigationSplitViewStyle(.balanced)
     .focusedSceneValue(
       \.previewZoomCommands,
       showLivePreview || model.previewImage == nil
@@ -386,7 +393,7 @@ struct ContentView: View {
           Button(action: model.loadRawDetailPreview) {
             Label("Load RAW Preview", systemImage: "sparkles.rectangle.stack")
           }
-          .help("Decode the selected camera RAW and build a 2400px high-detail preview")
+          .help("Decode a 2400px demosaiced RAW preview now")
         }
 
         Toggle(isOn: $model.showOriginal) {
@@ -481,26 +488,26 @@ struct ContentView: View {
 
       Divider()
 
-      ZStack {
-        inspectorPageView(.edit, content: editInspector)
-        inspectorPageView(.grade, content: gradeInspector)
-        inspectorPageView(.export, content: exportInspector)
+      ScrollView {
+        inspectorPageContent
+          .padding(12)
+          .frame(maxWidth: .infinity, alignment: .leading)
       }
+      .scrollBounceBehavior(.basedOnSize)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .clipped()
     .background(Color(nsColor: .controlBackgroundColor))
   }
 
-  private func inspectorPageView<Content: View>(
-    _ page: InspectorPage, content: Content
-  ) -> some View {
-    ScrollView {
-      VStack(spacing: 10) { content }
-        .padding(12)
+  @ViewBuilder
+  private var inspectorPageContent: some View {
+    switch inspectorPage {
+    case .edit: editInspector
+    case .grade: gradeInspector
+    case .export: exportInspector
     }
-    .scrollBounceBehavior(.basedOnSize)
-    .opacity(inspectorPage == page ? 1 : 0)
-    .allowsHitTesting(inspectorPage == page)
-    .accessibilityHidden(inspectorPage != page)
   }
 
   private var filmConversionSection: some View {
@@ -823,7 +830,9 @@ struct ContentView: View {
   }
 
   private var editInspector: some View {
-    Group {
+    // VStack, not Group: a Group of sections overlays its children when passed
+    // as a single view, stacking every inspector card on top of the others.
+    VStack(spacing: 10) {
       InspectorSection("Settings", systemImage: "slider.horizontal.2.square") {
         HStack(spacing: 8) {
           Button(action: model.copyCorrectionSettings) {
@@ -858,6 +867,20 @@ struct ContentView: View {
           "Apply the color-negative profile, then adapt tone and color to the successful reference look."
         )
 
+        Menu {
+          ForEach(AdaptiveDisplayLook.prototypes) { look in
+            Button(look.name) {
+              model.applyAdaptiveDisplayLook(look)
+            }
+            .help(look.summary)
+          }
+        } label: {
+          Label("Prototype Looks", systemImage: "paintpalette")
+        }
+        .help(
+          "Experimental display looks sampled from photos you like. They keep the standard color-negative inversion, then apply a scene-adaptive curve and a light split-tone."
+        )
+
         if let appliedPresetName = model.appliedPresetName {
           Button(action: model.removeAppliedPreset) {
             Label("Remove \(appliedPresetName)", systemImage: "arrow.uturn.backward")
@@ -879,7 +902,7 @@ struct ContentView: View {
           }
         }
         .help(
-          "Keeps 1000px previews ready in the count- and byte-bounded LRU cache; full RAW files are never prefetched."
+          "Keeps colour-accurate RAW drafts and 2400px demosaiced previews ready. Default is 8 files, still capped at 256 MB. Export still decodes each RAW at full resolution."
         )
 
         HStack {
@@ -971,26 +994,29 @@ struct ContentView: View {
         AdjustmentSlider(
           "Temperature",
           value: Binding(
-            get: { Double(model.parameters.temperature) },
-            set: { model.setTemperature(Int($0.rounded())) }
+            get: { model.parameters.photoAdjustments.temperatureShiftMired },
+            set: { model.setSemanticTemperature($0) }
           ),
-          range: -100...100, neutral: 0, valueFormat: "%.0f", step: 1
+          range: PhotoAdjustmentParameters.temperatureShiftRangeMired,
+          neutral: 0, valueFormat: "%.0f", responseExponent: 1.6
         )
         AdjustmentSlider(
           "Tint",
           value: Binding(
-            get: { Double(model.parameters.tint) },
-            set: { model.setTint(Int($0.rounded())) }
+            get: { model.parameters.photoAdjustments.tint },
+            set: { model.setSemanticTint($0) }
           ),
-          range: -100...100, neutral: 0, valueFormat: "%.0f", step: 1
+          range: PhotoAdjustmentParameters.tintRange,
+          neutral: 0, valueFormat: "%.3f", responseExponent: 1.6
         )
         AdjustmentSlider(
           "Saturation",
           value: Binding(
-            get: { Double(model.parameters.saturation - 100) },
-            set: { model.setSaturation(Int($0.rounded()) + 100) }
+            get: { model.parameters.photoAdjustments.saturation },
+            set: { model.setSemanticSaturation($0) }
           ),
-          range: -100...100, neutral: 0, valueFormat: "%.0f", step: 1
+          range: PhotoAdjustmentParameters.saturationRange,
+          neutral: 0, valueFormat: "%.3f", responseExponent: 1.6
         )
         AdjustmentSlider(
           "Vibrance",
@@ -998,7 +1024,8 @@ struct ContentView: View {
             get: { model.parameters.photoAdjustments.vibrance },
             set: { model.setVibrance($0) }
           ),
-          range: -1...1, neutral: 0, valueFormat: "%.3f", responseExponent: 1.6
+          range: PhotoAdjustmentParameters.vibranceRange,
+          neutral: 0, valueFormat: "%.3f", responseExponent: 1.6
         )
       }
       .disabled(!model.parameters.filmType.supportsColorCorrections)
@@ -1485,7 +1512,7 @@ struct ContentView: View {
   }
 
   private var gradeInspector: some View {
-    Group {
+    VStack(spacing: 10) {
       InspectorSection("Clipping", systemImage: "waveform.path.ecg") {
         let low = model.previewStatistics.lowClippingRatios
         let high = model.previewStatistics.highClippingRatios
@@ -1544,7 +1571,7 @@ struct ContentView: View {
   }
 
   private var exportInspector: some View {
-    Group {
+    VStack(spacing: 10) {
       InspectorSection("File", systemImage: "doc") {
         Picker(
           "Format",
@@ -1712,6 +1739,17 @@ struct ContentView: View {
               Spacer()
             }
             Spacer()
+            if model.previewSourceKind == .rawDraft
+              || (model.isUpgradingRawPreview && model.previewSourceKind != .rawDetail)
+            {
+              Text("Loading…")
+                .font(.caption.weight(.semibold))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(.black.opacity(0.72), in: Capsule())
+                .foregroundStyle(.white)
+                .padding(.bottom, 14)
+            }
           }
           .padding(10)
           .allowsHitTesting(false)
@@ -1727,6 +1765,8 @@ struct ContentView: View {
         }
 
       }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      .clipped()
     } else {
       ContentUnavailableView {
         Label("Drop Film Scans Here", systemImage: "photo.on.rectangle.angled")
@@ -1741,15 +1781,12 @@ struct ContentView: View {
 
   private func previewDocument(image: NSImage) -> some View {
     ZStack {
-      Image(nsImage: image)
-        .resizable()
-        .interpolation(.high)
+      RasterImage(image: image, interpolation: .high)
         .frame(width: image.size.width, height: image.size.height)
+        .blur(radius: model.previewSourceKind == .rawDraft ? 1.6 : 0)
 
       if let dustMask = model.dustMaskImage {
-        Image(nsImage: dustMask)
-          .resizable()
-          .interpolation(.none)
+        RasterImage(image: dustMask, interpolation: .none)
           .frame(width: image.size.width, height: image.size.height)
           .blendMode(.screen)
           .opacity(0.85)
@@ -1819,7 +1856,13 @@ struct ContentView: View {
       icon = "exclamationmark.triangle.fill"
       tint = .yellow
       help =
-        "A fast embedded camera preview, not full-resolution export evidence. Use Load RAW Preview for a demosaiced judging preview."
+        "A fast embedded camera preview, not full-resolution export evidence."
+    case .rawDraft:
+      label = "RAW colour preview · loading · \(dimensions)"
+      icon = "circle.dotted"
+      tint = .white
+      help =
+        "A colour-accurate demosaiced draft. A sharper 2400px RAW preview loads in the background while you edit."
     case .rawDetail:
       label = "Demosaiced RAW preview · \(dimensions)"
       icon = "viewfinder"

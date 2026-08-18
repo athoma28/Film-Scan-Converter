@@ -132,6 +132,8 @@ public struct RawProcessingStages: OptionSet, Sendable, Equatable {
     rawValue: UInt32(FSC_RAW_PROCESSING_XTRANS_DETERMINISTIC_PARALLEL))
   public static let parallelFujiUnpack = Self(
     rawValue: UInt32(FSC_RAW_PROCESSING_PARALLEL_FUJI_UNPACK))
+  public static let previewBound = Self(
+    rawValue: UInt32(FSC_RAW_PROCESSING_PREVIEW_BOUND))
 }
 
 public enum RawDecodeProfile: UInt32, Sendable, Codable, Equatable {
@@ -182,11 +184,14 @@ public enum RawImageDecoder {
   /// Decodes a RAW file. When `collectDiagnostics` is true and the profile
   /// collects stage-boundary digests (currently camera-scan only), the result
   /// carries `RawDecodeDiagnostics`; the default path performs no hashing.
+  /// `maxDimension` bins the mosaic before interpolation so a preview can avoid
+  /// full-sensor demosaic. Full-resolution export ignores it.
   public static func decode(
     _ url: URL,
     fullResolution: Bool = false,
     profile: RawDecodeProfile = .rawPyCompatibility,
-    collectDiagnostics: Bool = false
+    collectDiagnostics: Bool = false,
+    maxDimension: Int? = nil
   ) throws -> RawDecodeResult {
     guard url.isFileURL,
       FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased())
@@ -194,17 +199,22 @@ public enum RawImageDecoder {
       DecodeLog.rawDecodeFailed(path: url.lastPathComponent, error: "unsupportedFileType")
       throw RawImageDecoderError.unsupportedFileType
     }
+    if let maxDimension, maxDimension <= 0 {
+      throw RawImageDecoderError.decodeFailed("Preview bound must be positive.")
+    }
 
     DecodeLog.rawDecodeStarted(path: url.lastPathComponent, fullResolution: fullResolution)
 
     var output = fsc_raw_direct()
     var stageHashes = fsc_raw_stage_hashes()
     var errorBytes = [CChar](repeating: 0, count: 512)
+    let previewBound = Int32(maxDimension ?? 0)
     let code = url.withUnsafeFileSystemRepresentation { path in
       if collectDiagnostics {
         return fsc_decode_raw_direct_with_profile_diagnostics(
           path,
           fullResolution ? 1 : 0,
+          previewBound,
           profile.cValue,
           &output,
           &stageHashes,
@@ -215,6 +225,7 @@ public enum RawImageDecoder {
       return fsc_decode_raw_direct_with_profile(
         path,
         fullResolution ? 1 : 0,
+        previewBound,
         profile.cValue,
         &output,
         &errorBytes,

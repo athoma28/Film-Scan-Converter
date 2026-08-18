@@ -91,19 +91,52 @@ struct ScanStackAppModelTests {
     #expect(exported == expectedOutput)
   }
 
-  private func syntheticCapture(noiseOffset: Int) -> UInt16Image {
+  @Test("Distinct imported frames stay independent instead of forming one stack")
+  func distinctImportsDoNotFormAScanStack() async throws {
+    let workDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-distinct-stack-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: workDirectory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDirectory) }
+
+    let firstURL = workDirectory.appendingPathComponent("frame-a.png")
+    let secondURL = workDirectory.appendingPathComponent("frame-b.png")
+    let thirdURL = workDirectory.appendingPathComponent("frame-c.png")
+    try syntheticCapture(noiseOffset: 0, seed: 7).write(
+      to: firstURL,
+      format: .png,
+      parameters: ExportParameters(format: .png))
+    try syntheticCapture(noiseOffset: 11, seed: 91).write(
+      to: secondURL,
+      format: .png,
+      parameters: ExportParameters(format: .png))
+    try syntheticCapture(noiseOffset: 23, seed: 204).write(
+      to: thirdURL,
+      format: .png,
+      parameters: ExportParameters(format: .png))
+
+    let model = AppModel()
+    model.importFiles([firstURL, secondURL, thirdURL])
+    try await waitUntil { !model.isAnalyzingScanStacks && model.files.count == 3 }
+
+    #expect(model.detectedScanStacks.isEmpty)
+    #expect(model.detectedScanStack(containing: firstURL) == nil)
+    #expect(model.detectedScanStack(containing: secondURL) == nil)
+    #expect(model.detectedScanStack(containing: thirdURL) == nil)
+  }
+
+  private func syntheticCapture(noiseOffset: Int, seed: Int = 7) -> UInt16Image {
     let width = 96
     let height = 72
     var pixels: [UInt16] = []
     pixels.reserveCapacity(width * height * 3)
     for y in 0..<height {
       for x in 0..<width {
-        var hash = UInt64(bitPattern: Int64(x &* 73_856_093 ^ y &* 19_349_663 ^ 7))
+        var hash = UInt64(bitPattern: Int64(x &* 73_856_093 ^ y &* 19_349_663 ^ seed &* 83_492_791))
         hash ^= hash >> 13
         hash &*= 0xff51_afd7_ed55_8ccd
         hash ^= hash >> 33
         let random = Double(hash & 0xffff) / 65_535
-        let wave = 0.5 + 0.5 * sin(Double(x + 7) * 0.19) * cos(Double(y - 7) * 0.13)
+        let wave = 0.5 + 0.5 * sin(Double(x + seed) * 0.19) * cos(Double(y - seed) * 0.13)
         let base = 0.04 + 0.68 * (0.72 * wave + 0.28 * random)
         for scale in [0.86, 1.0, 0.93] {
           let encoded = encodeSRGB(min(0.88, base * scale))

@@ -503,10 +503,12 @@ public enum DensityPrintProcessing {
       return 3.5
     }
     let ratio = abs(floorCeilRange) / texturalRange
-    return autoGradeTarget * (autoGradeNominalRatio + autoGradeStrength * (ratio - autoGradeNominalRatio))
+    return autoGradeTarget
+      * (autoGradeNominalRatio + autoGradeStrength * (ratio - autoGradeNominalRatio))
   }
 
-  static func luminanceRange(_ bounds: (floors: BGRChannelValues, ceils: BGRChannelValues)) -> Double
+  static func luminanceRange(_ bounds: (floors: BGRChannelValues, ceils: BGRChannelValues))
+    -> Double
   {
     lumaB * abs(bounds.ceils.blue - bounds.floors.blue)
       + lumaG * abs(bounds.ceils.green - bounds.floors.green)
@@ -635,7 +637,8 @@ public enum DensityPrintProcessing {
     let rGreen = refs.green
     let numer = anchor - rGreen
     func channelSlope(_ ref: Double, gamma: Double) -> Double {
-      let cast = min(max(appliedStrength * (rGreen - ref), -castRemovalMaxOffset), castRemovalMaxOffset)
+      let cast = min(
+        max(appliedStrength * (rGreen - ref), -castRemovalMaxOffset), castRemovalMaxOffset)
       let denom = anchor - (rGreen - cast)
       let tilted: Double
       if abs(denom) < epsilon {
@@ -693,9 +696,12 @@ public enum DensityPrintProcessing {
     let tMid = greenTarget(mid.green)
     let tShadow = greenTarget(shadow.green)
     func clampDev(_ greenRef: Double, _ channelRef: Double) -> Double {
-      greenRef + min(max(strength * (channelRef - greenRef), -midtoneCastMaxOffset), midtoneCastMaxOffset)
+      greenRef
+        + min(max(strength * (channelRef - greenRef), -midtoneCastMaxOffset), midtoneCastMaxOffset)
     }
-    func solveChannel(_ channelMid: Double, _ channelShadow: Double, _ channelHighlight: Double?, gamma: Double)
+    func solveChannel(
+      _ channelMid: Double, _ channelShadow: Double, _ channelHighlight: Double?, gamma: Double
+    )
       -> (slope: Double, pivot: Double, curv: Double)
     {
       let uM = clampDev(mid.green, channelMid)
@@ -769,7 +775,8 @@ public enum DensityPrintProcessing {
     let band = samples.indices.filter { luma[$0] >= lo && luma[$0] <= hi }
     guard band.count >= minPixels else { return nil }
 
-    func select(gammaB: Double, gammaG: Double, gammaR: Double) -> (indices: [Int], chroma: Double)? {
+    func select(gammaB: Double, gammaG: Double, gammaR: Double) -> (indices: [Int], chroma: Double)?
+    {
       let gB = abs(gammaB) < epsilon ? epsilon : gammaB
       let gG = abs(gammaG) < epsilon ? epsilon : gammaG
       let gR = abs(gammaR) < epsilon ? epsilon : gammaR
@@ -868,7 +875,9 @@ public enum DensityPrintProcessing {
     }
     let nm = normRef(mid1.refs)
     let ns = normRef(sh1.refs)
-    func correctedChannel(_ channel: Double, mid: Double, shadow: Double, midG: Double, shadowG: Double)
+    func correctedChannel(
+      _ channel: Double, mid: Double, shadow: Double, midG: Double, shadowG: Double
+    )
       -> Double
     {
       let du = mid - shadow
@@ -919,7 +928,9 @@ public enum DensityPrintProcessing {
   }
 
   static func rmsChroma(blue: Double, green: Double, red: Double) -> Double {
-    sqrt(((red - green) * (red - green) + (green - blue) * (green - blue) + (red - blue) * (red - blue)) / 3)
+    sqrt(
+      ((red - green) * (red - green) + (green - blue) * (green - blue) + (red - blue) * (red - blue))
+        / 3)
   }
 
   static func median(_ values: [Double]) -> Double {

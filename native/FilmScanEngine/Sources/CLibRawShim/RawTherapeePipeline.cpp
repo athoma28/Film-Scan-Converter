@@ -168,10 +168,19 @@ private:
         // 16-pixel halo that can read the above-right neighbor, then run
         // independent 2*row+col wavefront diagonals concurrently.
         const auto start = std::chrono::steady_clock::now();
-        deterministicParallelXTransInterpolate(xtransPasses);
+        if (imgdata.sizes.width < LIBRAW_AHD_TILE
+            || imgdata.sizes.height < LIBRAW_AHD_TILE)
+        {
+            // The interpolator rejects frames smaller than one AHD tile
+            // (512px). Linear interpolation keeps camera WB and colour matrix
+            // so a colour-accurate draft can still render quickly.
+            lin_interpolate();
+        } else {
+            deterministicParallelXTransInterpolate(xtransPasses);
+            usedXTransThreePass = xtransPasses == 3;
+        }
         demosaicSeconds = std::chrono::duration<double>(
             std::chrono::steady_clock::now() - start).count();
-        usedXTransThreePass = xtransPasses == 3;
         hashDemosaicedIfRequested();
     }
 
@@ -685,6 +694,81 @@ bool isValidRGB16Bitmap(const libraw_processed_image_t *image) {
         && image->data_size == rgb16PixelBytes(image);
 }
 
+// Bin the visible mosaic by an integer number of CFA periods so interpolation
+// can run at the preview bound. Same-CFA photosites are averaged; the 6x6
+// X-Trans or 2x2 Bayer pattern is preserved. Full-resolution export never
+// calls this.
+bool shrinkMosaicToBound(LibRaw &raw, int maxDimension) {
+    auto &sizes = raw.imgdata.sizes;
+    ushort *rawImage = raw.imgdata.rawdata.raw_image;
+    if (!rawImage || maxDimension <= 0) { return false; }
+
+    const int visibleWidth = sizes.width;
+    const int visibleHeight = sizes.height;
+    if (visibleWidth <= 0 || visibleHeight <= 0) { return false; }
+    const int longest = std::max(visibleWidth, visibleHeight);
+    if (longest <= maxDimension) { return false; }
+
+    const bool isXTrans = raw.imgdata.idata.filters == 9;
+    if (!isXTrans && raw.imgdata.idata.filters == 0) { return false; }
+    const int period = isXTrans ? 6 : 2;
+    const int factor = (longest + maxDimension - 1) / maxDimension;
+    if (factor < 2) { return false; }
+
+    const int tilesX = visibleWidth / period;
+    const int tilesY = visibleHeight / period;
+    const int outTilesX = tilesX / factor;
+    const int outTilesY = tilesY / factor;
+    if (outTilesX < 2 || outTilesY < 2) { return false; }
+
+    const int outW = outTilesX * period;
+    const int outH = outTilesY * period;
+    const unsigned srcPitch =
+        sizes.raw_pitch > 0 ? sizes.raw_pitch / static_cast<unsigned>(sizeof(ushort))
+                            : static_cast<unsigned>(sizes.raw_width);
+    const int left = sizes.left_margin;
+    const int top = sizes.top_margin;
+    std::vector<ushort> shrunk(static_cast<size_t>(outW) * static_cast<size_t>(outH));
+    const uint32_t samples = static_cast<uint32_t>(factor) * static_cast<uint32_t>(factor);
+    const uint32_t rounding = samples / 2;
+
+    for (int ty = 0; ty < outTilesY; ++ty) {
+        for (int tx = 0; tx < outTilesX; ++tx) {
+            for (int py = 0; py < period; ++py) {
+                for (int px = 0; px < period; ++px) {
+                    uint32_t sum = 0;
+                    for (int fy = 0; fy < factor; ++fy) {
+                        for (int fx = 0; fx < factor; ++fx) {
+                            const int iy = top + (ty * factor + fy) * period + py;
+                            const int ix = left + (tx * factor + fx) * period + px;
+                            sum += rawImage[static_cast<size_t>(iy) * srcPitch + static_cast<size_t>(ix)];
+                        }
+                    }
+                    shrunk[(static_cast<size_t>(ty * period + py) * outW)
+                        + static_cast<size_t>(tx * period + px)] =
+                        static_cast<ushort>((sum + rounding) / samples);
+                }
+            }
+        }
+    }
+
+    std::memcpy(rawImage, shrunk.data(), shrunk.size() * sizeof(ushort));
+    sizes.raw_width = static_cast<ushort>(outW);
+    sizes.raw_height = static_cast<ushort>(outH);
+    sizes.raw_pitch = static_cast<unsigned>(outW) * static_cast<unsigned>(sizeof(ushort));
+    sizes.width = static_cast<ushort>(outW);
+    sizes.height = static_cast<ushort>(outH);
+    sizes.iwidth = static_cast<ushort>(outW);
+    sizes.iheight = static_cast<ushort>(outH);
+    sizes.left_margin = 0;
+    sizes.top_margin = 0;
+    sizes.raw_inset_crops[0] = {0, 0, 0, 0};
+    sizes.raw_inset_crops[1] = {0, 0, 0, 0};
+    // dcraw_process restores sizes from this backup at raw2image_start().
+    raw.imgdata.rawdata.sizes = sizes;
+    return true;
+}
+
 libraw_processed_image_t *downsampleTwoByTwo(libraw_processed_image_t *source) {
     const unsigned outputWidth = source->width / 2;
     const unsigned outputHeight = source->height / 2;
@@ -722,7 +806,7 @@ libraw_processed_image_t *downsampleTwoByTwo(libraw_processed_image_t *source) {
 } // namespace
 
 extern "C" int fsc_decode_rawtherapee_direct(
-    const char *path, int full_resolution, fsc_raw_direct *output,
+    const char *path, int full_resolution, int max_dimension, fsc_raw_direct *output,
     fsc_raw_stage_hashes *stage_hashes,
     char *error_message, size_t error_capacity
 ) {
@@ -744,14 +828,19 @@ extern "C" int fsc_decode_rawtherapee_direct(
     p.output_bps = 16; p.use_camera_wb = 1; p.user_qual = 2;
     p.output_color = 1; p.gamm[0] = 1.0 / 2.4; p.gamm[1] = 12.92;
     const bool isXTrans = raw->imgdata.idata.filters == 9;
+    const int previewBound = full_resolution ? 0 : std::max(0, max_dimension);
     p.no_auto_bright = 1; p.highlight = 3;
-    p.half_size = (full_resolution || isXTrans) ? 0 : 1;
+    p.half_size = (full_resolution || isXTrans || previewBound > 0) ? 0 : 1;
     p.adjust_maximum_thr = 0.75f; p.bright = 1.f; p.exp_correc = 0;
     const auto unpackStart = Clock::now();
     code = raw->unpack();
     output->unpack_seconds = std::chrono::duration<double>(Clock::now() - unpackStart).count();
     if (code == LIBRAW_SUCCESS && stage_hashes) {
         hashUnpackedMosaic(*raw, stage_hashes);
+    }
+    bool shrunkToPreviewBound = false;
+    if (code == LIBRAW_SUCCESS && previewBound > 0) {
+        shrunkToPreviewBound = shrinkMosaicToBound(*raw, previewBound);
     }
     if (code == LIBRAW_SUCCESS) {
         const auto processStart = Clock::now();
@@ -780,7 +869,7 @@ extern "C" int fsc_decode_rawtherapee_direct(
         std::snprintf(error_message, error_capacity, "LibRaw returned an invalid camera-scan image.");
         return imageError == LIBRAW_SUCCESS ? -1 : imageError;
     }
-    if (!full_resolution && isXTrans) {
+    if (!full_resolution && isXTrans && previewBound <= 0) {
         libraw_processed_image_t *downsampled = downsampleTwoByTwo(processed);
         if (!downsampled) {
             libraw_dcraw_clear_mem(processed);
@@ -809,6 +898,9 @@ extern "C" int fsc_decode_rawtherapee_direct(
     }
     if (raw->usedParallelFujiUnpack) {
         flags |= FSC_RAW_PROCESSING_PARALLEL_FUJI_UNPACK;
+    }
+    if (shrunkToPreviewBound) {
+        flags |= FSC_RAW_PROCESSING_PREVIEW_BOUND;
     }
     const auto isoPolicyStart = Clock::now();
     isoAdaptiveFilter(processed, raw->imgdata.other.iso_speed, flags);

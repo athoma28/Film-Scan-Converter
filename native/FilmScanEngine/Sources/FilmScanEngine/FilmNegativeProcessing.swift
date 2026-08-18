@@ -1498,8 +1498,7 @@ public enum FilmNegativeProcessing {
       medians: medians,
       maxSamples: maxSamples,
       borderPercent: borderPercent
-    ), cyanMask >= 0.45
-    {
+    ), cyanMask >= 0.45 {
       classification = FilmClassification(
         filmType: .colourNegative,
         filmNegativePreset: .densityPrintHarmanPhoenixII,

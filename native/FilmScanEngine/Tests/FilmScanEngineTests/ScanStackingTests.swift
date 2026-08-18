@@ -33,6 +33,17 @@ struct ScanStackingTests {
         == [[0, 1], [2]])
   }
 
+  @Test("A shared holder around different interiors does not form a stack")
+  func sharedHolderDoesNotGroupDifferentFrames() throws {
+    let first = syntheticHolderCapture(interiorSeed: 11)
+    let second = syntheticHolderCapture(interiorSeed: 77)
+    let fingerprints = try [first, second].map { try ScanFingerprint(image: $0) }
+    let match = SameNegativeDetector.match(fingerprints[0], fingerprints[1])
+
+    #expect(!match.isMatch)
+    #expect(SameNegativeDetector.groupAdjacent(fingerprints) == [[0], [1]])
+  }
+
   @Test("Stacker recovers a known integer translation")
   func knownTranslation() throws {
     let reference = syntheticImage(width: 96, height: 72, channels: 3, seed: 12)
@@ -209,6 +220,37 @@ struct ScanStackingTests {
       }
     }
     return UInt16Image(width: width, height: height, channels: channels, pixels: pixels)
+  }
+
+  private func syntheticHolderCapture(interiorSeed: Int) -> UInt16Image {
+    let width = 160
+    let height = 120
+    let insetX = width / 5
+    let insetY = height / 5
+    var pixels = [UInt16](repeating: 0, count: width * height * 3)
+    for y in 0..<height {
+      for x in 0..<width {
+        let interior = x >= insetX && x < width - insetX && y >= insetY && y < height - insetY
+        let value: Double
+        if interior {
+          value = sceneValue(
+            x: x - insetX,
+            y: y - insetY,
+            width: width - insetX * 2,
+            height: height - insetY * 2,
+            channel: 1,
+            seed: interiorSeed)
+        } else {
+          value = 0.62 + 0.04 * Double((x + y) % 5) / 5
+        }
+        let encoded = encodeSRGB(value)
+        let base = (y * width + x) * 3
+        pixels[base] = UInt16((Double(encoded) * 0.86).rounded())
+        pixels[base + 1] = encoded
+        pixels[base + 2] = UInt16((Double(encoded) * 0.93).rounded())
+      }
+    }
+    return UInt16Image(width: width, height: height, channels: 3, pixels: pixels)
   }
 
   private func replacingPatch(

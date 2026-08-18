@@ -244,17 +244,18 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
 ## Implementation Contracts
 
 - Keep interactive previews bounded and latest-value-wins.
-- Use explicit image contracts: normal browsing starts with a 1000px display
-  source and a 256px analysis source; the explicit **Load RAW Preview** action
-  may replace the selected embedded RAW source with a demosaiced preview up to
-  2400px; export owns an independent full-resolution decode.
+- Use explicit image contracts: standard-image browsing starts with a 1000px
+  display source; camera RAW browsing starts with a colour-accurate ~640px
+  demosaiced draft, then upgrades to 2400px in idle time; a 256px analysis
+  source drives classification. Export owns an independent full-resolution
+  decode.
 - Keep lookahead preview-only, LRU, and bounded by both file count and bytes.
 - Keep the still image, dust mask, and crop/straighten/perspective editors in
   one native viewport transform. Original comparison must preserve its pan and
   magnification, and selection changes must return to a predictable Fit state.
 - Define 100% against the pixels in the current bounded preview, not the
   full-resolution export source. Keep the preview-source/dimensions badge
-  visible so embedded RAW thumbnails are never presented as export evidence.
+  visible so a RAW draft or 2400px preview is never presented as export evidence.
 - Keep adaptive-look analysis bounded independently of imported image size;
   Kodachrome-like Auto currently analyzes at most a 1024-pixel long edge and
   stores a concrete five-point curve for deterministic preview/export parity.

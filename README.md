@@ -13,8 +13,8 @@ target for new features.
 
 The beta currently includes:
 
-- Camera RAW, TIFF, PNG, JPEG, and BMP import with fast bounded previews and an
-  optional higher-detail demosaiced RAW preview.
+- Camera RAW, TIFF, PNG, JPEG, and BMP import with colour-accurate RAW drafts
+  that upgrade to a 2400px demosaiced preview while you edit.
 - Color-negative, black-and-white-negative, slide, and Original (no-inversion)
   workflows with the Film & Conversion panel, Natural/Darkroom/Classic/Bypass
   conversion choices, visible film-stock and paper options, film-base

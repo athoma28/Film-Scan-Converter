@@ -283,12 +283,10 @@ Use known techniques to remove the waits a RawTherapee-style user still hits
 after the completed three-pass wavefront work. Do not invent a new demosaic.
 Do not change export pixels.
 
-The interactive path already shows an embedded JPEG in tens of milliseconds
-and applies settings on the GPU in a few milliseconds. The remaining feels-slow
-seams are:
+The interactive path already shows a colour-accurate RAW draft in about 0.3s
+and applies settings on the GPU in a few milliseconds. The remaining
+feels-slow seam is:
 
-- **Load RAW Preview** still unpacks the RAF and runs 1-pass X-Trans at full
-  sensor size, then downscales to 2400px;
 - every RAW export calls a fresh full-resolution three-pass decode and discards
   the buffer.
 
@@ -305,12 +303,12 @@ Work in this order, as small slices:
    disabled. Five release repetitions reproduced every approved digest;
    same-session unpack fell from a 1.335-second serial median to 0.266 seconds
    at eight workers. `FSC_UNPACK_WORKERS=1` remains the serial mosaic oracle.
-2. **Demosaic Load RAW Preview at the preview bound.** Interpolate at most
-   2400px of work, using the existing 1-pass camera-scan interpolator or
-   another already-shipped path—not a new CFA algorithm. Browsing stays on the
-   embedded JPEG. The source badge stays honest. Export stays three-pass full
-   resolution. Metal is allowed here only if preview-sized CPU work is still
-   too slow; it is not a three-pass Markesteijn port.
+2. **Demosaic Load RAW Preview at the preview bound.** — completed 2026-08-17:
+   camera-scan bins the CFA-aligned mosaic to the requested bound, then runs
+   the existing 1-pass interpolator (or linear interpolation below the 512px
+   X-Trans tile). Browsing ignores embedded JPEGs and uses a ~640px RAW draft,
+   then upgrades to 2400px in idle time. Export stays three-pass full
+   resolution.
 3. **Retain the last full-resolution decode for the selected file.**
    Settings-only re-export of that file skips CFA work. Drop the buffer on
    selection change, reset, and teardown. Keep one authoritative full-resolution
@@ -323,8 +321,8 @@ part of this item.
 
 Acceptance:
 
-- Load RAW Preview no longer interpolates the full 40 MP mosaic as a means of
-  producing a 2400px display source;
+- browsing no longer uses Fuji JPEG colour for interactive RAW previews;
+- the 2400px judging preview no longer interpolates the full 40 MP mosaic;
 - a settings-only re-export of the current RAW does not repeat unpack+demosaic;
 - the camera-scan three-pass fixture still reproduces every approved digest;
 - physical footprint stays bounded; cancellation still writes no output;

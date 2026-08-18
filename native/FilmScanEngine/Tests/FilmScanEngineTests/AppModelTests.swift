@@ -224,6 +224,8 @@ struct AppModelTests {
 
     let thumbnail = try #require(model.thumbnail(for: input))
     let representation = try #require(thumbnail.representations.first)
+    #expect(thumbnail.representations.count == 1)
+    #expect(thumbnail.cacheMode == .never)
     #expect(representation.pixelsWide <= AppModel.thumbnailMaxDimension)
     #expect(representation.pixelsHigh <= AppModel.thumbnailMaxDimension)
     #expect(!model.isThumbnailLoading(for: input))
@@ -822,45 +824,50 @@ struct AppModelTests {
   }
 
   @Test(
-    "RAW import keeps the embedded 1000px preview as the interactive source",
+    "RAW import shows a colour-accurate demosaiced draft instead of the embedded JPEG",
     .enabled(
       if: appModelRawCorpusAvailable,
       "sample-raw corpus unavailable; AppModel RAW preview test skipped")
   )
-  func rawImportUsesFastEmbeddedPreview() async throws {
+  func rawImportUsesDemosaicedDraftPreview() async throws {
     let raw = try #require(appModelRepresentativeRawURL)
 
     let model = AppModel()
     model.importFiles([raw])
 
-    try await waitUntil(timeout: .seconds(3)) { model.previewImage != nil }
-    #expect(model.previewSourceKind == .embeddedRAW)
+    try await waitUntil(timeout: .seconds(8)) { model.previewImage != nil }
+    #expect(model.previewSourceKind == .rawDraft || model.previewSourceKind == .rawDetail)
+    #expect(model.previewSourceKind != .embeddedRAW)
     #expect(model.decodedImage?.channels == 3)
-    #expect(max(model.decodedImage?.width ?? 0, model.decodedImage?.height ?? 0) <= 1_000)
+    if model.previewSourceKind == .rawDraft {
+      #expect(
+        max(model.decodedImage?.width ?? 0, model.decodedImage?.height ?? 0)
+          <= AppModel.rawDraftPreviewMaxDimension)
+      #expect(!model.isLoading)
+    }
   }
 
   @Test(
-    "Load RAW Preview replaces embedded pixels with a bounded demosaiced preview",
+    "Idle RAW preview work upgrades the draft to a bounded demosaiced preview",
     .enabled(
       if: appModelRawCorpusAvailable,
       "sample-raw corpus unavailable; RAW detail preview test skipped")
   )
-  func rawDetailPreviewUsesCameraScanDecode() async throws {
+  func rawDetailPreviewUpgradesAutomatically() async throws {
     let raw = try #require(appModelRepresentativeRawURL)
     let model = AppModel()
     model.importFiles([raw])
 
-    try await waitUntil(timeout: .seconds(3)) { model.previewSourceKind == .embeddedRAW }
-    #expect(model.canLoadRawDetailPreview)
-    model.loadRawDetailPreview()
-
+    try await waitUntil(timeout: .seconds(8)) {
+      model.previewSourceKind == .rawDraft || model.previewSourceKind == .rawDetail
+    }
     try await waitUntil(timeout: .seconds(25)) {
-      model.previewSourceKind == .rawDetail && !model.isLoading
+      model.previewSourceKind == .rawDetail && !model.isLoading && !model.isUpgradingRawPreview
     }
     let dimensions = try #require(model.selectedImageDimensions)
     #expect(!dimensions.provisional)
     #expect(max(dimensions.width, dimensions.height) <= AppModel.rawDetailPreviewMaxDimension)
-    #expect(max(dimensions.width, dimensions.height) > AppModel.displayPreviewMaxDimension)
+    #expect(max(dimensions.width, dimensions.height) > AppModel.rawDraftPreviewMaxDimension)
     #expect(!model.canLoadRawDetailPreview)
   }
 
@@ -947,6 +954,24 @@ struct AppModelTests {
     #expect(model.parameters.photoAdjustments.tint == expected.tint)
     #expect(model.parameters.photoAdjustments.saturation == expected.saturation)
     #expect(model.parameters.photoAdjustments.vibrance == 0.6)
+  }
+
+  @Test("Semantic color sliders write protected-color intent without extra compression")
+  func semanticColorSlidersWriteProtectedColorIntent() {
+    let model = AppModel()
+
+    model.setSemanticTemperature(50)
+    model.setSemanticTint(-0.25)
+    model.setSemanticSaturation(0.4)
+    model.setVibrance(0.6)
+
+    #expect(model.parameters.photoAdjustments.temperatureShiftMired == 50)
+    #expect(model.parameters.photoAdjustments.tint == -0.25)
+    #expect(model.parameters.photoAdjustments.saturation == 0.4)
+    #expect(model.parameters.photoAdjustments.vibrance == 0.6)
+    #expect(model.parameters.temperature == 50)
+    #expect(model.parameters.tint == -25)
+    #expect(model.parameters.saturation == 140)
   }
 
   @Test("Enabling the overall curve starts from an identity curve")
@@ -1427,6 +1452,36 @@ struct AppModelTests {
     #expect(model.settingsStatus.contains("restored the previous adjustments"))
   }
 
+  @Test("App model applies a prototype display look immediately")
+  func appModelAppliesPrototypeDisplayLook() async throws {
+    let model = AppModel()
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"))
+    model.importFiles([input])
+    try await waitUntil { model.previewImage != nil && !model.isRendering }
+    model.setFilmType(.slide)
+    model.rotateClockwise()
+    try await waitUntil { !model.isRendering }
+
+    model.applyAdaptiveDisplayLook(.daylightPrint)
+
+    #expect(model.parameters.filmType == .colourNegative)
+    #expect(model.parameters.filmNegativeParams.enabled)
+    #expect(model.parameters.rotation == 1)
+    #expect(model.parameters.photoAdjustments.tint == -0.10)
+    #expect(model.parameters.midtoneWheel.hue == 72)
+    #expect(model.appliedPresetName == "Daylight Print")
+    #expect(model.settingsStatus == "Applied Daylight Print.")
+
+    model.removeAppliedPreset()
+
+    #expect(model.parameters.filmType == .slide)
+    #expect(model.parameters.rotation == 1)
+    #expect(model.appliedPresetName == nil)
+  }
+
   @Test("Preview cache limit persists, expands lookahead, and trims immediately")
   func previewCacheLimitPersistsAndTrims() async throws {
     let suiteName = "fsc-preview-cache-\(UUID().uuidString)"
@@ -1447,6 +1502,7 @@ struct AppModelTests {
     }
 
     let model = AppModel(preferences: preferences)
+    #expect(model.previewCacheLimit == AppModel.defaultPreviewCacheLimit)
     model.setPreviewCacheLimit(3)
     model.importFiles(files)
     try await waitUntil { model.previewCacheSessionCount == 3 }

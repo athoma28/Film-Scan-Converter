@@ -68,6 +68,11 @@ struct ProtectedColorAdjustmentTests {
     #expect(magenta.pixels[3] > magenta.pixels[4])
     #expect(abs(luminance(Array(warm.pixels[3...5])) - 0.25) < 1e-12)
     #expect(abs(luminance(Array(magenta.pixels[3...5])) - 0.25) < 1e-12)
+
+    let warmRelativeChroma = opponentChroma(Array(warm.pixels[3...5])) / 0.25
+    let tintRelativeChroma = opponentChroma(Array(magenta.pixels[3...5])) / 0.25
+    #expect(warmRelativeChroma > 0.25)
+    #expect(tintRelativeChroma > 0.25)
   }
 
   @Test("Highlight protection attenuates color shifts above display white")
