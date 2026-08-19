@@ -125,8 +125,10 @@ or Homebrew LibRaw:
    must pass Gatekeeper without a bypass.
 3. Import a standard image and representative camera RAW, compare corrected
    preview orientation to reopened full-resolution output, and exercise Fit,
-   pan, zoom, Original comparison, previous/next scan, Load RAW Preview, and
-   the preview-source badge.
+   pan, zoom, Original comparison, previous/next scan, and Load RAW Preview
+   skip-ahead. Confirm the embedded-JPEG warning when RAW colour is unavailable
+   and the aligned-stack badge when a stack is enabled. Inspect versus
+   full-res is not labeled on the canvas.
 4. Export and reopen TIFF, JPEG, PNG, and DNG. Confirm dimensions, orientation,
    depth, metadata, and color interpretation.
 5. Confirm cancellation/failure leaves no misleading partial output, camera

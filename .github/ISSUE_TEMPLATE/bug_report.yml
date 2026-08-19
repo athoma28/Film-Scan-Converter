@@ -11,7 +11,7 @@ body:
     attributes:
       label: App version
       description: Find this in Film Scan Converter > About Film Scan Converter.
-      placeholder: 0.1.0 beta 1
+      placeholder: 0.2.0 beta 1
     validations:
       required: true
   - type: input

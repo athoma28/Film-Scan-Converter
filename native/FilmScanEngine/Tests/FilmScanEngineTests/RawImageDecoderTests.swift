@@ -502,6 +502,50 @@ struct RawImageDecoderTests {
   }
 
   @Test(
+    "Camera-scan 1200px preview bound interpolates below the full sensor",
+    .enabled(
+      if: representativeRawAvailable,
+      "sample-raw corpus unavailable; 1200px preview-bound test skipped")
+  )
+  func cameraScan1200PreviewBoundShrinksMosaicBeforeDemosaic() throws {
+    let rawURL = try #require(representativeRawURL)
+    let bound = 1_200
+    let result = try RawImageDecoder.decode(
+      rawURL,
+      profile: .rawTherapeeCameraScan,
+      maxDimension: bound
+    )
+    let full = try RawImageDecoder.fullResolutionDimensions(rawURL)
+
+    #expect(result.processing.contains(.previewBound))
+    #expect(!result.processing.contains(.xTransThreePass))
+    #expect(max(result.image.width, result.image.height) <= bound)
+    #expect(max(result.image.width, result.image.height) > 640)
+    #expect(full.width > result.image.width)
+  }
+
+  @Test(
+    "Camera-scan full-sensor 1-pass preview does not bin the mosaic",
+    .enabled(
+      if: representativeRawAvailable,
+      "sample-raw corpus unavailable; full-sensor 1-pass preview test skipped")
+  )
+  func cameraScanFullSensorOnePassPreviewSkipsMosaicShrink() throws {
+    let rawURL = try #require(representativeRawURL)
+    let result = try RawImageDecoder.decode(
+      rawURL,
+      profile: .rawTherapeeCameraScan,
+      maxDimension: 100_000
+    )
+    let full = try RawImageDecoder.fullResolutionDimensions(rawURL)
+
+    #expect(!result.processing.contains(.previewBound))
+    #expect(!result.processing.contains(.xTransThreePass))
+    #expect(max(result.image.width, result.image.height) > 2_400)
+    #expect(max(result.image.width, result.image.height) >= max(full.width, full.height) * 9 / 10)
+  }
+
+  @Test(
     "Camera-scan 2400px preview bound interpolates below the full sensor",
     .enabled(
       if: representativeRawAvailable,
@@ -553,7 +597,7 @@ struct RawImageDecoderTests {
     let rawURL = try #require(representativeRawURL)
     _ = try RawImageDecoder.decode(
       rawURL, profile: .rawTherapeeCameraScan, maxDimension: 400)
-    let bounds = [400, 640, 800, 1_000, 1_200, 1_600, 2_400]
+    let bounds = [1_200, 2_400, 3_200, 4_000, 5_000, 8_000]
     for bound in bounds {
       var walls: [Double] = []
       var last: RawDecodeResult?
@@ -565,6 +609,7 @@ struct RawImageDecoderTests {
       }
       let result = try #require(last)
       let median = walls.sorted()[walls.count / 2]
+      let full = try RawImageDecoder.fullResolutionDimensions(rawURL)
       print(
         "preview-bound \(bound): \(result.image.width)×\(result.image.height) "
           + "wallMedian=\(String(format: "%.3f", median))s "
@@ -572,8 +617,11 @@ struct RawImageDecoderTests {
           + "demosaic=\(String(format: "%.3f", result.timings.demosaicSeconds))s "
           + "total=\(String(format: "%.3f", result.timings.totalSeconds))s"
       )
-      #expect(max(result.image.width, result.image.height) <= bound)
-      #expect(result.processing.contains(.previewBound))
+      #expect(max(result.image.width, result.image.height) <= max(bound, full.width, full.height))
+      if max(full.width, full.height) > bound {
+        #expect(result.processing.contains(.previewBound))
+        #expect(max(result.image.width, result.image.height) <= bound)
+      }
     }
   }
 

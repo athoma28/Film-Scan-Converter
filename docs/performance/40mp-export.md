@@ -13,11 +13,14 @@ cancellation without requiring Instruments; Instruments remains useful for
 stage-level traces. Destination reservation is included in the app-path total
 but is not reported as a separate interval.
 
-Interactive loading and export have separate image contracts. Browsing and
-editing use a 1000px embedded-RAW or ImageIO preview with a 256px analysis
-proxy. The preview cache never owns full-resolution decoded files. Export
-always decodes on demand; camera-scan RAW export retains the final-quality
-three-pass X-Trans path measured below.
+Interactive loading and export have separate image contracts. Standard images
+use an ImageIO thumbnail at most 1000px. Camera RAW browsing ignores the
+embedded JPEG and stages a colour-accurate ~640px draft, a ~4000px inspect
+preview, a selected-file 1-pass full-sensor preview, and 3200px neighbour
+lookahead, with a 256px analysis proxy. The preview cache may keep one
+selected-file 1-pass full-res buffer and must demote it on selection change.
+Export always decodes on demand; camera-scan RAW export retains the
+final-quality three-pass X-Trans path measured below.
 
 App cancellation is cooperative at safe stage boundaries: starting an export
 cancels speculative lookahead decoding, cancellation prevents completed decode
@@ -90,10 +93,14 @@ sequential-export, cancellation, and correlated stage-level app-path evidence.
 ## App-Path Preview Baseline
 
 The opt-in `AppPathPerformanceTests` benchmark exercises the real `AppModel`,
-embedded-RAW thumbnail extraction, 1000px display source, 256px analysis
+current RAW browsing (colour-accurate draft, inspect, lookahead, and selected
+1-pass full-res), 1000px standard-image display source, 256px analysis
 source, production preview renderer, lookahead cache, and latest-selection-wins
 drain. It records nearest-rank p50/p95 latency plus Mach physical footprint and
-the maximum logical preview-cache byte count. It writes no exports.
+the maximum logical preview-cache byte count. It writes no exports. The
+2026-07-11 table below is a historical first-paint baseline from the earlier
+embedded-JPEG browsing path; it is not a timing claim for the current RAW
+draft/inspect/full-res stages.
 
 Run it in release mode with writable Swift caches:
 
@@ -685,9 +692,9 @@ Warm demosaic is 2.848–2.859 seconds versus 3.38–3.54 seconds for the
 2026-08-12 row-parallel repair and 12.72–12.77 seconds for the stock serial
 reference. This is a same-fixture follow-up, not a replacement of the 18-output
 format matrix. Unpack was still about 0.89–0.91 seconds in that session.
-Writer and batch-overlap work stay deferred. Preview-bound Load RAW Preview
-and last-decode retention remain the next product work; parallel Fuji unpack
-landed on 2026-08-14, below.
+Writer and batch-overlap work stay deferred. Mosaic-binned RAW browsing
+landed after this measurement; last-decode retention remains the next product
+work. Parallel Fuji unpack landed on 2026-08-14, below.
 
 ## 2026-08-14 Parallel Fuji Compressed Unpack
 
@@ -728,9 +735,9 @@ compared to that earlier run.
 
 Warm eight-worker unpack was 0.2664–0.2665 seconds. Both A/B arms wrote the
 same TIFF hash and removed all six outputs. This is a same-fixture unpack
-follow-up, not a replacement of the 18-output format matrix. Preview-bound
-Load RAW Preview and last-decode retention remain the next product work; see
-roadmap item 5.
+follow-up, not a replacement of the 18-output format matrix. Mosaic-binned
+RAW browsing is complete; last-decode retention remains the next product
+work. See roadmap item 5.
 
 ## Closed Baseline Cycle And Bounded Follow-Up
 
@@ -756,8 +763,9 @@ an unrestricted performance rewrite.
    correlation ID across queue wait, settings/classification resolution, decode,
    flat-field lookup, correction, crop/perspective/frame geometry,
    write/finalize, and cleanup. Loading spans selection-to-first-corrected-paint,
-   thumbnail extraction, 1000px conversion, and bounded analysis. The benchmark
-   records first paint, cached/uncached switching, rapid-selection drain, cache
+   conversion, and bounded analysis. RAW browsing later moved from embedded
+   JPEGs to colour-accurate drafts. The benchmark records first paint,
+   cached/uncached switching, rapid-selection drain, cache
    bytes, and physical footprint. Use Instruments only when a later regression
    needs deeper render-stage attribution.
 4. **Memory envelope.** Engine, preview-cache, and app-export gates complete. The corrected

@@ -116,7 +116,9 @@ struct AppPathPerformanceTests {
       cachedModel.importFiles(Array(ordered.prefix(3)))
       try await waitForDisplayedPreview(
         in: cachedModel, file: ordered[0], afterDisplayedCount: 0)
-      try await waitUntil("lookahead cache") { cachedModel.previewCacheSessionCount >= 2 }
+      try await waitUntil("lookahead cache", timeout: .seconds(30)) {
+        cachedModel.previewCacheSessionCount >= 2
+      }
       let cachedDisplayedCount = cachedModel.renderStats.displayedRenders
       let cachedStart = ContinuousClock.now
       cachedModel.selection = ordered[1]
@@ -131,7 +133,7 @@ struct AppPathPerformanceTests {
       uncachedModel.importFiles(Array(ordered.prefix(4)))
       try await waitForDisplayedPreview(
         in: uncachedModel, file: ordered[0], afterDisplayedCount: 0)
-      try await waitUntil("bounded lookahead cache") {
+      try await waitUntil("bounded lookahead cache", timeout: .seconds(30)) {
         uncachedModel.previewCacheSessionCount >= 2
       }
       let uncachedDisplayedCount = uncachedModel.renderStats.displayedRenders
@@ -175,7 +177,7 @@ struct AppPathPerformanceTests {
       maximumPreviewCacheBytes: maximumPreviewCacheBytes,
       previewCacheDepths: previewCacheDepths,
       note:
-        "Browsing uses colour-accurate bounded RAW drafts and upgrades them to 2400px demosaiced previews in idle time; configured cache depths can populate only up to the available file count and the 256 MiB cache cap. Export performs independent full-resolution decode. No benchmark exports are written."
+        "Browsing uses colour-accurate 640px RAW drafts, a ~4000px inspect preview in about 4s, 3200px neighbour lookahead, and a 1-pass full-resolution preview for the selected file. Unused full-res buffers demote to inspect size. Bounded preview sessions stay under the 256 MiB cache cap. Export performs independent full-resolution decode. No benchmark exports are written."
     )
 
     let encoder = JSONEncoder()
@@ -201,7 +203,7 @@ struct AppPathPerformanceTests {
         in: try #require(model), file: firstFile, afterDisplayedCount: 0)
       let expectedPopulation = expectedCachePopulation(
         limit: depth, fileCount: corpus.count)
-      try await waitUntil("preview cache depth \(depth)") {
+      try await waitUntil("preview cache depth \(depth)", timeout: .seconds(45)) {
         model?.previewCacheSessionCount == expectedPopulation
       }
 
@@ -236,7 +238,11 @@ struct AppPathPerformanceTests {
   }
 
   private func expectedCachePopulation(limit: Int, fileCount: Int) -> Int {
-    min(max(2, limit), fileCount)
+    guard fileCount > 0 else { return 0 }
+    let upcoming = max(0, fileCount - 1)
+    let budget = max(0, max(2, limit) - 1)
+    let lookahead = min(AppModel.rawLookaheadDetailCount, min(budget, upcoming))
+    return 1 + lookahead
   }
 
   private func waitForDisplayedPreview(

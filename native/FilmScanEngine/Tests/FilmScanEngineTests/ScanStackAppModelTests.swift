@@ -1,5 +1,7 @@
+import AppKit
 import FilmScanEngine
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import FilmScanConverterMac
@@ -9,6 +11,31 @@ import Testing
 struct ScanStackAppModelTests {
   private enum WaitError: Error {
     case timedOut
+  }
+
+  @Test("Selecting a detected stack keeps the app chrome inside the window")
+  func detectedStackLayoutStaysBounded() async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-stack-layout-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let first = directory.appendingPathComponent("first.png")
+    let second = directory.appendingPathComponent("second.png")
+    try syntheticCapture(noiseOffset: 0).write(
+      to: first, format: .png, parameters: ExportParameters(format: .png))
+    try syntheticCapture(noiseOffset: 37).write(
+      to: second, format: .png, parameters: ExportParameters(format: .png))
+    let model = AppModel()
+    model.importFiles([first, second])
+    try await waitUntil { model.detectedScanStacks.count == 1 && model.previewImage != nil }
+
+    let host = NSHostingView(
+      rootView: ContentView(model: model, camera: CameraController())
+        .frame(width: 980, height: 640))
+    host.frame = NSRect(x: 0, y: 0, width: 980, height: 640)
+    host.layoutSubtreeIfNeeded()
+    let splitView = try #require(descendantViews(in: host).first { $0 is NSSplitView })
+    #expect(splitView.frame.size == host.bounds.size)
   }
 
   @Test("Import proposes, previews, and exports one aligned stack")
@@ -154,6 +181,10 @@ struct ScanStackAppModelTests {
       ? linear * 12.92
       : 1.055 * pow(linear, 1 / 2.4) - 0.055
     return UInt16((min(max(encoded, 0), 1) * 65_535).rounded())
+  }
+
+  private func descendantViews(in view: NSView) -> [NSView] {
+    [view] + view.subviews.flatMap(descendantViews)
   }
 
   private func waitUntil(

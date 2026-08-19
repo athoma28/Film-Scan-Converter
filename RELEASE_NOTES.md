@@ -40,14 +40,15 @@ processed-RGB DNG export.
 ## What’s next
 
 Since this beta, development added import-ordered previous/next, active/pending
-export sidebar status, and parallel Fuji compressed unpack. The next coding
-work is to make **Load RAW Preview** interpolate at the 2400px bound instead of
-demosaicing the full sensor and downscaling, then retain the selected file’s
-last full-resolution decode so a settings-only re-export does not repeat unpack
-and demosaic. Verify that inspect-and-roll workflow on a real roll, including
-the representative-image viewport check, while doing that work. Apple
-notarization and an independent-Mac installation check remain required before
-this can become a general signed release.
+export sidebar status, parallel Fuji compressed unpack, Darkroom log-density
+inversion for cyan/purple-mask stocks, repeated-scan stacking, and
+colour-accurate RAW drafts that upgrade the selected file to a ~4000px inspect
+preview and a 1-pass full-resolution preview. The next coding work is retaining
+the selected file’s last full-resolution three-pass decode so a settings-only
+re-export does not repeat unpack and demosaic. Verify that inspect-and-roll
+workflow on a real roll, including the representative-image viewport check,
+while doing that work. Apple notarization and an independent-Mac installation
+check remain required before this can become a general signed release.
 
 ## Known limitations
 

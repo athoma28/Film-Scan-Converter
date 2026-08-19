@@ -19,11 +19,12 @@ source for verified progress, limitations, and release position. Use the
 
 The bounded export-latency slice, still-preview viewport, undo/redo, and
 import-ordered previous/next and apply-to-selected roll commands are
-implemented. Camera RAW browsing now demosaics a colour-accurate draft and
-upgrades to 2400px in idle time. The current native coding work is roadmap
-item 5 slice 3: retain the selected file's last full-resolution decode for
-settings-only re-export. Verify a real roll and the representative-image
-viewport in the same pass. Stock-look learning, corpus preparation,
+implemented. Camera RAW browsing now demosaics a colour-accurate draft, then
+upgrades the selected file to a ~4000px preview and a 1-pass
+full-resolution preview while the next unseen files prefetch at 3200px. The
+current native coding work is roadmap item 5 slice 3: retain the selected
+file's last full-resolution three-pass decode for settings-only re-export.
+Verify a real roll and the representative-image viewport in the same pass. Stock-look learning, corpus preparation,
 named-stock fitting, and ML experiments are explicitly parked until the
 project owner reactivates them. Additional processing or SwiftUI controls
 must close a roadmap gate or be supported by concrete user evidence.

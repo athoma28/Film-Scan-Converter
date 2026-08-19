@@ -17,10 +17,12 @@ features.
 - LibRaw-backed camera RAW decoding.
 - Fast bounded previews from ImageIO thumbnails for standard images. Camera
   RAW files ignore the embedded JPEG and decode a colour-accurate demosaiced
-  draft (about 640px, ~0.3s) so edits match RAW colour immediately. A
-  2400px 1-pass demosaic then replaces that draft in the background, and idle
-  lookahead prepares the next files (8 kept ready by default) the same way.
-  Full-resolution three-pass decoding remains reserved for export.
+  draft (about 640px, ~0.3s) so edits match RAW colour immediately. The selected
+  file then upgrades to a ~4000px preview in about 4s, then a 1-pass
+  full-resolution preview for pan and zoom. Lookahead decodes the next three
+  unseen files at 3200px. Switching away discards the full-res buffer and keeps
+  the ~4000px preview. Export still re-decodes the three-pass full-resolution
+  RAW. **Load RAW Preview** skips ahead to the selected-file 1-pass decode.
 - A visual **Scans** sidebar with independently bounded 192px source
   thumbnails, filenames, edit/cache/export state, native multi-selection, and
   stack badges. Thumbnail loading does not pin the larger interactive previews
@@ -42,10 +44,10 @@ features.
   cursor-centered pinch magnification, Fit, zoom-in/out, and 100% preview-pixel
   commands. Image, dust, crop, straighten, and perspective overlays share the
   same viewport transform.
-- An on-canvas badge identifies RAW colour drafts, demosaiced RAW-detail, and
-  bounded standard-image preview sources and reports the displayed pixel
-  dimensions. A **Loading…** caption stays on a RAW draft until the 2400px
-  preview arrives.
+- An on-canvas warning identifies embedded camera JPEGs when RAW colour is
+  unavailable, and an aligned-stack badge appears when a stack preview is
+  showing. A small loading bar stays on the first 640px draft until the
+  ~4000px preview arrives; later sharpening pops in without a resolution label.
 - Optional AVFoundation live camera preview when macOS exposes the camera or
   capture adapter as a video device. The live toolbar can invert a negative
   preview and adjust exposure and saturation; captured stills still use the
@@ -172,7 +174,8 @@ features.
   browser.
 - Enabled scan stacks use the first capture's settings and filename, and count
   as one export item while the other captures remain available in the sidebar.
-- Configurable 2/4/8/16/32-session preview cache and forward lookahead.
+- Configurable 2/4/8/16/32-session preview cache (**Files kept ready**, default
+  8) and forward lookahead of the next three unseen files.
 - Immediate Edit/Grade/Export inspector switching.
 
 ### Export
@@ -208,10 +211,11 @@ features.
 ## Native Limitations
 
 - No applied dust removal or Telea inpainting.
-- Camera-scan RAW browsing unpacks the RAF, bins the mosaic to the preview
-  bound, and interpolates there: a ~640px colour-accurate draft in about 0.3s,
-  then a 2400px 1-pass X-Trans upgrade in under a second. Export still
-  re-decodes the full-resolution three-pass path and discards the buffer.
+- Camera-scan RAW browsing first bins a ~640px colour-accurate draft, then
+  upgrades the selected file to a ~4000px preview in about 4s, then a
+  1-pass full-sensor preview. Unseen neighbours prefetch at 3200px; unused
+  full-res buffers demote back to inspect size. Export still re-decodes the
+  full-resolution three-pass path and discards that buffer.
 - Sidebar order remains import order. Manual reordering is unavailable and is
   not a first-release gate unless the roll workflow demonstrates a need.
 - Repeated-capture proposals are limited to adjacent, same-size imports and

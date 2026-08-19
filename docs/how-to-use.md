@@ -13,11 +13,13 @@ The native application is the primary product. It provides:
   color wheels.
 - Camera-scan RAW processing with ISO-tier noise/detail filtering. Browsing
   ignores the camera JPEG and first shows a colour-accurate demosaiced draft
-  (about 640px) so slider work matches RAW colour. A 2400px 1-pass preview
-  then loads in the background, and idle lookahead prepares the next files
-  (8 kept ready by default) the same way. Export still re-decodes RAW files
-  at full resolution, using RCD for Bayer data or three-pass Markesteijn
-  interpolation for X-Trans.
+  (about 640px) so slider work matches RAW colour. The selected file then loads
+  a ~4000px preview in about 4s, then a 1-pass full-resolution preview for pan
+  and zoom. The next three unseen files prefetch at 3200px, and unused full-res
+  buffers demote back to inspect size. **Load RAW Preview** skips ahead to the
+  selected-file 1-pass decode. Export still re-decodes RAW files at full
+  resolution, using RCD for Bayer data or three-pass Markesteijn interpolation
+  for X-Trans.
 - Interactive GPU-accelerated preview that updates during slider drags, with
   native pan/pinch navigation plus Fit, step-zoom, and 100% commands.
 - Optional live camera preview when macOS exposes the camera or capture adapter
@@ -33,18 +35,20 @@ The native application is the primary product. It provides:
 
 ### Workflow
 
-1. Launch the app with `swift run --package-path native/FilmScanEngine FilmScanConverterMac`
+1. Launch the installed beta from Applications, or during development run
+   `swift run --package-path native/FilmScanEngine FilmScanConverterMac`
    or `./run-swift.sh`.
 2. Drag and drop supported RAW or image files onto the app window.
    A bounded preview appears first for large files, while the inspector header
    reports full-resolution output dimensions from file metadata. That readout
    updates after crop, rotation, and straightening; it does not report the
    preview proxy size. Camera RAW files show a slightly soft colour-accurate
-   draft almost immediately, with **Loading…** on the canvas until the 2400px
-   demosaic replaces it. You can edit colour as soon as the draft appears.
-   Full-resolution RAW decoding still happens independently during export. The
-   badge over the preview names the current source and its displayed pixel
-   dimensions.
+   draft almost immediately, with a small loading bar on the canvas until the
+   ~4000px preview replaces it. Full-resolution continues in the background.
+   You can edit colour as soon as the draft appears. **Load RAW Preview** on
+   the toolbar skips ahead to the selected-file 1-pass decode. Export still
+   re-decodes RAW independently with the three-pass path. Later preview
+   sharpening pops in without naming the current decode size.
    Use a two-finger trackpad gesture or mouse wheel to pan, pinch to zoom, or use
    the toolbar's minus/plus buttons and Fit/100% menu. Command-0 fits the image,
    Command-1 shows one preview pixel per point, and Command-plus/minus changes
@@ -57,7 +61,8 @@ The native application is the primary product. It provides:
    of one negative, a stack card appears below the thumbnails. Leave
    **Combine for** on **Auto** to choose HDR for an exposure bracket or robust
    averaging for same-exposure captures, or force **Noise** or **HDR**. Turn on
-   **Use aligned stack** only after reviewing the proposal. The preview is
+   **Use aligned stack** only after reviewing the proposal. The canvas shows an
+   **Aligned stack preview** badge while that preview is active. The preview is
    aligned from bounded sources; export repeats the alignment and combination
    from the full-resolution files. An enabled stack exports one image using
    the first capture's filename and edits. Translation-only matching is
@@ -128,7 +133,9 @@ The native application is the primary product. It provides:
    legacy exponent controls cannot. **Reset Dye Crossover** returns to the exact
    neutral matrix.
 6. Use the Settings section to copy or paste a look, or save, apply, and delete
-   named presets. After applying a named preset or **Kodachrome-like Auto**, use
+   named presets. **Files kept ready** (default 8) keeps recently viewed
+   inspect previews and prefetches the next three unseen files at 3200px.
+   After applying a named preset or **Kodachrome-like Auto**, use
    its **Remove** action to restore the adjustments from immediately before the
    preset without resetting crop or orientation. Transferred looks keep the
    destination scan's rotation, crop, and measured film-base state.

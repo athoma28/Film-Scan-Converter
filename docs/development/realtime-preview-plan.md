@@ -4,7 +4,7 @@
 complete. The proposed idle full-resolution replacement was retired when
 browsing moved to a preview-only contract.
 
-**Last verified:** 2026-08-14
+**Last verified:** 2026-08-18. The browsing contract below is current.
 
 This page records the design outcome of the real-time preview work. It is not
 the active roadmap. Current product priority belongs in the
@@ -15,22 +15,21 @@ app-path latency measurements belong in
 
 ## Shipped Contract
 
-- RAW browsing extracts the camera's embedded preview directly to a bounded
-  1000px 16-bit display source. Standard images use an ImageIO thumbnail at the
-  same bound.
+- Standard images use an ImageIO thumbnail at most 1000px. Camera RAW files
+  ignore the embedded JPEG and decode a colour-accurate ~640px demosaiced
+  draft, then upgrade the selected file to a ~4000px inspect preview and a
+  1-pass full-sensor preview. Unseen neighbours prefetch at 3200px.
 - A separate 256px source drives classification and median calibration.
-- Browsing keeps that bounded source. It does not start a speculative
-  full-resolution RAW decode or later replace the displayed image.
-- **Load RAW Preview** is the explicit higher-quality action: it decodes the
-  selected RAW through the camera-scan profile with 1-pass X-Trans at full
-  sensor size, then downscales to at most 2400px and recalibrates from those
-  pixels. Interpolating at the 2400px bound instead is roadmap item 5 slice 2.
+- Lookahead never starts a second full-resolution RAW. The selected file may
+  keep one 1-pass full-res buffer and must demote it to inspect size on
+  selection change.
+- **Load RAW Preview** is a skip-ahead to that selected-file 1-pass decode, not
+  the only way to reach it. Export independently decodes camera RAW at full
+  resolution with the `rawTherapeeCameraScan` profile (three-pass X-Trans).
+  Retaining that three-pass buffer for settings-only re-export is roadmap item
+  5 slice 3.
 - Lookahead prepares preview sessions only and is bounded by both the selected
   2/4/8/16/32-file limit and a 256 MiB byte limit.
-- Export independently decodes camera RAW at full resolution with the
-  `rawTherapeeCameraScan` profile (three-pass X-Trans) and recalibrates film-base
-  medians from the export pixels. That full-resolution buffer is discarded after
-  the job; retaining it for settings-only re-export is roadmap item 5 slice 3.
 - The Core Image/Metal correction renderer is the normal interactive path on
   supported MacBook Pro hardware. The Swift CPU pipeline remains the
   deterministic reference, export authority, CI/headless path, and fallback.
@@ -40,8 +39,9 @@ app-path latency measurements belong in
   native scroll viewport. It provides momentum pan, trackpad pinch, Fit,
   step-zoom, and 100% preview-pixel commands.
 - Original/corrected comparison retains the viewport and magnification. An
-  on-canvas badge identifies the bounded preview source and displayed pixel
-  dimensions.
+  embedded-JPEG warning and an aligned-stack badge appear when those sources
+  are on the canvas; inspect versus full-res is not labeled. A loading bar
+  stays on the first RAW draft until the inspect preview arrives.
 
 ## Completed Interactive Work
 
@@ -106,18 +106,23 @@ the roadmap and native status rather than by this historical outcome document.
 
 ## Durable Rules
 
-- Keep the 1000px display source and 256px analysis source explicit.
-- Keep **Load RAW Preview** an explicit on-demand action, not a browsing
-  replacement.
-- Never prefetch full-resolution RAW buffers for browsing or lookahead.
+- Keep the 1000px standard-image display source and 256px analysis source
+  explicit. Camera RAW browsing uses the staged 640 / 3200 / 4000 / full-sensor
+  1-pass contract, not an embedded JPEG.
+- Keep **Load RAW Preview** a skip-ahead to the selected-file 1-pass preview,
+  not the only way to reach it.
+- Never prefetch a second full-resolution RAW buffer for browsing or lookahead.
+  The selected file may keep one 1-pass full-res buffer and must demote it on
+  selection change.
 - Keep only the newest pending render snapshot.
 - Preserve the CPU processing path as the deterministic pixel authority.
 - Keep display transforms outside the authoritative processing result.
 - Keep image and diagnostic/editing overlays in one viewport transform, and do
   not reset that viewport when Original comparison changes the displayed pixels.
-- Keep 100% explicitly defined against bounded preview pixels, and keep the
-  preview-source badge visible so it is not confused with full-resolution
-  export evidence.
+- Define 100% against the pixels in the current preview, which become sensor
+  pixels after the full-res upgrade, not the three-pass export source. Do not
+  label inspect versus full-res on the canvas; keep the embedded-JPEG warning
+  when RAW colour is unavailable.
 - Treat color-management, EDR, and display-profile differences as measured
   preview concerns rather than silently baking them into export pixels.
 - Do not revive an authoritative browsing replacement without new evidence and

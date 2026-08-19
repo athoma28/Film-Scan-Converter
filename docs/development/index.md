@@ -9,8 +9,8 @@ limitations, release position, and the bounded current work.
 
 The [native product roadmap](../improvements/MacOS-Native-Roadmap.md) is the
 single ordered plan. The next coding slice is retaining the last
-full-resolution decode for settings-only re-export. Preview-bound RAW demosaic
-and parallel Fuji unpack are complete. The plan separates
+full-resolution three-pass decode for settings-only re-export. Mosaic-binned
+RAW browsing and parallel Fuji unpack are complete. The plan separates
 work required before the first public release from evidence-driven
 post-release candidates and explicitly unplanned ideas.
 
@@ -30,6 +30,11 @@ sample; neither should be confused with the app's camera-scan export profile.
 A [real-time still preview outcome](realtime-preview-plan.md) records the
 historical interactive design, the retired idle-replacement proposal, and
 deferred display-surface options. It does not set current priority.
+
+X-Trans preview bounds are not continuous pixel sizes. Mosaic shrink bins
+by an integer number of 6×6 CFA periods before 1-pass demosaic, so 4000px
+and 5000px can be the same image and 2400px often lands near 1900px. See
+[X-Trans preview mosaic binning](xtrans-preview-mosaic-binning.md).
 
 The `FilmScanPreviewComparator` tool
 (`swift run --package-path native/FilmScanEngine FilmScanPreviewComparator`)

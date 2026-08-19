@@ -113,9 +113,11 @@ Acceptance:
 - measured artifacts continue to be removed after each run.
 
 That cycle’s “optimize again only when profiling exposes a problem” gate was
-met: remaining user-visible waits are Load RAW Preview (full-sensor 1-pass
-then downscale) and every RAW export re-decoding from scratch. Item 5 owns
-those seams. Do not reopen item 1 as an unrestricted demosaic rewrite.
+met: remaining user-visible wait is every RAW export re-decoding from scratch.
+Interactive RAW browsing already uses a colour-accurate draft, a ~4000px
+inspect preview, and a selected-file 1-pass full-resolution preview. Item 5
+slice 3 owns the leftover export seam. Do not reopen item 1 as an unrestricted
+demosaic rewrite.
 
 ### 1. Resolve Measured Full-Resolution RAW Export Bottlenecks — Completed 2026-08-12
 
@@ -208,15 +210,17 @@ Deliver:
 2. smooth panning that does not fight crop, straighten, perspective, or loupe
    interactions;
 3. original/corrected comparison at the same viewport and magnification;
-4. clear preview-source status so an embedded RAW thumbnail is never mistaken
-   for full-resolution export evidence;
+4. warn when the canvas is an embedded camera JPEG or an aligned-stack
+   preview, without labeling inspect versus full-res pixel size;
 5. stable clipping diagnostics while navigating the image.
 
 Acceptance:
 
-- zoom/pan remains responsive on the bounded preview path;
-- browsing and lookahead never start speculative full-resolution RAW decodes;
-- **Load RAW Preview** remains the explicit higher-quality preview action;
+- zoom/pan remains responsive on the current preview path;
+- lookahead never starts a second full-resolution RAW; the selected file may
+  keep one 1-pass full-res buffer and must demote it on selection change;
+- **Load RAW Preview** remains a skip-ahead to that selected-file 1-pass
+  preview, not the only way to reach it;
 - selection changes and resets leave the viewport in a predictable state;
 - preview/export geometry remains shared and pixel dimensions remain truthful.
 
@@ -283,9 +287,11 @@ Use known techniques to remove the waits a RawTherapee-style user still hits
 after the completed three-pass wavefront work. Do not invent a new demosaic.
 Do not change export pixels.
 
-The interactive path already shows a colour-accurate RAW draft in about 0.3s
-and applies settings on the GPU in a few milliseconds. The remaining
-feels-slow seam is:
+The interactive path already shows a colour-accurate RAW draft in about 0.3s,
+upgrades the selected file to a ~4000px inspect preview in about 4s, then a
+1-pass full-sensor preview, and applies settings on the GPU in a few
+milliseconds. Unseen neighbours prefetch at 3200px. The remaining feels-slow
+seam is:
 
 - every RAW export calls a fresh full-resolution three-pass decode and discards
   the buffer.
@@ -303,12 +309,14 @@ Work in this order, as small slices:
    disabled. Five release repetitions reproduced every approved digest;
    same-session unpack fell from a 1.335-second serial median to 0.266 seconds
    at eight workers. `FSC_UNPACK_WORKERS=1` remains the serial mosaic oracle.
-2. **Demosaic Load RAW Preview at the preview bound.** — completed 2026-08-17:
-   camera-scan bins the CFA-aligned mosaic to the requested bound, then runs
-   the existing 1-pass interpolator (or linear interpolation below the 512px
-   X-Trans tile). Browsing ignores embedded JPEGs and uses a ~640px RAW draft,
-   then upgrades to 2400px in idle time. Export stays three-pass full
-   resolution.
+2. **Demosaic interactive RAW previews at the preview bound.** — completed
+   2026-08-18: camera-scan bins the CFA-aligned mosaic to the requested bound,
+   then runs the existing 1-pass interpolator (or linear interpolation below
+   the 512px X-Trans tile). Browsing ignores embedded JPEGs and uses a ~640px
+   RAW draft, then upgrades the selected file to a ~4000px inspect preview and
+   a 1-pass full-sensor preview. Unseen neighbours prefetch at 3200px. X-Trans
+   bounds land on integer CFA-period steps, so 4000px and 5000px can be the
+   same image. Export stays three-pass full resolution.
 3. **Retain the last full-resolution decode for the selected file.**
    Settings-only re-export of that file skips CFA work. Drop the buffer on
    selection change, reset, and teardown. Keep one authoritative full-resolution
@@ -322,7 +330,8 @@ part of this item.
 Acceptance:
 
 - browsing no longer uses Fuji JPEG colour for interactive RAW previews;
-- the 2400px judging preview no longer interpolates the full 40 MP mosaic;
+- the inspect and full-res 1-pass previews no longer interpolate the full 40 MP
+  mosaic only to downscale it;
 - a settings-only re-export of the current RAW does not repeat unpack+demosaic;
 - the camera-scan three-pass fixture still reproduces every approved digest;
 - physical footprint stays bounded; cancellation still writes no output;
@@ -394,9 +403,9 @@ After the editing and output contracts stabilize:
    gesture coalescing and transient relaunch semantics.
 4. A real roll workflow validates anchor-look, selected/all application,
    per-frame exceptions, selection, and export.
-5. Open, inspect, and settings-only re-export no longer wait on a full-sensor
-   1-pass or a repeated three-pass decode. Export pixels stay on the frozen
-   camera-scan oracle.
+5. Settings-only re-export of the selected RAW no longer repeats unpack and
+   three-pass demosaic. Interactive inspect already uses mosaic-binned 1-pass
+   previews. Export pixels stay on the frozen camera-scan oracle.
 6. Packaged outputs pass correctness, color-space, reopen, failure, and cleanup
    checks.
 7. The signed/notarized app passes Gatekeeper and clean-machine use.
@@ -486,6 +495,9 @@ stock/capture calibration track additionally requires explicit owner direction.
 Maintain this foundation rather than repeatedly replanning it:
 
 - native standard-image and LibRaw-backed RAW decoding;
+- colour-accurate RAW drafts, mosaic-binned ~4000px inspect and 3200px
+  lookahead, and a selected-file 1-pass full-res preview that demotes on
+  selection change;
 - frozen compatibility fixtures and deterministic native CPU contracts;
 - automatic frame detection, straighten, manual crop, four-corner perspective,
   loupe, alignment assistance, rotation, flip, frame, and aspect ratio;

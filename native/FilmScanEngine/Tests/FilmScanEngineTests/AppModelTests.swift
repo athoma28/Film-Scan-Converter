@@ -836,7 +836,9 @@ struct AppModelTests {
     model.importFiles([raw])
 
     try await waitUntil(timeout: .seconds(8)) { model.previewImage != nil }
-    #expect(model.previewSourceKind == .rawDraft || model.previewSourceKind == .rawDetail)
+    #expect(
+      model.previewSourceKind == .rawDraft || model.previewSourceKind == .rawDetail
+        || model.previewSourceKind == .rawInspect || model.previewSourceKind == .rawFull)
     #expect(model.previewSourceKind != .embeddedRAW)
     #expect(model.decodedImage?.channels == 3)
     if model.previewSourceKind == .rawDraft {
@@ -848,27 +850,106 @@ struct AppModelTests {
   }
 
   @Test(
-    "Idle RAW preview work upgrades the draft to a bounded demosaiced preview",
+    "Idle RAW preview work upgrades the draft to a full-resolution 1-pass preview",
     .enabled(
       if: appModelRawCorpusAvailable,
-      "sample-raw corpus unavailable; RAW detail preview test skipped")
+      "sample-raw corpus unavailable; RAW full preview test skipped")
   )
-  func rawDetailPreviewUpgradesAutomatically() async throws {
+  func rawPreviewUpgradesAutomaticallyToFullResolution() async throws {
     let raw = try #require(appModelRepresentativeRawURL)
     let model = AppModel()
     model.importFiles([raw])
 
     try await waitUntil(timeout: .seconds(8)) {
       model.previewSourceKind == .rawDraft || model.previewSourceKind == .rawDetail
+        || model.previewSourceKind == .rawInspect || model.previewSourceKind == .rawFull
     }
-    try await waitUntil(timeout: .seconds(25)) {
-      model.previewSourceKind == .rawDetail && !model.isLoading && !model.isUpgradingRawPreview
+    try await waitUntil(timeout: .seconds(8)) {
+      model.previewSourceKind == .rawInspect || model.previewSourceKind == .rawFull
+    }
+    if model.previewSourceKind == .rawInspect {
+      let inspect = try #require(model.selectedImageDimensions)
+      #expect(max(inspect.width, inspect.height) > AppModel.rawDetailPreviewMaxDimension)
+      #expect(max(inspect.width, inspect.height) <= AppModel.rawInspectPreviewMaxDimension)
+    }
+    try await waitUntil(timeout: .seconds(90)) {
+      model.previewSourceKind == .rawFull && !model.isLoading && !model.isUpgradingRawPreview
     }
     let dimensions = try #require(model.selectedImageDimensions)
+    let full = try RawImageDecoder.fullResolutionDimensions(raw)
     #expect(!dimensions.provisional)
-    #expect(max(dimensions.width, dimensions.height) <= AppModel.rawDetailPreviewMaxDimension)
-    #expect(max(dimensions.width, dimensions.height) > AppModel.rawDraftPreviewMaxDimension)
+    #expect(model.previewSourceKind == .rawFull)
+    #expect(max(dimensions.width, dimensions.height) > AppModel.rawDetailPreviewMaxDimension)
+    #expect(max(dimensions.width, dimensions.height) >= max(full.width, full.height) * 9 / 10)
     #expect(!model.canLoadRawDetailPreview)
+  }
+
+  @Test("Lookahead prefetches the next three unseen files")
+  func previewLookaheadPrefersThreeDetailNeighbors() {
+    let files = (0..<8).map { URL(fileURLWithPath: "/tmp/scan-\($0).raf") }
+    let lookahead = AppModel.previewLookahead(
+      files: files, selected: files[0], cacheLimit: 8)
+    #expect(lookahead == Array(files[1...3]))
+
+    let short = AppModel.previewLookahead(
+      files: files, selected: files[0], cacheLimit: 2)
+    #expect(short == [files[1]])
+  }
+
+  @Test(
+    "Lookahead decodes the next RAW to 3200px without waiting for the selected full-res decode",
+    .enabled(
+      if: appModelRawCorpusAvailable && SampleRawCorpus.rawURLs().count >= 2,
+      "sample-raw corpus needs at least two RAWs; lookahead preview test skipped")
+  )
+  func rawLookaheadDecodesNeighborDetailInParallel() async throws {
+    let urls = SampleRawCorpus.rawURLs()
+    let first = urls[0]
+    let second = urls[1]
+    let model = AppModel()
+    model.setPreviewCacheLimit(4)
+    model.importFiles([first, second])
+
+    try await waitUntil(timeout: .seconds(8)) { model.previewImage != nil }
+    try await waitUntil(timeout: .seconds(45)) {
+      model.cachedPreviewKind(for: second) == .rawDetail
+        || model.cachedPreviewKind(for: second) == .rawFull
+    }
+    #expect(model.cachedPreviewKind(for: second) == .rawDetail)
+    #expect(
+      model.previewSourceKind == .rawDraft || model.previewSourceKind == .rawDetail
+        || model.previewSourceKind == .rawInspect || model.previewSourceKind == .rawFull)
+
+    model.selection = second
+    model.loadSelection()
+    #expect(model.previewSourceKind == .rawDetail)
+    #expect(model.isUpgradingRawPreview)
+  }
+
+  @Test(
+    "Selecting another RAW demotes the previous full-resolution preview to inspect size",
+    .enabled(
+      if: appModelRawCorpusAvailable && SampleRawCorpus.rawURLs().count >= 2,
+      "sample-raw corpus needs at least two RAWs; demote preview test skipped")
+  )
+  func unselectedFullResPreviewDemotesToInspect() async throws {
+    let urls = SampleRawCorpus.rawURLs()
+    let first = urls[0]
+    let second = urls[1]
+    let model = AppModel()
+    model.setPreviewCacheLimit(4)
+    model.importFiles([first, second])
+
+    try await waitUntil(timeout: .seconds(90)) {
+      model.previewSourceKind == .rawFull && model.selection == first
+    }
+    model.selection = second
+    model.loadSelection()
+    try await waitUntil(timeout: .seconds(8)) {
+      model.selection == second && model.previewImage != nil
+    }
+    #expect(model.cachedPreviewKind(for: first) == .rawInspect)
+    #expect(model.cachedPreviewKind(for: first) != .rawFull)
   }
 
   @Test("Standard image import keeps a bounded thumbnail and full-resolution geometry")

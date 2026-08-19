@@ -202,6 +202,8 @@ final class AppModel: ObservableObject {
   private var lastSubmitTime: Date = .distantPast
   private var lastRenderEnd: ContinuousClock.Instant = .now
   private var pendingFirstPreviewInterval: AppPerformanceInterval?
+  private let rawFullPreviewDecodeGate = RawFullPreviewDecodeGate()
+  private var rawFullDecodeURL: URL?
   // Keep latest-value-wins scheduling bounded while allowing 120 Hz displays
   // to consume the sub-4 ms Metal renderer without an artificial 60 Hz cap.
   private static let renderCoalesceInterval: Duration = .milliseconds(8)
@@ -209,9 +211,25 @@ final class AppModel: ObservableObject {
   /// Largest camera-scan preview that stays near 0.3s on the development machine
   /// (unpack dominates; X-Trans interpolation requires a 512px tile).
   nonisolated static let rawDraftPreviewMaxDimension = 640
-  nonisolated static let rawDetailPreviewMaxDimension = 2_400
+  /// Unseen-neighbour lookahead. On the 40MP development RAF a 3200px bound
+  /// bins to ~2580px in about 2.4s: sharper than the 640px draft, cheap enough
+  /// to fill while the selected file is already on its inspect or full pass.
+  nonisolated static let rawDetailPreviewMaxDimension = 3_200
+  /// Selected-file inspect preview. On the 40MP development RAF a 4000px bound
+  /// bins to ~3876px and paints in about 4.0s; the next CFA integer step is the
+  /// full sensor (~11–14s).
+  nonisolated static let rawInspectPreviewMaxDimension = 4_000
+  /// Positive bound larger than any current camera mosaic. Keeps the 1-pass
+  /// interpolator (`fullResolution` stays false) while skipping mosaic shrink
+  /// and the X-Trans 2×2 preview downsample used when `maxDimension` is nil.
+  nonisolated static let rawFullPreviewDecodeBound = 100_000
   nonisolated static let analysisPreviewMaxDimension = 256
+  nonisolated static let rawLookaheadDetailCount = 3
   nonisolated static let defaultPreviewCacheLimit = 8
+  /// Bounded sessions exclude the selected full-res buffer. A 4000px inspect
+  /// frame is about 57 MiB of UInt16 RGB on the 40MP RAF; a 3200px lookahead
+  /// frame is about 25 MiB. This cap therefore holds about four inspect frames
+  /// or about ten lookahead frames before LRU demotion or eviction.
   nonisolated static let previewCacheByteLimit = 256 * 1_024 * 1_024
   nonisolated static let thumbnailMaxDimension = 192
   nonisolated static let thumbnailCacheCountLimit = 256
@@ -228,7 +246,7 @@ final class AppModel: ObservableObject {
     if let previewSource {
       return (
         previewSource.width, previewSource.height,
-        previewSourceKind != .rawDetail
+        previewSourceKind != .rawFull
       )
     }
     return nil
@@ -258,7 +276,7 @@ final class AppModel: ObservableObject {
   var canLoadRawDetailPreview: Bool {
     guard let selection else { return false }
     return FileDropPolicy.rawExtensions.contains(selection.pathExtension.lowercased())
-      && previewSourceKind != .rawDetail
+      && previewSourceKind != .rawFull
       && previewSourceKind != .alignedStack
       && !isLoading
       && !isUpgradingRawPreview
@@ -308,6 +326,24 @@ final class AppModel: ObservableObject {
 
   func hasCachedPreview(for url: URL) -> Bool {
     previewCache[settingsKey(url)] != nil
+  }
+
+  func cachedPreviewKind(for url: URL) -> PreviewSourceKind? {
+    previewCache[settingsKey(url)]?.sourceKind
+  }
+
+  /// Upcoming unseen files after `selected`, capped by the cache budget and
+  /// decoded at the 3200px lookahead bound. Visited files keep their inspect
+  /// preview through the normal cache; they are not re-queued here.
+  nonisolated static func previewLookahead(
+    files: [URL],
+    selected: URL,
+    cacheLimit: Int
+  ) -> [URL] {
+    guard let index = files.firstIndex(of: selected) else { return [] }
+    let budget = max(0, cacheLimit - 1)
+    let upcoming = Array(files.dropFirst(index + 1).prefix(budget))
+    return Array(upcoming.prefix(rawLookaheadDetailCount))
   }
 
   func hasEdits(for url: URL) -> Bool {
@@ -535,8 +571,8 @@ final class AppModel: ObservableObject {
       setStatus("RAW preview detail is only available for camera RAW files.")
       return
     }
-    guard previewSourceKind != .rawDetail else {
-      setStatus("The high-detail RAW preview is already loaded.")
+    guard previewSourceKind != .rawFull else {
+      setStatus("The full-resolution RAW preview is already loaded.")
       return
     }
     schedulePreviewWork(after: selection)
@@ -596,6 +632,7 @@ final class AppModel: ObservableObject {
     isUpgradingRawPreview = false
 
     cancelPredecode()
+    demoteUnselectedFullResPreviews()
     ImportLog.loadSelectionStarted(path: selection.lastPathComponent)
 
     decodedImage = nil
@@ -2886,7 +2923,6 @@ final class AppModel: ObservableObject {
     applyPreviewSession(
       session, selection: selection,
       hasStoredSettings: settingsByPath[settingsKey(selection)] != nil)
-    setStatus("Loaded \(selection.lastPathComponent) from preview cache.")
     scheduleRender(immediate: true)
   }
 
@@ -2896,6 +2932,11 @@ final class AppModel: ObservableObject {
     hasStoredSettings: Bool,
     recalibrateFromSource: Bool = true
   ) {
+    if let current = previewSourceKind,
+      session.sourceKind.qualityRank < current.qualityRank
+    {
+      return
+    }
     // Compatibility for feature gates while they migrate to explicit preview
     // requirements. This is never consulted by export.
     decodedImage = session.displaySource
@@ -2904,7 +2945,7 @@ final class AppModel: ObservableObject {
     previewSourceKind = session.sourceKind
     sourcePixelDimensions = session.sourcePixelDimensions
     isLoading = false
-    if session.sourceKind == .rawDetail {
+    if session.sourceKind == .rawFull {
       isUpgradingRawPreview = false
     }
     if hasStoredSettings {
@@ -2919,89 +2960,180 @@ final class AppModel: ObservableObject {
 
   private func schedulePreviewWork(after selection: URL) {
     guard !isExporting else { return }
-    guard let currentIndex = files.firstIndex(of: selection) else { return }
+    guard files.contains(selection) else { return }
 
     let selectedKey = settingsKey(selection)
-    let needsSelectedDetail =
-      FileDropPolicy.rawExtensions.contains(selection.pathExtension.lowercased())
-      && previewSourceKind != .alignedStack
-      && previewCache[selectedKey]?.sourceKind != .rawDetail
-    let lookahead =
-      previewCacheLimit > 1
-      ? Array(files.dropFirst(currentIndex + 1).prefix(previewCacheLimit - 1))
-      : []
-    guard needsSelectedDetail || !lookahead.isEmpty else { return }
+    let isRaw = FileDropPolicy.rawExtensions.contains(selection.pathExtension.lowercased())
+    let currentRank =
+      previewCache[selectedKey]?.sourceKind.qualityRank
+      ?? previewSourceKind?.qualityRank
+      ?? 0
+    let blockedByStack = previewSourceKind == .alignedStack
+    // A 3200px lookahead hit is already sharp enough to skip the 4000px inspect
+    // decode so the selected-file full-res pass can start immediately.
+    let needsSelectedInspect =
+      isRaw && !blockedByStack && currentRank < PreviewSourceKind.rawDetail.qualityRank
+    let needsSelectedFullRes =
+      isRaw && !blockedByStack && currentRank < PreviewSourceKind.rawFull.qualityRank
+    let lookahead = Self.previewLookahead(
+      files: files, selected: selection, cacheLimit: previewCacheLimit)
+    guard needsSelectedInspect || needsSelectedFullRes || !lookahead.isEmpty else {
+      return
+    }
 
     let generation = loadGeneration
     predecodeTask?.cancel()
-    if needsSelectedDetail {
+    if needsSelectedInspect || needsSelectedFullRes {
       isUpgradingRawPreview = true
     }
 
     predecodeTask = Task { [weak self] in
       guard let self else { return }
-      if needsSelectedDetail {
-        // Clear as soon as this file's 2400px decode finishes. Lookahead must
-        // not keep the selected canvas in the loading state.
-        defer {
-          if generation == self.loadGeneration {
-            self.isUpgradingRawPreview = false
-          }
-        }
-        await self.decodeAndCacheRawDetail(selection, generation: generation)
-      }
-      for target in lookahead {
-        guard !Task.isCancelled, generation == self.loadGeneration else { return }
-        let key = self.settingsKey(target)
-        if self.previewCache[key] == nil {
-          do {
-            let session = try await Task.detached(priority: .utility) {
-              try Self.makeFastPreviewSession(for: target)
-            }.value
-            try Task.checkCancellation()
-            guard self.previewCache[key] == nil else { continue }
-            if self.settingsByPath[key] == nil {
-              self.settingsByPath[key] = Self.automaticallyClassifiedParameters(
-                base: ProcessingParameters(), image: session.analysisSource,
-                weakPrior: self.sameRollFilmTypeHint)
-              self.automaticallyClassifiedKeys.insert(key)
-            }
-            self.cacheSession(session, for: target)
-          } catch is CancellationError {
-            return
-          } catch {
-            ImportLog.loadSelectionDecodeFailed(
-              path: "predecode \(target.lastPathComponent)", error: error.localizedDescription)
-          }
+      defer {
+        if generation == self.loadGeneration {
+          self.isUpgradingRawPreview = false
         }
       }
-      for target in lookahead {
-        guard !Task.isCancelled, generation == self.loadGeneration else { return }
-        await self.decodeAndCacheRawDetail(
-          target, generation: generation, applyIfSelected: true)
+      if needsSelectedInspect {
+        await self.decodeAndCacheRawInspect(selection, generation: generation)
+      }
+      if needsSelectedFullRes {
+        async let fullWork: Void = self.decodeAndCacheRawFull(
+          selection, generation: generation)
+        async let lookaheadWork: Void = self.prefetchLookahead(
+          lookahead, generation: generation)
+        _ = await (fullWork, lookaheadWork)
+      } else {
+        await self.prefetchLookahead(lookahead, generation: generation)
       }
     }
   }
 
-  private func decodeAndCacheRawDetail(
+  private func prefetchLookahead(_ urls: [URL], generation: Int) async {
+    for url in urls {
+      guard !Task.isCancelled, generation == loadGeneration else { return }
+      await decodeAndCachePreviewTier(
+        url, generation: generation, applyIfSelected: true)
+    }
+  }
+
+  private func decodeAndCacheRawInspect(
     _ url: URL,
-    generation: Int,
-    applyIfSelected: Bool = true
+    generation: Int
   ) async {
     guard FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased()) else { return }
-    let key = settingsKey(url)
-    if previewCache[key]?.sourceKind == .rawDetail { return }
+    if let existing = previewCache[settingsKey(url)]?.sourceKind,
+      existing.qualityRank >= PreviewSourceKind.rawInspect.qualityRank
+    {
+      return
+    }
     if selection == url, previewSourceKind == .alignedStack { return }
 
     do {
       let session = try await Task.detached(priority: .userInitiated) {
         try Self.makeRawPreviewSession(
           for: url,
-          maxDimension: Self.rawDetailPreviewMaxDimension,
-          kind: .rawDetail)
+          maxDimension: Self.rawInspectPreviewMaxDimension,
+          kind: .rawInspect)
       }.value
-      try Task.checkCancellation()
       cacheSession(session, for: url)
+      guard generation == loadGeneration, selection == url,
+        previewSourceKind != .alignedStack
+      else { return }
+      applyPreviewSession(
+        session,
+        selection: url,
+        hasStoredSettings: settingsByPath[settingsKey(url)] != nil,
+        recalibrateFromSource: !editedKeys.contains(settingsKey(url)))
+      scheduleRender(immediate: true)
+    } catch is CancellationError {
+      return
+    } catch {
+      ImportLog.loadSelectionDecodeFailed(
+        path: "RAW inspect \(url.lastPathComponent)", error: error.localizedDescription)
+      if generation == loadGeneration, selection == url {
+        setStatus(
+          "Unable to load inspect RAW preview: \(error.localizedDescription)",
+          kind: .error)
+      }
+    }
+  }
+
+  private func decodeAndCacheRawFull(
+    _ url: URL,
+    generation: Int
+  ) async {
+    guard FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased()) else { return }
+    if previewCache[settingsKey(url)]?.sourceKind == .rawFull { return }
+    if selection == url, previewSourceKind == .alignedStack { return }
+    if rawFullDecodeURL == url { return }
+    rawFullDecodeURL = url
+    defer {
+      if rawFullDecodeURL == url { rawFullDecodeURL = nil }
+    }
+
+    let gate = rawFullPreviewDecodeGate
+    do {
+      let session = try await Task.detached(priority: .userInitiated) {
+        try await gate.run {
+          try Self.makeRawFullPreviewSession(for: url)
+        }
+      }.value
+      // Keep at most one full-res preview: only retain it while this file is
+      // still selected. Switching away demotes the previous file to the 4000px
+      // inspect preview.
+      guard selection == url, previewSourceKind != .alignedStack else { return }
+      cacheSession(session, for: url)
+      applyPreviewSession(
+        session,
+        selection: url,
+        hasStoredSettings: settingsByPath[settingsKey(url)] != nil,
+        recalibrateFromSource: !editedKeys.contains(settingsKey(url)))
+      scheduleRender(immediate: true)
+    } catch is CancellationError {
+      return
+    } catch {
+      ImportLog.loadSelectionDecodeFailed(
+        path: "RAW full preview \(url.lastPathComponent)", error: error.localizedDescription)
+      if generation == loadGeneration, selection == url {
+        setStatus(
+          "Unable to load full-resolution RAW preview: \(error.localizedDescription)",
+          kind: .error)
+      }
+    }
+  }
+
+  private func decodeAndCachePreviewTier(
+    _ url: URL,
+    generation: Int,
+    applyIfSelected: Bool
+  ) async {
+    let isRaw = FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased())
+    let desiredKind: PreviewSourceKind = isRaw ? .rawDetail : .standardThumbnail
+    let key = settingsKey(url)
+    if let existing = previewCache[key], existing.sourceKind.qualityRank >= desiredKind.qualityRank
+    {
+      return
+    }
+    if selection == url, previewSourceKind == .alignedStack { return }
+
+    do {
+      let session = try await Task.detached(priority: .utility) { () -> CachedPreviewSession in
+        if isRaw {
+          return try Self.makeRawPreviewSession(
+            for: url,
+            maxDimension: Self.rawDetailPreviewMaxDimension,
+            kind: desiredKind)
+        }
+        return try Self.makeFastPreviewSession(for: url)
+      }.value
+      cacheSession(session, for: url)
+      if settingsByPath[key] == nil {
+        settingsByPath[key] = Self.automaticallyClassifiedParameters(
+          base: ProcessingParameters(), image: session.analysisSource,
+          weakPrior: sameRollFilmTypeHint)
+        automaticallyClassifiedKeys.insert(key)
+      }
       guard applyIfSelected, generation == loadGeneration, selection == url,
         previewSourceKind != .alignedStack
       else { return }
@@ -3011,17 +3143,11 @@ final class AppModel: ObservableObject {
         hasStoredSettings: settingsByPath[key] != nil,
         recalibrateFromSource: !editedKeys.contains(key))
       scheduleRender(immediate: true)
-      setStatus("Loaded high-detail RAW preview for \(url.lastPathComponent).")
     } catch is CancellationError {
       return
     } catch {
       ImportLog.loadSelectionDecodeFailed(
-        path: "RAW detail \(url.lastPathComponent)", error: error.localizedDescription)
-      if generation == loadGeneration, selection == url {
-        setStatus(
-          "Unable to load RAW preview detail: \(error.localizedDescription)",
-          kind: .error)
-      }
+        path: "predecode \(url.lastPathComponent)", error: error.localizedDescription)
     }
   }
 
@@ -3064,23 +3190,70 @@ final class AppModel: ObservableObject {
     )
   }
 
-  private func cacheSession(_ session: CachedPreviewSession, for url: URL) {
+  private func cacheSession(
+    _ session: CachedPreviewSession,
+    for url: URL,
+    allowDowngrade: Bool = false
+  ) {
     let key = settingsKey(url)
+    if !allowDowngrade,
+      let existing = previewCache[key],
+      existing.sourceKind.qualityRank > session.sourceKind.qualityRank
+    {
+      return
+    }
+    replaceCachedSession(session, for: key)
+    trimPreviewCache()
+  }
+
+  private func replaceCachedSession(_ session: CachedPreviewSession, for key: String) {
     if let previous = previewCache[key] { previewCacheBytes -= previous.byteCount }
     previewCache[key] = session
     previewCacheBytes += session.byteCount
     touchPreviewCache(key)
-    trimPreviewCache()
   }
 
   private func trimPreviewCache() {
+    demoteUnselectedFullResPreviews()
+    let selectedKey = selection.map { settingsKey($0) }
+    while boundedPreviewCacheBytes > Self.previewCacheByteLimit {
+      guard
+        let key = previewCacheOrder.first(where: {
+          $0 != selectedKey && previewCache[$0]?.sourceKind == .rawInspect
+        })
+      else { break }
+      guard let session = previewCache[key] else { break }
+      replaceCachedSession(Self.demotedSession(from: session, kind: .rawDetail), for: key)
+    }
     while previewCacheOrder.count > previewCacheLimit
-      || previewCacheBytes > Self.previewCacheByteLimit
+      || boundedPreviewCacheBytes > Self.previewCacheByteLimit
     {
-      let evicted = previewCacheOrder.removeFirst()
+      guard let evicted = previewCacheOrder.first(where: { $0 != selectedKey }) else {
+        break
+      }
+      previewCacheOrder.removeAll { $0 == evicted }
       if let removed = previewCache.removeValue(forKey: evicted) {
         previewCacheBytes -= removed.byteCount
       }
+    }
+  }
+
+  private var boundedPreviewCacheBytes: Int {
+    previewCache.values.reduce(0) { partial, session in
+      session.sourceKind == .rawFull ? partial : partial + session.byteCount
+    }
+  }
+
+  private func demoteUnselectedFullResPreviews() {
+    let selectedKey = selection.map { settingsKey($0) }
+    let fullKeys = previewCache.compactMap { key, session -> String? in
+      session.sourceKind == .rawFull && key != selectedKey ? key : nil
+    }
+    for key in fullKeys {
+      guard let session = previewCache[key] else { continue }
+      let demoted = Self.demotedSession(from: session, kind: .rawInspect)
+      guard demoted.sourceKind == .rawInspect else { continue }
+      replaceCachedSession(demoted, for: key)
     }
   }
 
@@ -3539,25 +3712,16 @@ final class AppModel: ObservableObject {
         pendingFirstPreviewInterval = nil
       }
       if !status.localizedCaseInsensitiveContains("cancel") {
-        let sourceLabel: String
+        let filename = request.selection.lastPathComponent
+        let renderer = result.rendererName
         switch previewSourceKind {
         case .embeddedRAW:
-          sourceLabel = "Fast embedded preview · camera JPEG, not RAW color"
-        case .rawDraft:
-          sourceLabel = "RAW color preview · loading higher-detail demosaic"
-        case .rawDetail:
-          sourceLabel = "High-detail demosaiced RAW preview · full resolution used for export"
-        case .standardThumbnail:
-          sourceLabel = "Fast image preview · full resolution used for export"
+          setStatus("\(filename) • \(renderer) · camera JPEG, not RAW color")
         case .alignedStack:
-          sourceLabel =
-            "Aligned multi-capture preview · stack rebuilt at full resolution for export"
-        case nil:
-          sourceLabel = "Fast preview"
+          setStatus("\(filename) • \(renderer) · aligned stack preview")
+        default:
+          setStatus("\(filename) • \(renderer)")
         }
-        setStatus(
-          "\(request.selection.lastPathComponent) • \(preview.width)×\(preview.height) \(result.rendererName) · \(sourceLabel)"
-        )
       }
 
       lastRenderEnd = ContinuousClock.now
@@ -3630,13 +3794,16 @@ final class AppModel: ObservableObject {
 
   nonisolated private static func decodeRawPreview(
     _ url: URL,
-    maxDimension: Int
+    maxDimension: Int,
+    resizeToBound: Bool = true
   ) throws -> UInt16Image {
-    try RawImageDecoder.decode(
+    let decoded = try RawImageDecoder.decode(
       url,
       profile: .rawTherapeeCameraScan,
       maxDimension: maxDimension
-    ).image.resizedToFit(maxDimension: maxDimension)
+    ).image
+    guard resizeToBound else { return decoded }
+    return decoded.resizedToFit(maxDimension: maxDimension)
   }
 
   nonisolated private static func makeRawPreviewSession(
@@ -3645,15 +3812,57 @@ final class AppModel: ObservableObject {
     kind: PreviewSourceKind
   ) throws -> CachedPreviewSession {
     let display = try decodeRawPreview(url, maxDimension: maxDimension)
-    guard let renderer = StillPreviewRenderer(image: display) else {
+    let analysis = display.resizedToFit(maxDimension: analysisPreviewMaxDimension)
+    guard let renderer = StillPreviewRenderer(image: display, analysisImage: analysis) else {
       throw CocoaError(.coderInvalidValue)
     }
     return CachedPreviewSession(
       sourceKind: kind,
       displaySource: display,
-      analysisSource: display.resizedToFit(maxDimension: analysisPreviewMaxDimension),
+      analysisSource: analysis,
       previewRenderer: renderer,
       sourcePixelDimensions: fullResolutionDimensions(of: url))
+  }
+
+  nonisolated private static func makeRawFullPreviewSession(
+    for url: URL
+  ) throws -> CachedPreviewSession {
+    let display = try decodeRawPreview(
+      url, maxDimension: rawFullPreviewDecodeBound, resizeToBound: false)
+    let analysis = display.resizedToFit(maxDimension: analysisPreviewMaxDimension)
+    guard let renderer = StillPreviewRenderer(image: display, analysisImage: analysis) else {
+      throw CocoaError(.coderInvalidValue)
+    }
+    return CachedPreviewSession(
+      sourceKind: .rawFull,
+      displaySource: display,
+      analysisSource: analysis,
+      previewRenderer: renderer,
+      sourcePixelDimensions: fullResolutionDimensions(of: url))
+  }
+
+  nonisolated private static func demotedSession(
+    from session: CachedPreviewSession,
+    kind: PreviewSourceKind
+  ) -> CachedPreviewSession {
+    let maxDimension =
+      switch kind {
+      case .rawInspect: rawInspectPreviewMaxDimension
+      case .rawDetail: rawDetailPreviewMaxDimension
+      case .rawDraft: rawDraftPreviewMaxDimension
+      default: rawDetailPreviewMaxDimension
+      }
+    let display = session.displaySource.resizedToFit(maxDimension: maxDimension)
+    let analysis = session.analysisSource.resizedToFit(maxDimension: analysisPreviewMaxDimension)
+    guard let renderer = StillPreviewRenderer(image: display, analysisImage: analysis) else {
+      return session
+    }
+    return CachedPreviewSession(
+      sourceKind: kind,
+      displaySource: display,
+      analysisSource: analysis,
+      previewRenderer: renderer,
+      sourcePixelDimensions: session.sourcePixelDimensions)
   }
 
   nonisolated private static func makeFastPreviewSession(
@@ -3793,7 +4002,26 @@ enum PreviewSourceKind: String, Sendable {
   case rawDraft
   case standardThumbnail
   case rawDetail
+  case rawInspect
+  case rawFull
   case alignedStack
+
+  var qualityRank: Int {
+    switch self {
+    case .embeddedRAW: 0
+    case .rawDraft, .standardThumbnail: 1
+    case .rawDetail: 2
+    case .rawInspect: 3
+    case .rawFull: 4
+    case .alignedStack: 5
+    }
+  }
+}
+
+private actor RawFullPreviewDecodeGate {
+  func run<T: Sendable>(_ operation: @Sendable () throws -> T) rethrows -> T {
+    try operation()
+  }
 }
 
 private struct CachedPreviewSession: Sendable {

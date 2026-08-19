@@ -27,7 +27,9 @@ elsewhere:
 - `FilmScanReleaseValidator`: packaged-app contract validator;
 - `FilmScanProcessingBenchmark`: focused processing benchmark;
 - `FilmScanProfileCalibrator`: offline weighted density-matrix fitter with a
-  frame-level held-out validation gate.
+  frame-level held-out validation gate;
+- `FilmScanReferenceCalibrator`: offline paired RAF/JPEG/XMP curve fitter used
+  by the measured Natural looks.
 
 The package requires macOS 14 or later and Homebrew LibRaw. `CLibRawShim`
 provides the narrow C/C++ boundary used by Swift. Camera-scan X-Trans keeps
@@ -246,16 +248,21 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
 - Keep interactive previews bounded and latest-value-wins.
 - Use explicit image contracts: standard-image browsing starts with a 1000px
   display source; camera RAW browsing starts with a colour-accurate ~640px
-  demosaiced draft, then upgrades to 2400px in idle time; a 256px analysis
-  source drives classification. Export owns an independent full-resolution
-  decode.
+  demosaiced draft, upgrades the selected file to a ~4000px inspect preview
+  then a 1-pass full-sensor preview, and keeps unseen neighbour files at
+  3200px; a 256px analysis source drives classification. Export owns an
+  independent three-pass full-resolution decode.
 - Keep lookahead preview-only, LRU, and bounded by both file count and bytes.
+  Keep at most one full-resolution 1-pass preview; demote unused full-res
+  sessions to the ~4000px inspect size. **Load RAW Preview** is a skip-ahead to
+  that selected-file 1-pass decode, not the only way to reach it.
 - Keep the still image, dust mask, and crop/straighten/perspective editors in
   one native viewport transform. Original comparison must preserve its pan and
   magnification, and selection changes must return to a predictable Fit state.
-- Define 100% against the pixels in the current bounded preview, not the
-  full-resolution export source. Keep the preview-source/dimensions badge
-  visible so a RAW draft or 2400px preview is never presented as export evidence.
+- Define 100% against the pixels in the current preview, which become sensor
+  pixels after the full-res upgrade, not the three-pass export source. Do not
+  label inspect versus full-res on the canvas; keep the embedded-JPEG warning
+  when RAW colour is unavailable.
 - Keep adaptive-look analysis bounded independently of imported image size;
   Kodachrome-like Auto currently analyzes at most a 1024-pixel long edge and
   stores a concrete five-point curve for deterministic preview/export parity.

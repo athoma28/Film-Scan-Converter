@@ -12,7 +12,7 @@ bounded inspect/re-export work is owned by the
 [native product roadmap](../improvements/MacOS-Native-Roadmap.md), not by a
 continuation of that rewrite.
 
-**Last verified:** 2026-08-17 against the current working tree. Some
+**Last verified:** 2026-08-18 against the current working tree. Some
 representative-RAW tests require the untracked local `sample-raw/` corpus and
 are explicitly disabled when it is absent.
 
@@ -39,8 +39,11 @@ should begin until the project owner explicitly reactivates that track.
 The bounded 40 MP measurement cycle and beta packaging/output correctness work
 are complete. The still-preview viewport has native pan/pinch navigation,
 Fit/step/100% commands, shared image and editing-overlay transforms,
-viewport-stable comparison, and explicit preview-source status. Per-file
-undo/redo now covers processing, geometry, framing, reset, paste, and
+and viewport-stable comparison. An embedded-JPEG warning and an aligned-stack
+badge appear when those sources are on the canvas; inspect versus full-res is
+not labeled. A loading bar stays on the first RAW draft until the inspect
+preview arrives. Per-file undo/redo now covers processing, geometry, framing,
+reset, paste, and
 profile/preset application, with one history step per continuous editing
 gesture and transient history restored independently for each selected scan.
 **Apply Look to Selected** now transfers the active frame's look to the
@@ -90,19 +93,28 @@ Harman Phoenix II stock (Crystal Archive paper, 20% rebate inset) instead of the
 orange-mask Camera Raw LUT. The conversion panel now exposes the bundled stock
 and paper choices directly rather than requiring technical profile names.
 
+Roadmap item 5 slice 2 landed on 2026-08-18: camera-scan browsing ignores the
+embedded JPEG, paints a colour-accurate ~640px draft, upgrades the selected
+file to a ~4000px inspect preview then a 1-pass full-sensor preview, and
+prefetches the next three unseen files at 3200px. **Load RAW Preview** remains
+a skip-ahead to that selected-file 1-pass decode. Switching away demotes the
+unused full-res buffer to inspect size.
+
 The next product coding slice is roadmap item 5 slice 3: retain the last
-full-resolution decode for the selected file so settings-only re-export skips
-unpack and demosaic. Verify the remaining roll workflow on a real roll while
-doing that work. Complete the representative-image viewport check in the same
-pass. Do not begin a three-pass Metal port, a new X-Trans interpolator, writer
-replacement, or stock-look calibration.
+full-resolution three-pass decode for the selected file so settings-only
+re-export skips unpack and demosaic. Verify the remaining roll workflow on a
+real roll while doing that work. Complete the representative-image viewport
+check in the same pass. Do not begin a three-pass Metal port, a new X-Trans
+interpolator, writer replacement, or stock-look calibration.
 
 The current measurement evidence is:
 
-- colour-accurate ~640px RAW drafts that upgrade to 2400px demosaiced previews,
-  plus 1000px standard-image previews, are the default interactive sources;
-- lookahead prepares those bounded RAW sessions and never starts speculative
-  full-resolution RAW decodes;
+- colour-accurate ~640px RAW drafts that upgrade the selected file to a ~4000px
+  preview in about 4s, then a 1-pass full-resolution preview, plus
+  3200px neighbour lookahead and 1000px standard-image previews, are the
+  default interactive sources;
+- lookahead never prefetches a second full-resolution RAW; unused full-res
+  preview buffers demote back to inspect size;
 - app-path signposts cover selection-to-first-corrected-paint, preview extraction,
   conversion, analysis, and export from queue wait through cleanup;
 - export cancellation now stops speculative lookahead decoding, checks each
@@ -241,11 +253,11 @@ the follow-up.
 | Area | Current behavior |
 |---|---|
 | Import | Drag/drop, file picker, Finder Open With, standard PNG/JPEG/BMP/TIFF decode, and LibRaw-backed camera RAW decode. Optional AVFoundation live preview when macOS exposes the camera or capture adapter as a video device, with invert/exposure/saturation on the live toolbar. |
-| First paint | Standard images use ImageIO thumbnails at most 1000px. Camera RAW files ignore the embedded JPEG and decode a colour-accurate ~640px demosaiced draft (about 0.3s), then upgrade to a 2400px 1-pass preview in idle time. Lookahead keeps 8 of those sessions ready by default. A separate 256px proxy drives classification and median calibration before the first filtered render. |
+| First paint | Standard images use ImageIO thumbnails at most 1000px. Camera RAW files ignore the embedded JPEG and decode a colour-accurate ~640px demosaiced draft (about 0.3s). The selected RAW then upgrades to a ~4000px preview in about 4s, then a 1-pass full-sensor preview; the next three unseen files prefetch at 3200px. Switching away demotes an unused full-res buffer to inspect size. A separate 256px proxy drives classification and median calibration before the first filtered render. |
 | Processing | Color/B&W negative and slide startup classification plus a selectable Original (no-inversion) film type; visible Natural, Darkroom, Classic, and Bypass conversion intents; measured Natural starting looks; Darkroom log-density invert (dye unmix, independent channel stretch, H&D paper, Neutral/Endura/Crystal Archive) with cyan/purple-mask auto-select onto Darkroom/Harman Phoenix II; a reference-derived Kodachrome-like adaptive look; an optional density pipeline, film-base measurement, flat field, capture-profile 3x3-plus-offset density correction before curve inversion; a neutral-preserving six-control dye-crossover matrix shared by calibrated/power-law/density color-negative paths; protected color and tone controls with center-weighted UI response and pipeline-calibrated tone references; shape-preserving overall/per-channel curves; color wheels; neutral-white handling for clipped near-zero holder pixels; automatic frame detection; a centered two-click horizontal/vertical straighten guide; an immediately visible post-straighten drag-box crop with full-canvas replacement and reset; an independent four-corner perspective warp with targeting reticles, a 100×100-pixel drag loupe, soft parallel-edge assistance, and a visible grid; live full-resolution output dimensions, frame, and aspect ratio. |
 | Scan review and stacking | Scans sidebar with bounded source thumbnails, native multi-selection, edit/cache/export indicators, and conservative adjacent same-size repeated-capture proposals. Opt-in translation-only alignment supports Auto, Noise, and HDR modes; low-texture or ambiguous captures are left separate, and enabled stacks export once under the first capture's name and settings. |
-| Preview | First paint uses a bounded 16-bit display source plus a 256px analysis source. Camera RAW sources are demosaiced at the preview bound, not Fuji JPEG renderings. A native scroll viewport supplies momentum pan, cursor-centered pinch zoom, Fit/step/100% commands, viewport-stable Original comparison, shared editing-overlay transforms, and an explicit source/dimension badge. The Core Image/Metal renderer uses latest-value-wins scheduling; CPU remains the reference and fallback. |
-| Editing state | Per-file settings plus session-local per-file Undo/Redo for processing, geometry, output framing, reset, paste, and profile/preset application. Continuous slider, curve, color-wheel, and perspective gestures coalesce to one step; the restored current state persists while history starts empty after relaunch. Named presets, a built-in Kodachrome-like Auto action, one-step preset removal, system-clipboard copy/paste, edited/preview-ready/active-export/pending-export markers, import-ordered previous/next scan, apply-to-selected/all with per-frame geometry and measured-base preservation, and configurable 2/4/8/16/32-file lookahead are also implemented. Lookahead caches preview sessions only and is bounded by count and 256 MiB. |
+| Preview | First paint uses a bounded 16-bit display source plus a 256px analysis source. Camera RAW sources are demosaiced at the preview bound, not Fuji JPEG renderings. A native scroll viewport supplies momentum pan, cursor-centered pinch zoom, Fit/step/100% commands, viewport-stable Original comparison, and shared editing-overlay transforms. An embedded-JPEG warning and aligned-stack badge appear when those sources are on the canvas; inspect versus full-res is not labeled. **Load RAW Preview** skips ahead to the selected-file 1-pass decode. The Core Image/Metal renderer uses latest-value-wins scheduling; CPU remains the reference and fallback. |
+| Editing state | Per-file settings plus session-local per-file Undo/Redo for processing, geometry, output framing, reset, paste, and profile/preset application. Continuous slider, curve, color-wheel, and perspective gestures coalesce to one step; the restored current state persists while history starts empty after relaunch. Named presets, a built-in Kodachrome-like Auto action, one-step preset removal, system-clipboard copy/paste, edited/preview-ready/active-export/pending-export markers, import-ordered previous/next scan, apply-to-selected/all with per-frame geometry and measured-base preservation, and a configurable 2/4/8/16/32-session preview cache are also implemented. Forward lookahead prefetches at most the next three unseen files. Lookahead caches preview sessions only and is bounded by count and 256 MiB. |
 | Export | Named-sRGB TIFF, JPEG, and PNG plus output-referred linear-sRGB processed DNG; individual, ordered multi-selection, and lazy memory-bounded batch-all workflows; collision-safe names; partial-file cleanup; progress, per-file errors, queued cancellation, and duplicate-friendly append-selected jobs with per-addition export-setting snapshots during an active sequential run. |
 | Dust | Native parity-tested candidate-mask detection and a non-destructive aligned overlay. Dust removal is not applied to preview or export. |
 | Packaging | Self-contained app/ZIP/checksum assembly, embedded non-system libraries, bundle-relative load paths, licenses/notices/library manifest, icon/document registration, ad-hoc beta signing, gated Developer ID/notary support, local bundle validation, archive extraction/revalidation, and local packaged launch. |
@@ -293,7 +305,9 @@ Implemented in the current working tree:
 - native pan/pinch navigation plus Fit, zoom-in/out, and 100% commands;
 - original/corrected comparison at the same viewport and magnification;
 - a shared transform for image, dust, crop, straighten, and perspective layers;
-- an explicit preview-source and displayed-dimensions badge.
+- an embedded-JPEG warning when RAW colour is unavailable, a draft loading
+  bar, and an aligned-stack canvas badge. Inspect versus full-res is not
+  labeled on the canvas.
 - native Undo/Redo with exact parameter snapshots, one history step per
   continuous gesture, and safe per-file boundaries.
 
@@ -301,9 +315,10 @@ Still required before calling the application high quality:
 
 - complete a direct representative-image workflow check for focus, grain,
   dust, crop-edge, overlay-drag, comparison, and clipping-diagnostic behavior;
-- reuse the last full-resolution decode for settings-only re-export of the
-  selected file;
-- preserve the explicit bounded-preview versus full-resolution-export contract.
+- reuse the last full-resolution three-pass decode for settings-only re-export
+  of the selected file;
+- preserve the named preview/export split: mosaic-binned 1-pass browsing versus
+  independent three-pass export.
 
 ### 3. Roll And Batch Workflow
 
@@ -376,11 +391,13 @@ fail-closed `public` path. The following remain for the notarized build:
   algorithm body that must be reviewed when LibRaw is upgraded.
 - The available real RAW corpus is X-Trans and does not provide a committed
   real-file gate for the Bayer RCD path.
-- Camera-scan RAW browsing bins the mosaic and interpolates at the preview
-  bound: a ~640px colour-accurate draft in about 0.3s, then a 2400px 1-pass
-  X-Trans upgrade. Export always re-decodes the full-resolution three-pass
-  path and discards the buffer. Roadmap item 5 slice 3 (retain the last
-  full-resolution decode for settings-only re-export) remains.
+- Camera-scan RAW browsing first paints a ~640px colour-accurate draft, then
+  upgrades the selected file to a ~4000px preview in about 4s, then a
+  1-pass full-sensor preview. Unseen neighbours prefetch at 3200px; unused
+  full-res buffers demote back to inspect size. Export always re-decodes the
+  full-resolution three-pass path and discards that buffer. Roadmap item 5
+  slice 3 (retain the last full-resolution decode for settings-only re-export)
+  remains.
 - Fuji compressed unpack runs independent strips concurrently through
   LibRaw's `fuji_decode_loop` hook. `LIBRAW_FORCE_OPENMP` and overlapping-tile
   X-Trans OpenMP remain disabled. `FSC_UNPACK_WORKERS=1` is the serial mosaic
@@ -410,7 +427,7 @@ fail-closed `public` path. The following remain for the notarized build:
 
 ## Verification Summary
 
-- 496 native tests across 39 Swift files in the current working tree, including
+- 516 native tests across 39 Swift test files in the current working tree, including
   import-order previous/next, sidebar export-state, repeated-scan detection,
   aligned stacking, wavefront-vs-serial X-Trans identity, and
   parallel-vs-serial Fuji unpack identity.
@@ -465,8 +482,11 @@ fail-closed `public` path. The following remain for the notarized build:
    may use a cheaper already-known interpolator at the preview bound; that is
    a named preview/export split, not an unnamed quality cut.
 5. Keep preview and export memory bounded. Do not retain a full import batch of
-   decoded RAW buffers. One selected-file full-resolution decode may be kept
-   for settings-only re-export when the inspect/re-export slice lands.
+   decoded RAW buffers. Interactive preview may keep one selected-file 1-pass
+   full-resolution buffer and must demote it to the ~4000px inspect size on
+   selection change. One
+   selected-file full-resolution three-pass decode may be kept for
+   settings-only re-export when the inspect/re-export slice lands.
 6. Treat implementation and documentation as one change. Update this page,
    Features, the roadmap, and specialized evidence pages only where their owned
    facts changed.

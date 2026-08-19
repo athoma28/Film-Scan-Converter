@@ -19,9 +19,11 @@ nav:
       - Native macOS Product Roadmap: improvements/MacOS-Native-Roadmap.md
       - Native macOS Release: development/native-release.md
       - Real-Time Still Preview Outcome: development/realtime-preview-plan.md
+      - X-Trans Preview Mosaic Binning: development/xtrans-preview-mosaic-binning.md
       - Native RAW Benchmark: development/native-raw-benchmark.md
       - Film Processing Research: film-processing-research.md
       - Density-Matrix Calibration (Parked): development/density-matrix-calibration.md
+      - Reference Negative Calibration: development/reference-negative-calibration.md
       - Building: development/building.md
       - Contributing: contributing.md
   - Legacy Python:

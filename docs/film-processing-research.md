@@ -3,10 +3,11 @@
 > **Parked research reference, not the active roadmap.** The native app now wires an
 > optional density pipeline through preview and export with capture
 > normalization, flat field, film-base measurement, roll profiles, and generic
-> capture/stock profile types. The default color-negative path is a
+> capture/stock profile types. The default color-negative path is **Natural**, a
 > paired-scan-calibrated curve with partial exposure and channel-ratio
-> adaptation; the former RawTherapee-oriented power-law model remains available
-> as **Color Negative (Legacy)**. Fitted capture matrices, residual LUTs, and
+> adaptation. **Darkroom** inverts in log density for film-and-paper rendering.
+> The former RawTherapee-oriented power-law model remains available as
+> **Classic**. Fitted capture matrices, residual LUTs, and
 > further named-stock work remain evidence-driven research candidates. Further
 > corpus preparation, named-stock fitting, residual LUTs, or ML work is paused
 > until the project owner explicitly reactivates it. See

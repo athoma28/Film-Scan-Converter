@@ -93,8 +93,8 @@ struct ContentView: View {
 
   var body: some View {
     NavigationSplitView {
-      VStack(spacing: 0) {
-        List(model.files, id: \.self, selection: $model.selectedFiles) { url in
+      List(selection: $model.selectedFiles) {
+        ForEach(model.files, id: \.self) { url in
           ScanSidebarRow(
             url: url,
             thumbnail: model.thumbnail(for: url),
@@ -111,15 +111,20 @@ struct ContentView: View {
           .task(id: model.thumbnail(for: url) == nil) {
             model.requestThumbnail(for: url)
           }
-        }
-        .listStyle(.sidebar)
-        .frame(maxHeight: .infinity)
 
-        if let stack = model.selectedDetectedScanStack {
-          Divider()
-          scanStackProposal(stack)
-        } else if model.isAnalyzingScanStacks, model.files.count > 1 {
-          Divider()
+          // Keep this inside the scrollable list. A sibling below List makes
+          // NavigationSplitView adopt the inspector's full fitting height.
+          if model.selection == url, let stack = model.selectedDetectedScanStack {
+            scanStackProposal(stack)
+              .listRowInsets(EdgeInsets())
+              .listRowSeparator(.hidden)
+          }
+        }
+
+        if model.selectedDetectedScanStack == nil,
+          model.isAnalyzingScanStacks,
+          model.files.count > 1
+        {
           HStack(spacing: 8) {
             ProgressView()
               .controlSize(.small)
@@ -130,8 +135,12 @@ struct ContentView: View {
           }
           .frame(maxWidth: .infinity, alignment: .leading)
           .padding(12)
+          .listRowInsets(EdgeInsets())
+          .listRowSeparator(.hidden)
+          .background(Color(nsColor: .controlBackgroundColor))
         }
       }
+      .listStyle(.sidebar)
       .navigationTitle("Scans")
       .navigationSplitViewColumnWidth(min: 220, ideal: 270, max: 340)
       .onChange(of: model.selectedFiles) {
@@ -294,6 +303,7 @@ struct ContentView: View {
           .fixedSize(horizontal: false, vertical: true)
       }
     }
+    .frame(maxWidth: .infinity, alignment: .leading)
     .padding(12)
     .background(Color(nsColor: .controlBackgroundColor))
   }
@@ -393,7 +403,7 @@ struct ContentView: View {
           Button(action: model.loadRawDetailPreview) {
             Label("Load RAW Preview", systemImage: "sparkles.rectangle.stack")
           }
-          .help("Decode a 2400px demosaiced RAW preview now")
+          .help("Decode the full-resolution 1-pass RAW preview now")
         }
 
         Toggle(isOn: $model.showOriginal) {
@@ -902,7 +912,7 @@ struct ContentView: View {
           }
         }
         .help(
-          "Keeps colour-accurate RAW drafts and 2400px demosaiced previews ready. Default is 8 files, still capped at 256 MB. Export still decodes each RAW at full resolution."
+          "Keeps recently viewed ~4000px RAW previews and prefetches the next few unseen files at ~3200px. The selected RAW upgrades from a 640px draft to a ~4000px preview, then a 1-pass full-resolution decode. Switching away discards full-res and keeps the ~4000px preview. Default is 8 files, with bounded previews still capped at 256 MB. Export still re-decodes each RAW at full resolution."
         )
 
         HStack {
@@ -1733,26 +1743,7 @@ struct ContentView: View {
           }
           .accessibilityLabel("Still image preview")
 
-          VStack {
-            HStack {
-              previewSourceBadge
-              Spacer()
-            }
-            Spacer()
-            if model.previewSourceKind == .rawDraft
-              || (model.isUpgradingRawPreview && model.previewSourceKind != .rawDetail)
-            {
-              Text("Loading…")
-                .font(.caption.weight(.semibold))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(.black.opacity(0.72), in: Capsule())
-                .foregroundStyle(.white)
-                .padding(.bottom, 14)
-            }
-          }
-          .padding(10)
-          .allowsHitTesting(false)
+          previewCanvasChrome
         } else {
           VStack(spacing: 16) {
             Text(model.selection?.lastPathComponent ?? "")
@@ -1840,59 +1831,54 @@ struct ContentView: View {
     .frame(width: image.size.width, height: image.size.height)
   }
 
-  private var previewSourceBadge: some View {
-    let dimensions =
-      model.previewImage.map {
-        "\(Int($0.size.width.rounded()))×\(Int($0.size.height.rounded()))"
-      } ?? ""
-    let label: String
-    let icon: String
-    let tint: Color
-    let help: String
+  @ViewBuilder
+  private var previewCanvasChrome: some View {
+    let showDraftBar = model.previewSourceKind == .rawDraft
+    let showBadge =
+      model.previewSourceKind == .embeddedRAW || model.previewSourceKind == .alignedStack
+    if showDraftBar || showBadge {
+      VStack {
+        HStack {
+          if showBadge {
+            previewSourceBadge
+          }
+          Spacer()
+        }
+        Spacer()
+        if showDraftBar {
+          RawPreviewUpgradeBar()
+            .padding(.bottom, 14)
+        }
+      }
+      .padding(10)
+      .allowsHitTesting(false)
+    }
+  }
 
+  @ViewBuilder
+  private var previewSourceBadge: some View {
     switch model.previewSourceKind {
     case .embeddedRAW:
-      label = "Embedded RAW preview · \(dimensions)"
-      icon = "exclamationmark.triangle.fill"
-      tint = .yellow
-      help =
-        "A fast embedded camera preview, not full-resolution export evidence."
-    case .rawDraft:
-      label = "RAW colour preview · loading · \(dimensions)"
-      icon = "circle.dotted"
-      tint = .white
-      help =
-        "A colour-accurate demosaiced draft. A sharper 2400px RAW preview loads in the background while you edit."
-    case .rawDetail:
-      label = "Demosaiced RAW preview · \(dimensions)"
-      icon = "viewfinder"
-      tint = .white
-      help = "A bounded high-detail RAW preview. Export re-decodes the full-resolution RAW."
-    case .standardThumbnail:
-      label = "Bounded image preview · \(dimensions)"
-      icon = "viewfinder"
-      tint = .white
-      help = "A bounded preview used for interaction. Export uses the full-resolution source image."
+      Label("Embedded RAW preview", systemImage: "exclamationmark.triangle.fill")
+        .font(.caption2.weight(.medium))
+        .foregroundStyle(.yellow)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(.black.opacity(0.72), in: Capsule())
+        .help("A fast embedded camera preview, not RAW colour.")
     case .alignedStack:
-      label = "Aligned stack preview · \(dimensions)"
-      icon = "square.stack.3d.up.fill"
-      tint = .white
-      help =
-        "An aligned multi-capture preview. Export rebuilds the stack from the full-resolution sources."
-    case nil:
-      label = "Preview · \(dimensions)"
-      icon = "viewfinder"
-      tint = .white
-      help = "The pixels currently used for interactive preview."
+      Label("Aligned stack preview", systemImage: "square.stack.3d.up.fill")
+        .font(.caption2.weight(.medium))
+        .foregroundStyle(.white)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(.black.opacity(0.72), in: Capsule())
+        .help(
+          "An aligned multi-capture preview. Export rebuilds the stack from the full-resolution sources."
+        )
+    default:
+      EmptyView()
     }
-
-    return Label(label, systemImage: icon)
-      .font(.caption2.weight(.medium))
-      .foregroundStyle(tint)
-      .padding(.horizontal, 8)
-      .padding(.vertical, 5)
-      .background(.black.opacity(0.72), in: Capsule())
-      .help(help)
   }
 
   private func requestPreviewZoom(_ action: PreviewZoomAction) {
@@ -2180,6 +2166,28 @@ struct ContentView: View {
 
   private func pointText(_ point: PerspectiveCrop.Point) -> String {
     String(format: "%.2f, %.2f", point.x, point.y)
+  }
+}
+
+private struct RawPreviewUpgradeBar: View {
+  @State private var fill: CGFloat = 0
+
+  var body: some View {
+    ZStack(alignment: .leading) {
+      Capsule()
+        .fill(.white.opacity(0.22))
+      Capsule()
+        .fill(.white.opacity(0.92))
+        .scaleEffect(x: fill, y: 1, anchor: .leading)
+    }
+    .frame(width: 96, height: 3)
+    .accessibilityLabel("Loading a sharper preview")
+    .onAppear {
+      fill = 0
+      withAnimation(.easeOut(duration: 1.0)) {
+        fill = 0.92
+      }
+    }
   }
 }
 

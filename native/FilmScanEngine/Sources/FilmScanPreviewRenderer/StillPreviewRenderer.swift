@@ -36,7 +36,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
     _ = sharedContext
   }
 
-  public init?(image: UInt16Image) {
+  public init?(image: UInt16Image, analysisImage: UInt16Image? = nil) {
     guard
       let rgba = image.rgba16Data(),
       let kernel = Self.sharedKernel
@@ -44,7 +44,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       return nil
     }
 
-    analysisImage = image
+    self.analysisImage = analysisImage ?? image
     source = CIImage(
       bitmapData: rgba,
       bytesPerRow: image.width * 4 * MemoryLayout<UInt16>.stride,
