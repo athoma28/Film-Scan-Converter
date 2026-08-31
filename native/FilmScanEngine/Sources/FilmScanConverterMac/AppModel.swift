@@ -16,6 +16,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var scanStackModes: [String: ScanStackMode] = [:]
   @Published private(set) var isAnalyzingScanStacks = false
   @Published private(set) var isBuildingScanStack = false
+  @Published private(set) var isUpgradingScanStack = false
   @Published private(set) var scanStackStatus = ""
   @Published private(set) var scanStackStatusID: String?
   @Published private(set) var decodedImage: UInt16Image?
@@ -204,6 +205,15 @@ final class AppModel: ObservableObject {
   private var pendingFirstPreviewInterval: AppPerformanceInterval?
   private let rawFullPreviewDecodeGate = RawFullPreviewDecodeGate()
   private var rawFullDecodeURL: URL?
+  /// Last three-pass camera-scan decode of the selected file. Settings-only
+  /// re-export skips unpack and demosaic. Dropped on selection change.
+  private var retainedExportDecode = SelectedFileExportDecodeCache()
+  /// Test seam that replaces LibRaw for selected-file export-cache tests.
+  var fullResolutionExportDecoder: (@Sendable (URL) throws -> UInt16Image)?
+  private(set) var fullResolutionExportDecodeCount = 0
+  private(set) var fullResolutionExportDecodeCacheHits = 0
+
+  var retainedExportDecodePath: String? { retainedExportDecode.key }
   // Keep latest-value-wins scheduling bounded while allowing 120 Hz displays
   // to consume the sub-4 ms Metal renderer without an artificial 60 Hz cap.
   private static let renderCoalesceInterval: Duration = .milliseconds(8)
@@ -244,9 +254,11 @@ final class AppModel: ObservableObject {
 
   var selectedImageDimensions: (width: Int, height: Int, provisional: Bool)? {
     if let previewSource {
+      let stackIsAuthoritative =
+        previewSourceKind == .alignedStack && stackPreviewCoversSource(previewSource)
       return (
         previewSource.width, previewSource.height,
-        previewSourceKind != .rawFull
+        previewSourceKind != .rawFull && !stackIsAuthoritative
       )
     }
     return nil
@@ -451,6 +463,7 @@ final class AppModel: ObservableObject {
       scanStackPreviewTask?.cancel()
       scanStackPreviewTask = nil
       isBuildingScanStack = false
+      isUpgradingScanStack = false
       scanStackStatus = "Stack disabled; showing the reference capture."
       scanStackStatusID = stack.id
       if selection.map(stack.contains) == true { loadSelection() }
@@ -583,11 +596,13 @@ final class AppModel: ObservableObject {
 
   func loadSelection() {
     endEditingGesture()
+    retainedExportDecode.dropIfNotSelected(selection.map(settingsKey))
     refreshHistoryAvailability()
     scanStackPreviewGeneration += 1
     scanStackPreviewTask?.cancel()
     scanStackPreviewTask = nil
     isBuildingScanStack = false
+    isUpgradingScanStack = false
     if let interval = pendingFirstPreviewInterval {
       AppPerformanceSignposts.end(interval)
       pendingFirstPreviewInterval = nil
@@ -1883,6 +1898,7 @@ final class AppModel: ObservableObject {
       scanStackPreviewTask?.cancel()
       scanStackPreviewTask = nil
       isBuildingScanStack = false
+      isUpgradingScanStack = false
       scanStackStatus =
         "Stack disabled because flat-field correction must be applied before alignment."
       scanStackStatusID = nil
@@ -2249,6 +2265,7 @@ final class AppModel: ObservableObject {
     // finish its current synchronous call, but cancellation prevents it from
     // advancing through the rest of the lookahead queue.
     cancelPredecode()
+    cancelScanStackUpgradePreservingPreview()
 
     var params = exportParameters
     params.destinationDirectory = destDir
@@ -2526,13 +2543,32 @@ final class AppModel: ObservableObject {
 
   private func decodedImageForExport(_ url: URL) async throws -> UInt16Image {
     if Self.requiresFullResolutionExportDecode(url) {
-      return try await Task.detached(priority: .userInitiated) {
-        try RawImageDecoder.decode(
-          url,
-          fullResolution: true,
-          profile: .rawTherapeeCameraScan
-        ).image
+      let key = settingsKey(url)
+      if let cached = retainedExportDecode.image(forKey: key) {
+        fullResolutionExportDecodeCacheHits += 1
+        return cached
+      }
+      let decoder = fullResolutionExportDecoder
+      let gate = rawFullPreviewDecodeGate
+      let image = try await Task.detached(priority: .userInitiated) {
+        try await gate.run {
+          if let decoder {
+            return try decoder(url)
+          }
+          return try RawImageDecoder.decode(
+            url,
+            fullResolution: true,
+            profile: .rawTherapeeCameraScan
+          ).image
+        }
       }.value
+      fullResolutionExportDecodeCount += 1
+      retainedExportDecode.retain(
+        key: key,
+        image: image,
+        selectedKey: selection.map(settingsKey)
+      )
+      return image
     }
     return try await Task.detached(priority: .userInitiated) {
       return try Self.decodeImage(url)
@@ -2968,7 +3004,9 @@ final class AppModel: ObservableObject {
       previewCache[selectedKey]?.sourceKind.qualityRank
       ?? previewSourceKind?.qualityRank
       ?? 0
-    let blockedByStack = previewSourceKind == .alignedStack
+    let blockedByStack =
+      previewSourceKind == .alignedStack
+      || enabledScanStack(containing: selection) != nil
     // A 3200px lookahead hit is already sharp enough to skip the 4000px inspect
     // decode so the selected-file full-res pass can start immediately.
     let needsSelectedInspect =
@@ -3027,7 +3065,7 @@ final class AppModel: ObservableObject {
     {
       return
     }
-    if selection == url, previewSourceKind == .alignedStack { return }
+    if selection == url, enabledScanStack(containing: url) != nil { return }
 
     do {
       let session = try await Task.detached(priority: .userInitiated) {
@@ -3038,7 +3076,7 @@ final class AppModel: ObservableObject {
       }.value
       cacheSession(session, for: url)
       guard generation == loadGeneration, selection == url,
-        previewSourceKind != .alignedStack
+        enabledScanStack(containing: url) == nil
       else { return }
       applyPreviewSession(
         session,
@@ -3065,7 +3103,7 @@ final class AppModel: ObservableObject {
   ) async {
     guard FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased()) else { return }
     if previewCache[settingsKey(url)]?.sourceKind == .rawFull { return }
-    if selection == url, previewSourceKind == .alignedStack { return }
+    if selection == url, enabledScanStack(containing: url) != nil { return }
     if rawFullDecodeURL == url { return }
     rawFullDecodeURL = url
     defer {
@@ -3082,7 +3120,7 @@ final class AppModel: ObservableObject {
       // Keep at most one full-res preview: only retain it while this file is
       // still selected. Switching away demotes the previous file to the 4000px
       // inspect preview.
-      guard selection == url, previewSourceKind != .alignedStack else { return }
+      guard selection == url, enabledScanStack(containing: url) == nil else { return }
       cacheSession(session, for: url)
       applyPreviewSession(
         session,
@@ -3115,7 +3153,7 @@ final class AppModel: ObservableObject {
     {
       return
     }
-    if selection == url, previewSourceKind == .alignedStack { return }
+    if selection == url, enabledScanStack(containing: url) != nil { return }
 
     do {
       let session = try await Task.detached(priority: .utility) { () -> CachedPreviewSession in
@@ -3135,7 +3173,7 @@ final class AppModel: ObservableObject {
         automaticallyClassifiedKeys.insert(key)
       }
       guard applyIfSelected, generation == loadGeneration, selection == url,
-        previewSourceKind != .alignedStack
+        enabledScanStack(containing: url) == nil
       else { return }
       applyPreviewSession(
         session,
@@ -3154,6 +3192,29 @@ final class AppModel: ObservableObject {
   private func cancelPredecode() {
     predecodeTask?.cancel()
     predecodeTask = nil
+  }
+
+  private func cancelScanStackUpgradePreservingPreview() {
+    guard isUpgradingScanStack else { return }
+    scanStackPreviewGeneration += 1
+    scanStackPreviewTask?.cancel()
+    scanStackPreviewTask = nil
+    isUpgradingScanStack = false
+  }
+
+  private func stackPreviewCoversSource(_ image: UInt16Image) -> Bool {
+    guard let source = sourcePixelDimensions else { return false }
+    return image.width >= source.width && image.height >= source.height
+  }
+
+  private func stackPreviewSessionIsCurrent(
+    generation: Int,
+    selectedURL: URL,
+    stack: DetectedScanStack
+  ) -> Bool {
+    generation == scanStackPreviewGeneration
+      && selection == selectedURL
+      && enabledScanStackIDs.contains(stack.id)
   }
 
   private func reclassifyAutomaticBatchGuesses() {
@@ -3282,11 +3343,15 @@ final class AppModel: ObservableObject {
     scanAnalysisRecords[key] = analysis.detectionRecord
     failedThumbnailPaths.remove(key)
 
+    // Invert the embedded JPEG / ImageIO thumbnail with CIColorInvert into
+    // named sRGB. A 16-bit DeviceRGB complement looked uninverted in the
+    // sidebar because SwiftUI swapped red/blue on that bitmap.
     if thumbnailImages[key] == nil,
-      let cgImage = analysis.thumbnailSource.makePreviewCGImage()
+      let cgImage = analysis.thumbnailSource.makePreviewCGImage(),
+      let thumbnail = PreviewBitmap.invertedNSImage(from: cgImage)
     {
       let byteCount = analysis.thumbnailSource.width * analysis.thumbnailSource.height * 4
-      thumbnailImages[key] = PreviewBitmap.nsImage(from: cgImage)
+      thumbnailImages[key] = thumbnail
       thumbnailByteCounts[key] = byteCount
       thumbnailCacheBytes += byteCount
     }
@@ -3308,6 +3373,7 @@ final class AppModel: ObservableObject {
       scanStackPreviewTask?.cancel()
       scanStackPreviewTask = nil
       isBuildingScanStack = false
+      isUpgradingScanStack = false
       scanStackStatus = "Stack disabled while newly imported captures are analyzed."
       scanStackStatusID = nil
     }
@@ -3435,58 +3501,198 @@ final class AppModel: ObservableObject {
     scanStackPreviewGeneration += 1
     let generation = scanStackPreviewGeneration
     scanStackPreviewTask?.cancel()
+    cancelPredecode()
     let mode = scanStackMode(for: stack)
     isBuildingScanStack = true
+    isUpgradingScanStack = false
     scanStackStatus = "Aligning \(stack.members.count) captures..."
     scanStackStatusID = stack.id
 
     scanStackPreviewTask = Task { [weak self] in
       guard let self else { return }
+      var appliedImage: UInt16Image?
       do {
-        let worker = Task.detached(priority: .userInitiated) {
-          var images: [UInt16Image] = []
-          images.reserveCapacity(stack.members.count)
-          for url in stack.members {
-            try Task.checkCancellation()
-            images.append(try Self.makeStackPreviewSource(for: url))
+        for tier in ScanStackPreviewTier.allCases {
+          try Task.checkCancellation()
+          guard
+            self.stackPreviewSessionIsCurrent(
+              generation: generation, selectedURL: selectedURL, stack: stack)
+          else { return }
+          if let appliedImage, self.stackPreviewCoversSource(appliedImage) {
+            break
+          }
+
+          if appliedImage != nil {
+            self.isBuildingScanStack = false
+            self.isUpgradingScanStack = true
+            self.scanStackStatus = "Loading \(tier.statusLabel) stack..."
+          }
+
+          let result: MultiScanStackResult
+          do {
+            result = try await self.combinedStackResult(
+              stack: stack, mode: mode, tier: tier)
+          } catch {
+            if appliedImage == nil { throw error }
+            continue
           }
           try Task.checkCancellation()
-          return try MultiScanStacker.combine(images: images, mode: mode)
+          guard
+            self.stackPreviewSessionIsCurrent(
+              generation: generation, selectedURL: selectedURL, stack: stack)
+          else { return }
+
+          try self.applyAlignedStackPreview(
+            result,
+            stack: stack,
+            calibrateFromSource: appliedImage == nil)
+          appliedImage = result.image
         }
-        let result = try await withTaskCancellationHandler {
-          try await worker.value
-        } onCancel: {
-          worker.cancel()
-        }
-        try Task.checkCancellation()
-        guard generation == self.scanStackPreviewGeneration,
-          self.selection == selectedURL,
-          self.enabledScanStackIDs.contains(stack.id)
+        guard
+          self.stackPreviewSessionIsCurrent(
+            generation: generation, selectedURL: selectedURL, stack: stack)
         else { return }
-        guard let renderer = StillPreviewRenderer(image: result.image) else {
-          throw CocoaError(.coderInvalidValue)
-        }
-        self.decodedImage = result.image
-        self.previewSource = result.image
-        self.previewRenderer = renderer
-        self.previewSourceKind = .alignedStack
-        self.populateFilmNegativeMedians(
-          from: result.image.resizedToFit(maxDimension: Self.analysisPreviewMaxDimension))
         self.isBuildingScanStack = false
+        self.isUpgradingScanStack = false
         self.scanStackPreviewTask = nil
-        self.scanStackStatus =
-          "Aligned \(stack.members.count) captures for \(Self.scanStackModeLabel(result.effectiveMode))."
-        self.scheduleRender(immediate: true)
       } catch is CancellationError {
         return
       } catch {
         guard generation == self.scanStackPreviewGeneration else { return }
         self.isBuildingScanStack = false
+        self.isUpgradingScanStack = false
         self.scanStackPreviewTask = nil
-        self.scanStackStatus = "Stack could not be built: \(error.localizedDescription)"
-        self.setStatus(self.scanStackStatus, kind: .error)
+        if appliedImage != nil {
+          self.scanStackStatus =
+            "Showing the bounded stack; full-resolution upgrade failed: \(error.localizedDescription)"
+        } else {
+          self.scanStackStatus = "Stack could not be built: \(error.localizedDescription)"
+          self.setStatus(self.scanStackStatus, kind: .error)
+        }
       }
     }
+  }
+
+  private func combinedStackResult(
+    stack: DetectedScanStack,
+    mode: ScanStackMode,
+    tier: ScanStackPreviewTier
+  ) async throws -> MultiScanStackResult {
+    if tier == .full {
+      return try await combinedFullResolutionStackPreview(stack: stack, mode: mode)
+    }
+    let worker = Task.detached(priority: .userInitiated) {
+      var images: [UInt16Image] = []
+      images.reserveCapacity(stack.members.count)
+      for url in stack.members {
+        try Task.checkCancellation()
+        images.append(try Self.makeStackPreviewSource(for: url, tier: tier))
+      }
+      try Task.checkCancellation()
+      return try MultiScanStacker.combine(images: images, mode: mode)
+    }
+    return try await withTaskCancellationHandler {
+      try await worker.value
+    } onCancel: {
+      worker.cancel()
+    }
+  }
+
+  private func combinedFullResolutionStackPreview(
+    stack: DetectedScanStack,
+    mode: ScanStackMode
+  ) async throws -> MultiScanStackResult {
+    guard let firstMember = stack.members.first else {
+      throw ScanStackError.insufficientImages
+    }
+    scanStackStatus =
+      "Decoding stack capture 1 of \(stack.members.count): \(firstMember.lastPathComponent)"
+    var composite = try await decodeStackPreviewMember(firstMember, tier: .full)
+    var lastResult: MultiScanStackResult?
+    var automaticUsedHDR = false
+
+    for (index, member) in stack.members.enumerated().dropFirst() {
+      try Task.checkCancellation()
+      scanStackStatus =
+        "Decoding stack capture \(index + 1) of \(stack.members.count): \(member.lastPathComponent)"
+      let candidate = try await decodeStackPreviewMember(member, tier: .full)
+      try Task.checkCancellation()
+      scanStackStatus =
+        "Aligning full-resolution capture \(index + 1) of \(stack.members.count)..."
+      let accumulated = composite
+      let worker = Task.detached(priority: .userInitiated) {
+        let weightedComposite = Array(repeating: accumulated, count: index)
+        return try MultiScanStacker.combine(
+          images: weightedComposite + [candidate],
+          mode: mode)
+      }
+      let result = try await withTaskCancellationHandler {
+        try await worker.value
+      } onCancel: {
+        worker.cancel()
+      }
+      composite = result.image
+      lastResult = result
+      if mode == .automatic {
+        automaticUsedHDR = automaticUsedHDR || result.effectiveMode == .hdr
+      }
+    }
+
+    guard let lastResult else { throw ScanStackError.insufficientImages }
+    let effectiveMode: ScanStackMode
+    if mode == .automatic {
+      effectiveMode = automaticUsedHDR ? .hdr : .noiseReduction
+    } else {
+      effectiveMode = lastResult.effectiveMode
+    }
+    return MultiScanStackResult(
+      image: composite,
+      effectiveMode: effectiveMode,
+      alignments: lastResult.alignments,
+      exposureOffsetsEV: lastResult.exposureOffsetsEV)
+  }
+
+  private func decodeStackPreviewMember(
+    _ url: URL,
+    tier: ScanStackPreviewTier
+  ) async throws -> UInt16Image {
+    if tier == .full, FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased()) {
+      let gate = rawFullPreviewDecodeGate
+      return try await Task.detached(priority: .userInitiated) {
+        try await gate.run {
+          try Self.makeStackPreviewSource(for: url, tier: .full)
+        }
+      }.value
+    }
+    return try await Task.detached(priority: .userInitiated) {
+      try Self.makeStackPreviewSource(for: url, tier: tier)
+    }.value
+  }
+
+  private func applyAlignedStackPreview(
+    _ result: MultiScanStackResult,
+    stack: DetectedScanStack,
+    calibrateFromSource: Bool
+  ) throws {
+    guard let renderer = StillPreviewRenderer(image: result.image) else {
+      throw CocoaError(.coderInvalidValue)
+    }
+    decodedImage = result.image
+    previewSource = result.image
+    previewRenderer = renderer
+    previewSourceKind = .alignedStack
+    if calibrateFromSource {
+      populateFilmNegativeMedians(
+        from: result.image.resizedToFit(maxDimension: Self.analysisPreviewMaxDimension))
+    }
+    let modeLabel = Self.scanStackModeLabel(result.effectiveMode)
+    if stackPreviewCoversSource(result.image) {
+      scanStackStatus =
+        "Aligned \(stack.members.count) captures for \(modeLabel) at full resolution."
+    } else {
+      scanStackStatus = "Aligned \(stack.members.count) captures for \(modeLabel)."
+    }
+    scheduleRender(immediate: true)
   }
 
   nonisolated private static func scanStackModeLabel(_ mode: ScanStackMode) -> String {
@@ -3718,7 +3924,11 @@ final class AppModel: ObservableObject {
         case .embeddedRAW:
           setStatus("\(filename) • \(renderer) · camera JPEG, not RAW color")
         case .alignedStack:
-          setStatus("\(filename) • \(renderer) · aligned stack preview")
+          let qualifier =
+            (previewSource.map(stackPreviewCoversSource) == true)
+            ? "aligned stack"
+            : "aligned stack preview"
+          setStatus("\(filename) • \(renderer) · \(qualifier)")
         default:
           setStatus("\(filename) • \(renderer)")
         }
@@ -3908,12 +4118,31 @@ final class AppModel: ObservableObject {
       exposureEV: approximateExposureEV(source))
   }
 
-  nonisolated private static func makeStackPreviewSource(for url: URL) throws -> UInt16Image {
-    if FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased()) {
-      return try decodeRawPreview(url, maxDimension: rawDraftPreviewMaxDimension)
+  nonisolated private static func makeStackPreviewSource(
+    for url: URL,
+    tier: ScanStackPreviewTier
+  ) throws -> UInt16Image {
+    let isRaw = FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased())
+    switch tier {
+    case .draft:
+      if isRaw {
+        return try decodeRawPreview(url, maxDimension: rawDraftPreviewMaxDimension)
+      }
+      return try StandardImageDecoder.decodePreview(
+        url, maxDimension: displayPreviewMaxDimension)
+    case .inspect:
+      if isRaw {
+        return try decodeRawPreview(url, maxDimension: rawInspectPreviewMaxDimension)
+      }
+      return try StandardImageDecoder.decodePreview(
+        url, maxDimension: rawInspectPreviewMaxDimension)
+    case .full:
+      if isRaw {
+        return try decodeRawPreview(
+          url, maxDimension: rawFullPreviewDecodeBound, resizeToBound: false)
+      }
+      return try StandardImageDecoder.decode(url)
     }
-    return try StandardImageDecoder.decodePreview(
-      url, maxDimension: displayPreviewMaxDimension)
   }
 
   nonisolated private static func approximateExposureEV(_ image: UInt16Image) -> Double {
@@ -3947,6 +4176,34 @@ final class AppModel: ObservableObject {
       ? (luminances[middle - 1] + luminances[middle]) / 2
       : luminances[middle]
     return log2(max(median, 1e-9))
+  }
+}
+
+/// One selected-file three-pass camera-scan buffer for settings-only re-export.
+/// This is not a roll cache and not a second in-flight decode.
+struct SelectedFileExportDecodeCache: Equatable, Sendable {
+  private(set) var key: String?
+  private(set) var image: UInt16Image?
+
+  func image(forKey key: String) -> UInt16Image? {
+    guard self.key == key else { return nil }
+    return image
+  }
+
+  mutating func retain(key: String, image: UInt16Image, selectedKey: String?) {
+    guard key == selectedKey else { return }
+    self.key = key
+    self.image = image
+  }
+
+  mutating func dropIfNotSelected(_ selectedKey: String?) {
+    guard key != selectedKey else { return }
+    removeAll()
+  }
+
+  mutating func removeAll() {
+    key = nil
+    image = nil
   }
 }
 
@@ -4014,6 +4271,20 @@ enum PreviewSourceKind: String, Sendable {
     case .rawInspect: 3
     case .rawFull: 4
     case .alignedStack: 5
+    }
+  }
+}
+
+enum ScanStackPreviewTier: Int, CaseIterable, Sendable {
+  case draft
+  case inspect
+  case full
+
+  var statusLabel: String {
+    switch self {
+    case .draft: "preview"
+    case .inspect: "inspect"
+    case .full: "full-resolution"
     }
   }
 }

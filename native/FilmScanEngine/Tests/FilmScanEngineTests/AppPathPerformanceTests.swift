@@ -177,7 +177,7 @@ struct AppPathPerformanceTests {
       maximumPreviewCacheBytes: maximumPreviewCacheBytes,
       previewCacheDepths: previewCacheDepths,
       note:
-        "Browsing uses colour-accurate 640px RAW drafts, a ~4000px inspect preview in about 4s, 3200px neighbour lookahead, and a 1-pass full-resolution preview for the selected file. Unused full-res buffers demote to inspect size. Bounded preview sessions stay under the 256 MiB cache cap. Export performs independent full-resolution decode. No benchmark exports are written."
+        "Browsing uses colour-accurate 640px RAW drafts, a ~4000px inspect preview in about 4s, 3200px neighbour lookahead, and a 1-pass full-resolution preview for the selected file. Unused full-res buffers demote to inspect size. Bounded preview sessions stay under the 256 MiB cache cap. Export retains the selected file's last three-pass decode for settings-only re-export. No benchmark exports are written."
     )
 
     let encoder = JSONEncoder()

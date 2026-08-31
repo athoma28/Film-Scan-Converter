@@ -232,6 +232,67 @@ struct AppModelTests {
     #expect(model.previewCacheSessionCount == 0)
   }
 
+  @Test("Sidebar thumbnails invert the bounded source without touching preview cache")
+  func sidebarThumbnailsInvertTheBoundedSource() async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-thumb-invert-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let input = directory.appendingPathComponent("negative.png")
+    var pixels = [UInt16](repeating: 0, count: 8 * 8 * 3)
+    for y in 0..<8 {
+      for x in 4..<8 {
+        let base = (y * 8 + x) * 3
+        pixels[base] = .max
+        pixels[base + 1] = .max
+        pixels[base + 2] = .max
+      }
+    }
+    try UInt16Image(width: 8, height: 8, channels: 3, pixels: pixels).write(
+      to: input, format: .png, parameters: ExportParameters(format: .png))
+
+    let model = AppModel()
+    model.requestThumbnail(for: input)
+    try await waitUntil { model.thumbnail(for: input) != nil }
+
+    let thumbnail = try #require(model.thumbnail(for: input))
+    let representation = try #require(thumbnail.representations.first as? NSBitmapImageRep)
+    let left = try #require(representation.colorAt(x: 1, y: 4)?.usingColorSpace(.deviceRGB))
+    let right = try #require(representation.colorAt(x: 6, y: 4)?.usingColorSpace(.deviceRGB))
+    #expect(left.redComponent + left.greenComponent + left.blueComponent > 2.3)
+    #expect(right.redComponent + right.greenComponent + right.blueComponent < 0.6)
+    #expect(model.previewCacheSessionCount == 0)
+  }
+
+  @Test(
+    "RAW sidebar thumbnails invert the embedded JPEG instead of the demosaiced preview",
+    .enabled(
+      if: appModelRawCorpusAvailable,
+      "sample-raw corpus unavailable; RAW sidebar thumbnail test skipped")
+  )
+  func rawSidebarThumbnailsInvertEmbeddedJPEG() async throws {
+    let raw = try #require(appModelRepresentativeRawURL)
+    let expectedSource = try RawImageDecoder.extractThumbnail(
+      raw, maxDimension: AppModel.thumbnailMaxDimension
+    ).image
+    let sourceImage = try #require(expectedSource.makePreviewCGImage())
+    let expectedImage = try #require(PreviewBitmap.invertedNSImage(from: sourceImage))
+
+    let model = AppModel()
+    model.requestThumbnail(for: raw)
+    try await waitUntil { model.thumbnail(for: raw) != nil }
+
+    let thumbnail = try #require(model.thumbnail(for: raw))
+    let expectedCG = try #require(PreviewBitmap.cgImage(from: expectedImage))
+    let actualImage = try #require(PreviewBitmap.cgImage(from: thumbnail))
+    #expect(actualImage.width == expectedCG.width)
+    #expect(actualImage.height == expectedCG.height)
+    let expectedBytes = try #require(rgba8Bytes(expectedCG))
+    let actualBytes = try #require(rgba8Bytes(actualImage))
+    #expect(actualBytes == expectedBytes)
+    #expect(model.previewCacheSessionCount == 0)
+  }
+
   @Test("Explicit first-file film identity becomes a weak hint for ambiguous later files")
   func firstFileFilmIdentityHintsLaterAutomaticClassification() async throws {
     let workDir = FileManager.default.temporaryDirectory
@@ -414,6 +475,112 @@ struct AppModelTests {
     #expect(
       !AppModel.requiresFullResolutionExportDecode(
         URL(fileURLWithPath: "/tmp/scan.tiff")))
+  }
+
+  @Test("Selected-file export decode cache retains only the current selection")
+  func selectedFileExportDecodeCachePolicy() {
+    let first = "/tmp/first.raf"
+    let second = "/tmp/second.raf"
+    let image = UInt16Image(width: 1, height: 1, channels: 3, pixels: [1, 2, 3])
+    var cache = SelectedFileExportDecodeCache()
+
+    cache.retain(key: first, image: image, selectedKey: first)
+    #expect(cache.image(forKey: first) == image)
+    cache.retain(key: second, image: image, selectedKey: first)
+    #expect(cache.image(forKey: first) == image)
+    #expect(cache.image(forKey: second) == nil)
+
+    cache.dropIfNotSelected(first)
+    #expect(cache.image(forKey: first) == image)
+    cache.dropIfNotSelected(second)
+    #expect(cache.image(forKey: first) == nil)
+    #expect(cache.key == nil)
+  }
+
+  @Test("Settings-only re-export of the selected RAW reuses the last three-pass decode")
+  func selectedRawExportRetainsFullResolutionDecode() async throws {
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-export-retain-\(UUID().uuidString)", isDirectory: true)
+    let destination = workDir.appendingPathComponent("export", isDirectory: true)
+    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let raw = try makeStubRawFile(named: "scan.RAF", in: workDir)
+    let decoded = UInt16Image(
+      width: 4, height: 4, channels: 3,
+      pixels: Array(repeating: [UInt16(12_000), 24_000, 36_000], count: 16).flatMap { $0 })
+
+    let model = AppModel()
+    model.fullResolutionExportDecoder = { _ in decoded }
+    model.importFiles([raw])
+    try await waitUntil { !model.isLoading }
+    model.setFilmType(.cropOnly)
+    model.setExportDestinationDirectory(destination)
+    model.setExportFormat(.png)
+
+    model.exportSelected()
+    try await waitUntil { !model.isExporting && model.exportProgressCurrent == 1 }
+    #expect(model.exportErrors.isEmpty)
+    #expect(model.fullResolutionExportDecodeCount == 1)
+    #expect(model.fullResolutionExportDecodeCacheHits == 0)
+    #expect(model.retainedExportDecodePath == raw.standardizedFileURL.path)
+    #expect(
+      FileManager.default.fileExists(atPath: destination.appendingPathComponent("scan.png").path))
+
+    model.setTemperature(25)
+    model.exportSelected()
+    let secondOutput = destination.appendingPathComponent("scan-2.png")
+    try await waitUntil {
+      !model.isExporting && FileManager.default.fileExists(atPath: secondOutput.path)
+    }
+    #expect(model.exportErrors.isEmpty)
+    #expect(model.fullResolutionExportDecodeCount == 1)
+    #expect(model.fullResolutionExportDecodeCacheHits == 1)
+
+    model.resetCorrections()
+    #expect(model.retainedExportDecodePath == raw.standardizedFileURL.path)
+  }
+
+  @Test("Selecting another scan drops the retained full-resolution export decode")
+  func selectionChangeDropsRetainedExportDecode() async throws {
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-export-drop-\(UUID().uuidString)", isDirectory: true)
+    let destination = workDir.appendingPathComponent("export", isDirectory: true)
+    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+    let first = try makeStubRawFile(named: "first.RAF", in: workDir)
+    let second = try makeStubRawFile(named: "second.RAF", in: workDir)
+    let decoded = UInt16Image(
+      width: 2, height: 2, channels: 3, pixels: Array(repeating: 8_000, count: 12))
+
+    let model = AppModel()
+    model.fullResolutionExportDecoder = { _ in decoded }
+    model.importFiles([first, second])
+    try await waitUntil { !model.isLoading }
+    model.setFilmType(.cropOnly)
+    model.setExportDestinationDirectory(destination)
+    model.setExportFormat(.png)
+
+    model.exportAll()
+    try await waitUntil { !model.isExporting && model.exportProgressCurrent == 2 }
+    #expect(model.exportErrors.isEmpty)
+    #expect(model.fullResolutionExportDecodeCount == 2)
+    #expect(model.fullResolutionExportDecodeCacheHits == 0)
+    #expect(model.retainedExportDecodePath == first.standardizedFileURL.path)
+
+    model.exportSelected()
+    try await waitUntil { !model.isExporting && model.exportProgressCurrent == 1 }
+    #expect(model.fullResolutionExportDecodeCount == 2)
+    #expect(model.fullResolutionExportDecodeCacheHits == 1)
+
+    model.selection = second
+    model.loadSelection()
+    try await waitUntil { !model.isLoading }
+    #expect(model.retainedExportDecodePath == nil)
+
+    model.exportSelected()
+    try await waitUntil { !model.isExporting && model.exportProgressCurrent == 1 }
+    #expect(model.fullResolutionExportDecodeCount == 3)
+    #expect(model.retainedExportDecodePath == second.standardizedFileURL.path)
   }
 
   @Test(
@@ -2209,9 +2376,38 @@ struct AppModelTests {
       try await Task.sleep(for: .milliseconds(10))
     }
   }
+
+  private func makeStubRawFile(named name: String, in directory: URL) throws -> URL {
+    let url = directory.appendingPathComponent(name)
+    try Data([0]).write(to: url)
+    return url
+  }
   private var repositoryRoot: URL {
     appModelRepositoryRoot
   }
+}
+
+private func rgba8Bytes(_ image: CGImage) -> [UInt8]? {
+  let count = image.width * image.height * 4
+  var data = [UInt8](repeating: 0, count: count)
+  let drawn = data.withUnsafeMutableBytes { buffer -> Bool in
+    guard
+      let context = CGContext(
+        data: buffer.baseAddress,
+        width: image.width,
+        height: image.height,
+        bitsPerComponent: 8,
+        bytesPerRow: image.width * 4,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+      )
+    else {
+      return false
+    }
+    context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+    return true
+  }
+  return drawn ? data : nil
 }
 
 private final class AuthoritativeDecodeProbe: @unchecked Sendable {

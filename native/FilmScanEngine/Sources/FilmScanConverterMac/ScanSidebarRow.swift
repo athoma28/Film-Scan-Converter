@@ -66,7 +66,12 @@ struct ScanSidebarRow: View {
           .fill(Color.secondary.opacity(0.11))
 
         if let thumbnail {
-          RasterImage(image: thumbnail, interpolation: .medium)
+          // Draw the inverted sRGB bitmap through AppKit. Image(decorative:)
+          // on DeviceRGB thumbnails swapped red/blue and undid the invert.
+          Image(nsImage: thumbnail)
+            .renderingMode(.original)
+            .resizable()
+            .interpolation(.medium)
             .scaledToFill()
             .frame(width: 88, height: 66)
             .clipped()

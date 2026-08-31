@@ -251,7 +251,9 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   demosaiced draft, upgrades the selected file to a ~4000px inspect preview
   then a 1-pass full-sensor preview, and keeps unseen neighbour files at
   3200px; a 256px analysis source drives classification. Export owns an
-  independent three-pass full-resolution decode.
+  independent three-pass full-resolution decode. The selected file may keep
+  that last three-pass buffer for settings-only re-export and must drop it on
+  selection change.
 - Keep lookahead preview-only, LRU, and bounded by both file count and bytes.
   Keep at most one full-resolution 1-pass preview; demote unused full-res
   sessions to the ~4000px inspect size. **Load RAW Preview** is a skip-ahead to
@@ -302,8 +304,9 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   paths that are not GPU-integrated yet.
 - Serialize fallback/detail decode work and full-resolution RAW export decode;
   check cancellation before entering synchronous LibRaw/ImageIO calls.
-- Keep full-resolution RAW export one-file-at-a-time. Do not retain that
-  decode after the job until the selected-file re-export slice lands.
+- Keep full-resolution RAW export one-file-at-a-time. Retain the selected
+  file's last three-pass decode for settings-only re-export; drop it on
+  selection change. Do not prefetch file N+1 or keep a roll-sized decode cache.
 - Give export priority over speculative lookahead work and check cancellation
   between decode, correction, geometry, and write stages.
 - Preserve PNG's staged commit, collision-safe naming, and destination cleanup

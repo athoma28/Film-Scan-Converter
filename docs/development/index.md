@@ -8,9 +8,10 @@ target for new features. Start with
 limitations, release position, and the bounded current work.
 
 The [native product roadmap](../improvements/MacOS-Native-Roadmap.md) is the
-single ordered plan. The next coding slice is retaining the last
-full-resolution three-pass decode for settings-only re-export. Mosaic-binned
-RAW browsing and parallel Fuji unpack are complete. The plan separates
+single ordered plan. Selected-file three-pass decode retention for
+settings-only re-export, mosaic-binned RAW browsing, and parallel Fuji unpack
+are complete. The remaining first-release work is a real-roll and
+representative-image check, then distribution proof. The plan separates
 work required before the first public release from evidence-driven
 post-release candidates and explicitly unplanned ideas.
 

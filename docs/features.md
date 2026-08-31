@@ -21,21 +21,25 @@ features.
   file then upgrades to a ~4000px preview in about 4s, then a 1-pass
   full-resolution preview for pan and zoom. Lookahead decodes the next three
   unseen files at 3200px. Switching away discards the full-res buffer and keeps
-  the ~4000px preview. Export still re-decodes the three-pass full-resolution
-  RAW. **Load RAW Preview** skips ahead to the selected-file 1-pass decode.
-- A visual **Scans** sidebar with independently bounded 192px source
-  thumbnails, filenames, edit/cache/export state, native multi-selection, and
-  stack badges. Thumbnail loading does not pin the larger interactive previews
-  in memory.
+  the ~4000px preview. Export retains the selected file's last three-pass
+  decode so a settings-only re-export skips unpack and demosaic. Other files
+  still decode independently. **Load RAW Preview** skips ahead to the
+  selected-file 1-pass decode.
+- A visual **Scans** sidebar with independently bounded 192px thumbnails,
+  filenames, edit/cache/export state, native multi-selection, and stack badges.
+  Camera RAW rows use the embedded JPEG with a simple invert; standard images
+  invert the ImageIO thumbnail. Thumbnail loading does not pin the larger
+  interactive previews in memory.
 - Automatic high-confidence detection of adjacent, same-size captures of the
   same negative. Repeated captures are proposed as an opt-in aligned stack:
   **Auto** selects exposure fusion when the measured bracket spans at least
   0.5 EV and otherwise uses exposure-normalized robust averaging for lower
   sensor noise. **HDR** and **Noise** can also be forced explicitly. Detection
   and alignment are exposure-invariant, reject low-texture or ambiguous
-  frames, and currently correct translation only. The bounded preview and
-  full-resolution export are rebuilt independently; an enabled stack exports
-  once under its first capture's filename and settings.
+  frames, and currently correct translation only. The canvas upgrades from a
+  bounded stack preview to full resolution while you inspect; export still
+  rebuilds from the sources. An enabled stack exports once under its first
+  capture's filename and settings.
 - A bounded Core Image/Metal correction preview fed by the 16-bit preview
   source, with latest-value-wins scheduling. This GPU path is the primary
   interactive target on supported MacBook Pro hardware; CPU rendering remains
@@ -188,7 +192,9 @@ features.
   preferred 16-bit interchange format for software with limited DNG support.
 - Individual, ordered multi-selection, and lazy memory-bounded Export All
   workflows.
-- Full-resolution RAW re-decode one file at a time during export.
+- Full-resolution RAW decode one file at a time during export. The selected
+  file's last three-pass decode is kept for settings-only re-export and dropped
+  on selection change.
 - Collision-safe destination names, per-file errors, and cooperative
   cancellation at safe decode/correction/geometry/write boundaries. An active
   synchronous LibRaw or writer call finishes before cancellation advances.
@@ -214,8 +220,9 @@ features.
 - Camera-scan RAW browsing first bins a ~640px colour-accurate draft, then
   upgrades the selected file to a ~4000px preview in about 4s, then a
   1-pass full-sensor preview. Unseen neighbours prefetch at 3200px; unused
-  full-res buffers demote back to inspect size. Export still re-decodes the
-  full-resolution three-pass path and discards that buffer.
+  full-res buffers demote back to inspect size. Export retains the selected
+  file's last three-pass decode for settings-only re-export and drops it on
+  selection change. Other files still decode independently.
 - Sidebar order remains import order. Manual reordering is unavailable and is
   not a first-release gate unless the roll workflow demonstrates a need.
 - Repeated-capture proposals are limited to adjacent, same-size imports and

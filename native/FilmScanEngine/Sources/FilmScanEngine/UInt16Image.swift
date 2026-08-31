@@ -20,6 +20,16 @@ public struct UInt16Image: Equatable, Sendable {
     self.pixels = pixels
   }
 
+  /// Channel-wise complement, used for cheap negative sidebar previews.
+  public func inverted() -> UInt16Image {
+    UInt16Image(
+      width: width,
+      height: height,
+      channels: channels,
+      pixels: pixels.map { UInt16.max &- $0 }
+    )
+  }
+
   mutating func neutralizeInvertedZeroLight(from source: UInt16Image, threshold: UInt16) {
     precondition(
       width == source.width && height == source.height && channels == source.channels,

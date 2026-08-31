@@ -19,8 +19,9 @@ embedded JPEG and stages a colour-accurate ~640px draft, a ~4000px inspect
 preview, a selected-file 1-pass full-sensor preview, and 3200px neighbour
 lookahead, with a 256px analysis proxy. The preview cache may keep one
 selected-file 1-pass full-res buffer and must demote it on selection change.
-Export always decodes on demand; camera-scan RAW export retains the
-final-quality three-pass X-Trans path measured below.
+Camera-scan RAW export retains the final-quality three-pass X-Trans path
+measured below. The selected file's last three-pass decode is kept for
+settings-only re-export and dropped on selection change.
 
 App cancellation is cooperative at safe stage boundaries: starting an export
 cancels speculative lookahead decoding, cancellation prevents completed decode
@@ -736,8 +737,24 @@ compared to that earlier run.
 Warm eight-worker unpack was 0.2664–0.2665 seconds. Both A/B arms wrote the
 same TIFF hash and removed all six outputs. This is a same-fixture unpack
 follow-up, not a replacement of the 18-output format matrix. Mosaic-binned
-RAW browsing is complete; last-decode retention remains the next product
-work. See roadmap item 5.
+RAW browsing and selected-file three-pass decode retention are complete. See
+roadmap item 5.
+
+## 2026-08-30 Selected-File Three-Pass Decode Retention
+
+App-path export now keeps one three-pass camera-scan buffer for the currently
+selected RAW. A settings-only re-export of that file skips unpack and demosaic
+and reapplies correction, geometry, and the writer. The buffer is dropped on
+selection change, session reset, and teardown. Other files still decode
+independently. This is not prefetch of file N+1 and not a roll-sized cache.
+
+The engine `FilmScanExportBenchmark` path is unchanged: it still decodes each
+measured job. The skip is an `AppModel` contract, covered by injected-decoder
+tests that prove a second export of the selected file does not call the
+three-pass decoder, that a batch of another file does not replace the selected
+buffer, and that changing selection drops it. A timed 40 MP app-path A/B of
+first export versus settings-only re-export remains optional local evidence;
+the decode-stage cost already recorded above is the work being skipped.
 
 ## Closed Baseline Cycle And Bounded Follow-Up
 

@@ -43,12 +43,11 @@ Since this beta, development added import-ordered previous/next, active/pending
 export sidebar status, parallel Fuji compressed unpack, Darkroom log-density
 inversion for cyan/purple-mask stocks, repeated-scan stacking, and
 colour-accurate RAW drafts that upgrade the selected file to a ~4000px inspect
-preview and a 1-pass full-resolution preview. The next coding work is retaining
-the selected file’s last full-resolution three-pass decode so a settings-only
-re-export does not repeat unpack and demosaic. Verify that inspect-and-roll
-workflow on a real roll, including the representative-image viewport check,
-while doing that work. Apple notarization and an independent-Mac installation
-check remain required before this can become a general signed release.
+preview and a 1-pass full-resolution preview. Export now retains the selected
+file’s last full-resolution three-pass decode so a settings-only re-export
+does not repeat unpack and demosaic. Remaining first-release work is a
+real-roll and representative-image check, then Apple notarization and an
+independent-Mac installation check.
 
 ## Known limitations
 

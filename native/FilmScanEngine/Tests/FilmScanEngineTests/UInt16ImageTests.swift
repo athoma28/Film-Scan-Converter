@@ -103,6 +103,23 @@ struct UInt16ImageTests {
     #expect(resized.pixels.count == 8)
   }
 
+  @Test("Simple invert complements every channel")
+  func invertedComplementsChannels() {
+    let image = UInt16Image(
+      width: 2,
+      height: 1,
+      channels: 3,
+      pixels: [0, 1, 32_768, 65_535, 65_534, 0]
+    )
+
+    #expect(
+      image.inverted().pixels == [
+        UInt16.max, UInt16.max - 1, UInt16.max - 32_768,
+        0, 1, UInt16.max,
+      ])
+    #expect(image.inverted().inverted() == image)
+  }
+
   @Test("16-bit preview image preserves dimensions and component depth")
   func previewImage16() {
     let image = UInt16Image(width: 1, height: 1, channels: 3, pixels: [1, 2, 3])

@@ -97,6 +97,39 @@ enum PreviewViewportZoom {
   }
 }
 
+/// Maps a zoomed visible region from one preview bitmap size onto another so a
+/// draft-to-inspect or inspect-to-full pop-in keeps the same photo crop.
+enum PreviewViewportDocumentRemap {
+  static func magnification(
+    from previousSize: CGSize,
+    to newSize: CGSize,
+    magnification: CGFloat
+  ) -> CGFloat {
+    guard previousSize.width > 0, previousSize.height > 0,
+      newSize.width > 0, newSize.height > 0
+    else { return PreviewViewportZoom.clamped(magnification) }
+
+    let scale = min(
+      previousSize.width / newSize.width,
+      previousSize.height / newSize.height)
+    return PreviewViewportZoom.clamped(magnification * scale)
+  }
+
+  static func center(
+    visibleRect: CGRect,
+    from previousSize: CGSize,
+    to newSize: CGSize
+  ) -> CGPoint {
+    guard previousSize.width > 0, previousSize.height > 0 else {
+      return CGPoint(x: newSize.width / 2, y: newSize.height / 2)
+    }
+    return CGPoint(
+      x: visibleRect.midX * (newSize.width / previousSize.width),
+      y: visibleRect.midY * (newSize.height / previousSize.height)
+    )
+  }
+}
+
 /// A native scroll view keeps Mac trackpad scrolling, momentum, rubber-banding,
 /// and cursor-centered pinch magnification. The SwiftUI document view contains
 /// the image and every editing overlay so they always share one transform.
@@ -149,8 +182,13 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
 
   func updateNSView(_ scrollView: PreviewScrollView, context: Context) {
     context.coordinator.onZoomChanged = onZoomChanged
+    let visibleRect = scrollView.documentVisibleRect
+    let magnification = scrollView.magnification
     context.coordinator.hostingView.rootView = content
-    context.coordinator.updateDocumentSize(imageSize)
+    context.coordinator.updateDocumentSize(
+      imageSize,
+      previousVisibleRect: visibleRect,
+      previousMagnification: magnification)
     context.coordinator.apply(request)
   }
 
@@ -191,7 +229,11 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
         object: scrollView)
     }
 
-    func updateDocumentSize(_ size: CGSize) {
+    func updateDocumentSize(
+      _ size: CGSize,
+      previousVisibleRect: CGRect,
+      previousMagnification: CGFloat
+    ) {
       let validSize = CGSize(width: max(1, size.width), height: max(1, size.height))
       guard validSize != documentSize else { return }
       let previousSize = documentSize
@@ -200,19 +242,17 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
       if isFitMode {
         applyFit(force: true)
       } else if let scrollView, previousSize.width > 1, previousSize.height > 1 {
-        let factor = min(
-          previousSize.width / validSize.width,
-          previousSize.height / validSize.height)
-        let visible = scrollView.documentVisibleRect
-        let normalizedCenter = CGPoint(
-          x: visible.midX / previousSize.width,
-          y: visible.midY / previousSize.height)
-        let newCenter = CGPoint(
-          x: normalizedCenter.x * validSize.width,
-          y: normalizedCenter.y * validSize.height)
+        // Capture the visible crop before the document frame change; reading
+        // `documentVisibleRect` afterwards is already pinned to the origin.
         scrollView.setMagnification(
-          PreviewViewportZoom.clamped(scrollView.magnification * factor),
-          centeredAt: newCenter)
+          PreviewViewportDocumentRemap.magnification(
+            from: previousSize,
+            to: validSize,
+            magnification: previousMagnification),
+          centeredAt: PreviewViewportDocumentRemap.center(
+            visibleRect: previousVisibleRect,
+            from: previousSize,
+            to: validSize))
         reportZoom()
       } else if let scrollView {
         scrollView.reflectScrolledClipView(scrollView.contentView)

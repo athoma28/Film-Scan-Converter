@@ -213,21 +213,25 @@ struct ContentView: View {
   }
 
   private func scanStackProposal(_ stack: DetectedScanStack) -> some View {
-    VStack(alignment: .leading, spacing: 9) {
-      HStack(spacing: 7) {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack(alignment: .firstTextBaseline, spacing: 7) {
         Image(systemName: "square.stack.3d.up.fill")
           .foregroundStyle(Color.accentColor)
         Text("\(stack.members.count)-capture stack")
           .font(.headline)
-        Spacer()
-        Text("\(Int((stack.confidence * 100).rounded()))% match")
+          .lineLimit(1)
+          .minimumScaleFactor(0.85)
+        Spacer(minLength: 6)
+        Text("\(Int((stack.confidence * 100).rounded()))%")
           .font(.caption2.monospacedDigit())
           .foregroundStyle(.secondary)
+          .help("Match confidence")
       }
 
       Text(scanStackProposalDescription(stack))
         .font(.caption)
         .foregroundStyle(.secondary)
+        .lineLimit(3)
         .fixedSize(horizontal: false, vertical: true)
 
       if model.isAnalyzingScanStacks {
@@ -241,19 +245,27 @@ struct ContentView: View {
         }
       }
 
-      Picker(
-        "Combine for",
-        selection: Binding(
-          get: { model.scanStackMode(for: stack) },
-          set: { model.setScanStackMode($0, for: stack) }
-        )
-      ) {
-        Text("Auto").tag(ScanStackMode.automatic)
-        Text("Noise").tag(ScanStackMode.noiseReduction)
-        Text("HDR").tag(ScanStackMode.hdr)
+      VStack(alignment: .leading, spacing: 4) {
+        Text("Combine for")
+          .font(.caption)
+          .foregroundStyle(.secondary)
+        Picker(
+          "Combine for",
+          selection: Binding(
+            get: { model.scanStackMode(for: stack) },
+            set: { model.setScanStackMode($0, for: stack) }
+          )
+        ) {
+          Text("Auto").tag(ScanStackMode.automatic)
+          Text("Noise").tag(ScanStackMode.noiseReduction)
+          Text("HDR").tag(ScanStackMode.hdr)
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)
+        .frame(maxWidth: .infinity)
+        .disabled(model.isExporting || model.isAnalyzingScanStacks || model.isLoading)
       }
-      .pickerStyle(.segmented)
-      .disabled(model.isExporting || model.isAnalyzingScanStacks || model.isLoading)
 
       Toggle(
         "Use aligned stack",
@@ -263,6 +275,7 @@ struct ContentView: View {
         )
       )
       .toggleStyle(.switch)
+      .controlSize(.small)
       .disabled(
         model.isExporting || model.isAnalyzingScanStacks || model.isLoading
           || model.flatFieldImage != nil)
@@ -282,7 +295,7 @@ struct ContentView: View {
       }
 
       if model.scanStackStatusID == stack.id,
-        model.isBuildingScanStack,
+        model.isBuildingScanStack || model.isUpgradingScanStack,
         model.isScanStackEnabled(stack)
       {
         HStack(spacing: 7) {
@@ -303,8 +316,9 @@ struct ContentView: View {
           .fixedSize(horizontal: false, vertical: true)
       }
     }
+    .controlSize(.small)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(12)
+    .padding(10)
     .background(Color(nsColor: .controlBackgroundColor))
   }
 
@@ -912,7 +926,7 @@ struct ContentView: View {
           }
         }
         .help(
-          "Keeps recently viewed ~4000px RAW previews and prefetches the next few unseen files at ~3200px. The selected RAW upgrades from a 640px draft to a ~4000px preview, then a 1-pass full-resolution decode. Switching away discards full-res and keeps the ~4000px preview. Default is 8 files, with bounded previews still capped at 256 MB. Export still re-decodes each RAW at full resolution."
+          "Keeps recently viewed ~4000px RAW previews and prefetches the next few unseen files at ~3200px. The selected RAW upgrades from a 640px draft to a ~4000px preview, then a 1-pass full-resolution decode. Switching away discards full-res and keeps the ~4000px preview. Default is 8 files, with bounded previews still capped at 256 MB. Export keeps the selected file's last three-pass decode so a settings-only re-export skips unpack and demosaic."
         )
 
         HStack {
@@ -1874,7 +1888,7 @@ struct ContentView: View {
         .padding(.vertical, 5)
         .background(.black.opacity(0.72), in: Capsule())
         .help(
-          "An aligned multi-capture preview. Export rebuilds the stack from the full-resolution sources."
+          "An aligned multi-capture preview. The canvas upgrades from a bounded draft to full resolution while you inspect; export still rebuilds from the sources."
         )
     default:
       EmptyView()

@@ -17,9 +17,10 @@ The native application is the primary product. It provides:
   a ~4000px preview in about 4s, then a 1-pass full-resolution preview for pan
   and zoom. The next three unseen files prefetch at 3200px, and unused full-res
   buffers demote back to inspect size. **Load RAW Preview** skips ahead to the
-  selected-file 1-pass decode. Export still re-decodes RAW files at full
-  resolution, using RCD for Bayer data or three-pass Markesteijn interpolation
-  for X-Trans.
+  selected-file 1-pass decode. Export retains the selected file's last
+  three-pass decode so a settings-only re-export skips unpack and demosaic;
+  other files still decode independently. Bayer data uses RCD; X-Trans uses
+  three-pass Markesteijn interpolation.
 - Interactive GPU-accelerated preview that updates during slider drags, with
   native pan/pinch navigation plus Fit, step-zoom, and 100% commands.
 - Optional live camera preview when macOS exposes the camera or capture adapter
@@ -46,8 +47,9 @@ The native application is the primary product. It provides:
    draft almost immediately, with a small loading bar on the canvas until the
    ~4000px preview replaces it. Full-resolution continues in the background.
    You can edit colour as soon as the draft appears. **Load RAW Preview** on
-   the toolbar skips ahead to the selected-file 1-pass decode. Export still
-   re-decodes RAW independently with the three-pass path. Later preview
+   the toolbar skips ahead to the selected-file 1-pass decode. Exporting the
+   selected RAW keeps its last three-pass decode, so changing settings and
+   exporting again skips unpack and demosaic. Later preview
    sharpening pops in without naming the current decode size.
    Use a two-finger trackpad gesture or mouse wheel to pan, pinch to zoom, or use
    the toolbar's minus/plus buttons and Fit/100% menu. Command-0 fits the image,
@@ -56,21 +58,22 @@ The native application is the primary product. It provides:
    **Next Scan** (Option-Command-Up/Down) move through import order, collapse a
    multi-selection to that one file, and fit the new preview. Those shortcuts
    work while a slider or other inspector control has focus.
-   The **Scans** sidebar shows a source thumbnail and edit/cache/export state
+   The **Scans** sidebar shows an inverted thumbnail (embedded JPEG for camera
+   RAW, ImageIO thumbnail for standard files) and edit/cache/export state
    for every import. When adjacent, same-size files look like repeated captures
    of one negative, a stack card appears below the thumbnails. Leave
    **Combine for** on **Auto** to choose HDR for an exposure bracket or robust
    averaging for same-exposure captures, or force **Noise** or **HDR**. Turn on
    **Use aligned stack** only after reviewing the proposal. The canvas shows an
-   **Aligned stack preview** badge while that preview is active. The preview is
-   aligned from bounded sources; export repeats the alignment and combination
-   from the full-resolution files. An enabled stack exports one image using
-   the first capture's filename and edits. Translation-only matching is
-   deliberately conservative, so low-detail or ambiguous captures remain
-   separate rather than being merged automatically. Clear any loaded flat
-   field before enabling a stack; sensor-coordinate flat-field correction is
-   intentionally kept separate until it can be applied to each capture before
-   alignment.
+   **Aligned stack preview** badge while that preview is active. The canvas first
+   shows a bounded aligned preview, then upgrades to full resolution while you
+   inspect. Export still rebuilds the stack from the sources. An enabled stack
+   exports one image using the first capture's filename and edits.
+   Translation-only matching is deliberately conservative, so low-detail or
+   ambiguous captures remain separate rather than being merged automatically.
+   Clear any loaded flat field before enabling a stack; sensor-coordinate
+   flat-field correction is intentionally kept separate until it can be applied
+   to each capture before alignment.
    **Live Camera** is available when macOS exposes the camera or capture adapter
    as a video device. Invert Negative, Exposure, and Saturation on the live
    toolbar affect only that preview; imported stills still use the 16-bit

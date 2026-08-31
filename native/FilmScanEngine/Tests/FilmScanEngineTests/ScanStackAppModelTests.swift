@@ -85,6 +85,13 @@ struct ScanStackAppModelTests {
     #expect(model.selectedFiles == [firstURL])
     #expect(model.scanStackStatus.contains("noise reduction"))
 
+    try await waitUntil {
+      model.selectedImageDimensions?.provisional == false && !model.isUpgradingScanStack
+    }
+    #expect(model.selectedImageDimensions?.width == 96)
+    #expect(model.selectedImageDimensions?.height == 72)
+    #expect(model.scanStackStatus.contains("full resolution"))
+
     model.setFilmType(.cropOnly)
     let decodedInputs = try [firstURL, secondURL].map(StandardImageDecoder.decode)
     let expectedStack = try MultiScanStacker.combine(
@@ -151,9 +158,60 @@ struct ScanStackAppModelTests {
     #expect(model.detectedScanStack(containing: thirdURL) == nil)
   }
 
-  private func syntheticCapture(noiseOffset: Int, seed: Int = 7) -> UInt16Image {
-    let width = 96
-    let height = 72
+  @Test("Enabled stack preview upgrades past the bounded draft to source resolution")
+  func enabledStackPreviewUpgradesToFullResolution() async throws {
+    let workDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-stack-upgrade-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: workDirectory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDirectory) }
+
+    let width = AppModel.displayPreviewMaxDimension + 80
+    let height = 160
+    let firstURL = workDirectory.appendingPathComponent("frame-01.png")
+    let secondURL = workDirectory.appendingPathComponent("frame-02.png")
+    let capture = syntheticCapture(noiseOffset: 0, width: width, height: height)
+    try capture.write(
+      to: firstURL,
+      format: .png,
+      parameters: ExportParameters(format: .png))
+    try capture.write(
+      to: secondURL,
+      format: .png,
+      parameters: ExportParameters(format: .png))
+    let written = try StandardImageDecoder.fullResolutionDimensions(firstURL)
+    #expect(written.width == width)
+    #expect(written.height == height)
+
+    let model = AppModel()
+    model.importFiles([firstURL, secondURL])
+    try await waitUntil(timeout: .seconds(20)) {
+      !model.isAnalyzingScanStacks && model.files.count == 2 && model.previewImage != nil
+    }
+    #expect(model.detectedScanStacks.count == 1)
+
+    let stack = try #require(model.detectedScanStacks.first)
+    model.setScanStackEnabled(true, for: stack)
+    #expect(model.isScanStackEnabled(stack))
+    try await waitUntil(timeout: .seconds(15)) {
+      model.previewSourceKind == .alignedStack && !model.isBuildingScanStack
+    }
+    try await waitUntil(timeout: .seconds(15)) {
+      model.selectedImageDimensions?.width == width
+        && model.selectedImageDimensions?.height == height
+        && model.selectedImageDimensions?.provisional == false
+        && !model.isUpgradingScanStack
+    }
+    #expect(model.scanStackStatus.contains("full resolution"))
+    #expect(model.selectedImageDimensions?.width == width)
+    #expect(model.selectedImageDimensions?.height == height)
+  }
+
+  private func syntheticCapture(
+    noiseOffset: Int,
+    seed: Int = 7,
+    width: Int = 96,
+    height: Int = 72
+  ) -> UInt16Image {
     var pixels: [UInt16] = []
     pixels.reserveCapacity(width * height * 3)
     for y in 0..<height {

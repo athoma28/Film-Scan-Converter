@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import CoreImage
 import SwiftUI
 
 /// Builds and displays a single raster snapshot.
@@ -16,6 +17,25 @@ enum PreviewBitmap {
     image.cacheMode = .never
     image.addRepresentation(NSBitmapImageRep(cgImage: cgImage))
     return image
+  }
+
+  /// Simple complementary invert of a JPEG/ImageIO thumbnail, rendered into
+  /// named sRGB so SwiftUI does not undo it with DeviceRGB channel swapping.
+  static func invertedNSImage(from cgImage: CGImage) -> NSImage? {
+    let inverted = CIImage(cgImage: cgImage).applyingFilter("CIColorInvert")
+    let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+    let context = CIContext(options: [.cacheIntermediates: false])
+    guard
+      let rendered = context.createCGImage(
+        inverted,
+        from: inverted.extent,
+        format: .RGBA8,
+        colorSpace: colorSpace
+      )
+    else {
+      return nil
+    }
+    return nsImage(from: rendered)
   }
 
   static func cgImage(from image: NSImage) -> CGImage? {

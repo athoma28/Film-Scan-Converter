@@ -113,10 +113,10 @@ Acceptance:
 - measured artifacts continue to be removed after each run.
 
 That cycle’s “optimize again only when profiling exposes a problem” gate was
-met: remaining user-visible wait is every RAW export re-decoding from scratch.
+met: remaining user-visible wait was every RAW export re-decoding from scratch.
 Interactive RAW browsing already uses a colour-accurate draft, a ~4000px
 inspect preview, and a selected-file 1-pass full-resolution preview. Item 5
-slice 3 owns the leftover export seam. Do not reopen item 1 as an unrestricted
+slice 3 closed that leftover export seam. Do not reopen item 1 as an unrestricted
 demosaic rewrite.
 
 ### 1. Resolve Measured Full-Resolution RAW Export Bottlenecks — Completed 2026-08-12
@@ -278,10 +278,11 @@ The usability pass must also verify:
 Only promote sidebar reordering, a larger export queue, ratings, or other
 organization features if this real workflow demonstrates the need.
 
-Verify the remaining usability items while exercising item 5 on a real roll.
-Do not insert a separate organization-features phase before the feel slice.
+Verify the remaining usability items on a real roll now that settings-only
+re-export of the selected RAW skips unpack and demosaic. Do not insert a
+separate organization-features phase before that check.
 
-### 5. Make Open, Inspect, And Re-Export Feel Fast — Next
+### 5. Make Open, Inspect, And Re-Export Feel Fast — Completed 2026-08-30
 
 Use known techniques to remove the waits a RawTherapee-style user still hits
 after the completed three-pass wavefront work. Do not invent a new demosaic.
@@ -290,11 +291,9 @@ Do not change export pixels.
 The interactive path already shows a colour-accurate RAW draft in about 0.3s,
 upgrades the selected file to a ~4000px inspect preview in about 4s, then a
 1-pass full-sensor preview, and applies settings on the GPU in a few
-milliseconds. Unseen neighbours prefetch at 3200px. The remaining feels-slow
-seam is:
-
-- every RAW export calls a fresh full-resolution three-pass decode and discards
-  the buffer.
+milliseconds. Unseen neighbours prefetch at 3200px. The leftover export seam
+was that every RAW export called a fresh full-resolution three-pass decode
+and discarded the buffer; slice 3 retains that decode for the selected file.
 
 Fuji compressed unpack is no longer serial. Independent strips run across at
 most eight workers through LibRaw's `fuji_decode_loop` hook, with a locking
@@ -317,11 +316,13 @@ Work in this order, as small slices:
    a 1-pass full-sensor preview. Unseen neighbours prefetch at 3200px. X-Trans
    bounds land on integer CFA-period steps, so 4000px and 5000px can be the
    same image. Export stays three-pass full resolution.
-3. **Retain the last full-resolution decode for the selected file.**
-   Settings-only re-export of that file skips CFA work. Drop the buffer on
-   selection change, reset, and teardown. Keep one authoritative full-resolution
-   RAW in flight. This is not prefetch of file N+1 and not a roll-sized decode
-   cache. Budget about 241 MB of 16-bit RGB for a 40 MP frame.
+3. **Retain the last full-resolution decode for the selected file.** —
+   completed 2026-08-30: export keeps one three-pass camera-scan buffer for
+   the currently selected RAW. Settings-only re-export of that file skips unpack
+   and demosaic. The buffer is dropped on selection change, session reset, and
+   teardown. Other files still decode independently. This is not prefetch of
+   file N+1 and not a roll-sized decode cache. Budget about 241 MB of 16-bit
+   RGB for a 40 MP frame.
 
 Stop after each slice if the photographer-visible wait is gone. Do not continue
 into 100% viewport tiling, writer replacement, or two-file decode overlap as
@@ -403,9 +404,9 @@ After the editing and output contracts stabilize:
    gesture coalescing and transient relaunch semantics.
 4. A real roll workflow validates anchor-look, selected/all application,
    per-frame exceptions, selection, and export.
-5. Settings-only re-export of the selected RAW no longer repeats unpack and
-   three-pass demosaic. Interactive inspect already uses mosaic-binned 1-pass
-   previews. Export pixels stay on the frozen camera-scan oracle.
+5. Closed: settings-only re-export of the selected RAW no longer repeats unpack
+   and three-pass demosaic. Interactive inspect already uses mosaic-binned
+   1-pass previews. Export pixels stay on the frozen camera-scan oracle.
 6. Packaged outputs pass correctness, color-space, reopen, failure, and cleanup
    checks.
 7. The signed/notarized app passes Gatekeeper and clean-machine use.
@@ -518,7 +519,9 @@ Maintain this foundation rather than repeatedly replanning it:
 - staged RAW/export benchmarks, camera-scan byte-identity fixtures, and
   app-path signposts;
 - deterministic parallel X-Trans wavefront demosaic and parallel Fuji
-  compressed unpack, both gated by the frozen camera-scan oracle.
+  compressed unpack, both gated by the frozen camera-scan oracle;
+- one selected-file three-pass export decode retained for settings-only
+  re-export, dropped on selection change.
 
 Detailed implementation claims belong in [Features](../features.md), not here.
 

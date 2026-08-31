@@ -133,7 +133,7 @@ struct AppPathExportPerformanceTests {
       sequentialExport: sequential,
       cancellation: cancellation,
       note:
-        "The app path imports the available local RAF corpus, starts Export All, and appends repeated source jobs only when fewer than ten unique RAFs are available. Every job independently performs the production full-resolution camera-scan decode, correction, geometry, and TIFF writer path. Completion observations may overlap the next decode; post-run and post-model-release physical footprint are the live-memory gates. Temporary outputs are removed after each observed completion and again at teardown. Cancellation is requested during the first full-resolution decode after the configured delay."
+        "The app path imports the available local RAF corpus, starts Export All, and appends repeated source jobs only when fewer than ten unique RAFs are available. Each job uses the production full-resolution camera-scan path. Settings-only re-export of the currently selected RAW reuses that file's last three-pass decode; other files still decode independently. Completion observations may overlap the next decode; post-run and post-model-release physical footprint are the live-memory gates. Temporary outputs are removed after each observed completion and again at teardown. Cancellation is requested during the first full-resolution decode after the configured delay."
     )
 
     let encoder = JSONEncoder()

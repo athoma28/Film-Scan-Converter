@@ -5,8 +5,8 @@ isolated 2026-07-30; adjusted-correction evidence completed 2026-08-03;
 adjusted-correction repair completed 2026-08-12; deterministic X-Trans repair
 completed 2026-08-12; deterministic X-Trans wavefront follow-up completed
 2026-08-13; parallel Fuji unpack completed 2026-08-14 as roadmap item 5
-slice 1. Remaining inspect/re-export work (last-decode retention) is owned by
-`docs/improvements/MacOS-Native-Roadmap.md` item 5. Mosaic-binned RAW browsing
+slice 1. Remaining inspect/re-export work (last-decode retention) landed on
+2026-08-30 as roadmap item 5 slice 3. Mosaic-binned RAW browsing
 is complete.
 
 **Date:** 2026-07-27  
@@ -42,8 +42,8 @@ The two measured areas have completed bounded repairs:
 
 This page remains the evidence record for that closed slice. Do **not** reopen
 it as an unrestricted rewrite, a RawTherapee X-Trans port, a TIFF dependency,
-or batch prefetch. Last-decode retention remains product-roadmap item 5
-slice 3. Mosaic-binned RAW browsing and parallel Fuji unpack have landed.
+or batch prefetch. Last-decode retention landed on 2026-08-30 as product-roadmap
+item 5 slice 3. Mosaic-binned RAW browsing and parallel Fuji unpack have landed.
 
 ## Evidence Rules
 

@@ -51,7 +51,8 @@ shared preview/export entry point with workflow-level tests.
 
 Dust-mask detection exists, but Telea inpainting and applied dust removal do
 not. Self-contained app/ZIP packaging is complete; Developer ID notarization
-and Gatekeeper/clean-machine validation remain. Remaining product coding is
-roadmap item 5 slice 3 (retain the last full-resolution three-pass decode for
-settings-only re-export), plus the representative-image and real-roll checks.
+and Gatekeeper/clean-machine validation remain. Remaining product work is a representative-image and real-roll check, then
+distribution proof. Roadmap item 5 (open/inspect/re-export feel) is implemented:
+the selected file's last full-resolution three-pass decode is retained for
+settings-only re-export.
 The authoritative status page owns any changes to that boundary.

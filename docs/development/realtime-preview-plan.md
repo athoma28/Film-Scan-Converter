@@ -26,8 +26,8 @@ app-path latency measurements belong in
 - **Load RAW Preview** is a skip-ahead to that selected-file 1-pass decode, not
   the only way to reach it. Export independently decodes camera RAW at full
   resolution with the `rawTherapeeCameraScan` profile (three-pass X-Trans).
-  Retaining that three-pass buffer for settings-only re-export is roadmap item
-  5 slice 3.
+  The selected file's last three-pass buffer is retained for settings-only
+  re-export and dropped on selection change.
 - Lookahead prepares preview sessions only and is bounded by both the selected
   2/4/8/16/32-file limit and a 256 MiB byte limit.
 - The Core Image/Metal correction renderer is the normal interactive path on
