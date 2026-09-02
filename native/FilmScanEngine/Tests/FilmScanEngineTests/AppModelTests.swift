@@ -513,7 +513,7 @@ struct AppModelTests {
     model.fullResolutionExportDecoder = { _ in decoded }
     model.importFiles([raw])
     try await waitUntil { !model.isLoading }
-    model.setFilmType(.cropOnly)
+    model.setFilmType(.slide)
     model.setExportDestinationDirectory(destination)
     model.setExportFormat(.png)
 
@@ -535,6 +535,23 @@ struct AppModelTests {
     #expect(model.exportErrors.isEmpty)
     #expect(model.fullResolutionExportDecodeCount == 1)
     #expect(model.fullResolutionExportDecodeCacheHits == 1)
+
+    model.setTemperature(0)
+    model.exportSelected()
+    let thirdOutput = destination.appendingPathComponent("scan-3.png")
+    try await waitUntil {
+      !model.isExporting && FileManager.default.fileExists(atPath: thirdOutput.path)
+    }
+    #expect(model.exportErrors.isEmpty)
+    #expect(model.fullResolutionExportDecodeCount == 1)
+    #expect(model.fullResolutionExportDecodeCacheHits == 2)
+
+    let firstImage = try StandardImageDecoder.decode(
+      destination.appendingPathComponent("scan.png"))
+    let adjustedImage = try StandardImageDecoder.decode(secondOutput)
+    let restoredImage = try StandardImageDecoder.decode(thirdOutput)
+    #expect(adjustedImage != firstImage)
+    #expect(restoredImage == firstImage)
 
     model.resetCorrections()
     #expect(model.retainedExportDecodePath == raw.standardizedFileURL.path)

@@ -65,11 +65,12 @@ struct AppPathPerformanceTests {
     #expect(summary.p95Milliseconds == 4)
   }
 
-  @Test("Preview-cache depth sampling reports corpus-limited populations")
+  @Test("Preview-cache depth sampling respects the bounded lookahead population")
   func previewCacheDepthPopulationContract() {
     #expect(expectedCachePopulation(limit: 2, fileCount: 6) == 2)
-    #expect(expectedCachePopulation(limit: 8, fileCount: 6) == 6)
-    #expect(expectedCachePopulation(limit: 32, fileCount: 6) == 6)
+    #expect(expectedCachePopulation(limit: 8, fileCount: 6) == 4)
+    #expect(expectedCachePopulation(limit: 32, fileCount: 6) == 4)
+    #expect(expectedCachePopulation(limit: 8, fileCount: 3) == 3)
   }
 
   @Test(
