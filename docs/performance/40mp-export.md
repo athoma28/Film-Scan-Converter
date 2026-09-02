@@ -604,6 +604,19 @@ decode slowed to 21.5–22.5 s from the 14.3–14.9 s baseline, so the latencies
 directional evidence rather than a controlled same-state A/B, while the
 peak-footprint and byte-identity results are machine-independent.
 
+### 2026-09-01 Protected-Color Fixture Refresh
+
+The full native suite exposed that the protected-color and combined fixture
+hashes still described the earlier `0.08` opponent-shift strength. The
+intentional 2026-08-18 change to `0.375` made temperature and tint visibly
+effective but did not refresh this full-resolution oracle. A current release
+`--corrections` run on `DSCF2833.RAF` repeated three times reproduced one exact
+corrected-image hash and one exact TIFF hash per scenario. Neutral, tone, and
+dye-mixing retained their existing hashes; only protected-color and combined
+changed. All 15 generated TIFFs were removed, and the fixture now records the
+current intentional processing contract rather than accepting unexplained
+drift.
+
 ## 2026-08-12 Deterministic Parallel X-Trans Repair
 
 The production repair does not enable LibRaw's failed overlapping-tile OpenMP
