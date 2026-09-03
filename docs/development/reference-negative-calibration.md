@@ -1,5 +1,11 @@
 # Reference Negative Calibration
 
+**Status:** Existing offline tooling and recorded profile evidence. Further
+corpus preparation and named-stock fitting are parked until the project owner
+reactivates them; see the [roadmap](../improvements/MacOS-Native-Roadmap.md#parked-stock-and-capture-look-calibration).
+The sample counts and fit scores below are historical measurements, not a live
+inventory of the untracked corpus.
+
 `sample-raw/` is an untracked, recursively organized development corpus. Each
 film-stock directory may contain paired Camera Raw reference triplets:
 
@@ -58,9 +64,10 @@ material held-out improvement (currently 5% relative) for that.
 
 - Harman Phoenix II now has 12 varied references. Its Camera Raw LUT fit
   reaches `0.090` leave-one-frame-out MAE versus `0.159` for the current generic
-  rendering, a roughly 43% reduction. That LUT still ships as **Alternate —
-  Harman Phoenix II**. Cyan/purple camera scans auto-select **Physical —
-  Harman Phoenix II**, a log-density invert (independent channel stretch,
+  rendering, a roughly 43% reduction. That LUT still ships as the Harman
+  Phoenix II stock choice under **Natural** (`harmanPhoenixIIAlternate`).
+  Cyan/purple camera scans auto-select **Darkroom** with Harman Phoenix II,
+  a log-density invert (independent channel stretch,
   Fujicolor Crystal Archive paper, 20% rebate inset) tuned toward a same-scene
   phone JPEG of a dusk plaza photographed at a different time of day. The
   physical profile is not a Camera Raw LUT; sampled MAE versus the ACR JPEGs
@@ -79,5 +86,5 @@ material held-out improvement (currently 5% relative) for that.
   aligns after the `tiff:Orientation` fix. Its stock-specific curve reaches
   `0.126` in-sample and `0.143` leave-one-frame-out MAE versus `0.137` for the
   generic B&W curve, and `0.146` for Legacy. The GP3 curve ships as an explicit
-  **Alternate — Shanghai GP3** monochrome profile with a half-strength exposure
-  anchor; the generic B&W curve remains the default.
+  **Shanghai GP3** stock choice under Natural (`shanghaiGP3Alternate`) with a
+  half-strength exposure anchor; the generic B&W curve remains the default.

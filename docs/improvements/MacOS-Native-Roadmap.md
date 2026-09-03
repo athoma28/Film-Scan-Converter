@@ -10,9 +10,16 @@ measurements live in the
 [40 MP benchmark notes](../performance/40mp-export.md). The audited
 [full-resolution performance guide](../../PERFORMANCE-OPPORTUNITIES-2026-07-27.md)
 records the evidence, rejected shortcuts, and implementation handoff for the
-completed full-resolution export-latency slice. The next performance work is
-the bounded inspect/re-export slice below, not a continuation of that rewrite.
+completed full-resolution export-latency slice. The subsequent bounded
+open/inspect/re-export slice is also complete (item 5 below).
 Processing research is background material, not a competing delivery plan.
+
+**Working-tree review: 2026-09-02.** Viewport integration and the automated
+three-frame RAW roll workflow have passed their recorded checks. Remaining
+first-release work is to resolve the B&W CPU/GPU preview discrepancy, perform
+hands-on viewport/roll/stack and independent-viewer checks, and complete
+notarized distribution proof. Completed items below preserve their original
+numbers for evidence links; they are not tasks to restart.
 
 ## Current Product Direction
 
@@ -38,9 +45,11 @@ Film Scan Converter should help a photographer:
 Export pixels stay on the frozen camera-scan oracle (LibRaw 0.21.4 integer
 three-pass, same-machine SHA-256) until the owner explicitly replaces that
 lock. That oracle is a decoder regression harness, not a claim of live
-RawTherapee parity. Interactive preview is already allowed to differ (embedded
-JPEG, 1-pass, 2/255 GPU). Determinism—same app version, same settings, same
-bytes—remains a product promise.
+RawTherapee parity. Interactive preview uses 1-pass demosaic and a 2/255 GPU
+target; the known B&W exception is an open correctness item. Embedded JPEGs
+supply sidebar thumbnails, while the RAW canvas uses demosaiced previews.
+Determinism—same app version, same settings,
+same bytes—remains a product promise.
 
 Stock/capture fitting remains documented and its small deterministic
 infrastructure stays in the repository, but further dataset preparation,
@@ -198,13 +207,24 @@ TIFFs, and the ten-job app path plus active-decode cancellation. Every output
 scheduled for cleanup was removed, the engine's post-release footprint stayed
 within 45.5–53.6 MB with a 686.8 MB peak, and cancellation left no output.
 
-### 2. Make The Still Preview A Reliable Judging Surface — Implementation Complete; Direct Check Pending
+### 2. Make The Still Preview A Reliable Judging Surface — Viewport Implemented; Parity Fix And Direct Check Pending
 
-Implement zoom and pan before adding more processing ideas. A photographer must
+The 2026-09-02 automated app/viewport pass corrected composition jumps during
+Original comparison with geometry edits and draft/inspect/full-resolution
+upgrades. Native scroll-view and app-model regression tests now cover those
+transitions. The hands-on photographic judgment and gesture check remains.
+The same verification pass found a B&W preview/CPU comparison above the 2/255
+tolerance under combined legacy gamma/highlight adjustment. Resolve that
+bounded discrepancy before closing this judging-surface item; see the native
+status page for the exact case. The comparator also needs to fail explicitly
+when rendering is unavailable or tolerance is exceeded; it currently exits
+successfully and can print `PASS` with zero completed comparisons.
+
+Zoom and pan are implemented. A photographer must
 be able to inspect focus, grain, dust, crop edges, and fine tonal transitions,
 not merely see a fit-to-window composition.
 
-Deliver:
+Implemented:
 
 1. fit, zoom-in/out, and 100% commands with normal Mac trackpad/mouse behavior;
 2. smooth panning that does not fight crop, straighten, perspective, or loupe
@@ -282,6 +302,14 @@ Verify the remaining usability items on a real roll now that settings-only
 re-export of the selected RAW skips unpack and demosaic. Do not insert a
 separate organization-features phase before that check.
 
+The 2026-09-02 automated three-frame Fuji 400 app-model workflow passed
+selected-look application, preserved frame-specific geometry/base values,
+undo/redo of an exception, full-resolution comparison, ordered TIFF export,
+retained-decode re-export, and persisted-state restoration. All three outputs
+reopened and were removed, with unchanged source hashes. The direct roll/stack
+usability pass remains open; see the native status page for evidence and the
+test guide for the repeatable command.
+
 ### 5. Make Open, Inspect, And Re-Export Feel Fast — Completed 2026-08-30
 
 Use known techniques to remove the waits a RawTherapee-style user still hits
@@ -331,8 +359,9 @@ part of this item.
 Acceptance:
 
 - browsing no longer uses Fuji JPEG colour for interactive RAW previews;
-- the inspect and full-res 1-pass previews no longer interpolate the full 40 MP
-  mosaic only to downscale it;
+- bounded draft/inspect/lookahead previews demosaic the reduced mosaic; the
+  selected-file full-sensor 1-pass preview demosaics at sensor size without a
+  subsequent preview downsample;
 - a settings-only re-export of the current RAW does not repeat unpack+demosaic;
 - the camera-scan three-pass fixture still reproduces every approved digest;
 - physical footprint stays bounded; cancellation still writes no output;
@@ -399,16 +428,17 @@ After the editing and output contracts stabilize:
 1. Closed: the measured RAW-threading and adjusted-correction follow-up
    preserves deterministic final-quality pixels, bounded physical footprint,
    cancellation, cleanup, and packaged dependency closure.
-2. Zoom/pan makes the preview useful for photographic inspection.
+2. Viewport implementation and automated geometry checks are complete; the B&W
+   preview-parity fix and direct photographic inspection remain open.
 3. Closed: editing-state changes have reliable per-file undo/redo with
    gesture coalescing and transient relaunch semantics.
-4. A real roll workflow validates anchor-look, selected/all application,
-   per-frame exceptions, selection, and export.
+4. The automated three-frame roll check is recorded; hands-on selected/all look
+   application, per-frame exceptions, stacking, and export remain to be judged.
 5. Closed: settings-only re-export of the selected RAW no longer repeats unpack
    and three-pass demosaic. Interactive inspect already uses mosaic-binned
    1-pass previews. Export pixels stay on the frozen camera-scan oracle.
-6. Packaged outputs pass correctness, color-space, reopen, failure, and cleanup
-   checks.
+6. Beta writer and packaging contracts are implemented; broader camera and
+   independent-viewer output checks remain open.
 7. The signed/notarized app passes Gatekeeper and clean-machine use.
 
 Do not delay these gates for stock-specific calibration, a new demosaic, or a
@@ -510,6 +540,8 @@ Maintain this foundation rather than repeatedly replanning it:
 - per-file settings, presets, clipboard transfer, apply-to-selected/all,
   import-ordered previous/next, edited/preview-ready/export markers,
   multi-selection, and adjustable preview lookahead;
+- opt-in adjacent repeated-scan stacks with translation alignment, Auto/Noise/HDR
+  modes, bounded-to-full-resolution stack previews, and one export per stack;
 - per-file, session-local undo/redo with gesture coalescing, standard Mac
   commands, persisted current state, and exact parameter restoration;
 - collision-safe TIFF/JPEG/PNG/processed-RGB-DNG individual and sequential

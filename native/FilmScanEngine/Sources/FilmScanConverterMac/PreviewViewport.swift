@@ -156,28 +156,7 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
   }
 
   func makeNSView(context: Context) -> PreviewScrollView {
-    let scrollView = PreviewScrollView()
-    scrollView.contentView = CenteredPreviewClipView()
-    scrollView.documentView = context.coordinator.hostingView
-    scrollView.drawsBackground = false
-    scrollView.borderType = .noBorder
-    scrollView.contentView.clipsToBounds = true
-    scrollView.hasHorizontalScroller = true
-    scrollView.hasVerticalScroller = true
-    scrollView.autohidesScrollers = true
-    scrollView.scrollerStyle = .overlay
-    scrollView.horizontalScrollElasticity = .automatic
-    scrollView.verticalScrollElasticity = .automatic
-    scrollView.allowsMagnification = true
-    scrollView.minMagnification = PreviewViewportZoom.minimumMagnification
-    scrollView.maxMagnification = PreviewViewportZoom.maximumMagnification
-
-    context.coordinator.scrollView = scrollView
-    context.coordinator.observeMagnification(in: scrollView)
-    scrollView.onViewportLayout = { [weak coordinator = context.coordinator] in
-      coordinator?.viewportDidLayout()
-    }
-    return scrollView
+    context.coordinator.makeScrollView()
   }
 
   func updateNSView(_ scrollView: PreviewScrollView, context: Context) {
@@ -216,6 +195,31 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
       NotificationCenter.default.removeObserver(self)
     }
 
+    func makeScrollView() -> PreviewScrollView {
+      let scrollView = PreviewScrollView()
+      scrollView.contentView = CenteredPreviewClipView()
+      scrollView.documentView = hostingView
+      scrollView.drawsBackground = false
+      scrollView.borderType = .noBorder
+      scrollView.contentView.clipsToBounds = true
+      scrollView.hasHorizontalScroller = true
+      scrollView.hasVerticalScroller = true
+      scrollView.autohidesScrollers = true
+      scrollView.scrollerStyle = .overlay
+      scrollView.horizontalScrollElasticity = .automatic
+      scrollView.verticalScrollElasticity = .automatic
+      scrollView.allowsMagnification = true
+      scrollView.minMagnification = PreviewViewportZoom.minimumMagnification
+      scrollView.maxMagnification = PreviewViewportZoom.maximumMagnification
+
+      self.scrollView = scrollView
+      observeMagnification(in: scrollView)
+      scrollView.onViewportLayout = { [weak self] in
+        self?.viewportDidLayout()
+      }
+      return scrollView
+    }
+
     func observeMagnification(in scrollView: NSScrollView) {
       NotificationCenter.default.addObserver(
         self,
@@ -244,15 +248,16 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
       } else if let scrollView, previousSize.width > 1, previousSize.height > 1 {
         // Capture the visible crop before the document frame change; reading
         // `documentVisibleRect` afterwards is already pinned to the origin.
-        scrollView.setMagnification(
-          PreviewViewportDocumentRemap.magnification(
-            from: previousSize,
-            to: validSize,
-            magnification: previousMagnification),
-          centeredAt: PreviewViewportDocumentRemap.center(
+        scrollView.magnification = PreviewViewportDocumentRemap.magnification(
+          from: previousSize,
+          to: validSize,
+          magnification: previousMagnification)
+        centerDocument(
+          on: PreviewViewportDocumentRemap.center(
             visibleRect: previousVisibleRect,
             from: previousSize,
-            to: validSize))
+            to: validSize),
+          in: scrollView)
         reportZoom()
       } else if let scrollView {
         scrollView.reflectScrolledClipView(scrollView.contentView)
@@ -313,10 +318,23 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
         imageSize: documentSize,
         viewportSize: scrollView.contentSize)
       guard force || abs(scrollView.magnification - magnification) > 0.0001 else { return }
-      scrollView.setMagnification(
-        magnification,
-        centeredAt: CGPoint(x: documentSize.width / 2, y: documentSize.height / 2))
+      scrollView.magnification = magnification
+      centerDocument(
+        on: CGPoint(x: documentSize.width / 2, y: documentSize.height / 2), in: scrollView)
       reportZoom()
+    }
+
+    private func centerDocument(on point: CGPoint, in scrollView: NSScrollView) {
+      // AppKit's setMagnification(_:centeredAt:) preserves a point's current
+      // screen location; it does not move that point to the viewport center.
+      // A resized document needs an explicit scroll after its scale changes.
+      let clipView = scrollView.contentView
+      let center = clipView.convert(point, from: hostingView)
+      var bounds = clipView.bounds
+      bounds.origin = CGPoint(
+        x: center.x - bounds.width / 2, y: center.y - bounds.height / 2)
+      clipView.scroll(to: clipView.constrainBoundsRect(bounds).origin)
+      scrollView.reflectScrolledClipView(clipView)
     }
 
     private func setMagnification(
@@ -335,8 +353,9 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
       lastReportedPercent = percent
       lastReportedFit = isFitMode
       let callback = onZoomChanged
+      let reportedFit = isFitMode
       DispatchQueue.main.async {
-        callback(percent, self.isFitMode)
+        callback(percent, reportedFit)
       }
     }
   }

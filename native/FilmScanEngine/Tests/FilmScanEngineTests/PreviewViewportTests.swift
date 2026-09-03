@@ -1,4 +1,5 @@
-import CoreGraphics
+import AppKit
+import SwiftUI
 import Testing
 
 @testable import FilmScanConverterMac
@@ -79,5 +80,91 @@ struct PreviewViewportTests {
     #expect(resetCenter.y < 500)
     #expect(preservedCenter.x > 2_000)
     #expect(preservedCenter.y > 1_000)
+  }
+}
+
+@Suite("Native preview scroll view", .serialized)
+@MainActor
+struct PreviewScrollViewTests {
+  @Test(
+    "A panned view retains its photo region through draft, inspect, and full-resolution upgrades")
+  func resolutionUpgradesPreservePan() {
+    let coordinator = PreviewViewport<Color>.Coordinator(rootView: .black) { _, _ in }
+    let scrollView = coordinator.makeScrollView()
+    scrollView.frame = CGRect(x: 0, y: 0, width: 600, height: 400)
+    scrollView.layoutSubtreeIfNeeded()
+    var size = CGSize(width: 640, height: 426)
+    coordinator.updateDocumentSize(size, previousVisibleRect: .zero, previousMagnification: 1)
+    coordinator.apply(.init(sequence: 0, action: .actualSize))
+    scrollView.setMagnification(3, centeredAt: CGPoint(x: 390, y: 250))
+    let initial = normalizedVisibleRect(scrollView, size: size)
+    #expect(initial.minX > 0.1)
+    #expect(initial.minY > 0.1)
+
+    for nextSize in [CGSize(width: 3_876, height: 2_580), CGSize(width: 7_728, height: 5_152)] {
+      coordinator.updateDocumentSize(
+        nextSize, previousVisibleRect: scrollView.documentVisibleRect,
+        previousMagnification: scrollView.magnification)
+      scrollView.layoutSubtreeIfNeeded()
+      size = nextSize
+      let visible = normalizedVisibleRect(scrollView, size: size)
+      #expect(abs(visible.midX - initial.midX) < 0.005)
+      #expect(abs(visible.midY - initial.midY) < 0.005)
+      #expect(abs(visible.width - initial.width) < 0.005)
+      #expect(abs(visible.height - initial.height) < 0.005)
+    }
+
+    let beforeComparison = scrollView.documentVisibleRect
+    coordinator.hostingView.rootView = .white
+    coordinator.updateDocumentSize(
+      size, previousVisibleRect: beforeComparison,
+      previousMagnification: scrollView.magnification)
+    #expect(scrollView.documentVisibleRect == beforeComparison)
+
+    coordinator.apply(.init(sequence: 1, action: .fit))
+    #expect(abs(scrollView.magnification - 600 / size.width) < 0.001)
+  }
+
+  @Test("Fit follows window resize and pinch leaves fit mode")
+  func fitResizeAndPinch() async throws {
+    var reports: [(percent: Int, isFit: Bool)] = []
+    let coordinator = PreviewViewport<Color>.Coordinator(rootView: .black) { percent, isFit in
+      reports.append((percent, isFit))
+    }
+    let scrollView = coordinator.makeScrollView()
+    scrollView.frame = CGRect(x: 0, y: 0, width: 800, height: 600)
+    scrollView.layoutSubtreeIfNeeded()
+    let size = CGSize(width: 2_000, height: 1_000)
+    coordinator.updateDocumentSize(size, previousVisibleRect: .zero, previousMagnification: 1)
+    coordinator.apply(.init(sequence: 0, action: .fit))
+    #expect(abs(scrollView.magnification - 0.4) < 0.001)
+    scrollView.frame.size = CGSize(width: 1_000, height: 700)
+    scrollView.layoutSubtreeIfNeeded()
+    #expect(abs(scrollView.magnification - 0.5) < 0.001)
+
+    NotificationCenter.default.post(
+      name: NSScrollView.willStartLiveMagnifyNotification, object: scrollView)
+    scrollView.setMagnification(1.5, centeredAt: CGPoint(x: 1_200, y: 600))
+    NotificationCenter.default.post(
+      name: NSScrollView.didEndLiveMagnifyNotification, object: scrollView)
+    scrollView.frame.size = CGSize(width: 900, height: 600)
+    scrollView.layoutSubtreeIfNeeded()
+    #expect(scrollView.magnification == 1.5)
+    coordinator.apply(.init(sequence: 1, action: .actualSize))
+    #expect(scrollView.magnification == 1)
+    let deadline = ContinuousClock.now + .seconds(2)
+    while reports.last?.percent != 100 {
+      try #require(ContinuousClock.now < deadline)
+      try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(reports.map(\.percent) == [40, 50, 150, 100])
+    #expect(reports.map(\.isFit) == [true, true, false, false])
+  }
+
+  private func normalizedVisibleRect(_ scrollView: NSScrollView, size: CGSize) -> CGRect {
+    let visible = scrollView.documentVisibleRect
+    return CGRect(
+      x: visible.minX / size.width, y: visible.minY / size.height,
+      width: visible.width / size.width, height: visible.height / size.height)
   }
 }

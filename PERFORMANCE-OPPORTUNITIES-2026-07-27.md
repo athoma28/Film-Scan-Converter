@@ -5,7 +5,7 @@ isolated 2026-07-30; adjusted-correction evidence completed 2026-08-03;
 adjusted-correction repair completed 2026-08-12; deterministic X-Trans repair
 completed 2026-08-12; deterministic X-Trans wavefront follow-up completed
 2026-08-13; parallel Fuji unpack completed 2026-08-14 as roadmap item 5
-slice 1. Remaining inspect/re-export work (last-decode retention) landed on
+slice 1. The subsequent inspect/re-export work (last-decode retention) landed on
 2026-08-30 as roadmap item 5 slice 3. Mosaic-binned RAW browsing
 is complete.
 
@@ -20,8 +20,10 @@ This document replaces the original static-analysis memo. The original found
 important hotspots, but it mixed committed and uncommitted source, treated
 engineering estimates as likely savings, and made incorrect claims about
 LibRaw threading, determinism, fixtures, TIFF defaults, and batch memory.
-This version records what is measured, what is inferred, and what must be
-proven before an optimization can ship.
+This version records the original measurements, investigation sequence, and
+completed repairs. Remaining candidates are conditional reference material;
+the [product roadmap](docs/improvements/MacOS-Native-Roadmap.md) owns current
+priority. The closed investigation below is not a new implementation queue.
 
 ## Executive Decision
 
@@ -131,7 +133,7 @@ Fuji unpack, disproving the original recommendation to accept unpack as a
 fixed 1.3-second floor.
 
 The result **cannot ship**: the two multi-threaded runs did not produce the
-same output hash. The experiment does not yet identify whether nondeterminism
+same output hash. The initial experiment did not identify whether nondeterminism
 originates in threaded unpack, X-Trans demosaic, another OpenMP path, or more
 than one stage. The one-thread forced build matching stock is useful evidence
 that the build itself did not intentionally select a different serial
@@ -175,7 +177,7 @@ Do not reduce final-quality export from three passes to one.
 
 ### P0 — Establish production gates and diagnose RAW threading — Completed 2026-08-12
 
-This is the first work to land.
+The initial instrumentation and investigation sequence was:
 
 1. Extend `FilmScanExportBenchmark` with a camera-scan determinism mode that
    repeats the same decode and reports the stage-boundary evidence above.
@@ -269,7 +271,8 @@ byte-for-byte. The measured correction-stage medians (tone 0.954 s, protected
 color 0.993 s, dye mixing 0.944 s, combined 1.269 s versus 2.182/2.266/1.885/
 2.749 s) came from a run whose decode slowed to 21.5–22.5 s from the
 14.3–14.9 s baseline, so the latencies are directional while the
-peak-footprint and byte-identity results are machine-independent. `Float`,
+peak-footprint and byte-identity evidence applies to this measured local
+workload, not all hardware. `Float`,
 structure-of-arrays, vDSP, and vForce were not adopted; they remain separate
 candidates only if profiling later justifies them.
 
@@ -362,16 +365,16 @@ Important constraints:
 
 | Original recommendation | Disposition |
 |---|---|
-| Port and tile RawTherapee X-Trans immediately | Replace with P0 LibRaw OpenMP determinism investigation |
+| Port and tile RawTherapee X-Trans immediately | Investigation and deterministic LibRaw wavefront repair completed; RawTherapee port is not planned |
 | Run three X-Trans passes concurrently | Reject; later passes depend on earlier results |
 | Parallelize RCD as P0 | Defer until Bayer fixture and timing exist |
-| Treat unpack as an accepted floor | Reject; forced OpenMP accelerated the tested Fuji unpack |
-| Optimize adjusted correction | Keep as P1; benchmark completed 2026-08-03, implementation next |
+| Treat unpack as an accepted floor | Rejected; deterministic parallel Fuji strip unpack completed 2026-08-14 |
+| Optimize adjusted correction | Benchmark completed 2026-08-03; in-place parallel repair completed 2026-08-12 |
 | Use vForce `pow` | Keep only as a measured candidate |
 | Parallelize small full-frame passes | Keep as profile-gated cleanup |
 | Lift worker cap to active processor count | Replace with per-kernel worker sweep |
 | Port a parallel TIFF writer | Conditional on selected-compression usage |
-| Prefetch the next full-resolution decode | Defer until stage costs and byte budgets are known |
+| Prefetch the next full-resolution decode | Not planned; selected-file decode retention completed instead |
 | Optimize perspective warp | Low priority; current working tree is already row-parallel |
 | Preserve atomic staging | Keep unchanged |
 
@@ -393,8 +396,8 @@ Every performance change must state which cells it exercises:
 
 ## First Developer Handoff
 
-A useful first pull request should contain instrumentation and tests, not the
-final optimization. This handoff was completed across the 2026-07-28 through
+The first handoff called for instrumentation and tests before the final
+optimization. It was completed across the 2026-07-28 through
 2026-08-03 evidence slices:
 
 1. add camera-scan repeat/determinism mode to `FilmScanExportBenchmark`;
@@ -408,9 +411,9 @@ final optimization. This handoff was completed across the 2026-07-28 through
    `docs/performance/40mp-export.md`;
 6. make no pixel algorithm change in that first PR.
 
-The next pull request can enable the experimental threaded build and identify
-the first divergent boundary. Only the following PR should fix or replace the
-responsible implementation.
+The threaded-boundary investigation completed on 2026-07-30, followed by the
+production repairs on 2026-08-12 and the wavefront follow-up on 2026-08-13.
+The experimental forced-OpenMP candidate remains disabled in production.
 
 ## Source Map
 
@@ -426,7 +429,7 @@ responsible implementation.
 - `native/FilmScanEngine/Sources/FilmScanEngine/FilmNegativeProcessing.swift`:
   fused power-law kernel and render-ready linear conversion.
 - `native/FilmScanEngine/Sources/FilmScanEngine/RenderReadyLinearImage.swift`:
-  serial linear tone/color/dye passes.
+  in-place parallel linear tone/color/dye passes.
 - `native/FilmScanEngine/Sources/FilmScanEngine/UInt16Image+Export.swift`:
   format packing, writers, staging, and atomic commit.
 - `native/FilmScanEngine/Sources/FilmScanEngine/ExportFormat.swift`:
@@ -453,7 +456,7 @@ Upstream reference points:
 ## Non-Goals
 
 - reducing final-quality X-Trans passes;
-- speculative full-resolution RAW browsing or preview lookahead;
+- speculative full-resolution decode of unselected RAW files;
 - changing pixel math merely to use Metal, Accelerate, or another library;
 - reviving legacy Python performance work;
 - promising hardware-independent speedup ratios from the isolated audit.

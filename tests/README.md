@@ -31,7 +31,7 @@ present. A separate camera-scan fixture,
 `native/FilmScanEngine/Tests/FilmScanEngineTests/Fixtures/camera_scan_decode_reference.json`,
 pins the full-resolution `rawTherapeeCameraScan` decode of
 `fuji400-fresh/DSCF2833.RAF` (stage digests plus Swift pixels). When the
-untracked RAF corpus is absent, corpus-specific Swift tests are reported as
+untracked RAF corpus is absent, default corpus-specific Swift tests are reported as
 disabled with an explicit reason rather than silently passing.
 The RAF files remain outside version control. Discovery is recursive so the
 corpus can be organized by film stock; manifests and benchmark reports store
@@ -96,3 +96,33 @@ native/FilmScanEngine/.build/release/FilmScanRawBenchmark \
 See [Native RAW Compatibility Decode And Quality Benchmark](../docs/development/native-raw-benchmark.md)
 for the eight-file compatibility-profile snapshot and its distinction from the
 current app export profile.
+
+## Native Viewport And Roll Workflow
+
+The default native suite now exercises the actual AppKit scroll view through
+draft/inspect/full-resolution size changes, panning, Fit, resize, and pinch
+notifications. App-model comparison tests cover automatic crop, manual crop,
+perspective, straightening, and their combination, including temporary editor
+canvases and exact corrected-pixel restoration.
+
+Run the supplemental three-frame RAW workflow in a release build:
+
+```sh
+RUN_REPRESENTATIVE_ROLL_TESTS=1 \
+CLANG_MODULE_CACHE_PATH=/tmp/film-scan-clang-cache \
+SWIFTPM_MODULECACHE_OVERRIDE=/tmp/film-scan-swiftpm-cache \
+swift test --disable-sandbox -c release \
+  --package-path native/FilmScanEngine --no-parallel \
+  --filter RepresentativeRollWorkflowTests
+```
+
+This requires `fuji400-fresh/DSCF2833.RAF`, `DSCF2851.RAF`, and `DSCF2856.RAF`
+in the untracked `sample-raw/` corpus; explicitly enabling this workflow with
+missing files fails the test. It applies an anchor look to selected
+frames, checks an untouched frame and a reversible per-frame exception,
+compares the full-resolution preview, exports in import order, changes settings
+and re-exports through the retained decode, and restores persisted edits in a
+new app model. Settings and TIFFs use a unique temporary directory; source
+hashes must remain unchanged and all outputs are removed. This automated check
+does not replace a hands-on assessment of focus, grain, gesture feel, or overlay
+dragging in the packaged app.

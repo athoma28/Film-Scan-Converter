@@ -3,7 +3,12 @@
 **Date:** 2026-07-27  
 **Scope:** Swift engine, macOS SwiftUI app, native tests, and native CI  
 **Excluded by request:** the legacy Python implementation  
-**Status:** source-verified and updated after corrective changes
+**Status:** historical audit; later implementation changes noted below
+
+Use [Native macOS Development](docs/development/native-macos.md) for current
+verification and the [product roadmap](docs/improvements/MacOS-Native-Roadmap.md)
+for priority. The remaining audit candidates below are supporting maintenance
+notes, not a competing release plan.
 
 ## Executive summary
 
@@ -29,7 +34,8 @@ The highest-confidence native issues have now been corrected:
 - native CI now tests macOS 14 and 15 and emits code-coverage reports/artifacts.
 
 The remaining findings are mostly bounded refactors, missing failure-injection
-seams, corpus/benchmark CI work, and a formatting baseline.
+seams, and corpus/benchmark CI work. The formatting baseline and CI gate are
+implemented.
 
 ## Disposition of the original findings
 
@@ -200,10 +206,11 @@ only to avoid duplicating artifact work.
 
 ### Testability and CI
 
-- **59:** there is no explicit stress test combining import, editing, cache
-  invalidation, and export. Main app state is `@MainActor`, but task cancellation
-  and stale-result rejection would still benefit from a deterministic stress
-  test.
+- **59:** the 2026-09-02 supplemental three-frame RAW test now combines import,
+  look application, per-frame editing, comparison, ordered export, decode-cache
+  reuse/invalidation, and relaunch. This is a sequential workflow test;
+  deterministic cancellation and late-result stress coverage remains a
+  separate candidate.
 - **62:** `StillPreviewRenderer` has no injected pipeline/compiler failure seam,
   so Metal compilation and allocation failures are not directly testable.
 - **63:** `CameraController` directly owns AVFoundation discovery/session setup;
@@ -261,7 +268,10 @@ only to avoid duplicating artifact work.
   ordinary integration and processing suites had passed; this document does not
   claim that corpus-heavy full run completed.
 
-## Recommended next work
+## Remaining Maintenance Candidates
+
+These do not precede the product roadmap's preview-correctness, hands-on
+workflow, and distribution gates without new evidence.
 
 1. Add injectable renderer and AVFoundation seams, then cover findings 62–63.
 2. Establish a redistributable RAW mini-corpus for CI (64).

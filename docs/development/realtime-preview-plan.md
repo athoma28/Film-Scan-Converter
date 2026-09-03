@@ -1,10 +1,11 @@
 # Real-Time Still Preview Outcome
 
-**Status:** The original equivalence and latency gates through Stage 3 are
-complete. The proposed idle full-resolution replacement was retired when
-browsing moved to a preview-only contract.
+**Status:** Interactive rendering and viewport implementation are complete.
+The current comparator has a known B&W tolerance failure. The proposed idle
+authoritative CPU replacement was retired; selected-file full-sensor 1-pass
+preview upgrades are implemented separately.
 
-**Last verified:** 2026-08-18. The browsing contract below is current.
+**Last reviewed:** 2026-09-02 against the working tree and recorded verification.
 
 This page records the design outcome of the real-time preview work. It is not
 the active roadmap. Current product priority belongs in the
@@ -19,6 +20,9 @@ app-path latency measurements belong in
   ignore the embedded JPEG and decode a colour-accurate ~640px demosaiced
   draft, then upgrade the selected file to a ~4000px inspect preview and a
   1-pass full-sensor preview. Unseen neighbours prefetch at 3200px.
+- Selecting an existing 3200px lookahead preview skips the inspect decode and
+  starts the full-sensor upgrade. Embedded JPEGs are still used for sidebar
+  thumbnails and repeated-capture detection.
 - A separate 256px source drives classification and median calibration.
 - Lookahead never starts a second full-resolution RAW. The selected file may
   keep one 1-pass full-res buffer and must demote it to inspect size on
@@ -51,8 +55,11 @@ app-path latency measurements belong in
 2. **GPU correction renderer.** `StillPreviewRenderer` implements film-mode
    inversion, protected tone and color controls, white balance, curves, color
    wheels, orientation, and display conversion on the Core Image/Metal path.
-3. **Visual equivalence.** Current production CPU/GPU grids cover 2,725 channel
-   comparisons with zero failures and a maximum difference of 2/255.
+3. **Visual equivalence coverage.** The 2026-09-02 CPU/Metal run completed
+   2,725 image/parameter comparisons with no render failures. Color-negative
+   and slide results stayed within 2/255; B&W at legacy gamma `-35` and
+   highlights `-45` reached 6/255. The tolerance remains 2/255, so this gate is
+   open; see the [verification summary](native-macos.md#verification-summary).
 4. **Latency gate.** The deterministic adjustment-heavy 1080×720 release
    benchmark now exercises dye crossover as well as protected color/tone,
    curves, and color wheels. The 2026-07-15 M4 Pro run with crossover active
@@ -93,6 +100,10 @@ profiling exposes a user-visible display-path bottleneck.
 - Add a dedicated late-render regression proving a previous file cannot publish
   after selection changes; generation guards and cancellation already enforce
   the behavior in the app path.
+- Resolve the recorded B&W comparator discrepancy and recheck all 2,725 cases
+  with a working Metal device. The comparator currently reports diagnostics
+  rather than enforcing a failing process exit; a `PASS` line alone is
+  insufficient when comparisons are missing or renders fail.
 - Add a UI automation smoke test that drags each adjustment and confirms visible
   updates when reliable macOS app automation is available.
 - Re-run the deterministic renderer and app-path benchmarks after changes to

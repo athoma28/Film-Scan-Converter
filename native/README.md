@@ -29,7 +29,9 @@ elsewhere:
 - `FilmScanProfileCalibrator`: offline weighted density-matrix fitter with a
   frame-level held-out validation gate;
 - `FilmScanReferenceCalibrator`: offline paired RAF/JPEG/XMP curve fitter used
-  by the measured Natural looks.
+  by the measured Natural looks;
+- `FilmScanLookbook`: developer utility for generating preview/comparison
+  images from the local RAW corpus.
 
 The package requires macOS 14 or later and Homebrew LibRaw. `CLibRawShim`
 provides the narrow C/C++ boundary used by Swift. Camera-scan X-Trans keeps
@@ -226,8 +228,10 @@ decode against recorded hashes. The camera-scan byte-identity fixture
 `rawTherapeeCameraScan` decode of `fuji400-fresh/DSCF2833.RAF`, including
 wavefront X-Trans and parallel Fuji unpack oracles. The X-T5 regression trio
 additionally guards camera-scan previews against leaked X-Trans mosaic pixels.
-Each corpus-dependent test is explicitly disabled unless all files it needs are
-present.
+Default corpus-dependent regressions are explicitly disabled unless all files
+they need are present. The opt-in `RepresentativeRollWorkflowTests` instead
+requires its three named Fuji 400 files once enabled; see the
+[test guide](../tests/README.md#native-viewport-and-roll-workflow).
 The corpus may be organized recursively by film stock. See
 [Reference Negative Calibration](../docs/development/reference-negative-calibration.md)
 for paired-triplet naming, fitting, and held-out stock-profile gates.
@@ -255,6 +259,9 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   that last three-pass buffer for settings-only re-export and must drop it on
   selection change.
 - Keep lookahead preview-only, LRU, and bounded by both file count and bytes.
+  Selecting a cached 3200px lookahead preview skips the inspect decode and
+  starts the selected-file full-sensor upgrade. Sidebar thumbnails and repeated
+  capture detection still use embedded JPEGs; the main RAW canvas does not.
   Keep at most one full-resolution 1-pass preview; demote unused full-res
   sessions to the ~4000px inspect size. **Load RAW Preview** is a skip-ahead to
   that selected-file 1-pass decode, not the only way to reach it.
@@ -274,8 +281,10 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   the basic, power-law, physical density-print, and density paths. Keep its CPU and Core Image kernels
   in parity, and keep the exact-neutral fast path bit-for-bit unchanged.
 - User film-stock profiles persist exponent, dye-mixing, density-response, and
-  display-rendering priors. Do not add named stock matrices until held-out
-  measured data validates them.
+  display-rendering priors. Preserve the recorded provenance of existing Natural
+  curves and Darkroom stock matrices. Further named-stock fitting and capture
+  calibration are parked until the owner reactivates them; fitted candidates
+  still need held-out evidence before promotion.
 - Keep edit history session-local and isolated by standardized source path.
   Coalesce each slider, curve, color-wheel, and perspective drag into one
   history entry; persist the restored current state but start with empty

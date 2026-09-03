@@ -2106,6 +2106,7 @@ struct ContentView: View {
     rebateDragEnd = nil
     overlayPreviousShowOriginal = model.showOriginal
     activeOverlay = .rebate
+    model.beginSourceGeometryEditing()
     model.showOriginal = true
   }
 
@@ -2116,6 +2117,7 @@ struct ContentView: View {
     }
     endActiveOverlay()
     overlayPreviousShowOriginal = model.showOriginal
+    model.beginSourceGeometryEditing()
     model.beginPerspectiveCrop()
     activeOverlay = .perspective
     model.showOriginal = true
@@ -2173,6 +2175,7 @@ struct ContentView: View {
   }
 
   private func restoreShowOriginalAfterOverlay() {
+    model.endSourceGeometryEditing()
     guard let previousValue = overlayPreviousShowOriginal else { return }
     overlayPreviousShowOriginal = nil
     model.showOriginal = previousValue
