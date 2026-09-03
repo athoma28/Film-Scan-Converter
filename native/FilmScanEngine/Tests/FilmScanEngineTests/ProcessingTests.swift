@@ -294,6 +294,26 @@ struct ProcessingTests {
     #expect(actual.pixels == [65535, 65535, 65535])
   }
 
+  @Test("B&W negative inversion keeps near-zero holder pixels neutral")
+  func blackAndWhiteNegativeNeutralizesZeroLight() {
+    let image = UInt16Image(
+      width: 1,
+      height: 1,
+      channels: 3,
+      pixels: [256, 512, 1024]
+    )
+    let parameters = ProcessingParameters(
+      filmType: .blackAndWhiteNegative,
+      gamma: -35,
+      highlights: -45,
+      filmNegativeParams: FilmNegativeParams()
+    )
+
+    let actual = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+
+    #expect(actual.pixels == [65535])
+  }
+
   @Test("Crop-only corrected preview applies orientation without tonal corrections")
   func correctedPreviewCropOnly() {
     let image = UInt16Image(

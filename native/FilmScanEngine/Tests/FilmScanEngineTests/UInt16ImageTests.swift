@@ -134,4 +134,25 @@ struct UInt16ImageTests {
     let components = data?.withUnsafeBytes { Array($0.bindMemory(to: UInt16.self)) }
     #expect(components == [3, 2, 1, .max])
   }
+
+  @Test("Zero-light neutralization supports single-channel and multi-channel targets")
+  func neutralizeInvertedZeroLightChannels() {
+    let source3 = UInt16Image(
+      width: 2, height: 1, channels: 3,
+      pixels: [200, 500, 1000, 200, 500, 2000]
+    )
+    var target1 = UInt16Image(
+      width: 2, height: 1, channels: 1,
+      pixels: [12_000, 34_000]
+    )
+    target1.neutralizeInvertedZeroLight(from: source3, threshold: 1024)
+    #expect(target1.pixels == [65535, 34_000])
+
+    var target3 = UInt16Image(
+      width: 2, height: 1, channels: 3,
+      pixels: [1000, 2000, 3000, 4000, 5000, 6000]
+    )
+    target3.neutralizeInvertedZeroLight(from: source3, threshold: 1024)
+    #expect(target3.pixels == [65535, 65535, 65535, 4000, 5000, 6000])
+  }
 }

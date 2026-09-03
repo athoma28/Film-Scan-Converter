@@ -122,8 +122,7 @@ their matching Fit state. Editor canvas changes clear stale dust overlays and
 use the displayed geometry for newly detected masks.
 
 The next product work is the remaining hands-on representative-image viewport
-and real-roll check, plus the B&W preview-parity discrepancy recorded below,
-then distribution proof. The automated commands and
+and real-roll check, then distribution proof. The automated commands and
 coverage are in [the test guide](../../tests/README.md#native-viewport-and-roll-workflow).
 Do not begin a three-pass Metal port, a new X-Trans interpolator, writer
 replacement, or stock-look calibration.
@@ -343,8 +342,6 @@ judgment in the packaged app.
 
 Still required before calling the application high quality:
 
-- resolve the B&W legacy gamma/highlights CPU/GPU discrepancy in the
-  [verification summary](#verification-summary), then rerun the comparator;
 - complete a direct representative-image workflow check for focus, grain,
   dust, crop-edge, overlay-drag, comparison, and clipping-diagnostic behavior;
 - preserve the named preview/export split: mosaic-binned 1-pass browsing versus
@@ -410,9 +407,6 @@ fail-closed `public` path. The following remain for the notarized build:
 
 ## Known Limitations
 
-- The CPU/Metal comparator has a known B&W preview discrepancy: legacy gamma
-  `-35` with highlights `-45` reaches 6/255 instead of the required 2/255
-  maximum channel difference. Export continues to use the CPU authority.
 - Telea dust inpainting and applying dust removal to preview/export are not
   implemented natively.
 - Sidebar order remains import order. Manual reordering is unavailable and is
@@ -476,19 +470,20 @@ fail-closed `public` path. The following remain for the notarized build:
 
 ## Verification Summary
 
-- On 2026-09-02 the release suite reported **531 tests passed** in 243.411
+- On 2026-09-02 the release suite reported **533 tests passed** in 332.843
   seconds with `RUN_REPRESENTATIVE_ROLL_TESTS=1`, including the local RAW
   workflow above. Strict native formatting and `git diff --check` also passed.
   The run used normal macOS graphics/window access: the restricted-sandbox
   attempt could not render several Core Image thumbnails and stopped in a
   native layout test. Those tests passed in the completed macOS run. Other
   opt-in performance benchmarks remained disabled.
-- That recorded run covered 531 native tests across 41 Swift test files, including
+- That recorded run covered 533 native tests across 41 Swift test files, including
   import-order previous/next, sidebar export-state, repeated-scan detection,
   aligned stacking, wavefront-vs-serial X-Trans identity,
-  parallel-vs-serial Fuji unpack identity, and selected-file three-pass
+  parallel-vs-serial Fuji unpack identity, selected-file three-pass
   export-decode retention, native scroll-view upgrades, geometric Original
-  comparison, and the opt-in representative RAW roll workflow.
+  comparison, single- and multi-channel zero-light neutralization, and the opt-in
+  representative RAW roll workflow.
 - The camera-scan byte-identity fixture
   (`camera_scan_decode_reference.json` plus `CameraScanByteIdentityTests`)
   pins the full-resolution X-Trans decode of `fuji400-fresh/DSCF2833.RAF` to
@@ -497,20 +492,14 @@ fail-closed `public` path. The following remain for the notarized build:
   reproduce exactly.
 - Frozen Python-generated fixtures cover shared numerical behavior.
 - The 2026-09-02 release CPU/Metal comparator ran 2,725 image/parameter
-  comparisons with zero render failures. Color-negative and slide paths stayed
-  within 2/255, but the B&W gradient with legacy gamma `-35` and highlights
-  `-45` reached 6/255 (mean pixel difference 0.18). This exceeds the documented
-  2/255 tolerance and remains a processing follow-up; the viewport changes do
-  not modify the engine, Metal kernel, or comparator. Do not treat the older
-  blanket 2/255 claim as current evidence.
-- The documentation audit independently rebuilt and reran that release
-  comparator on 2026-09-02 with Metal available: 2,725 completed comparisons,
-  zero render failures, and the same 6/255 B&W result. Source inventory also
-  confirmed 531 `@Test` declarations in 41 test files; the full regression suite
-  was not rerun for this documentation-only audit. The comparator is diagnostic:
-  it returns a successful exit even for tolerance warnings, and the restricted
-  run printed `PASS` despite zero comparisons and 2,725 render failures. Check
-  graphics availability and counters as well as the maximum difference.
+  comparisons with zero render failures, confirming full parity across all
+  modes within the documented 2/255 tolerance (colourNegative max 2/255,
+  blackAndWhiteNegative max 1/255, slide max 2/255). The previous B&W gradient
+  discrepancy (6/255 under legacy gamma `-35` and highlights `-45`) was resolved
+  by ensuring near-zero holder pixel neutralization applies to single-channel
+  B&W negatives on the CPU path matching the GPU kernel. The comparator was also
+  hardened to fail explicitly with non-zero exit if Metal is unavailable,
+  comparisons count is zero, render failures occur, or tolerance is exceeded.
 - A separate directed dye-crossover fixture verifies the new linear matrix
   against the production Metal renderer within the same 2/255 tolerance.
 - Synthetic calibration tests recover a known density-space affine transform,

@@ -45,10 +45,10 @@ inversion for cyan/purple-mask stocks, repeated-scan stacking, and
 colour-accurate RAW drafts that upgrade the selected file to a ~4000px inspect
 preview and a 1-pass full-resolution preview. Export now retains the selected
 file’s last full-resolution three-pass decode so a settings-only re-export
-does not repeat unpack and demosaic. Automated viewport and three-frame RAW
-roll checks are now recorded. Remaining first-release work includes a known
-B&W CPU/GPU preview discrepancy, hands-on representative-image and roll/stack
-checks, Apple notarization, and independent-Mac installation. See the
+does not repeat unpack and demosaic. Automated viewport, three-frame RAW roll, and B&W preview parity checks are
+now recorded. Remaining first-release work includes hands-on
+representative-image and roll/stack checks, Apple notarization, and
+independent-Mac installation. See the
 [current development status](docs/development/native-macos.md) for working-tree
 evidence; the Beta 1 verification below describes that earlier candidate.
 

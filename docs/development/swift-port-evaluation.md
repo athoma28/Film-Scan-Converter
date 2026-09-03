@@ -53,9 +53,9 @@ shared preview/export entry point with workflow-level tests.
 Dust-mask detection exists, but Telea inpainting and applied dust removal do
 not. Self-contained app/ZIP packaging is complete; Developer ID notarization
 and Gatekeeper/clean-machine validation remain. Remaining product work includes
-the known B&W CPU/GPU preview discrepancy, hands-on representative-image and
-roll/stack checks, and distribution proof. Automated viewport and three-frame
-RAW roll evidence is recorded in the status page. Roadmap item 5
+hands-on representative-image and roll/stack checks, and distribution proof.
+Automated viewport, three-frame RAW roll, and B&W preview parity evidence is
+recorded in the status page. Roadmap item 5
 (open/inspect/re-export feel) is implemented:
 the selected file's last full-resolution three-pass decode is retained for
 settings-only re-export.
