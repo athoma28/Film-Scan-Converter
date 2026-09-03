@@ -14,9 +14,10 @@ capabilities and limitations, use
   Swift.
 - Keep preview and export on the same adjustment and geometry semantics while
   preserving their explicit image-source boundary: bounded thumbnails for
-  browsing, independent full-resolution decode for export. The Core Image
-  renderer accelerates interaction, while CPU processing remains the export
-  reference.
+  initial browsing and lookahead, selected-file full-sensor 1-pass preview,
+  and a separate three-pass decode for export. The selected RAW may retain its
+  last export decode for settings-only re-export. The Core Image renderer
+  accelerates interaction, while CPU processing remains the export reference.
 - Use exact frozen fixtures where deterministic Python/OpenCV equivalence is a
   product requirement. Use documented tolerances only for genuinely different
   decoder or interpolation implementations.
@@ -51,8 +52,11 @@ shared preview/export entry point with workflow-level tests.
 
 Dust-mask detection exists, but Telea inpainting and applied dust removal do
 not. Self-contained app/ZIP packaging is complete; Developer ID notarization
-and Gatekeeper/clean-machine validation remain. Remaining product work is a representative-image and real-roll check, then
-distribution proof. Roadmap item 5 (open/inspect/re-export feel) is implemented:
+and Gatekeeper/clean-machine validation remain. Remaining product work includes
+the known B&W CPU/GPU preview discrepancy, hands-on representative-image and
+roll/stack checks, and distribution proof. Automated viewport and three-frame
+RAW roll evidence is recorded in the status page. Roadmap item 5
+(open/inspect/re-export feel) is implemented:
 the selected file's last full-resolution three-pass decode is retained for
 settings-only re-export.
 The authoritative status page owns any changes to that boundary.

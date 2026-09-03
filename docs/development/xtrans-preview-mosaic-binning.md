@@ -29,7 +29,9 @@ is:
    same-filter photosites, so the 6×6 (or 2×2) pattern is unchanged.
 3. Run the **1-pass** interpolator on that smaller mosaic.
 
-The interpolator therefore never sees 40 million photosites for a preview.
+For a bounded draft, inspect, or lookahead preview, the interpolator therefore
+sees only the reduced mosaic. The selected-file full preview uses all sensor
+photosites.
 That is why a 640px draft can appear in ~0.3s and a ~4000px inspect preview
 in ~4s, instead of waiting for a full-sensor 1-pass (~12s) or three-pass
 export.
@@ -103,12 +105,15 @@ scale:
 | Neighbour lookahead | 3200 | ~2580px, ~2.4s | Next unseen files while you stay on the current one |
 | Inspect | 4000 | ~3876px, ~4s | Selected-file zoom/pan within ~5s. Same image as a 5000 bound |
 | Full preview | 100000 (no shrink, 1-pass) | 7752×5184, ~12s after inspect | Lazy; not export |
-| Export | `full_resolution`, 3-pass | 7752×5184, slower | Discarded after write |
+| Export | `full_resolution`, 3-pass | 7752×5184 | Selected file's last decode retained for settings-only re-export; dropped on selection change |
 
 Inspect is 4000 rather than 3200 because 3200 is only 2580px and 2.4s;
 4000 uses the rest of a ~5s budget to reach half-res. 5000 would not buy
 more pixels. Lookahead stays at 3200 so neighbour work does not wait on
 the selected-file inspect pass.
+
+A selected file already cached at the 3200px lookahead bound skips the inspect
+decode and upgrades directly to the full preview.
 
 Switching away demotes a full preview back to inspect size by resizing the
 already-decoded buffer (no second RAW decode). If the cache is tight,

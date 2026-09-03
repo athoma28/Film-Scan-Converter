@@ -7,12 +7,13 @@ blocks a high-quality public release, and what is being worked on now. Use the
 [40 MP benchmark](../performance/40mp-export.md) for committed measurements.
 The audited
 [full-resolution performance guide](../../PERFORMANCE-OPPORTUNITIES-2026-07-27.md)
-records the completed full-resolution export-latency evidence. Remaining
-inspect/re-export work lives on the
-[native product roadmap](../improvements/MacOS-Native-Roadmap.md): the
-selected-file three-pass decode is now retained for settings-only re-export.
+records the completed full-resolution export-latency evidence. The subsequent
+open/inspect/re-export work is also complete: staged RAW previews and
+selected-file three-pass decode retention are implemented. The
+[native product roadmap](../improvements/MacOS-Native-Roadmap.md) tracks the
+remaining preview-correctness, hands-on workflow, and distribution gates.
 
-**Last verified:** 2026-08-30 against the current working tree. Some
+**Last verified:** 2026-09-02 against the current working tree. Some
 representative-RAW tests require the untracked local `sample-raw/` corpus and
 are explicitly disabled when it is absent.
 
@@ -60,8 +61,8 @@ Film & Conversion panel now presents
 Natural, Darkroom, Classic, and Bypass as the visible conversion intents, with
 stock and paper choices progressively disclosed inside the relevant intent.
 
-A 2026-07-27 audit has reopened one bounded performance slice before broader
-roll-workflow expansion. Camera-scan stage hashes and the repeated determinism
+A 2026-07-27 audit reopened a bounded performance slice, now complete.
+Camera-scan stage hashes and the repeated determinism
 mode landed on 2026-07-28 with a passing stock-build baseline, and the
 full-resolution X-Trans camera-scan byte-identity fixture followed the same
 day. The 2026-07-30 forced-OpenMP sweep then isolated tiled X-Trans demosaic as
@@ -99,7 +100,10 @@ embedded JPEG, paints a colour-accurate ~640px draft, upgrades the selected
 file to a ~4000px inspect preview then a 1-pass full-sensor preview, and
 prefetches the next three unseen files at 3200px. **Load RAW Preview** remains
 a skip-ahead to that selected-file 1-pass decode. Switching away demotes the
-unused full-res buffer to inspect size.
+unused full-res buffer to inspect size. Selecting a cached 3200px lookahead
+preview skips the inspect decode and proceeds directly to the full-sensor
+1-pass preview. Embedded JPEGs still supply sidebar thumbnails and repeated
+capture detection; they are not the main RAW canvas source.
 
 Roadmap item 5 slice 3 landed on 2026-08-30: export retains the selected
 file's last full-resolution three-pass decode so a settings-only re-export
@@ -107,11 +111,28 @@ skips unpack and demosaic. The buffer is dropped on selection change. Other
 files still decode independently, and export pixels stay on the frozen
 camera-scan oracle.
 
-The next product work is the representative-image viewport check and a real
-roll workflow, then distribution proof. Do not begin a three-pass Metal port, a
-new X-Trans interpolator, writer replacement, or stock-look calibration.
+The 2026-09-02 viewport integration pass found and fixed two composition jumps:
+Original comparison discarded committed crop/perspective/straightening, and
+RAW resolution upgrades retained magnification but lost the panned position.
+Comparison now uses the same geometry as corrected preview; perspective and
+film-base editors explicitly request the whole oriented source. Native AppKit
+tests exercise the real scroll view across draft, inspect, and full-resolution
+upgrades, Fit, resize, and pinch notifications. Deferred zoom reports also keep
+their matching Fit state. Editor canvas changes clear stale dust overlays and
+use the displayed geometry for newly detected masks.
 
-The current measurement evidence is:
+The next product work is the remaining hands-on representative-image viewport
+and real-roll check, plus the B&W preview-parity discrepancy recorded below,
+then distribution proof. The automated commands and
+coverage are in [the test guide](../../tests/README.md#native-viewport-and-roll-workflow).
+Do not begin a three-pass Metal port, a new X-Trans interpolator, writer
+replacement, or stock-look calibration.
+
+The following evidence includes historical baselines and later repairs, not
+one measurement of today's whole app. In particular, the July cache-depth
+measurements predate staged demosaiced previews and selected-file decode
+retention. See the dated [benchmark notes](../performance/40mp-export.md) for
+each workload and source contract:
 
 - colour-accurate ~640px RAW drafts that upgrade the selected file to a ~4000px
   preview in about 4s, then a 1-pass full-resolution preview, plus
@@ -187,7 +208,8 @@ The current measurement evidence is:
   medians (tone 2.182→0.954 s, protected color 2.266→0.993 s, dye mixing
   1.885→0.944 s, combined 2.749→1.269 s) on a run whose decode had slowed to
   21.5–22.5 s from the 14.3–14.9 s baseline, so those latencies are directional
-  while the peak-footprint and byte-identity results are machine-independent;
+  while the footprint and byte-identity evidence applies to the measured local
+  workload, not all hardware;
 - parallel full-resolution power-law correction reduced that measured stage
   from 3.685 seconds to a 0.926-second median with identical TIFF bytes and
   SHA-256, reducing median total export to 24.874 seconds.
@@ -244,13 +266,11 @@ current camera-scan decode contract is not comparable with the faster
 RawPy-compatibility profile because the stage sets and demosaic algorithms
 differ.
 
-The original baseline cycle remains closed; the audit created a narrower
-evidence-driven follow-up because it demonstrated a potentially user-visible
-decode improvement and exposed a determinism failure. The still-preview
-zoom/pan surface is implemented in the current working tree and still needs a
-direct representative-image workflow check. Preserve final-quality demosaic,
-output contracts, and the one-full-resolution-RAW-at-a-time bound throughout
-the follow-up.
+Both the original baseline cycle and the subsequent bounded performance work
+are closed. The still-preview zoom/pan surface is implemented and still needs
+a direct representative-image workflow check. Preserve final-quality demosaic,
+output contracts, and the one-full-resolution-RAW-decode-at-a-time bound in
+future work.
 
 ## Implemented Product Scope
 
@@ -314,8 +334,17 @@ Implemented in the current working tree:
 - native Undo/Redo with exact parameter snapshots, one history step per
   continuous gesture, and safe per-file boundaries.
 
+The 2026-09-02 automated pass covers actual scroll-view remapping and
+comparison with automatic crop, manual crop, perspective, straightening, and
+combined geometry. It verifies exact corrected-pixel restoration, temporary
+source/canvas editing, aligned dust-mask dimensions, and editor-state reset on
+selection load. These checks do not certify gesture feel or photographic
+judgment in the packaged app.
+
 Still required before calling the application high quality:
 
+- resolve the B&W legacy gamma/highlights CPU/GPU discrepancy in the
+  [verification summary](#verification-summary), then rerun the comparator;
 - complete a direct representative-image workflow check for focus, grain,
   dust, crop-edge, overlay-drag, comparison, and clipping-diagnostic behavior;
 - preserve the named preview/export split: mosaic-binned 1-pass browsing versus
@@ -333,6 +362,19 @@ and import-ordered selection/export in a realistic roll.
 
 Sidebar reordering, ratings, or a larger queue become requirements only when
 this workflow demonstrates a need.
+
+On 2026-09-02, the supplemental release-mode `RepresentativeRollWorkflowTests`
+passed on macOS 15.7.7 using local Fuji 400 frames `DSCF2833`, `DSCF2851`, and
+`DSCF2856`. The app-model workflow applied an anchor look to two selected
+frames, preserved the third frame's crop/orientation/base measurement, left the
+unselected frame unchanged, undid/redid an exception, and compared the selected
+full-resolution preview without a composition jump. It then exported two
+import-ordered TIFFs, changed settings and re-exported using the retained
+three-pass decode, and restored the saved exception in a new app model. All
+three TIFFs reopened, the three source SHA-256 hashes were unchanged, and all
+temporary outputs were removed. There were two authoritative decodes and one
+cache hit. This is automated workflow evidence; a hands-on roll/stack usability
+pass and independent-viewer assessment remain pending.
 
 ### 4. Representative Packaged-App And Output Correctness — Beta Contract Closed
 
@@ -368,6 +410,9 @@ fail-closed `public` path. The following remain for the notarized build:
 
 ## Known Limitations
 
+- The CPU/Metal comparator has a known B&W preview discrepancy: legacy gamma
+  `-35` with highlights `-45` reaches 6/255 instead of the required 2/255
+  maximum channel difference. Export continues to use the CPU authority.
 - Telea dust inpainting and applying dust removal to preview/export are not
   implemented natively.
 - Sidebar order remains import order. Manual reordering is unavailable and is
@@ -415,10 +460,13 @@ fail-closed `public` path. The following remain for the notarized build:
   fitter produces a candidate plus fit/held-out/identity-baseline metrics while
   preventing frame leakage across the validation split. The repository does
   not contain the paired measured corpus needed to validate or ship a built-in
-  capture/stock matrix. Reference-pair alignment and target-log-exposure
-  extraction, fitted per-stock curves, residual LUTs, and halation compensation
-  are not implemented. This calibration track is intentionally parked until the
-  project owner explicitly asks to resume it.
+  capture correction matrix for this fitter. Preparing aligned density samples
+  and target log exposures remains upstream work. The separate reference
+  calibrator already aligns RAF/JPEG/XMP pairs and fits per-stock curves, and
+  Darkroom already includes stock dye-unmix matrices with recorded provenance;
+  neither validates a new capture correction matrix. Residual LUTs and halation
+  compensation are not implemented. Further calibration work is parked until
+  the project owner explicitly asks to resume it.
 - Processed-RGB DNG does not claim untouched sensor-RAW semantics.
 - Standard images with alpha are rejected because four-channel processing has
   not been defined.
@@ -428,11 +476,19 @@ fail-closed `public` path. The following remain for the notarized build:
 
 ## Verification Summary
 
-- 527 native tests across 39 Swift test files in the current working tree, including
+- On 2026-09-02 the release suite reported **531 tests passed** in 243.411
+  seconds with `RUN_REPRESENTATIVE_ROLL_TESTS=1`, including the local RAW
+  workflow above. Strict native formatting and `git diff --check` also passed.
+  The run used normal macOS graphics/window access: the restricted-sandbox
+  attempt could not render several Core Image thumbnails and stopped in a
+  native layout test. Those tests passed in the completed macOS run. Other
+  opt-in performance benchmarks remained disabled.
+- That recorded run covered 531 native tests across 41 Swift test files, including
   import-order previous/next, sidebar export-state, repeated-scan detection,
   aligned stacking, wavefront-vs-serial X-Trans identity,
   parallel-vs-serial Fuji unpack identity, and selected-file three-pass
-  export-decode retention.
+  export-decode retention, native scroll-view upgrades, geometric Original
+  comparison, and the opt-in representative RAW roll workflow.
 - The camera-scan byte-identity fixture
   (`camera_scan_decode_reference.json` plus `CameraScanByteIdentityTests`)
   pins the full-resolution X-Trans decode of `fuji400-fresh/DSCF2833.RAF` to
@@ -440,8 +496,21 @@ fail-closed `public` path. The following remain for the notarized build:
   metadata, all five decode-stage digests, and the Swift pixel hash must
   reproduce exactly.
 - Frozen Python-generated fixtures cover shared numerical behavior.
-- Production CPU/GPU correction comparisons cover 2,725 channel comparisons
-  with zero failures and a maximum difference of 2/255.
+- The 2026-09-02 release CPU/Metal comparator ran 2,725 image/parameter
+  comparisons with zero render failures. Color-negative and slide paths stayed
+  within 2/255, but the B&W gradient with legacy gamma `-35` and highlights
+  `-45` reached 6/255 (mean pixel difference 0.18). This exceeds the documented
+  2/255 tolerance and remains a processing follow-up; the viewport changes do
+  not modify the engine, Metal kernel, or comparator. Do not treat the older
+  blanket 2/255 claim as current evidence.
+- The documentation audit independently rebuilt and reran that release
+  comparator on 2026-09-02 with Metal available: 2,725 completed comparisons,
+  zero render failures, and the same 6/255 B&W result. Source inventory also
+  confirmed 531 `@Test` declarations in 41 test files; the full regression suite
+  was not rerun for this documentation-only audit. The comparator is diagnostic:
+  it returns a successful exit even for tolerance warnings, and the restricted
+  run printed `PASS` despite zero comparisons and 2,725 render failures. Check
+  graphics availability and counters as well as the maximum difference.
 - A separate directed dye-crossover fixture verifies the new linear matrix
   against the production Metal renderer within the same 2/255 tolerance.
 - Synthetic calibration tests recover a known density-space affine transform,
@@ -467,8 +536,11 @@ fail-closed `public` path. The following remain for the notarized build:
 - Local packaging validates the assembled app and extracted ZIP copy, bundled
   license/notice/manifest resources, dependency closure, signature, and
   checksum-oriented archive contract.
-- The GitHub workflow currently runs the Swift test suite and builds the app on
-  macOS; it does not yet prove a notarized artifact or committed real RAW corpus.
+- The native GitHub workflow runs tests with coverage and builds the app on
+  macOS 14 and 15. The macOS 15 lane also checks strict Swift formatting and
+  assembles/validates an unsigned beta archive. It does not run the standalone
+  preview comparator or opt-in RAW roll workflow, and does not prove a
+  notarized artifact or committed real RAW corpus.
 
 ## Development Rules
 
@@ -535,7 +607,7 @@ measurement contract.
   performance acceptance evidence.
 - [Full-resolution performance guide](../../PERFORMANCE-OPPORTUNITIES-2026-07-27.md):
   closed export-latency evidence, rejected shortcuts, and the completed
-  developer handoff. Next inspect/re-export work lives on the roadmap.
+  developer handoff. Current product priority lives on the roadmap.
 - [Legacy Python](../legacy-python.md): maintenance boundary and retirement
   gates.
 - [Film-processing research](../film-processing-research.md): scientific and

@@ -171,6 +171,7 @@ final class AppModel: ObservableObject {
   private var previewSource: UInt16Image?
   private var previewRenderer: StillPreviewRenderer?
   private var isPreviewingUncroppedCanvas = false
+  private var isPreviewingSourceGeometry = false
   private var presetRollbacks: [String: CorrectionSettings] = [:]
   private var appliedPresetNames: [String: String] = [:]
   private var editHistories: [String: EditHistory<EditingSnapshot>] = [:]
@@ -596,6 +597,8 @@ final class AppModel: ObservableObject {
 
   func loadSelection() {
     endEditingGesture()
+    isPreviewingUncroppedCanvas = false
+    isPreviewingSourceGeometry = false
     retainedExportDecode.dropIfNotSelected(selection.map(settingsKey))
     refreshHistoryAvailability()
     scanStackPreviewGeneration += 1
@@ -1964,7 +1967,7 @@ final class AppModel: ObservableObject {
     isDustDetectionRunning = true
     dustStatus = "Detecting dust…"
     let selectedURL = selection
-    let displayParameters = parameters
+    let displayParameters = previewDisplayParameters
     dustDetectionTask = Task { [weak self] in
       guard let self else { return }
       let mask = await Task.detached(priority: .userInitiated) {
@@ -2111,12 +2114,30 @@ final class AppModel: ObservableObject {
   func beginManualCropEditing() {
     guard !isPreviewingUncroppedCanvas else { return }
     isPreviewingUncroppedCanvas = true
+    resetDustState(cancelTask: true)
     scheduleRender(immediate: true)
   }
 
   func endManualCropEditing() {
     guard isPreviewingUncroppedCanvas else { return }
     isPreviewingUncroppedCanvas = false
+    resetDustState(cancelTask: true)
+    scheduleRender(immediate: true)
+  }
+
+  /// Perspective handles and film-base sampling use the oriented source scan.
+  /// Ordinary Original comparison keeps all committed geometry instead.
+  func beginSourceGeometryEditing() {
+    guard !isPreviewingSourceGeometry else { return }
+    isPreviewingSourceGeometry = true
+    resetDustState(cancelTask: true)
+    scheduleRender(immediate: true)
+  }
+
+  func endSourceGeometryEditing() {
+    guard isPreviewingSourceGeometry else { return }
+    isPreviewingSourceGeometry = false
+    resetDustState(cancelTask: true)
     scheduleRender(immediate: true)
   }
 
@@ -3703,6 +3724,19 @@ final class AppModel: ObservableObject {
     }
   }
 
+  private var previewDisplayParameters: ProcessingParameters {
+    var displayParameters = parameters
+    if isPreviewingSourceGeometry {
+      displayParameters.cropRect = nil
+      displayParameters.perspectiveCrop = nil
+      displayParameters.straightenAngle = 0
+      displayParameters.manualCrop = nil
+    } else if isPreviewingUncroppedCanvas {
+      displayParameters.manualCrop = nil
+    }
+    return displayParameters
+  }
+
   private func scheduleRender(immediate: Bool = false) {
     guard let selection, let previewSource else {
       return
@@ -3710,15 +3744,11 @@ final class AppModel: ObservableObject {
 
     let previousHadPending = pendingRender != nil
     let ff = preparedFlatField(for: previewSource)
-    var displayParameters = parameters
-    if isPreviewingUncroppedCanvas {
-      displayParameters.manualCrop = nil
-    }
     pendingRender = PreviewRenderRequest(
       selection: selection,
       source: previewSource,
       renderer: previewRenderer,
-      parameters: displayParameters,
+      parameters: previewDisplayParameters,
       showOriginal: showOriginal,
       submitTime: Date(),
       flatField: ff
@@ -3841,17 +3871,15 @@ final class AppModel: ObservableObject {
             statistics: StillPreviewRenderer.statistics(for: rendered) ?? .empty
           )
         }
-        let rendered =
-          request.showOriginal
-          ? request.source.rotated(
-            quarterTurns: request.parameters.rotation,
-            flipHorizontally: request.parameters.flip
-          )
-          : FilmProcessing.correctedPreview(
-            image: request.source,
-            parameters: request.parameters,
-            flatField: request.flatField
-          )
+        var renderParameters = request.parameters
+        if request.showOriginal {
+          renderParameters.filmType = .cropOnly
+        }
+        let rendered = FilmProcessing.correctedPreview(
+          image: request.source,
+          parameters: renderParameters,
+          flatField: request.flatField
+        )
         guard let preview = rendered.makePreviewCGImage() else {
           return nil
         }
@@ -3881,12 +3909,8 @@ final class AppModel: ObservableObject {
         guard generation == renderLoopGeneration else { break }
         continue
       }
-      var expectedDisplayParameters = parameters
-      if isPreviewingUncroppedCanvas {
-        expectedDisplayParameters.manualCrop = nil
-      }
       guard selection == request.selection,
-        expectedDisplayParameters == request.parameters,
+        previewDisplayParameters == request.parameters,
         showOriginal == request.showOriginal,
         let result
       else {

@@ -53,11 +53,13 @@ preview without a full RAW decode:
 | DSCF0729.RAF | 4416 × 2944 | ~67 ms | ~15× faster |
 
 The JPEG is at the camera's native embedded resolution (4416 × 2944 for X-T5),
-which is higher than the half-res LibRaw decode (2592 × 3876). The current app
-extracts and downsizes this embedded preview directly to a 1000px display
-source, builds a separate 256px analysis source, and keeps that preview for
-browsing. It does not start a background authoritative replacement. Export
-independently decodes the full-resolution RAW with the camera-scan profile.
+which is higher than the half-res LibRaw decode (2592 × 3876). These timings
+describe the historical thumbnail path. The current main RAW canvas uses a
+~640px demosaiced draft, a ~4000px inspect preview, and a selected-file
+full-sensor 1-pass preview, with a separate 256px analysis source. The sidebar
+still extracts embedded JPEGs at up to 192px. Export uses an independent
+three-pass camera-scan decode and retains the selected file's last decode for
+settings-only re-export. See [Native macOS Development](native-macos.md).
 
 ## Method
 

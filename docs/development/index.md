@@ -11,17 +11,20 @@ The [native product roadmap](../improvements/MacOS-Native-Roadmap.md) is the
 single ordered plan. Selected-file three-pass decode retention for
 settings-only re-export, mosaic-binned RAW browsing, and parallel Fuji unpack
 are complete. The remaining first-release work is a real-roll and
-representative-image check, then distribution proof. The plan separates
-work required before the first public release from evidence-driven
-post-release candidates and explicitly unplanned ideas.
+representative-image check, resolution of the known B&W CPU/GPU preview
+discrepancy, and distribution proof. Automated viewport and three-frame RAW
+roll checks are recorded; hands-on photographic validation remains open. The
+plan separates work required before the first public release from
+evidence-driven post-release candidates and explicitly unplanned ideas.
 
 The [film-processing research](../film-processing-research.md) remains parked
 reference material. The opt-in
 [density-matrix calibration contract](density-matrix-calibration.md) and
-[reference negative calibrator](reference-negative-calibration.md) preserve the
-repeatable offline fitting and held-out gates used by current profiles. Named
-stock profiles are still evidence-driven rather than an automatic consequence
-of adding a stock folder; residual LUTs and ML work are not active priorities.
+[reference negative calibrator](reference-negative-calibration.md) document
+separate workflows: synthetic/held-out capture-matrix fitting and the paired
+reference-curve fits behind existing Natural profiles. Further fitting is
+parked; adding a stock folder does not authorize new named profiles. Residual
+LUTs and ML work are also not active priorities.
 
 The [native RAW decode and quality benchmark](native-raw-benchmark.md) records
 the eight-file `rawPyCompatibility` decode snapshot. The local regression
@@ -38,10 +41,13 @@ and 5000px can be the same image and 2400px often lands near 1900px. See
 [X-Trans preview mosaic binning](xtrans-preview-mosaic-binning.md).
 
 The `FilmScanPreviewComparator` tool
-(`swift run --package-path native/FilmScanEngine FilmScanPreviewComparator`)
+(`swift run -c release --package-path native/FilmScanEngine FilmScanPreviewComparator`)
 supports visual review of GPU and CPU rendering. The current automated
-parameter grids perform 2,725 channel comparisons within the documented 2/255
-tolerance.
+parameter grids perform 2,725 image/parameter comparisons. The 2026-09-02 run
+reported no render failures, but one B&W combination exceeded the 2/255
+channel tolerance (6/255 maximum). See the status page's
+[verification summary](native-macos.md#verification-summary) for the case and
+the distinction between regression-suite success and comparator results.
 
 A [Swift port evaluation](swift-port-evaluation.md) records an earlier
 architecture review. Treat it as historical evidence rather than a checklist.

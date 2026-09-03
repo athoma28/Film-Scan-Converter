@@ -50,7 +50,11 @@ The native application is the primary product. It provides:
    the toolbar skips ahead to the selected-file 1-pass decode. Exporting the
    selected RAW keeps its last three-pass decode, so changing settings and
    exporting again skips unpack and demosaic. Later preview
-   sharpening pops in without naming the current decode size.
+   sharpening keeps the same viewed region without naming the current decode
+   size. The toolbar's **Original** comparison preserves crop, perspective,
+   straightening, rotation, and flip so the composition stays aligned. The
+   perspective and film-base editors temporarily show the whole oriented scan
+   to make their handles and sampling regions accessible.
    Use a two-finger trackpad gesture or mouse wheel to pan, pinch to zoom, or use
    the toolbar's minus/plus buttons and Fit/100% menu. Command-0 fits the image,
    Command-1 shows one preview pixel per point, and Command-plus/minus changes

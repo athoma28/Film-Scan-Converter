@@ -16,9 +16,11 @@ corrected_density = matrix * measured_density + offset
 log_exposure = stock_slope * corrected_density + stock_offset
 ```
 
-This is calibration infrastructure, not a library of calibrated film stocks.
-No named stock or capture matrix is built in until measured reference pairs
-pass held-out validation.
+This fitter does not supply a validated built-in capture correction matrix;
+that requires measured reference pairs and held-out validation. The app already
+ships separate Natural reference curves and Darkroom stock dye-unmix matrices.
+Those catalogs have their own provenance and are not outputs of this affine
+capture-profile fitter.
 
 ## Input contract
 
