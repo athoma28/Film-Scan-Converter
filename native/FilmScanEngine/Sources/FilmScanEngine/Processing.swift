@@ -210,12 +210,14 @@ public enum FilmProcessing {
           highlights: parameters.highlights
         )
         : working.pixels.map(Double.init)
-      return UInt16Image(
+      var output = UInt16Image(
         width: working.width,
         height: working.height,
         channels: channels,
         pixels: values.map { UInt16(min(max($0, 0), 65535)) }
       )
+      preserveSensorBlack(source: sensorSource, output: &output, parameters: parameters)
+      return output
     }
 
     precondition(channels == 3, "Correction processing requires 1- or 3-channel images")
@@ -687,8 +689,8 @@ public enum FilmProcessing {
     guard
       parameters.filmType == .colourNegative
         || parameters.filmType == .blackAndWhiteNegative,
-      source.channels == 3,
-      output.channels == 3,
+      source.channels == 1 || source.channels == 3,
+      output.channels == 1 || output.channels == 3,
       source.width == output.width,
       source.height == output.height
     else {

@@ -14,12 +14,12 @@ completed full-resolution export-latency slice. The subsequent bounded
 open/inspect/re-export slice is also complete (item 5 below).
 Processing research is background material, not a competing delivery plan.
 
-**Working-tree review: 2026-09-02.** Viewport integration and the automated
-three-frame RAW roll workflow have passed their recorded checks. Remaining
-first-release work is to resolve the B&W CPU/GPU preview discrepancy, perform
-hands-on viewport/roll/stack and independent-viewer checks, and complete
-notarized distribution proof. Completed items below preserve their original
-numbers for evidence links; they are not tasks to restart.
+**Working-tree review: 2026-09-02.** Viewport integration, automated geometry
+checks, the automated three-frame RAW roll workflow, and B&W preview parity
+have passed their recorded checks. Remaining first-release work is hands-on
+viewport/roll/stack and independent-viewer checks, and notarized distribution
+proof. Completed items below preserve their original numbers for evidence links;
+they are not tasks to restart.
 
 ## Current Product Direction
 
@@ -207,18 +207,19 @@ TIFFs, and the ten-job app path plus active-decode cancellation. Every output
 scheduled for cleanup was removed, the engine's post-release footprint stayed
 within 45.5–53.6 MB with a 686.8 MB peak, and cancellation left no output.
 
-### 2. Make The Still Preview A Reliable Judging Surface — Viewport Implemented; Parity Fix And Direct Check Pending
+### 2. Make The Still Preview A Reliable Judging Surface — Viewport And Preview Parity Implemented; Direct Check Pending
 
 The 2026-09-02 automated app/viewport pass corrected composition jumps during
 Original comparison with geometry edits and draft/inspect/full-resolution
 upgrades. Native scroll-view and app-model regression tests now cover those
-transitions. The hands-on photographic judgment and gesture check remains.
-The same verification pass found a B&W preview/CPU comparison above the 2/255
-tolerance under combined legacy gamma/highlight adjustment. Resolve that
-bounded discrepancy before closing this judging-surface item; see the native
-status page for the exact case. The comparator also needs to fail explicitly
-when rendering is unavailable or tolerance is exceeded; it currently exits
-successfully and can print `PASS` with zero completed comparisons.
+transitions. The B&W CPU/GPU preview discrepancy under combined legacy
+gamma/highlights was resolved by extending near-zero holder pixel neutralization
+to single-channel B&W negatives on the CPU path. The release comparator verified
+all 2,725 parameter cases within 2/255 (B&W max diff 1/255, colourNegative max 2/255,
+slide max 2/255; zero render failures) and now fails explicitly with non-zero
+exit if Metal is unavailable, comparisons count is zero, render failures occur,
+or tolerance is exceeded. The hands-on photographic judgment and gesture check
+remains.
 
 Zoom and pan are implemented. A photographer must
 be able to inspect focus, grain, dust, crop edges, and fine tonal transitions,
@@ -428,8 +429,9 @@ After the editing and output contracts stabilize:
 1. Closed: the measured RAW-threading and adjusted-correction follow-up
    preserves deterministic final-quality pixels, bounded physical footprint,
    cancellation, cleanup, and packaged dependency closure.
-2. Viewport implementation and automated geometry checks are complete; the B&W
-   preview-parity fix and direct photographic inspection remain open.
+2. Viewport implementation, preview parity within 2/255 (2,725 cases, zero
+   render failures), and automated geometry checks are complete; direct
+   photographic inspection in the packaged app remains open.
 3. Closed: editing-state changes have reliable per-file undo/redo with
    gesture coalescing and transient relaunch semantics.
 4. The automated three-frame roll check is recorded; hands-on selected/all look

@@ -23,9 +23,9 @@ implemented. Camera RAW browsing now demosaics a colour-accurate draft, then
 upgrades the selected file to a ~4000px preview and a 1-pass
 full-resolution preview while the next unseen files prefetch at 3200px. Export
 retains the selected file's last three-pass decode for settings-only re-export.
-The automated viewport and three-frame RAW roll checks are recorded. Remaining
-first-release work is the known B&W CPU/GPU preview discrepancy, hands-on
-representative-image and roll/stack checks, and distribution proof.
+The automated viewport and three-frame RAW roll checks and B&W preview parity
+are recorded. Remaining first-release work is hands-on representative-image
+and roll/stack checks, and distribution proof.
 Stock-look learning, corpus preparation,
 named-stock fitting, and ML experiments are explicitly parked until the
 project owner reactivates them. Additional processing or SwiftUI controls

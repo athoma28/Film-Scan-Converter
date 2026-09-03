@@ -1,9 +1,9 @@
 # Real-Time Still Preview Outcome
 
-**Status:** Interactive rendering and viewport implementation are complete.
-The current comparator has a known B&W tolerance failure. The proposed idle
-authoritative CPU replacement was retired; selected-file full-sensor 1-pass
-preview upgrades are implemented separately.
+**Status:** Interactive rendering, viewport implementation, and GPU/CPU
+preview parity within 2/255 are complete across all 2,725 parameter cases.
+The proposed idle authoritative CPU replacement was retired; selected-file
+full-sensor 1-pass preview upgrades are implemented separately.
 
 **Last reviewed:** 2026-09-02 against the working tree and recorded verification.
 
@@ -56,10 +56,12 @@ app-path latency measurements belong in
    inversion, protected tone and color controls, white balance, curves, color
    wheels, orientation, and display conversion on the Core Image/Metal path.
 3. **Visual equivalence coverage.** The 2026-09-02 CPU/Metal run completed
-   2,725 image/parameter comparisons with no render failures. Color-negative
-   and slide results stayed within 2/255; B&W at legacy gamma `-35` and
-   highlights `-45` reached 6/255. The tolerance remains 2/255, so this gate is
-   open; see the [verification summary](native-macos.md#verification-summary).
+   2,725 image/parameter comparisons with no render failures. All cases stayed
+   within the 2/255 tolerance (colourNegative max 2/255, blackAndWhiteNegative
+   max 1/255, slide max 2/255); the previous B&W legacy gamma/highlights
+   discrepancy was resolved by neutralizing zero-light holder pixels on the
+   single-channel CPU path. The comparator also enforces failing process exit
+   if Metal is unavailable, comparisons are missing, or tolerance is exceeded.
 4. **Latency gate.** The deterministic adjustment-heavy 1080×720 release
    benchmark now exercises dye crossover as well as protected color/tone,
    curves, and color wheels. The 2026-07-15 M4 Pro run with crossover active
@@ -100,10 +102,9 @@ profiling exposes a user-visible display-path bottleneck.
 - Add a dedicated late-render regression proving a previous file cannot publish
   after selection changes; generation guards and cancellation already enforce
   the behavior in the app path.
-- Resolve the recorded B&W comparator discrepancy and recheck all 2,725 cases
-  with a working Metal device. The comparator currently reports diagnostics
-  rather than enforcing a failing process exit; a `PASS` line alone is
-  insufficient when comparisons are missing or renders fail.
+- Preview parity is confirmed across all 2,725 cases with zero render failures,
+  and the comparator enforces failing process exit on missing Metal, zero
+  comparisons, render failure, or tolerance violation.
 - Add a UI automation smoke test that drags each adjustment and confirms visible
   updates when reliable macOS app automation is available.
 - Re-run the deterministic renderer and app-path benchmarks after changes to

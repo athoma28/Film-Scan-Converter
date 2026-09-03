@@ -27,10 +27,10 @@ swift run -c release --package-path native/FilmScanEngine FilmScanPreviewCompara
 
 Run this with normal macOS graphics access. Confirm `Metal available: true`,
 2,725 completed comparisons, zero render failures, and maximum channel error
-at most 2/255. The tool currently exits successfully even when it prints a
-tolerance warning or has no successful renders; inspect its counters and
-diagnostics. The recorded B&W gamma/highlights case still exceeds tolerance;
-see the [verification summary](native-macos.md#verification-summary).
+at most 2/255. The tool exits with a non-zero status if Metal is unavailable,
+zero comparisons complete, render failures occur, or tolerance is exceeded.
+All 2,725 parameter cases pass within 2/255; see the
+[verification summary](native-macos.md#verification-summary).
 
 For the opt-in three-frame RAW roll command and corpus requirements, see the
 [test guide](../../tests/README.md#native-viewport-and-roll-workflow).

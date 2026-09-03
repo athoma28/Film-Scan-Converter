@@ -368,11 +368,20 @@ if filmModeStats.isEmpty {
 print()
 
 let tolerance = 2
-if worstMaxDiff <= tolerance {
-  print("PASS: All differences within \(tolerance)-level tolerance.")
+if !hasMetal || totalComparisons == 0 {
+  print(
+    "FAIL: Rendering is unavailable or 0 comparisons completed (Metal: \(hasMetal), count: \(totalComparisons))."
+  )
+  exit(1)
+} else if totalFailures > 0 {
+  print("FAIL: \(totalFailures) render failures occurred during comparison.")
+  exit(1)
+} else if worstMaxDiff <= tolerance {
+  print("PASS: All \(totalComparisons) differences within \(tolerance)-level tolerance.")
   print("GPU preview is visually equivalent to CPU authoritative path.")
+  exit(0)
 } else {
-  print("WARNING: Maximum channel difference \(worstMaxDiff) exceeds \(tolerance)-level tolerance.")
+  print("FAIL: Maximum channel difference \(worstMaxDiff) exceeds \(tolerance)-level tolerance.")
   print()
   print("DIAGNOSTIC: Worst-case pixel-by-pixel breakdown")
   print("----------------------------------------------")
@@ -449,4 +458,5 @@ if worstMaxDiff <= tolerance {
       "Worst pixel [\(worstIdx.offset)]: GPU=(\(gp[o]),\(gp[o+1]),\(gp[o+2])) CPU=(\(cp[o]),\(cp[o+1]),\(cp[o+2])) diff=\(worstIdx.element)"
     )
   }
+  exit(1)
 }

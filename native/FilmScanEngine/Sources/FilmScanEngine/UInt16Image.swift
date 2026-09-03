@@ -32,18 +32,21 @@ public struct UInt16Image: Equatable, Sendable {
 
   mutating func neutralizeInvertedZeroLight(from source: UInt16Image, threshold: UInt16) {
     precondition(
-      width == source.width && height == source.height && channels == source.channels,
-      "Black-mask source must match the output image"
+      width == source.width && height == source.height,
+      "Black-mask source must match the output image dimensions"
     )
+    let srcChannels = source.channels
+    let dstChannels = channels
     for pixelIndex in 0..<(width * height) {
-      let base = pixelIndex * channels
+      let srcBase = pixelIndex * srcChannels
       var sourceMaximum: UInt16 = 0
-      for channel in 0..<channels {
-        sourceMaximum = max(sourceMaximum, source.pixels[base + channel])
+      for channel in 0..<srcChannels {
+        sourceMaximum = max(sourceMaximum, source.pixels[srcBase + channel])
       }
       if sourceMaximum <= threshold {
-        for channel in 0..<channels {
-          pixels[base + channel] = 65535
+        let dstBase = pixelIndex * dstChannels
+        for channel in 0..<dstChannels {
+          pixels[dstBase + channel] = 65535
         }
       }
     }

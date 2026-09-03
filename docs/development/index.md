@@ -44,10 +44,11 @@ The `FilmScanPreviewComparator` tool
 (`swift run -c release --package-path native/FilmScanEngine FilmScanPreviewComparator`)
 supports visual review of GPU and CPU rendering. The current automated
 parameter grids perform 2,725 image/parameter comparisons. The 2026-09-02 run
-reported no render failures, but one B&W combination exceeded the 2/255
-channel tolerance (6/255 maximum). See the status page's
-[verification summary](native-macos.md#verification-summary) for the case and
-the distinction between regression-suite success and comparator results.
+reported zero render failures and all combinations within the 2/255 channel
+tolerance (maximum channel diff: 2/255 colourNegative, 1/255 B&W, 2/255 slide).
+The comparator fails closed with a non-zero exit status if Metal is unavailable,
+comparisons are missing, or tolerance is exceeded. See the status page's
+[verification summary](native-macos.md#verification-summary).
 
 A [Swift port evaluation](swift-port-evaluation.md) records an earlier
 architecture review. Treat it as historical evidence rather than a checklist.
