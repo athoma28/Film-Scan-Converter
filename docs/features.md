@@ -39,7 +39,8 @@ features.
   frames, and currently correct translation only. The canvas upgrades from a
   bounded stack preview to full resolution while you inspect; export still
   rebuilds from the sources. An enabled stack exports once under its first
-  capture's filename and settings.
+  capture's filename and settings. A failed full-resolution upgrade keeps the
+  bounded preview and displays the failure beside the stack controls.
 - A bounded Core Image/Metal correction preview fed by the 16-bit preview
   source, with latest-value-wins scheduling. This GPU path is the primary
   interactive target on supported MacBook Pro hardware; CPU rendering remains
@@ -112,7 +113,9 @@ features.
   active inversion pipeline, with finer slider control around neutral.
 - Smooth shape-preserving overall and per-channel curves plus shadow, midtone,
   and highlight color wheels. Enabling a new curve starts from identity, and
-  curve points remain ordered while editing.
+  curve points remain ordered while editing. B&W offers an overall **Tone**
+  curve in Natural, Classic, and Bypass, with matching preview/export behavior;
+  individual color-channel curves remain available for color film types.
 - Near-zero holder-mask pixels that invert into clipped highlights are rendered
   as neutral white after adjustments in both preview and export.
 - Automatic frame detection plus a built-in four-corner perspective tool:

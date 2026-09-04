@@ -5,6 +5,39 @@ import Testing
 
 @Suite("Film-specific negative processing")
 struct FilmNegativeProcessingTests {
+  @Test("Combined histogram medians match independently sorted channel samples")
+  func combinedHistogramMedians() {
+    for channels in [1, 3] {
+      for width in [3, 4] {
+        let height = 3
+        let pixels: [UInt16] = (0..<(width * height * channels)).map {
+          UInt16(($0 * 9173 + 271) % 65536)
+        }
+        let image = UInt16Image(width: width, height: height, channels: channels, pixels: pixels)
+        for border in [0.0, 25.0, 50.0] {
+          let bx = Int(Double(width) * border / 100)
+          let by = Int(Double(height) * border / 100)
+          let expected = (0..<3).map { channel -> Double in
+            var values: [UInt16] = []
+            if width - bx > bx, height - by > by {
+              for y in by..<(height - by) {
+                for x in bx..<(width - bx) {
+                  values.append(pixels[(y * width + x) * channels + min(channel, channels - 1)])
+                }
+              }
+            }
+            values.sort()
+            guard !values.isEmpty else { return 0 }
+            return (Double(values[(values.count - 1) / 2]) + Double(values[values.count / 2])) / 2
+          }
+          let actual = FilmNegativeProcessing.computeMedians(image: image, borderPercent: border)
+          #expect(
+            actual == BGRChannelValues(blue: expected[0], green: expected[1], red: expected[2]))
+        }
+      }
+    }
+  }
+
   @Test("Rec.2020 working-space matrices round trip linear sRGB")
   func rec2020WorkingSpaceRoundTrip() {
     let source = (red: 0.82, green: 0.31, blue: 0.07)

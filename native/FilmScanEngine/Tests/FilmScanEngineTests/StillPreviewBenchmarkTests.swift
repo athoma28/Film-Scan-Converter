@@ -641,6 +641,49 @@ struct StillPreviewBenchmarkTests {
     )
   }
 
+  @Test("B&W tone curves affect Natural, Classic, and GP3 previews and exports equally")
+  func monochromeCurveParity() throws {
+    let image = Self.createDeterministicImage(width: 128, height: 96)
+    let renderer = try #require(StillPreviewRenderer(image: image))
+    var bypass = FilmNegativeParams.legacyBlackAndWhite
+    bypass.enabled = false
+    for profile in [
+      FilmNegativeParams.blackAndWhite, .legacyBlackAndWhite, .shanghaiGP3Alternate, bypass,
+    ] {
+      var params = ProcessingParameters(
+        filmType: .blackAndWhiteNegative, filmNegativeParams: profile)
+      params.filmNegativeParams.measuredMedians = FilmNegativeProcessing.computeMedians(
+        image: image)
+      let cpuBefore = FilmProcessing.correctedPreview(image: image, parameters: params)
+      let gpuBefore = try #require(renderer.render(parameters: params, showOriginal: false))
+      params.curveEnabled = true
+      params.curveControlPoints = [
+        .init(input: 0, output: 0), .init(input: 0.5, output: 0.1), .init(input: 1, output: 1),
+      ]
+      // A saved color curve must not tint B&W, including after a cached color render.
+      params.redCurveEnabled = true
+      params.redCurveControlPoints = [.init(input: 0, output: 0.2), .init(input: 1, output: 0.8)]
+      var colorParams = params
+      colorParams.filmType = .slide
+      _ = try #require(renderer.render(parameters: colorParams, showOriginal: false))
+      let cpuAfter = FilmProcessing.correctedPreview(image: image, parameters: params)
+      let gpuAfter = try #require(renderer.render(parameters: params, showOriginal: false))
+      let cpuCGImage = try #require(cpuAfter.makePreviewCGImage())
+      let cpuPixels = try #require(rgbaPixels(cpuCGImage))
+      let gpuPixels = try #require(rgbaPixels(gpuAfter))
+      let cpuChanged = cpuBefore != cpuAfter
+      let gpuChanged = rgbaPixels(gpuBefore) != gpuPixels
+      #expect(cpuChanged)
+      #expect(gpuChanged)
+      let maxDiff = zip(cpuPixels, gpuPixels).map { abs(Int($0) - Int($1)) }.max() ?? 0
+      #expect(maxDiff <= 2, "B&W curve mismatch: \(maxDiff)/255 for \(profile.rendering)")
+      for index in stride(from: 0, to: gpuPixels.count, by: 4) {
+        #expect(
+          gpuPixels[index] == gpuPixels[index + 1] && gpuPixels[index] == gpuPixels[index + 2])
+      }
+    }
+  }
+
   private func rgbaPixels(_ image: CGImage) -> [UInt8]? {
     guard let data = image.dataProvider?.data, let pointer = CFDataGetBytePtr(data) else {
       return nil

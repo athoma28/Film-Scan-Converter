@@ -26,6 +26,10 @@ struct IntegratedCurvesView: View {
   @State private var selectedPointIndex: Int? = nil
   @State private var isDraggingPoint = false
 
+  private var availableChannels: [CurveChannel] {
+    model.parameters.filmType.supportsColorCorrections ? CurveChannel.allCases : [.rgb]
+  }
+
   private let pointRadius: CGFloat = 5
   private let selectedPointRadius: CGFloat = 7
 
@@ -85,7 +89,7 @@ struct IntegratedCurvesView: View {
         Spacer()
 
         Menu {
-          ForEach(CurveChannel.allCases) { ch in
+          ForEach(availableChannels) { ch in
             Button {
               resetChannel(ch)
             } label: {
@@ -93,10 +97,7 @@ struct IntegratedCurvesView: View {
             }
           }
           Button(role: .destructive) {
-            resetChannel(.rgb)
-            resetChannel(.red)
-            resetChannel(.green)
-            resetChannel(.blue)
+            for channel in availableChannels { resetChannel(channel) }
             selectedChannel = .rgb
             selectedPointIndex = nil
           } label: {
@@ -114,26 +115,35 @@ struct IntegratedCurvesView: View {
 
       presetButtonsRow
     }
+    .onChange(of: model.parameters.filmType) {
+      if !availableChannels.contains(selectedChannel) {
+        selectedChannel = .rgb
+        selectedPointIndex = nil
+      }
+    }
   }
 
   private var channelPicker: some View {
     HStack(spacing: 0) {
-      ForEach(CurveChannel.allCases) { channel in
+      ForEach(availableChannels) { channel in
         Button {
           selectedChannel = channel
           selectedPointIndex = nil
         } label: {
-          Text(channel.rawValue)
-            .font(.caption)
-            .fontWeight(selectedChannel == channel ? .semibold : .regular)
-            .foregroundStyle(selectedChannel == channel ? .white : .secondary)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 4)
-            .background(
-              selectedChannel == channel
-                ? channel.color.opacity(channel == .rgb ? 0.25 : 0.45)
-                : Color.clear
-            )
+          Text(
+            channel == .rgb && !model.parameters.filmType.supportsColorCorrections
+              ? "Tone" : channel.rawValue
+          )
+          .font(.caption)
+          .fontWeight(selectedChannel == channel ? .semibold : .regular)
+          .foregroundStyle(selectedChannel == channel ? .white : .secondary)
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, 4)
+          .background(
+            selectedChannel == channel
+              ? channel.color.opacity(channel == .rgb ? 0.25 : 0.45)
+              : Color.clear
+          )
         }
         .buttonStyle(.plain)
       }

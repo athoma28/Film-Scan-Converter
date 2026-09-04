@@ -230,72 +230,20 @@ public enum MultiScanStacker {
   ) throws -> MultiScanStackResult {
     guard images.count >= 2 else { throw ScanStackError.insufficientImages }
     let reference = images[0]
-    guard reference.channels == 1 || reference.channels == 3 else {
-      throw ScanStackError.unsupportedChannelCount(reference.channels)
-    }
-    for (index, image) in images.enumerated().dropFirst() {
-      guard image.width == reference.width, image.height == reference.height else {
-        throw ScanStackError.incompatibleDimensions(
-          index: index,
-          expectedWidth: reference.width,
-          expectedHeight: reference.height,
-          actualWidth: image.width,
-          actualHeight: image.height)
-      }
-      guard image.channels == reference.channels else {
-        throw ScanStackError.incompatibleChannels(
-          index: index, expected: reference.channels, actual: image.channels)
-      }
-    }
-
-    let referencePlanes = StackAnalysis.registrationPyramid(for: reference)
-    guard referencePlanes.coarse.textureScore >= 0.08 else {
-      throw ScanStackError.lowTexture(index: 0)
-    }
-
+    let referencePlanes = try StackAnalysis.prepareReference(reference)
     var alignments = [
       ScanStackAlignment(translationX: 0, translationY: 0, confidence: 1, overlap: 1)
     ]
     var exposureOffsetsEV = [0.0]
-    alignments.reserveCapacity(images.count)
-    exposureOffsetsEV.reserveCapacity(images.count)
-
     for index in images.indices.dropFirst() {
-      let candidatePlanes = StackAnalysis.registrationPyramid(for: images[index])
-      guard candidatePlanes.coarse.textureScore >= 0.08 else {
-        throw ScanStackError.lowTexture(index: index)
-      }
-      let alignment = StackAnalysis.registerTranslation(
-        reference: reference,
-        candidate: images[index],
-        referencePlanes: referencePlanes,
-        candidatePlanes: candidatePlanes)
-      guard alignment.confidence >= 0.72, alignment.overlap >= 0.80 else {
-        throw ScanStackError.alignmentFailed(
-          index: index,
-          confidence: alignment.confidence,
-          overlap: alignment.overlap)
-      }
-      alignments.append(alignment)
-      guard
-        let offset = StackAnalysis.exposureOffsetEV(
-          reference: reference,
-          candidate: images[index],
-          alignment: alignment)
-      else {
-        throw ScanStackError.exposureEstimationFailed(index: index)
-      }
-      exposureOffsetsEV.append(offset)
+      let registration = try StackAnalysis.registration(
+        reference: reference, candidate: images[index], index: index,
+        referencePlanes: referencePlanes)
+      alignments.append(registration.alignment)
+      exposureOffsetsEV.append(registration.exposureEV)
     }
 
-    let effectiveMode: ScanStackMode
-    switch mode {
-    case .automatic:
-      let spread = (exposureOffsetsEV.max() ?? 0) - (exposureOffsetsEV.min() ?? 0)
-      effectiveMode = spread >= 0.5 ? .hdr : .noiseReduction
-    case .noiseReduction, .hdr:
-      effectiveMode = mode
-    }
+    let effectiveMode = StackAnalysis.effectiveMode(mode, exposureOffsetsEV: exposureOffsetsEV)
 
     let combined = try StackAnalysis.merge(
       images: images,
@@ -308,6 +256,25 @@ public enum MultiScanStacker {
       alignments: alignments,
       exposureOffsetsEV: exposureOffsetsEV)
   }
+
+  /// Loads captures sequentially and merges their original samples in bounded
+  /// row bands. Temporary storage is removed on success, failure, or cancellation.
+  public static func combine(
+    imageCount: Int,
+    mode: ScanStackMode = .automatic,
+    loadImage: @Sendable (Int) async throws -> UInt16Image
+  ) async throws -> MultiScanStackResult {
+    guard imageCount >= 2 else { throw ScanStackError.insufficientImages }
+    let stored = try StoredScanStack()
+    for index in 0..<imageCount {
+      try Task.checkCancellation()
+      let image = try await loadImage(index)
+      try Task.checkCancellation()
+      try stored.append(image)
+    }
+    return try stored.finish(mode: mode)
+  }
+
 }
 
 private enum StackTransfer {
@@ -337,8 +304,8 @@ private enum StackTransfer {
   }
 }
 
-private enum StackAnalysis {
-  static let mergeParallelPixelThreshold = 1_000_000
+enum StackAnalysis {
+  static let mergeParallelPixelThreshold = 100_000
 
   struct NormalizedPlane: Sendable {
     let width: Int
@@ -364,6 +331,7 @@ private enum StackAnalysis {
 
   struct MergeSource: Sendable {
     let pixels: [UInt16]
+    let rowOffset: Int
     let translationX: Int
     let translationY: Int
     let inverseExposureScale: Double
@@ -381,6 +349,55 @@ private enum StackAnalysis {
       lock.unlock()
       return result
     }
+  }
+
+  static func prepareReference(_ image: UInt16Image) throws -> Pyramid {
+    guard image.channels == 1 || image.channels == 3 else {
+      throw ScanStackError.unsupportedChannelCount(image.channels)
+    }
+    let planes = registrationPyramid(for: image)
+    guard planes.coarse.textureScore >= 0.08 else {
+      throw ScanStackError.lowTexture(index: 0)
+    }
+    return planes
+  }
+
+  static func registration(
+    reference: UInt16Image, candidate: UInt16Image, index: Int,
+    referencePlanes: Pyramid
+  ) throws -> (alignment: ScanStackAlignment, exposureEV: Double) {
+    try Task.checkCancellation()
+    guard candidate.width == reference.width, candidate.height == reference.height else {
+      throw ScanStackError.incompatibleDimensions(
+        index: index, expectedWidth: reference.width, expectedHeight: reference.height,
+        actualWidth: candidate.width, actualHeight: candidate.height)
+    }
+    guard candidate.channels == reference.channels else {
+      throw ScanStackError.incompatibleChannels(
+        index: index, expected: reference.channels, actual: candidate.channels)
+    }
+    let candidatePlanes = registrationPyramid(for: candidate)
+    guard candidatePlanes.coarse.textureScore >= 0.08 else {
+      throw ScanStackError.lowTexture(index: index)
+    }
+    let alignment = registerTranslation(
+      reference: reference, candidate: candidate,
+      referencePlanes: referencePlanes, candidatePlanes: candidatePlanes)
+    guard alignment.confidence >= 0.72, alignment.overlap >= 0.80 else {
+      throw ScanStackError.alignmentFailed(
+        index: index, confidence: alignment.confidence, overlap: alignment.overlap)
+    }
+    guard
+      let exposureEV = exposureOffsetEV(
+        reference: reference, candidate: candidate, alignment: alignment)
+    else { throw ScanStackError.exposureEstimationFailed(index: index) }
+    return (alignment, exposureEV)
+  }
+
+  static func effectiveMode(_ mode: ScanStackMode, exposureOffsetsEV: [Double]) -> ScanStackMode {
+    guard mode == .automatic else { return mode }
+    let spread = (exposureOffsetsEV.max() ?? 0) - (exposureOffsetsEV.min() ?? 0)
+    return spread >= 0.5 ? .hdr : .noiseReduction
   }
 
   static func inset(_ image: UInt16Image, borderPercent: Double) -> UInt16Image {
@@ -881,31 +898,41 @@ private enum StackAnalysis {
     let width = reference.width
     let height = reference.height
     let channels = reference.channels
-    let pixelCount = width * height
     var preparedSources: [MergeSource] = []
     preparedSources.reserveCapacity(images.count)
     for index in images.indices {
       preparedSources.append(
         MergeSource(
           pixels: images[index].pixels,
+          rowOffset: 0,
           translationX: alignments[index].translationX,
           translationY: alignments[index].translationY,
           inverseExposureScale: pow(2, -exposureOffsetsEV[index])
         ))
     }
-    let sources = preparedSources
+    let pixels = try mergeRows(
+      width: width, height: height, channels: channels,
+      rows: 0..<height, sources: preparedSources, mode: mode)
+    return UInt16Image(width: width, height: height, channels: channels, pixels: pixels)
+  }
 
+  static func mergeRows(
+    width: Int, height: Int, channels: Int, rows: Range<Int>,
+    sources: [MergeSource], mode: ScanStackMode
+  ) throws -> [UInt16] {
+    try Task.checkCancellation()
+    let pixelCount = width * rows.count
     // Initialize the transfer tables before workers race to use their lazy
     // storage for the first time.
     _ = StackTransfer.decode(0)
     _ = StackTransfer.encode(0)
 
-    var output = [UInt16](repeating: 0, count: reference.pixels.count)
+    var output = [UInt16](repeating: 0, count: pixelCount * channels)
     let cancellation = MergeCancellationState()
 
     @Sendable func processRow(_ y: Int, output: UnsafeMutablePointer<UInt16>) -> Bool {
       guard !cancellation.shouldStop() else { return false }
-      let destinationRow = y * width * channels
+      let destinationRow = (y - rows.lowerBound) * width * channels
       for x in 0..<width {
         let destinationBase = destinationRow + x * channels
         for channel in 0..<channels {
@@ -933,7 +960,7 @@ private enum StackAnalysis {
             guard sourceX >= 0, sourceX < width, sourceY >= 0, sourceY < height else {
               continue
             }
-            let sourceBase = (sourceY * width + sourceX) * channels
+            let sourceBase = ((sourceY - source.rowOffset) * width + sourceX) * channels
             let original = StackTransfer.decode(source.pixels[sourceBase + channel])
             let normalized = original * source.inverseExposureScale
 
@@ -1028,28 +1055,24 @@ private enum StackAnalysis {
       guard let baseAddress = buffer.baseAddress else { return }
       if pixelCount >= mergeParallelPixelThreshold, workerCount > 1 {
         let sendableBuffer = SendableMutableBuffer(baseAddress)
-        let rowsPerWorker = (height + workerCount - 1) / workerCount
+        let rowsPerWorker = (rows.count + workerCount - 1) / workerCount
         DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
           guard !cancellation.shouldStop() else { return }
-          let start = worker * rowsPerWorker
-          let end = min(start + rowsPerWorker, height)
+          let start = rows.lowerBound + worker * rowsPerWorker
+          let end = min(start + rowsPerWorker, rows.upperBound)
           guard start < end else { return }
           for y in start..<end {
             guard processRow(y, output: sendableBuffer.baseAddress) else { return }
           }
         }
       } else {
-        for y in 0..<height {
+        for y in rows {
           guard processRow(y, output: baseAddress) else { return }
         }
       }
     }
     guard !cancellation.shouldStop() else { throw CancellationError() }
-    return UInt16Image(
-      width: width,
-      height: height,
-      channels: channels,
-      pixels: output)
+    return output
   }
 
   static func robustScalarMean(

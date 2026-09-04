@@ -73,6 +73,8 @@ The native application is the primary product. It provides:
    shows a bounded aligned preview, then upgrades to full resolution while you
    inspect. Export still rebuilds the stack from the sources. An enabled stack
    exports one image using the first capture's filename and edits.
+   If the full-resolution upgrade fails, the bounded preview remains visible
+   and the stack card explains the failure. Toggle the stack off and on to retry.
    Translation-only matching is deliberately conservative, so low-detail or
    ambiguous captures remain separate rather than being merged automatically.
    Clear any loaded flat field before enabling a stack; sensor-coordinate
@@ -123,7 +125,8 @@ The native application is the primary product. It provides:
    Tone and film-profile sliders provide finer movement around their neutral
    values while retaining their full range. Curves start from an identity line,
    render as a smooth shape-preserving curve, and keep adjacent points ordered
-   while dragging.
+   while dragging. B&W uses a single **Tone** curve; individual red, green, and
+   blue curves are available for color film types.
    Grade-page clipping statistics are available from the first displayed render.
    Corrections are saved automatically for that source file and restored the
    next time the same path is imported. Command-Z / Command-Shift-Z undo and

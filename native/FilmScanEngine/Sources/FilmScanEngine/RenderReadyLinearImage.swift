@@ -6,7 +6,7 @@ import Foundation
 /// display or export transform, not this buffer.
 public struct RenderReadyLinearImage: Equatable, Sendable {
   public static let statisticsSampleLimit = 65_536
-  static let parallelPixelThreshold = 1_000_000
+  static let parallelPixelThreshold = 100_000
 
   public let width: Int
   public let height: Int

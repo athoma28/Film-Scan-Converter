@@ -7,13 +7,14 @@ struct ContentView: View {
   @ObservedObject var camera: CameraController
   @State private var dropTargeted = false
   @State private var showLivePreview = false
-  @State private var inspectorPage: InspectorPage = .edit
+  @State private var inspectorPage: InspectorPage = .develop
   @State private var activeOverlay: PreviewOverlay?
   @State private var rebateDragStart: CGPoint?
   @State private var rebateDragEnd: CGPoint?
   @State private var overlayPreviousShowOriginal: Bool?
   @State private var usesPerspectiveParallelAssist = true
   @State private var presetName = ""
+  @State private var isSavingPreset = false
   @State private var profileName = ""
   @State private var previewZoomRequest = PreviewZoomRequest()
   @State private var previewZoomPercent = 100
@@ -32,16 +33,18 @@ struct ContentView: View {
   private var isCropping: Bool { activeOverlay == .crop }
 
   private enum InspectorPage: String, CaseIterable, Identifiable {
-    case edit = "Edit"
-    case grade = "Grade"
+    case develop = "Develop"
+    case geometry = "Geometry"
+    case calibration = "Calibrate"
     case export = "Export"
 
     var id: Self { self }
 
     var systemImage: String {
       switch self {
-      case .edit: "slider.horizontal.3"
-      case .grade: "circle.lefthalf.filled"
+      case .develop: "slider.horizontal.3"
+      case .geometry: "crop.rotate"
+      case .calibration: "viewfinder"
       case .export: "square.and.arrow.up"
       }
     }
@@ -61,24 +64,6 @@ struct ContentView: View {
       case .darkroom: "Darkroom"
       case .classic: "Classic"
       case .bypass: "Bypass"
-      }
-    }
-
-    var subtitle: String {
-      switch self {
-      case .natural: "Reference-based starting point"
-      case .darkroom: "Film and paper character"
-      case .classic: "Original converter response"
-      case .bypass: "Leave the scan uninverted"
-      }
-    }
-
-    var systemImage: String {
-      switch self {
-      case .natural: "camera.filters"
-      case .darkroom: "photo.artframe"
-      case .classic: "clock.arrow.circlepath"
-      case .bypass: "forward.end"
       }
     }
 
@@ -116,7 +101,7 @@ struct ContentView: View {
           // NavigationSplitView adopt the inspector's full fitting height.
           if model.selection == url, let stack = model.selectedDetectedScanStack {
             scanStackProposal(stack)
-              .listRowInsets(EdgeInsets())
+              .listRowInsets(EdgeInsets(top: 2, leading: 6, bottom: 4, trailing: 6))
               .listRowSeparator(.hidden)
           }
         }
@@ -213,42 +198,33 @@ struct ContentView: View {
   }
 
   private func scanStackProposal(_ stack: DetectedScanStack) -> some View {
-    VStack(alignment: .leading, spacing: 8) {
-      HStack(alignment: .firstTextBaseline, spacing: 7) {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(spacing: 6) {
         Image(systemName: "square.stack.3d.up.fill")
           .foregroundStyle(Color.accentColor)
         Text("\(stack.members.count)-capture stack")
-          .font(.headline)
+          .font(.caption.weight(.semibold))
           .lineLimit(1)
-          .minimumScaleFactor(0.85)
-        Spacer(minLength: 6)
         Text("\(Int((stack.confidence * 100).rounded()))%")
           .font(.caption2.monospacedDigit())
           .foregroundStyle(.secondary)
-          .help("Match confidence")
+        Spacer(minLength: 4)
+        Toggle(
+          "Use aligned stack",
+          isOn: Binding(
+            get: { model.isScanStackEnabled(stack) },
+            set: { model.setScanStackEnabled($0, for: stack) }
+          )
+        )
+        .toggleStyle(.switch)
+        .controlSize(.mini)
+        .labelsHidden()
+        .disabled(
+          model.isExporting || model.isAnalyzingScanStacks || model.isLoading
+            || model.flatFieldImage != nil)
       }
 
-      Text(scanStackProposalDescription(stack))
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .lineLimit(3)
-        .fixedSize(horizontal: false, vertical: true)
-
-      if model.isAnalyzingScanStacks {
-        HStack(spacing: 7) {
-          ProgressView()
-            .controlSize(.small)
-            .accessibilityHidden(true)
-          Text("Checking the remaining imports before this group can be enabled...")
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-      }
-
-      VStack(alignment: .leading, spacing: 4) {
-        Text("Combine for")
-          .font(.caption)
-          .foregroundStyle(.secondary)
+      if model.isScanStackEnabled(stack) {
         Picker(
           "Combine for",
           selection: Binding(
@@ -262,43 +238,24 @@ struct ContentView: View {
         }
         .pickerStyle(.segmented)
         .labelsHidden()
-        .controlSize(.small)
-        .frame(maxWidth: .infinity)
+        .controlSize(.mini)
         .disabled(model.isExporting || model.isAnalyzingScanStacks || model.isLoading)
       }
 
-      Toggle(
-        "Use aligned stack",
-        isOn: Binding(
-          get: { model.isScanStackEnabled(stack) },
-          set: { model.setScanStackEnabled($0, for: stack) }
-        )
-      )
-      .toggleStyle(.switch)
-      .controlSize(.small)
-      .disabled(
-        model.isExporting || model.isAnalyzingScanStacks || model.isLoading
-          || model.flatFieldImage != nil)
-
-      if model.flatFieldImage != nil {
-        Text(
-          "Clear the flat field before stacking so each capture keeps correct sensor coordinates."
-        )
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-      }
-
-      if model.isScanStackEnabled(stack) {
-        Text("The stack exports once using the first capture's name and edits.")
-          .font(.caption2)
-          .foregroundStyle(.tertiary)
-      }
-
-      if model.scanStackStatusID == stack.id,
+      if model.isAnalyzingScanStacks {
+        HStack(spacing: 6) {
+          ProgressView()
+            .controlSize(.small)
+            .accessibilityHidden(true)
+          Text("Checking imports…")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+      } else if model.scanStackStatusID == stack.id,
         model.isBuildingScanStack || model.isUpgradingScanStack,
         model.isScanStackEnabled(stack)
       {
-        HStack(spacing: 7) {
+        HStack(spacing: 6) {
           ProgressView()
             .controlSize(.small)
             .accessibilityHidden(true)
@@ -307,19 +264,29 @@ struct ContentView: View {
             .foregroundStyle(.secondary)
         }
       } else if model.scanStackStatusID == stack.id,
-        model.isScanStackEnabled(stack),
-        !model.scanStackStatus.isEmpty
+        model.isScanStackEnabled(stack), !model.scanStackStatus.isEmpty
       {
         Text(model.scanStackStatus)
           .font(.caption2)
           .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
+      } else if model.flatFieldImage != nil {
+        Text("Clear flat field before stacking.")
+          .font(.caption2)
+          .foregroundStyle(.secondary)
       }
     }
     .controlSize(.small)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(10)
-    .background(Color(nsColor: .controlBackgroundColor))
+    .padding(8)
+    .background(
+      RoundedRectangle(cornerRadius: 6, style: .continuous)
+        .fill(Color(nsColor: .controlBackgroundColor))
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: 6, style: .continuous)
+        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+    )
+    .help(scanStackProposalDescription(stack))
   }
 
   private func scanStackProposalDescription(_ stack: DetectedScanStack) -> String {
@@ -456,24 +423,6 @@ struct ContentView: View {
           }
           .help("Zoom in (Command-plus)")
         }
-
-        HStack(spacing: 4) {
-          Button(action: model.rotateCounterclockwise) {
-            Image(systemName: "rotate.left")
-              .frame(width: 18)
-          }
-          .help("Rotate left")
-          Button(action: model.rotateClockwise) {
-            Image(systemName: "rotate.right")
-              .frame(width: 18)
-          }
-          .help("Rotate right")
-          Button(action: model.toggleFlip) {
-            Image(systemName: "arrow.left.and.right.righttriangle.left.righttriangle.right")
-              .frame(width: 18)
-          }
-          .help("Flip horizontally")
-        }
       }
     }
     .controlSize(.small)
@@ -528,19 +477,162 @@ struct ContentView: View {
   @ViewBuilder
   private var inspectorPageContent: some View {
     switch inspectorPage {
-    case .edit: editInspector
-    case .grade: gradeInspector
+    case .develop: developInspector
+    case .geometry: geometryInspector
+    case .calibration: calibrationInspector
     case .export: exportInspector
     }
   }
 
+  private var developQuickActionsBar: some View {
+    VStack(spacing: 6) {
+      HStack(spacing: 6) {
+        Menu {
+          Section("Curated Looks") {
+            Button("Kodachrome-like Auto") {
+              model.applyKodachromeLikeLook()
+            }
+            Menu("Prototype Looks") {
+              ForEach(AdaptiveDisplayLook.prototypes) { look in
+                Button(look.name) {
+                  model.applyAdaptiveDisplayLook(look)
+                }
+              }
+            }
+          }
+          if !model.namedCorrectionPresets.isEmpty {
+            Section("User Presets") {
+              ForEach(model.namedCorrectionPresets) { preset in
+                Button(preset.name) {
+                  model.applyCorrectionPreset(preset)
+                }
+              }
+            }
+          }
+          Divider()
+          Button("Save as New Preset…") {
+            presetName = ""
+            isSavingPreset = true
+          }
+          if let applied = model.appliedPresetName {
+            Button("Restore Before \(applied)") {
+              model.removeAppliedPreset()
+            }
+          }
+          if !model.namedCorrectionPresets.isEmpty {
+            Menu("Delete Preset") {
+              ForEach(model.namedCorrectionPresets) { preset in
+                Button(role: .destructive) {
+                  model.deleteCorrectionPreset(preset)
+                } label: {
+                  Text(preset.name)
+                }
+              }
+            }
+          }
+        } label: {
+          HStack(spacing: 4) {
+            Image(systemName: "wand.and.stars")
+            Text(model.appliedPresetName ?? "Looks & Presets")
+              .lineLimit(1)
+            Image(systemName: "chevron.down")
+              .font(.caption2)
+          }
+          .font(.caption)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+
+        Spacer()
+
+        Button(action: model.copyCorrectionSettings) {
+          Image(systemName: "doc.on.doc")
+            .frame(width: 16)
+        }
+        .help("Copy corrections (⌘⌥C)")
+
+        Button(action: model.pasteCorrectionSettings) {
+          Image(systemName: "doc.on.clipboard")
+            .frame(width: 16)
+        }
+        .disabled(!model.canPasteCorrectionSettings)
+        .help("Paste corrections (⌘⌥V)")
+
+        Menu {
+          Button(
+            "Apply Look to Selected (\(model.selectedFileCount))",
+            action: model.applyCurrentLookToSelectedFiles
+          )
+          .disabled(model.selectedFileCount < 2)
+          Button(
+            "Apply Settings to All Open Files", action: model.applyCurrentSettingsToAllOpenFiles)
+          Divider()
+          Button("Reset All Adjustments", role: .destructive, action: model.resetCorrections)
+            .disabled(model.previewImage == nil)
+        } label: {
+          Image(systemName: "ellipsis.circle")
+            .frame(width: 16)
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Batch and roll actions")
+      }
+      .controlSize(.small)
+      .buttonStyle(.bordered)
+      .padding(.horizontal, 2)
+
+      if isSavingPreset {
+        HStack(spacing: 6) {
+          TextField("Preset name", text: $presetName)
+            .textFieldStyle(.roundedBorder)
+            .controlSize(.small)
+            .onSubmit {
+              saveNamedPreset()
+            }
+          Button("Save") {
+            saveNamedPreset()
+          }
+          .controlSize(.small)
+          .disabled(presetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+          Button("Cancel") {
+            isSavingPreset = false
+          }
+          .controlSize(.small)
+        }
+        .padding(.vertical, 2)
+      }
+
+      if !model.settingsStatus.isEmpty {
+        Text(model.settingsStatus)
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity, alignment: .leading)
+      }
+    }
+  }
+
+  private func saveNamedPreset() {
+    let name = presetName.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !name.isEmpty else { return }
+    model.saveCorrectionPreset(named: name)
+    presetName = ""
+    isSavingPreset = false
+  }
+
   private var filmConversionSection: some View {
-    InspectorSection("Film & Conversion", systemImage: "film.stack") {
-      VStack(alignment: .leading, spacing: 6) {
-        Text("Scan type")
+    let isNeg = supportsFilmNegative(filmType: model.parameters.filmType)
+    let isModified = isNeg && model.parameters.filmNegativeParams.enabled
+
+    return InspectorSection(
+      "Film & Inversion",
+      systemImage: "film.stack",
+      isModified: isModified
+    ) {
+      VStack(alignment: .leading, spacing: 8) {
+        Text("Scan Type")
           .font(.caption.weight(.medium))
         Picker(
-          "Scan type",
+          "Scan Type",
           selection: Binding(
             get: { model.parameters.filmType },
             set: { model.setFilmType($0) }
@@ -552,42 +644,30 @@ struct ContentView: View {
         }
         .pickerStyle(.segmented)
         .labelsHidden()
+        .help(filmTypeDescription(model.parameters.filmType))
 
-        Text(filmTypeDescription(model.parameters.filmType))
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-      }
+        if isNeg {
+          Divider()
+            .padding(.vertical, 2)
 
-      if supportsFilmNegative(filmType: model.parameters.filmType) {
-        Divider()
-
-        VStack(alignment: .leading, spacing: 8) {
-          Text("Conversion")
+          Text("Conversion Mode")
             .font(.caption.weight(.medium))
-          LazyVGrid(
-            columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible())],
-            spacing: 8
+
+          Picker(
+            "Conversion Mode",
+            selection: Binding(
+              get: { negativeConversionMode(for: model.parameters) },
+              set: { setNegativeConversionMode($0) }
+            )
           ) {
             ForEach(NegativeConversionMode.available(for: model.parameters.filmType)) { mode in
-              InspectorChoiceCard(
-                title: mode.title,
-                subtitle: mode.subtitle,
-                systemImage: mode.systemImage,
-                isSelected: negativeConversionMode(for: model.parameters) == mode
-              ) {
-                setNegativeConversionMode(mode)
-              }
+              Text(mode.title).tag(mode)
             }
           }
-        }
+          .pickerStyle(.segmented)
+          .labelsHidden()
 
-        conversionDetailControls
-
-        if model.parameters.filmType == .colourNegative
-          && negativeConversionMode(for: model.parameters) != .bypass
-        {
-          advancedColorScienceControls
+          conversionDetailControls
         }
       }
     }
@@ -603,33 +683,35 @@ struct ContentView: View {
     case .classic:
       classicConversionControls
     case .bypass:
-      Text(
-        "The negative stays uninverted while the scan type remains available for comparison. Choose Original above for a normal positive-image workflow."
-      )
-      .font(.caption2)
-      .foregroundStyle(.secondary)
-      .fixedSize(horizontal: false, vertical: true)
+      Text("The negative stays uninverted while preserving negative metadata.")
+        .font(.caption2)
+        .foregroundStyle(.secondary)
     }
   }
 
   private var naturalConversionControls: some View {
     let fn = model.parameters.filmNegativeParams
     let selectedPreset = filmNegativePreset(for: model.parameters)
-    return VStack(alignment: .leading, spacing: 10) {
-      Text("Starting look")
-        .font(.caption.weight(.medium))
-
-      VStack(spacing: 6) {
-        ForEach(naturalPresets(for: model.parameters.filmType), id: \.self) { preset in
-          InspectorChoiceRow(
-            title: naturalPresetTitle(preset),
-            subtitle: naturalPresetSubtitle(preset),
-            isSelected: selectedPreset == preset
-          ) {
-            model.setFilmNegativePreset(preset)
+    return VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        Text("Film Stock")
+          .font(.caption.weight(.medium))
+        Spacer()
+        Picker(
+          "Film Stock",
+          selection: Binding(
+            get: { selectedPreset },
+            set: { model.setFilmNegativePreset($0) }
+          )
+        ) {
+          ForEach(naturalPresets(for: model.parameters.filmType), id: \.self) { preset in
+            Text(naturalPresetTitle(preset)).tag(preset)
           }
         }
+        .labelsHidden()
+        .fixedSize()
       }
+      .help(naturalPresetSubtitle(selectedPreset))
 
       AdjustmentSlider(
         "Negative Exposure",
@@ -640,13 +722,6 @@ struct ContentView: View {
         range: -4...4, neutral: 0, valueFormat: "%+.2f", unitSuffix: "EV",
         responseExponent: 1.5
       )
-      HStack {
-        Text("Lighter positive")
-        Spacer()
-        Text("Darker positive")
-      }
-      .font(.caption2)
-      .foregroundStyle(.tertiary)
     }
   }
 
@@ -654,43 +729,71 @@ struct ContentView: View {
     let fn = model.parameters.filmNegativeParams
     let profile = NegativeDensityProfileCatalog.profile(id: fn.densityProfileID)
     let defaultStrength = profile.unmixStrength * 100
-    return VStack(alignment: .leading, spacing: 10) {
-      Text(
-        "Build the positive like a darkroom print: choose the negative stock, then choose the paper character."
-      )
-      .font(.caption2)
-      .foregroundStyle(.secondary)
-      .fixedSize(horizontal: false, vertical: true)
-
-      Text("Negative stock")
-        .font(.caption.weight(.medium))
-      LazyVGrid(
-        columns: [GridItem(.flexible(), spacing: 6), GridItem(.flexible())],
-        spacing: 6
-      ) {
-        ForEach(NegativeDensityProfileCatalog.bundled, id: \.id.rawValue) { option in
-          InspectorChoiceChip(
-            title: option.displayName,
-            isSelected: fn.densityProfileID == option.id.rawValue
-          ) {
-            model.setDensityProfileID(option.id.rawValue)
+    return VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        Text("Negative Stock")
+          .font(.caption.weight(.medium))
+        Spacer()
+        Picker(
+          "Negative Stock",
+          selection: Binding(
+            get: { fn.densityProfileID },
+            set: { model.setDensityProfileID($0) }
+          )
+        ) {
+          Section("Curated Popular") {
+            Text("Generic C-41").tag(NegativeDensityProfileCatalog.genericC41.id.rawValue)
+            Text("Kodak Portra 400").tag(NegativeDensityProfileCatalog.kodakPortra400.id.rawValue)
+            Text("Kodak Gold 200").tag(NegativeDensityProfileCatalog.kodakGold200.id.rawValue)
+            Text("Kodak Ektar 100").tag(NegativeDensityProfileCatalog.kodakEktar100.id.rawValue)
+            Text("Fujicolor Pro 400H").tag(
+              NegativeDensityProfileCatalog.fujicolorPro400H.id.rawValue)
+            Text("Kodak VISION3 500T (Cine)").tag(
+              NegativeDensityProfileCatalog.kodakVision3500T.id.rawValue)
+          }
+          Section("Other Kodak") {
+            Text("Kodak Portra 160").tag(NegativeDensityProfileCatalog.kodakPortra160.id.rawValue)
+            Text("Kodak Portra 800").tag(NegativeDensityProfileCatalog.kodakPortra800.id.rawValue)
+            Text("Kodak Ultra Max 400").tag(
+              NegativeDensityProfileCatalog.kodakUltramax400.id.rawValue)
+            Text("Kodak VISION3 250D").tag(
+              NegativeDensityProfileCatalog.kodakVision3250D.id.rawValue)
+          }
+          Section("Other Fujifilm") {
+            Text("Fujicolor 200").tag(NegativeDensityProfileCatalog.fujicolor200.id.rawValue)
+            Text("Fujicolor 400").tag(NegativeDensityProfileCatalog.fujicolor400.id.rawValue)
+            Text("Fujicolor Superia X-TRA 400").tag(
+              NegativeDensityProfileCatalog.fujicolorSuperiaXtra400.id.rawValue)
+            Text("Fujicolor Natura 1600").tag(
+              NegativeDensityProfileCatalog.fujicolorNatura1600.id.rawValue)
+          }
+          Section("Specialty") {
+            Text("Harman Phoenix II").tag(NegativeDensityProfileCatalog.harmanPhoenixII.id.rawValue)
+            Text("Kodak Aerocolor IV 2460").tag(
+              NegativeDensityProfileCatalog.kodakAerocolorIV.id.rawValue)
           }
         }
+        .labelsHidden()
+        .fixedSize()
       }
 
-      Text("Paper character")
-        .font(.caption.weight(.medium))
-        .padding(.top, 2)
-      VStack(spacing: 6) {
-        ForEach(DensityPaperProfileCatalog.bundled, id: \.id.rawValue) { paper in
-          InspectorChoiceRow(
-            title: paper.displayName,
-            subtitle: paperDescription(paper),
-            isSelected: fn.densityPaperID == paper.id.rawValue
-          ) {
-            model.setDensityPaperID(paper.id.rawValue)
-          }
+      VStack(alignment: .leading, spacing: 4) {
+        Text("Print Paper")
+          .font(.caption.weight(.medium))
+        Picker(
+          "Print Paper",
+          selection: Binding(
+            get: { fn.densityPaperID },
+            set: { model.setDensityPaperID($0) }
+          )
+        ) {
+          Text("Neutral").tag(DensityPaperProfileCatalog.neutral.id.rawValue)
+          Text("Kodak Endura").tag(DensityPaperProfileCatalog.kodakEnduraPremier.id.rawValue)
+          Text("Fuji Crystal").tag(DensityPaperProfileCatalog.fujiCrystalArchive.id.rawValue)
         }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .help(paperDescription(DensityPaperProfileCatalog.profile(id: fn.densityPaperID)))
       }
 
       AdjustmentSlider(
@@ -703,13 +806,6 @@ struct ContentView: View {
         ),
         range: 0...100, neutral: defaultStrength, valueFormat: "%.0f", unitSuffix: "%"
       )
-      HStack {
-        Text("Gentle")
-        Spacer()
-        Text("Stronger dye separation")
-      }
-      .font(.caption2)
-      .foregroundStyle(.tertiary)
     }
   }
 
@@ -718,259 +814,138 @@ struct ContentView: View {
     let neutral =
       model.parameters.filmType == .blackAndWhiteNegative
       ? FilmNegativeParams.legacyBlackAndWhite : FilmNegativeParams.legacyColourNegative
-    let rexp = -(fn.greenExp * fn.redRatio)
-    let gexp = -fn.greenExp
-    let bexp = -(fn.greenExp * fn.blueRatio)
-    return VStack(alignment: .leading, spacing: 8) {
-      Text(
-        "The original Film Scan Converter response is kept for older edits and for scans that already match it well."
-      )
-      .font(.caption2)
-      .foregroundStyle(.secondary)
-      .fixedSize(horizontal: false, vertical: true)
-
-      DisclosureGroup("Technical channel response") {
-        VStack(alignment: .leading, spacing: 10) {
-          AdjustmentSlider(
-            "Red Ratio",
-            value: Binding(
-              get: { fn.redRatio },
-              set: { model.setFilmNegativeRedRatio($0) }
-            ),
-            range: 0.8...1.8, neutral: neutral.redRatio,
-            valueFormat: "%.3f", responseExponent: 1.5
-          )
-          AdjustmentSlider(
-            "Green Exponent",
-            value: Binding(
-              get: { fn.greenExp },
-              set: { model.setFilmNegativeGreenExp($0) }
-            ),
-            range: 1.0...2.0, neutral: 1.5, valueFormat: "%.3f",
-            responseExponent: 1.5
-          )
-          AdjustmentSlider(
-            "Blue Ratio",
-            value: Binding(
-              get: { fn.blueRatio },
-              set: { model.setFilmNegativeBlueRatio($0) }
-            ),
-            range: 0.6...1.4, neutral: neutral.blueRatio,
-            valueFormat: "%.3f", responseExponent: 1.5
-          )
-          Text(
-            "Channel exponents: R \(String(format: "%.2f", rexp))  G \(String(format: "%.2f", gexp))  B \(String(format: "%.2f", bexp))"
-          )
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-        }
-        .padding(.top, 8)
+    return DisclosureGroup("Technical Channel Exponents") {
+      VStack(alignment: .leading, spacing: 8) {
+        AdjustmentSlider(
+          "Red Ratio",
+          value: Binding(
+            get: { fn.redRatio },
+            set: { model.setFilmNegativeRedRatio($0) }
+          ),
+          range: 0.8...1.8, neutral: neutral.redRatio,
+          valueFormat: "%.3f", responseExponent: 1.5
+        )
+        AdjustmentSlider(
+          "Green Exponent",
+          value: Binding(
+            get: { fn.greenExp },
+            set: { model.setFilmNegativeGreenExp($0) }
+          ),
+          range: 1.0...2.0, neutral: 1.5, valueFormat: "%.3f",
+          responseExponent: 1.5
+        )
+        AdjustmentSlider(
+          "Blue Ratio",
+          value: Binding(
+            get: { fn.blueRatio },
+            set: { model.setFilmNegativeBlueRatio($0) }
+          ),
+          range: 0.6...1.4, neutral: neutral.blueRatio,
+          valueFormat: "%.3f", responseExponent: 1.5
+        )
       }
+      .padding(.top, 4)
     }
+    .font(.caption)
+    .help("Original converter channel exponents")
   }
 
   private var advancedColorScienceControls: some View {
     let mixing = model.parameters.filmDyeMixing
-    return DisclosureGroup {
-      VStack(alignment: .leading, spacing: 10) {
-        Text(
-          "Use this only when one dye record is visibly contaminating another. It is applied before the everyday Color controls below."
-        )
+    return VStack(alignment: .leading, spacing: 8) {
+      Text("Cross-talk matrix for dye contamination")
         .font(.caption2)
         .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
 
-        AdjustmentSlider(
-          "Red from Green",
-          value: Binding(
-            get: { model.parameters.filmDyeMixing.redFromGreen * 100 },
-            set: { model.setFilmDyeMixing(\.redFromGreen, to: $0 / 100) }
-          ),
-          range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
-          responseExponent: 1.7
-        )
-        AdjustmentSlider(
-          "Red from Blue",
-          value: Binding(
-            get: { model.parameters.filmDyeMixing.redFromBlue * 100 },
-            set: { model.setFilmDyeMixing(\.redFromBlue, to: $0 / 100) }
-          ),
-          range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
-          responseExponent: 1.7
-        )
-        AdjustmentSlider(
-          "Green from Red",
-          value: Binding(
-            get: { model.parameters.filmDyeMixing.greenFromRed * 100 },
-            set: { model.setFilmDyeMixing(\.greenFromRed, to: $0 / 100) }
-          ),
-          range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
-          responseExponent: 1.7
-        )
-        AdjustmentSlider(
-          "Green from Blue",
-          value: Binding(
-            get: { model.parameters.filmDyeMixing.greenFromBlue * 100 },
-            set: { model.setFilmDyeMixing(\.greenFromBlue, to: $0 / 100) }
-          ),
-          range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
-          responseExponent: 1.7
-        )
-        AdjustmentSlider(
-          "Blue from Red",
-          value: Binding(
-            get: { model.parameters.filmDyeMixing.blueFromRed * 100 },
-            set: { model.setFilmDyeMixing(\.blueFromRed, to: $0 / 100) }
-          ),
-          range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
-          responseExponent: 1.7
-        )
-        AdjustmentSlider(
-          "Blue from Green",
-          value: Binding(
-            get: { model.parameters.filmDyeMixing.blueFromGreen * 100 },
-            set: { model.setFilmDyeMixing(\.blueFromGreen, to: $0 / 100) }
-          ),
-          range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
-          responseExponent: 1.7
-        )
+      AdjustmentSlider(
+        "Red from Green",
+        value: Binding(
+          get: { model.parameters.filmDyeMixing.redFromGreen * 100 },
+          set: { model.setFilmDyeMixing(\.redFromGreen, to: $0 / 100) }
+        ),
+        range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+        responseExponent: 1.7
+      )
+      AdjustmentSlider(
+        "Red from Blue",
+        value: Binding(
+          get: { model.parameters.filmDyeMixing.redFromBlue * 100 },
+          set: { model.setFilmDyeMixing(\.redFromBlue, to: $0 / 100) }
+        ),
+        range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+        responseExponent: 1.7
+      )
+      AdjustmentSlider(
+        "Green from Red",
+        value: Binding(
+          get: { model.parameters.filmDyeMixing.greenFromRed * 100 },
+          set: { model.setFilmDyeMixing(\.greenFromRed, to: $0 / 100) }
+        ),
+        range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+        responseExponent: 1.7
+      )
+      AdjustmentSlider(
+        "Green from Blue",
+        value: Binding(
+          get: { model.parameters.filmDyeMixing.greenFromBlue * 100 },
+          set: { model.setFilmDyeMixing(\.greenFromBlue, to: $0 / 100) }
+        ),
+        range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+        responseExponent: 1.7
+      )
+      AdjustmentSlider(
+        "Blue from Red",
+        value: Binding(
+          get: { model.parameters.filmDyeMixing.blueFromRed * 100 },
+          set: { model.setFilmDyeMixing(\.blueFromRed, to: $0 / 100) }
+        ),
+        range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+        responseExponent: 1.7
+      )
+      AdjustmentSlider(
+        "Blue from Green",
+        value: Binding(
+          get: { model.parameters.filmDyeMixing.blueFromGreen * 100 },
+          set: { model.setFilmDyeMixing(\.blueFromGreen, to: $0 / 100) }
+        ),
+        range: -30...30, neutral: 0, valueFormat: "%.1f", unitSuffix: "%",
+        responseExponent: 1.7
+      )
 
-        Button("Reset Dye Crossover", action: model.resetFilmDyeMixing)
-          .controlSize(.small)
-          .disabled(mixing.isNeutral)
-      }
-      .padding(.top, 8)
-    } label: {
-      HStack {
-        Label("Advanced color science", systemImage: "waveform.path")
-        Spacer()
-        if !mixing.isNeutral {
-          Text("Adjusted")
-            .font(.caption2.weight(.medium))
-            .foregroundStyle(Color.accentColor)
-        }
-      }
+      Button("Reset Dye Crossover", action: model.resetFilmDyeMixing)
+        .controlSize(.small)
+        .disabled(mixing.isNeutral)
     }
   }
 
-  private var editInspector: some View {
-    // VStack, not Group: a Group of sections overlays its children when passed
-    // as a single view, stacking every inspector card on top of the others.
+  private var developInspector: some View {
     VStack(spacing: 10) {
-      InspectorSection("Settings", systemImage: "slider.horizontal.2.square") {
-        HStack(spacing: 8) {
-          Button(action: model.copyCorrectionSettings) {
-            Label("Copy", systemImage: "doc.on.doc")
-          }
-          Button(action: model.pasteCorrectionSettings) {
-            Label("Paste", systemImage: "doc.on.clipboard")
-          }
-          .disabled(!model.canPasteCorrectionSettings)
-        }
-
-        Button(
-          model.selectedFileCount > 1
-            ? "Apply Look to Selected (\(model.selectedFileCount))"
-            : "Apply Look to Selected",
-          action: model.applyCurrentLookToSelectedFiles
-        )
-        .disabled(model.selectedFileCount < 2)
-        .help(
-          "Apply the active frame's look to the selected files while preserving each frame's geometry and measured film base."
-        )
-
-        Button("Apply Settings to All Open Files", action: model.applyCurrentSettingsToAllOpenFiles)
-          .help(
-            "Apply the active frame's look to every open file while preserving each frame's geometry and measured film base."
-          )
-
-        Button(action: model.applyKodachromeLikeLook) {
-          Label("Kodachrome-like Auto", systemImage: "wand.and.stars")
-        }
-        .help(
-          "Apply the color-negative profile, then adapt tone and color to the successful reference look."
-        )
-
-        Menu {
-          ForEach(AdaptiveDisplayLook.prototypes) { look in
-            Button(look.name) {
-              model.applyAdaptiveDisplayLook(look)
-            }
-            .help(look.summary)
-          }
-        } label: {
-          Label("Prototype Looks", systemImage: "paintpalette")
-        }
-        .help(
-          "Experimental display looks sampled from photos you like. They keep the standard color-negative inversion, then apply a scene-adaptive curve and a light split-tone."
-        )
-
-        if let appliedPresetName = model.appliedPresetName {
-          Button(action: model.removeAppliedPreset) {
-            Label("Remove \(appliedPresetName)", systemImage: "arrow.uturn.backward")
-          }
-          .help(
-            "Restore the adjustments from immediately before this preset was applied. Crop and orientation stay unchanged."
-          )
-        }
-
-        Picker(
-          "Files kept ready",
-          selection: Binding(
-            get: { model.previewCacheLimit },
-            set: { model.setPreviewCacheLimit($0) }
-          )
-        ) {
-          ForEach([2, 4, 8, 16, 32], id: \.self) { count in
-            Text("\(count)").tag(count)
-          }
-        }
-        .help(
-          "Keeps recently viewed ~4000px RAW previews and prefetches the next few unseen files at ~3200px. The selected RAW upgrades from a 640px draft to a ~4000px preview, then a 1-pass full-resolution decode. Switching away discards full-res and keeps the ~4000px preview. Default is 8 files, with bounded previews still capped at 256 MB. Export keeps the selected file's last three-pass decode so a settings-only re-export skips unpack and demosaic."
-        )
-
-        HStack {
-          TextField("Preset name", text: $presetName)
-            .textFieldStyle(.roundedBorder)
-            .onSubmit(saveNamedPreset)
-          Button("Save", action: saveNamedPreset)
-            .disabled(presetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }
-        .controlSize(.small)
-
-        if !model.namedCorrectionPresets.isEmpty {
-          VStack(spacing: 4) {
-            ForEach(model.namedCorrectionPresets) { preset in
-              HStack {
-                Button(preset.name) {
-                  model.applyCorrectionPreset(preset)
-                }
-                .buttonStyle(.plain)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .help("Apply \(preset.name)")
-                Button(role: .destructive) {
-                  model.deleteCorrectionPreset(preset)
-                } label: {
-                  Image(systemName: "trash")
-                }
-                .buttonStyle(.plain)
-                .help("Delete \(preset.name)")
-              }
-              .font(.caption)
-            }
-          }
-        }
-
-        if !model.settingsStatus.isEmpty {
-          Text(model.settingsStatus)
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-      }
+      developQuickActionsBar
 
       filmConversionSection
 
-      InspectorSection("Light", systemImage: "sun.max") {
+      lightSection
+
+      colorSection
+
+      Button(role: .destructive, action: model.resetCorrections) {
+        Label("Reset All Adjustments", systemImage: "arrow.counterclockwise")
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.bordered)
+      .disabled(model.previewImage == nil)
+      .padding(.top, 4)
+    }
+  }
+
+  private var lightSection: some View {
+    InspectorSection(
+      "Tone & Light",
+      systemImage: "sun.max",
+      isModified: model.parameters.photoAdjustments.hasToneAdjustment
+        || model.parameters.curveEnabled
+    ) {
+      VStack(alignment: .leading, spacing: 8) {
         AdjustmentSlider(
           "Exposure",
           value: Binding(
@@ -1011,10 +986,65 @@ struct ContentView: View {
           ),
           range: -1...1, neutral: 0, valueFormat: "%.3f", responseExponent: 1.6
         )
-      }
-      .disabled(!model.parameters.filmType.supportsToneCorrections)
 
-      InspectorSection("Color", systemImage: "thermometer.medium") {
+        Divider()
+          .padding(.vertical, 2)
+
+        DisclosureGroup("Tone Curve") {
+          VStack(alignment: .leading, spacing: 8) {
+            Toggle(
+              "Enable Tone Curve",
+              isOn: Binding(
+                get: { model.parameters.curveEnabled },
+                set: { model.setCurveEnabled($0) }
+              )
+            )
+            .font(.caption)
+            IntegratedCurvesView(model: model)
+          }
+          .padding(.top, 4)
+        }
+        .font(.caption.weight(.medium))
+
+        let low = model.previewStatistics.lowClippingRatios
+        let high = model.previewStatistics.highClippingRatios
+        let maxShadowClip = max(low.blue, low.green, low.red) * 100
+        let maxHighlightClip = max(high.blue, high.green, high.red) * 100
+        if maxShadowClip > 0.05 || maxHighlightClip > 0.05 {
+          HStack {
+            Text("Clipping:")
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+            if maxShadowClip > 0.05 {
+              Text("Shadows \(String(format: "%.1f", maxShadowClip))%")
+                .font(.caption2)
+                .foregroundStyle(maxShadowClip > 2.0 ? .orange : .secondary)
+            }
+            if maxHighlightClip > 0.05 {
+              Text("Highlights \(String(format: "%.1f", maxHighlightClip))%")
+                .font(.caption2)
+                .foregroundStyle(maxHighlightClip > 2.0 ? .orange : .secondary)
+            }
+          }
+        }
+      }
+    }
+    .disabled(!model.parameters.filmType.supportsToneCorrections)
+  }
+
+  private var colorSection: some View {
+    let hasWheels =
+      !model.parameters.highlightWheel.isNeutral
+      || !model.parameters.midtoneWheel.isNeutral
+      || !model.parameters.shadowWheel.isNeutral
+    let isModified = model.parameters.photoAdjustments.hasColorAdjustment || hasWheels
+
+    return InspectorSection(
+      "Color & Balance",
+      systemImage: "paintpalette",
+      isModified: isModified
+    ) {
+      VStack(alignment: .leading, spacing: 8) {
         AdjustmentSlider(
           "Temperature",
           value: Binding(
@@ -1051,45 +1081,476 @@ struct ContentView: View {
           range: PhotoAdjustmentParameters.vibranceRange,
           neutral: 0, valueFormat: "%.3f", responseExponent: 1.6
         )
+
+        Divider()
+          .padding(.vertical, 2)
+
+        DisclosureGroup("Color Grading Wheels") {
+          VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 12) {
+              ColorWheelControl(
+                title: "Shadows",
+                hue: model.parameters.shadowWheel.hue,
+                strength: model.parameters.shadowWheel.strength,
+                setHue: model.setShadowWheelHue,
+                setStrength: model.setShadowWheelStrength
+              )
+              ColorWheelControl(
+                title: "Midtones",
+                hue: model.parameters.midtoneWheel.hue,
+                strength: model.parameters.midtoneWheel.strength,
+                setHue: model.setMidtoneWheelHue,
+                setStrength: model.setMidtoneWheelStrength
+              )
+              ColorWheelControl(
+                title: "Highlights",
+                hue: model.parameters.highlightWheel.hue,
+                strength: model.parameters.highlightWheel.strength,
+                setHue: model.setHighlightWheelHue,
+                setStrength: model.setHighlightWheelStrength
+              )
+            }
+            .frame(height: 120)
+
+            Text("Drag from center to tint. Double-click a wheel to reset.")
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+          }
+          .padding(.top, 4)
+        }
+        .font(.caption.weight(.medium))
       }
-      .disabled(!model.parameters.filmType.supportsColorCorrections)
+    }
+    .disabled(!model.parameters.filmType.supportsColorCorrections)
+  }
+
+  private var geometryInspector: some View {
+    VStack(spacing: 10) {
+      InspectorSection("Orientation", systemImage: "arrow.triangle.2.circlepath") {
+        VStack(alignment: .leading, spacing: 8) {
+          HStack(spacing: 8) {
+            Button(action: model.rotateCounterclockwise) {
+              Label("Rotate Left", systemImage: "rotate.left")
+                .frame(maxWidth: .infinity)
+            }
+            .help("Rotate 90° counterclockwise")
+
+            Button(action: model.rotateClockwise) {
+              Label("Rotate Right", systemImage: "rotate.right")
+                .frame(maxWidth: .infinity)
+            }
+            .help("Rotate 90° clockwise")
+
+            Button(action: model.toggleFlip) {
+              Label(
+                "Flip", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right")
+            }
+            .help("Flip horizontally")
+          }
+          .controlSize(.small)
+
+          HStack(spacing: 8) {
+            Button(action: toggleStraightening) {
+              Label(
+                isStraightening ? "Cancel Straighten" : "Straighten Edge…",
+                systemImage: isStraightening ? "xmark" : "line.diagonal"
+              )
+              .frame(maxWidth: .infinity)
+            }
+            .controlSize(.small)
+
+            if abs(model.straightenAngle) > 0.000_001 {
+              HStack(spacing: 4) {
+                Text("\(String(format: "%+.1f", model.straightenAngle))°")
+                  .font(.caption2.monospacedDigit())
+                Button("Clear", action: model.clearStraightening)
+                  .controlSize(.mini)
+              }
+            }
+          }
+
+          if isStraightening {
+            Text("Click two points along an edge that should be vertical or horizontal.")
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+          }
+        }
+      }
+
+      InspectorSection("Crop & Framing", systemImage: "crop") {
+        VStack(alignment: .leading, spacing: 8) {
+          HStack(spacing: 8) {
+            Button(action: model.detectCrop) {
+              if model.isCropDetectionRunning {
+                ProgressView()
+                  .controlSize(.small)
+              } else {
+                Label("Auto Frame", systemImage: "sparkles")
+              }
+            }
+            .disabled(
+              model.decodedImage == nil || model.isCropDetectionRunning || isPerspectiveEditing)
+
+            Button(action: toggleCropping) {
+              Label(
+                isCropping ? "Cancel" : "Manual Crop",
+                systemImage: isCropping ? "xmark" : "crop"
+              )
+            }
+            .disabled(model.decodedImage == nil || isPerspectiveEditing)
+
+            Button(action: togglePerspectiveEditing) {
+              Label(
+                isPerspectiveEditing ? "Done" : "Perspective",
+                systemImage: isPerspectiveEditing ? "checkmark" : "square.on.square.dashed"
+              )
+            }
+            .disabled(model.decodedImage == nil)
+          }
+          .controlSize(.small)
+
+          if isCropping {
+            Text("Drag a rectangle over the preview to crop.")
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+          }
+
+          if isPerspectiveEditing {
+            VStack(alignment: .leading, spacing: 6) {
+              Text("Drag corner reticles to film edges. Option for unconstrained corner.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+              Toggle("Parallel-edge assist", isOn: $usesPerspectiveParallelAssist)
+                .controlSize(.small)
+              Button("Reset Corners") {
+                model.clearPerspectiveCrop()
+                model.beginPerspectiveCrop()
+              }
+              .controlSize(.small)
+            }
+          }
+
+          if model.perspectiveCrop != nil {
+            Divider()
+            HStack {
+              Text("Perspective Crop Applied")
+                .font(.caption2.weight(.medium))
+              Spacer()
+              Button("Clear") {
+                endPerspectiveEditing()
+                model.clearPerspectiveCrop()
+              }
+              .controlSize(.small)
+            }
+          } else if let cropRect = model.cropRect {
+            Divider()
+            HStack {
+              VStack(alignment: .leading, spacing: 2) {
+                Text("Detected Frame (\(String(format: "%.1f", cropRect.angle))°)")
+                  .font(.caption2.weight(.medium))
+                if let dimensions = model.selectedDetectedFrameDimensions {
+                  Text("\(dimensions.width) × \(dimensions.height) px")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
+              }
+              Spacer()
+              Button("Clear", action: model.clearCrop)
+                .controlSize(.small)
+            }
+          }
+          if model.manualCrop != nil {
+            Divider()
+            HStack {
+              VStack(alignment: .leading, spacing: 2) {
+                Text("Manual Crop")
+                  .font(.caption2.weight(.medium))
+                if let dimensions = model.selectedCanvasDimensions {
+                  Text("\(dimensions.width) × \(dimensions.height) px")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                }
+              }
+              Spacer()
+              Button("Clear", action: model.clearManualCrop)
+                .controlSize(.small)
+            }
+          }
+
+          if let output = model.selectedCanvasDimensions {
+            HStack {
+              Text("Canvas")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+              Spacer()
+              Text("\(output.width) × \(output.height) px")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+            }
+          }
+
+          if !model.cropStatus.isEmpty, !model.isCropDetectionRunning {
+            Text(model.cropStatus)
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+
+          DisclosureGroup("Detection Thresholds") {
+            VStack(alignment: .leading, spacing: 6) {
+              AdjustmentSlider(
+                "Dark",
+                value: Binding(
+                  get: { Double(model.parameters.darkThreshold) },
+                  set: { model.setDarkThreshold(Int($0.rounded())) }
+                ),
+                range: 0...100, neutral: 25, valueFormat: "%.0f", unitSuffix: "%", step: 1
+              )
+              AdjustmentSlider(
+                "Light",
+                value: Binding(
+                  get: { Double(model.parameters.lightThreshold) },
+                  set: { model.setLightThreshold(Int($0.rounded())) }
+                ),
+                range: 0...100, neutral: 100, valueFormat: "%.0f", unitSuffix: "%", step: 1
+              )
+            }
+            .padding(.top, 4)
+          }
+          .font(.caption)
+        }
+      }
+
+      InspectorSection("Dust Mask", systemImage: "sparkles") {
+        VStack(alignment: .leading, spacing: 6) {
+          HStack {
+            Button(action: model.detectDustMask) {
+              if model.isDustDetectionRunning {
+                ProgressView()
+                  .controlSize(.small)
+              } else {
+                Label("Detect Dust", systemImage: "wand.and.stars")
+              }
+            }
+            .disabled(model.decodedImage == nil || model.isDustDetectionRunning)
+
+            if model.dustMaskImage != nil {
+              Button("Clear", action: model.clearDustMask)
+            }
+          }
+          .controlSize(.small)
+
+          Text(
+            model.dustStatus.isEmpty
+              ? "Non-destructive overlay for dust particle removal."
+              : model.dustStatus
+          )
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+        }
+      }
+    }
+  }
+
+  private var calibrationInspector: some View {
+    VStack(spacing: 10) {
+      InspectorSection("Film Base (Rebate)", systemImage: "viewfinder") {
+        VStack(alignment: .leading, spacing: 8) {
+          HStack(spacing: 8) {
+            Button(action: model.detectRebate) {
+              if model.isRebateDetectionRunning {
+                ProgressView()
+                  .controlSize(.small)
+              } else {
+                Label("Auto Detect Edge", systemImage: "viewfinder")
+              }
+            }
+            .disabled(
+              model.decodedImage == nil || model.isRebateDetectionRunning
+                || !supportsFilmNegative(filmType: model.parameters.filmType))
+
+            Button {
+              if isPickingRebateRegion {
+                endRebateSelection()
+              } else {
+                beginRebateSelection()
+              }
+            } label: {
+              Label(
+                isPickingRebateRegion ? "Cancel" : "Sample Area",
+                systemImage: isPickingRebateRegion ? "xmark" : "rectangle.dashed"
+              )
+            }
+            .disabled(model.decodedImage == nil)
+          }
+          .controlSize(.small)
+
+          HStack {
+            Button(action: model.loadFlatField) {
+              Label("Flat Field", systemImage: "rectangle.split.1x2")
+            }
+            .controlSize(.small)
+
+            if let ffURL = model.flatFieldURL {
+              Text(ffURL.lastPathComponent)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+              Button(action: model.clearFlatField) {
+                Image(systemName: "xmark.circle.fill")
+                  .foregroundStyle(.secondary)
+              }
+              .buttonStyle(.plain)
+              .controlSize(.small)
+            }
+          }
+
+          if !model.rebateCandidates.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+              Text("Candidates:")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+              ForEach(Array(model.rebateCandidates.enumerated()), id: \.offset) {
+                _, candidate in
+                Button {
+                  model.selectRebateCandidate(candidate)
+                } label: {
+                  HStack {
+                    Text(
+                      "\(candidateDescription(candidate.region))  B\(String(format: "%.3f", candidate.measurement.baseDensity.blue))"
+                    )
+                    .font(.caption2)
+                    Spacer()
+                    Text("\(Int(candidate.confidence * 100))%")
+                      .font(.caption2)
+                      .foregroundStyle(
+                        candidate.confidence > 0.7
+                          ? .green : candidate.confidence > 0.45 ? .orange : .secondary)
+                  }
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 4)
+                .padding(.vertical, 2)
+                .background(
+                  model.selectedRebateRegion == candidate.region
+                    ? Color.accentColor.opacity(0.15) : Color.clear
+                )
+                .cornerRadius(4)
+              }
+            }
+          }
+
+          if let measurement = model.selectedRebateMeasurement {
+            VStack(alignment: .leading, spacing: 4) {
+              Divider()
+              HStack {
+                Text("Base Density (RGB)")
+                  .font(.caption.weight(.medium))
+                Spacer()
+                Button("Clear", action: model.clearRebateMeasurement)
+                  .font(.caption2)
+              }
+              HStack(spacing: 8) {
+                Text("R: \(String(format: "%.3f", measurement.baseDensity.red))")
+                Text("G: \(String(format: "%.3f", measurement.baseDensity.green))")
+                Text("B: \(String(format: "%.3f", measurement.baseDensity.blue))")
+              }
+              .font(.caption2.monospacedDigit())
+              .foregroundStyle(.secondary)
+
+              if let firstCandidate = model.rebateCandidates.first(where: {
+                $0.measurement == measurement
+              }) {
+                Button {
+                  model.createRollProfile(from: firstCandidate)
+                } label: {
+                  Label("Save Roll Profile", systemImage: "square.and.arrow.down")
+                }
+                .controlSize(.small)
+                .padding(.top, 2)
+              }
+            }
+          }
+          if !model.rebateStatus.isEmpty, !model.isRebateDetectionRunning {
+            Text(model.rebateStatus)
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+        }
+      }
+      .disabled(!supportsFilmNegative(filmType: model.parameters.filmType))
+
+      if model.selectedRebateMeasurement != nil
+        || model.rollProfile?.measuredBaseDensity != nil
+      {
+        InspectorSection("Density Pipeline", systemImage: "arrow.triangle.branch") {
+          VStack(alignment: .leading, spacing: 6) {
+            Toggle(
+              "Use Measured Film Base",
+              isOn: Binding(
+                get: { model.parameters.densityPipelineEnabled },
+                set: { model.setDensityPipelineEnabled($0) }
+              )
+            )
+            .font(.caption.weight(.medium))
+
+            if model.parameters.densityPipelineEnabled,
+              let baseDensity = model.parameters.densityBaseDensity
+            {
+              Text(
+                "Base: R\(String(format: "%.3f", baseDensity.red)) G\(String(format: "%.3f", baseDensity.green)) B\(String(format: "%.3f", baseDensity.blue))"
+              )
+              .font(.caption2.monospacedDigit())
+              .foregroundStyle(.secondary)
+              Text(
+                "C-41: slopes R\(String(format: "%.2f", model.parameters.densityC41Profile.densitySlope.red)) G\(String(format: "%.2f", model.parameters.densityC41Profile.densitySlope.green)) B\(String(format: "%.2f", model.parameters.densityC41Profile.densitySlope.blue))"
+              )
+              .font(.caption2.monospacedDigit())
+              .foregroundStyle(.secondary)
+              Text(
+                model.parameters.densityCorrection == .identity
+                  ? "Capture matrix: Identity"
+                  : "Capture matrix: Custom fitted correction"
+              )
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+            }
+          }
+        }
+      }
 
       InspectorSection("Workflow Profiles", systemImage: "square.stack.3d.up") {
-        Text(
-          "Reusable scanner, film-response, and roll measurements for calibrated batches. Applying one can replace the entire conversion; use Darkroom above for one-off stock and paper choices."
-        )
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 8) {
+          Picker("Scanner / capture", selection: $model.selectedCaptureProfileID) {
+            ForEach(model.availableCaptureProfiles, id: \.id) { profile in
+              Text(profile.id.rawValue).tag(profile.id)
+            }
+          }
+          Picker("Film response", selection: $model.selectedFilmStockProfileID) {
+            ForEach(model.availableFilmStockProfiles, id: \.id) { profile in
+              Text(profile.displayName).tag(profile.id)
+            }
+          }
+          Picker(
+            "Measured roll",
+            selection: Binding(
+              get: { model.selectedRollProfileID ?? "" },
+              set: { model.selectedRollProfileID = $0.isEmpty ? nil : $0 }
+            )
+          ) {
+            Text("None").tag("")
+            ForEach(model.availableRollProfiles, id: \.rollID) { profile in
+              Text(profile.rollID).tag(profile.rollID)
+            }
+          }
+          Button("Apply Workflow Profiles", action: model.applySelectedPipelineProfiles)
+            .controlSize(.small)
 
-        DisclosureGroup("Scanner & roll profiles") {
-          VStack(alignment: .leading, spacing: 10) {
-            Picker("Scanner / capture", selection: $model.selectedCaptureProfileID) {
-              ForEach(model.availableCaptureProfiles, id: \.id) { profile in
-                Text(profile.id.rawValue).tag(profile.id)
-              }
-            }
-            Picker("Film response", selection: $model.selectedFilmStockProfileID) {
-              ForEach(model.availableFilmStockProfiles, id: \.id) { profile in
-                Text(profile.displayName).tag(profile.id)
-              }
-            }
-            Picker(
-              "Measured roll",
-              selection: Binding(
-                get: { model.selectedRollProfileID ?? "" },
-                set: { model.selectedRollProfileID = $0.isEmpty ? nil : $0 }
-              )
-            ) {
-              Text("None").tag("")
-              ForEach(model.availableRollProfiles, id: \.rollID) { profile in
-                Text(profile.rollID).tag(profile.rollID)
-              }
-            }
-            Button("Apply Workflow Profiles", action: model.applySelectedPipelineProfiles)
-
+          DisclosureGroup("Save current as profile") {
             HStack {
-              TextField("New profile name", text: $profileName)
+              TextField("Profile name", text: $profileName)
                 .textFieldStyle(.roundedBorder)
               Menu("Save") {
                 Button("Capture Profile") {
@@ -1104,493 +1565,22 @@ struct ContentView: View {
               .disabled(profileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .controlSize(.small)
+            .padding(.top, 4)
           }
-          .padding(.top, 8)
-        }
+          .font(.caption)
 
-        if !model.profileStatus.isEmpty {
-          Text(model.profileStatus)
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-      }
-
-      InspectorSection("Film Base", systemImage: "viewfinder") {
-        HStack {
-          Button(action: model.loadFlatField) {
-            Label("Flat Field", systemImage: "rectangle.split.1x2")
-          }
-          .controlSize(.small)
-          if model.flatFieldURL != nil {
-            Button(action: model.clearFlatField) {
-              Image(systemName: "xmark.circle.fill")
-                .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-            .controlSize(.small)
-          }
-          Spacer()
-          if let ffURL = model.flatFieldURL {
-            Text(ffURL.lastPathComponent)
+          if !model.profileStatus.isEmpty {
+            Text(model.profileStatus)
               .font(.caption2)
               .foregroundStyle(.secondary)
-              .lineLimit(1)
-          }
-        }
-
-        Text(
-          "Film base is the clear, unexposed film edge outside the photographed frame. Measuring it removes the orange mask from colour negatives."
-        )
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
-
-        Button(action: model.detectRebate) {
-          if model.isRebateDetectionRunning {
-            HStack {
-              ProgressView()
-                .scaleEffect(0.7)
-                .frame(width: 16, height: 16)
-              Text("Detecting...")
-            }
-          } else {
-            Label("Find Unexposed Film Edge", systemImage: "viewfinder")
-          }
-        }
-        .disabled(
-          model.decodedImage == nil || model.isRebateDetectionRunning
-            || !supportsFilmNegative(filmType: model.parameters.filmType))
-
-        Button {
-          if isPickingRebateRegion {
-            endRebateSelection()
-          } else {
-            beginRebateSelection()
-          }
-        } label: {
-          Label(
-            isPickingRebateRegion ? "Cancel Film Base Selection" : "Select Film Base Area",
-            systemImage: isPickingRebateRegion ? "xmark" : "rectangle.dashed"
-          )
-        }
-        .disabled(model.decodedImage == nil)
-
-        if isPickingRebateRegion {
-          Text("Drag over a clear, unexposed strip of film—not the picture area.")
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-
-        if !model.rebateCandidates.isEmpty {
-          VStack(alignment: .leading, spacing: 2) {
-            Text("Possible unexposed edges:")
-              .font(.caption)
-              .foregroundStyle(.secondary)
-            ForEach(Array(model.rebateCandidates.enumerated()), id: \.offset) {
-              _, candidate in
-              Button {
-                model.selectRebateCandidate(candidate)
-              } label: {
-                HStack {
-                  Text(
-                    "\(candidateDescription(candidate.region))  B\(String(format: "%.3f", candidate.measurement.baseDensity.blue))"
-                  )
-                  .font(.caption2)
-                  Spacer()
-                  Text("\(Int(candidate.confidence * 100))%")
-                    .font(.caption2)
-                    .foregroundStyle(
-                      candidate.confidence > 0.7
-                        ? .green : candidate.confidence > 0.45 ? .orange : .secondary)
-                }
-              }
-              .buttonStyle(.plain)
-              .padding(.horizontal, 4)
-              .padding(.vertical, 2)
-              .background(
-                model.selectedRebateRegion == candidate.region
-                  ? Color.accentColor.opacity(0.15) : Color.clear
-              )
-              .cornerRadius(4)
-            }
-          }
-        }
-
-        if let measurement = model.selectedRebateMeasurement {
-          VStack(alignment: .leading, spacing: 4) {
-            Divider()
-            HStack {
-              Text("Base Density")
-                .font(.caption)
-              Spacer()
-              Button("Clear") {
-                model.clearRebateMeasurement()
-              }
-              .font(.caption2)
-            }
-            densityRow("Blue", measurement.baseDensity.blue)
-            densityRow("Green", measurement.baseDensity.green)
-            densityRow("Red", measurement.baseDensity.red)
-            Text(
-              "Samples: \(measurement.sampleCount)  Rejected: \(Int(measurement.rejectedFraction * 100))%"
-            )
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            Text("Confidence: \(Int(measurement.confidence * 100))%")
-              .font(.caption2)
-              .foregroundStyle(
-                measurement.confidence > 0.7
-                  ? .green : measurement.confidence > 0.45 ? .orange : .secondary)
-
-            if let firstCandidate = model.rebateCandidates.first(where: {
-              $0.measurement == measurement
-            }) {
-              Button {
-                model.createRollProfile(from: firstCandidate)
-              } label: {
-                Label("Save Roll Profile", systemImage: "square.and.arrow.down")
-              }
-              .controlSize(.small)
-            }
-          }
-        }
-
-        if !model.rebateStatus.isEmpty
-          && model.selectedRebateMeasurement == nil
-          && !model.isRebateDetectionRunning
-        {
-          Text(model.rebateStatus)
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-      }
-      .disabled(!supportsFilmNegative(filmType: model.parameters.filmType))
-
-      InspectorSection("Film Frame", systemImage: "crop") {
-        AdjustmentSlider(
-          "Dark",
-          value: Binding(
-            get: { Double(model.parameters.darkThreshold) },
-            set: { model.setDarkThreshold(Int($0.rounded())) }
-          ),
-          range: 0...100, neutral: 25, valueFormat: "%.0f", unitSuffix: "%", step: 1
-        )
-        AdjustmentSlider(
-          "Light",
-          value: Binding(
-            get: { Double(model.parameters.lightThreshold) },
-            set: { model.setLightThreshold(Int($0.rounded())) }
-          ),
-          range: 0...100, neutral: 100, valueFormat: "%.0f", unitSuffix: "%", step: 1
-        )
-
-        Button(action: model.detectCrop) {
-          if model.isCropDetectionRunning {
-            HStack {
-              ProgressView()
-                .scaleEffect(0.7)
-                .frame(width: 16, height: 16)
-              Text("Detecting...")
-            }
-          } else {
-            Label("Detect Frame", systemImage: "crop.rotate")
-          }
-        }
-        .disabled(model.decodedImage == nil || model.isCropDetectionRunning || isPerspectiveEditing)
-
-        HStack(spacing: 8) {
-          Button(action: toggleStraightening) {
-            Label(
-              isStraightening ? "Cancel" : "Straighten",
-              systemImage: isStraightening ? "xmark" : "line.diagonal"
-            )
-          }
-          Button(action: toggleCropping) {
-            Label(
-              isCropping ? "Cancel" : "Crop",
-              systemImage: isCropping ? "xmark" : "crop"
-            )
-          }
-        }
-        .disabled(model.decodedImage == nil || isPerspectiveEditing)
-
-        if isStraightening {
-          Text(
-            "Click one point, then a second point along an edge that should be horizontal or vertical."
-          )
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-        } else if isCropping {
-          Text("Drag a box over the canvas to keep that area.")
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-
-        if abs(model.straightenAngle) > 0.000_001 {
-          HStack {
-            Text("Straighten: \(String(format: "%.1f", model.straightenAngle))°")
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-            Spacer()
-            Button("Clear", action: model.clearStraightening)
-              .controlSize(.small)
-          }
-        }
-
-        Button(action: togglePerspectiveEditing) {
-          Label(
-            isPerspectiveEditing ? "Done Aligning" : "Adjust Perspective",
-            systemImage: isPerspectiveEditing ? "checkmark" : "square.on.square.dashed"
-          )
-        }
-        .disabled(model.decodedImage == nil)
-
-        if isPerspectiveEditing {
-          Text(
-            "Drag each targeting reticle onto the film edge. A 100 × 100 px loupe appears while dragging. Parallel-edge assist softly snaps likely trapezoids; hold Option for a free corner."
-          )
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-          Toggle("Parallel-edge assist", isOn: $usesPerspectiveParallelAssist)
-            .controlSize(.small)
-          Button("Reset Perspective") {
-            model.clearPerspectiveCrop()
-            model.beginPerspectiveCrop()
-          }
-          .controlSize(.small)
-        }
-
-        if let perspectiveCrop = model.perspectiveCrop {
-          Divider()
-          Text("Four-corner perspective crop")
-            .font(.caption2)
-          Text(
-            "TL \(pointText(perspectiveCrop.topLeft))  TR \(pointText(perspectiveCrop.topRight))"
-          )
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-          Text(
-            "BL \(pointText(perspectiveCrop.bottomLeft))  BR \(pointText(perspectiveCrop.bottomRight))"
-          )
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-          Button("Clear") {
-            endPerspectiveEditing()
-            model.clearPerspectiveCrop()
-          }
-          .controlSize(.small)
-          .font(.caption2)
-        } else if let cropRect = model.cropRect {
-          Divider()
-          VStack(alignment: .leading, spacing: 2) {
-            Text("Angle: \(String(format: "%.1f", cropRect.angle))°")
-              .font(.caption2)
-            Text(
-              "Size: \(String(format: "%.3f", cropRect.width)) × \(String(format: "%.3f", cropRect.height))"
-            )
-            .font(.caption2)
-            Text(
-              "Center: (\(String(format: "%.3f", cropRect.centerX)), \(String(format: "%.3f", cropRect.centerY)))"
-            )
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-          }
-          Button("Clear") { model.clearCrop() }
-            .controlSize(.small)
-            .font(.caption2)
-        }
-
-        if let manualCrop = model.manualCrop {
-          Divider()
-          HStack {
-            VStack(alignment: .leading, spacing: 2) {
-              Text("Manual canvas crop")
-                .font(.caption2)
-              Text(
-                String(
-                  format: "x %.3f  y %.3f  w %.3f  h %.3f",
-                  manualCrop.x, manualCrop.y, manualCrop.width, manualCrop.height)
-              )
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button("Reset Crop", action: model.clearManualCrop)
-              .controlSize(.small)
-          }
-        }
-
-        if let output = model.selectedCanvasDimensions {
-          Divider()
-          HStack {
-            Text("Full-resolution canvas")
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-            Spacer()
-            Text("\(output.width) × \(output.height) px")
-              .font(.caption2)
-              .monospacedDigit()
-          }
-        }
-
-        if !model.cropStatus.isEmpty && model.cropRect == nil
-          && model.perspectiveCrop == nil && model.manualCrop == nil
-          && !model.isCropDetectionRunning
-        {
-          Text(model.cropStatus)
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        }
-      }
-
-      InspectorSection("Dust Mask", systemImage: "sparkles") {
-        HStack {
-          Button(action: model.detectDustMask) {
-            if model.isDustDetectionRunning {
-              ProgressView()
-                .controlSize(.small)
-            } else {
-              Label("Detect Dust", systemImage: "wand.and.stars")
-            }
-          }
-          .disabled(model.decodedImage == nil || model.isDustDetectionRunning)
-          if model.dustMaskImage != nil {
-            Button("Clear", action: model.clearDustMask)
-          }
-        }
-        .controlSize(.small)
-        Text(
-          model.dustStatus.isEmpty
-            ? "Detection overlays candidate dust pixels; removal remains non-destructive and is not applied automatically."
-            : model.dustStatus
-        )
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-        .fixedSize(horizontal: false, vertical: true)
-      }
-
-      if model.selectedRebateMeasurement != nil
-        || model.rollProfile?.measuredBaseDensity != nil
-      {
-        InspectorSection("Density Pipeline", systemImage: "arrow.triangle.branch") {
-          VStack(alignment: .leading, spacing: 6) {
-            Toggle(
-              "Use Measured Film Base",
-              isOn: Binding(
-                get: { model.parameters.densityPipelineEnabled },
-                set: { model.setDensityPipelineEnabled($0) }
-              )
-            )
-            .font(.callout)
-
-            if model.parameters.densityPipelineEnabled,
-              let baseDensity = model.parameters.densityBaseDensity
-            {
-              Text(
-                "Base: B \(String(format: "%.3f", baseDensity.blue))  G \(String(format: "%.3f", baseDensity.green))  R \(String(format: "%.3f", baseDensity.red))"
-              )
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-              Text(
-                "C-41: slopes B\(String(format: "%.2f", model.parameters.densityC41Profile.densitySlope.blue)) G\(String(format: "%.2f", model.parameters.densityC41Profile.densitySlope.green)) R\(String(format: "%.2f", model.parameters.densityC41Profile.densitySlope.red))"
-              )
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-              Text(
-                model.parameters.densityCorrection == .identity
-                  ? "Capture matrix: Identity"
-                  : "Capture matrix: Custom fitted correction"
-              )
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-            }
-
-            if model.parameters.densityPipelineEnabled {
-              Text(
-                "This uses the measured film edge for inversion. Turn it off to compare with the basic negative conversion."
-              )
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-              .fixedSize(horizontal: false, vertical: true)
-            }
           }
         }
       }
 
-      Button(role: .destructive, action: model.resetCorrections) {
-        Label("Reset All Adjustments", systemImage: "arrow.counterclockwise")
-          .frame(maxWidth: .infinity)
+      InspectorSection("Advanced Color Science", systemImage: "slider.horizontal.below.rectangle") {
+        advancedColorScienceControls
       }
-      .buttonStyle(.bordered)
-      .disabled(model.previewImage == nil)
-    }
-  }
-
-  private func saveNamedPreset() {
-    let name = presetName.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !name.isEmpty else { return }
-    model.saveCorrectionPreset(named: name)
-    presetName = ""
-  }
-
-  private var gradeInspector: some View {
-    VStack(spacing: 10) {
-      InspectorSection("Clipping", systemImage: "waveform.path.ecg") {
-        let low = model.previewStatistics.lowClippingRatios
-        let high = model.previewStatistics.highClippingRatios
-        densityRow("Shadows", max(low.blue, low.green, low.red) * 100)
-        densityRow("Highlights", max(high.blue, high.green, high.red) * 100)
-        Text("Percent of sampled display pixels clipped in the most affected channel.")
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-      }
-
-      InspectorSection(
-        "Tone Curve", systemImage: "point.topleft.down.to.point.bottomright.curvepath"
-      ) {
-        Toggle(
-          "Enable Overall Curve",
-          isOn: Binding(
-            get: { model.parameters.curveEnabled },
-            set: { model.setCurveEnabled($0) }
-          )
-        )
-        .font(.caption)
-        IntegratedCurvesView(model: model)
-      }
-      .disabled(!model.parameters.filmType.supportsColorCorrections)
-
-      InspectorSection("Color Grading", systemImage: "circle.hexagongrid") {
-        HStack(alignment: .top, spacing: 12) {
-          ColorWheelControl(
-            title: "Shadows",
-            hue: model.parameters.shadowWheel.hue,
-            strength: model.parameters.shadowWheel.strength,
-            setHue: model.setShadowWheelHue,
-            setStrength: model.setShadowWheelStrength
-          )
-          ColorWheelControl(
-            title: "Midtones",
-            hue: model.parameters.midtoneWheel.hue,
-            strength: model.parameters.midtoneWheel.strength,
-            setHue: model.setMidtoneWheelHue,
-            setStrength: model.setMidtoneWheelStrength
-          )
-          ColorWheelControl(
-            title: "Highlights",
-            hue: model.parameters.highlightWheel.hue,
-            strength: model.parameters.highlightWheel.strength,
-            setHue: model.setHighlightWheelHue,
-            setStrength: model.setHighlightWheelStrength
-          )
-        }
-        Text("Drag from center to tint. Double-click a wheel to reset.")
-          .font(.caption2)
-          .foregroundStyle(.secondary)
-      }
-      .disabled(!model.parameters.filmType.supportsColorCorrections)
+      .disabled(model.parameters.filmType != .colourNegative)
     }
   }
 
@@ -1982,9 +1972,10 @@ struct ContentView: View {
 
   private func naturalPresetTitle(_ preset: FilmNegativePreset) -> String {
     switch preset {
-    case .colourNegative, .blackAndWhite: "Balanced"
+    case .colourNegative: "Standard C-41"
+    case .blackAndWhite: "Standard B&W"
     case .fuji400FreshAlternate: "Fujicolor 400"
-    case .fuji200ExpiredAlternate: "Fujicolor 200 · expired"
+    case .fuji200ExpiredAlternate: "Fujicolor 200 (Aged)"
     case .cinestill800TAlternate: "CineStill 800T"
     case .harmanPhoenixIIAlternate: "Harman Phoenix II"
     case .shanghaiGP3Alternate: "Shanghai GP3"
@@ -2016,11 +2007,11 @@ struct ContentView: View {
   private func paperDescription(_ paper: DensityPaperProfile) -> String {
     switch paper.id.rawValue {
     case DensityPaperProfileCatalog.kodakEnduraPremier.id.rawValue:
-      "Deeper blacks with slightly cooler shadows"
+      "Kodak Endura: warm skin tones, deeper blacks, rich contrast"
     case DensityPaperProfileCatalog.fujiCrystalArchive.id.rawValue:
-      "Brilliant whites with a crisp, cool response"
+      "Fuji Crystal Archive: brilliant whites and crisp, vivid color"
     default:
-      "Clean contrast without added paper color"
+      "Neutral: clean linear response without paper coloration"
     }
   }
 
@@ -2071,18 +2062,6 @@ struct ContentView: View {
 
   private func supportsFilmNegative(filmType: FilmType) -> Bool {
     filmType == .colourNegative || filmType == .blackAndWhiteNegative
-  }
-
-  private func densityRow(_ label: String, _ value: Double) -> some View {
-    HStack {
-      Text(label)
-        .font(.caption2)
-        .foregroundStyle(.secondary)
-      Spacer()
-      Text(String(format: "%.3f", value))
-        .font(.caption2)
-        .monospacedDigit()
-    }
   }
 
   private func candidateDescription(_ region: ImageRegion) -> String {
@@ -2181,9 +2160,6 @@ struct ContentView: View {
     model.showOriginal = previousValue
   }
 
-  private func pointText(_ point: PerspectiveCrop.Point) -> String {
-    String(format: "%.2f, %.2f", point.x, point.y)
-  }
 }
 
 private struct RawPreviewUpgradeBar: View {
@@ -2211,29 +2187,59 @@ private struct RawPreviewUpgradeBar: View {
 private struct InspectorSection<Content: View>: View {
   let title: String
   let systemImage: String
+  var isModified: Bool
   @ViewBuilder let content: Content
+  @State private var isExpanded: Bool
 
   init(
     _ title: String,
     systemImage: String,
+    isModified: Bool = false,
+    defaultExpanded: Bool = true,
     @ViewBuilder content: () -> Content
   ) {
     self.title = title
     self.systemImage = systemImage
+    self.isModified = isModified
     self.content = content()
+    self._isExpanded = State(initialValue: defaultExpanded)
   }
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      HStack(spacing: 7) {
-        Image(systemName: systemImage)
-          .foregroundStyle(.secondary)
-          .frame(width: 16)
-        Text(title)
-          .foregroundStyle(.primary)
+    VStack(alignment: .leading, spacing: 8) {
+      Button {
+        withAnimation(.easeInOut(duration: 0.18)) {
+          isExpanded.toggle()
+        }
+      } label: {
+        HStack(spacing: 7) {
+          Image(systemName: systemImage)
+            .foregroundStyle(.secondary)
+            .frame(width: 16)
+          Text(title)
+            .foregroundStyle(.primary)
+
+          if isModified {
+            Circle()
+              .fill(Color.accentColor)
+              .frame(width: 6, height: 6)
+          }
+
+          Spacer()
+
+          Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.tertiary)
+        }
+        .font(.subheadline.weight(.semibold))
+        .contentShape(Rectangle())
       }
-      .font(.subheadline.weight(.semibold))
-      content
+      .buttonStyle(.plain)
+
+      if isExpanded {
+        content
+          .padding(.top, 2)
+      }
     }
     .controlSize(.small)
     .buttonStyle(.bordered)
@@ -2247,139 +2253,6 @@ private struct InspectorSection<Content: View>: View {
       RoundedRectangle(cornerRadius: 8, style: .continuous)
         .stroke(Color.primary.opacity(0.08), lineWidth: 1)
     )
-  }
-}
-
-private struct InspectorChoiceCard: View {
-  let title: String
-  let subtitle: String
-  let systemImage: String
-  let isSelected: Bool
-  let action: () -> Void
-
-  var body: some View {
-    Button(action: action) {
-      VStack(alignment: .leading, spacing: 5) {
-        HStack(spacing: 6) {
-          Image(systemName: systemImage)
-            .frame(width: 15)
-          Text(title)
-            .font(.caption.weight(.semibold))
-          Spacer(minLength: 0)
-          if isSelected {
-            Image(systemName: "checkmark.circle.fill")
-              .font(.caption)
-          }
-        }
-        Text(subtitle)
-          .font(.caption2)
-          .foregroundStyle(isSelected ? Color.primary.opacity(0.8) : Color.secondary)
-          .fixedSize(horizontal: false, vertical: true)
-      }
-      .foregroundStyle(isSelected ? Color.accentColor : .primary)
-      .padding(9)
-      .frame(maxWidth: .infinity, minHeight: 68, alignment: .topLeading)
-      .background(
-        RoundedRectangle(cornerRadius: 7, style: .continuous)
-          .fill(isSelected ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.035))
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: 7, style: .continuous)
-          .stroke(
-            isSelected ? Color.accentColor.opacity(0.8) : Color.primary.opacity(0.09),
-            lineWidth: isSelected ? 1.5 : 1
-          )
-      )
-      .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-    }
-    .buttonStyle(.plain)
-    .accessibilityValue(isSelected ? "Selected" : "")
-  }
-}
-
-private struct InspectorChoiceRow: View {
-  let title: String
-  let subtitle: String
-  let isSelected: Bool
-  let action: () -> Void
-
-  var body: some View {
-    Button(action: action) {
-      HStack(alignment: .top, spacing: 8) {
-        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-          .foregroundStyle(isSelected ? Color.accentColor : Color.secondary.opacity(0.55))
-          .padding(.top, 1)
-        VStack(alignment: .leading, spacing: 2) {
-          Text(title)
-            .font(.caption.weight(.medium))
-            .foregroundStyle(.primary)
-          if !subtitle.isEmpty {
-            Text(subtitle)
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-              .fixedSize(horizontal: false, vertical: true)
-          }
-        }
-        Spacer(minLength: 0)
-      }
-      .padding(.horizontal, 9)
-      .padding(.vertical, 7)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-          .fill(isSelected ? Color.accentColor.opacity(0.09) : Color.primary.opacity(0.025))
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-          .stroke(
-            isSelected ? Color.accentColor.opacity(0.55) : Color.primary.opacity(0.07),
-            lineWidth: 1
-          )
-      )
-      .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-    }
-    .buttonStyle(.plain)
-    .accessibilityValue(isSelected ? "Selected" : "")
-  }
-}
-
-private struct InspectorChoiceChip: View {
-  let title: String
-  let isSelected: Bool
-  let action: () -> Void
-
-  var body: some View {
-    Button(action: action) {
-      HStack(spacing: 6) {
-        if isSelected {
-          Image(systemName: "checkmark")
-            .font(.caption2.weight(.bold))
-        }
-        Text(title)
-          .font(.caption)
-          .lineLimit(2)
-          .multilineTextAlignment(.leading)
-        Spacer(minLength: 0)
-      }
-      .foregroundStyle(isSelected ? Color.accentColor : .primary)
-      .padding(.horizontal, 8)
-      .padding(.vertical, 6)
-      .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
-      .background(
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-          .fill(isSelected ? Color.accentColor.opacity(0.1) : Color.primary.opacity(0.025))
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: 6, style: .continuous)
-          .stroke(
-            isSelected ? Color.accentColor.opacity(0.65) : Color.primary.opacity(0.07),
-            lineWidth: 1
-          )
-      )
-      .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-    }
-    .buttonStyle(.plain)
-    .accessibilityValue(isSelected ? "Selected" : "")
   }
 }
 

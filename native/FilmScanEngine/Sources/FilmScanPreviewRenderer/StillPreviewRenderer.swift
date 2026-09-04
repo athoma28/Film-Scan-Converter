@@ -381,13 +381,13 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       parameters.curveEnabled
       ? FilmProcessing.buildCurveLUT(controlPoints: parameters.curveControlPoints) : nil
     let redLUT =
-      parameters.redCurveEnabled
+      parameters.filmType.supportsColorCorrections && parameters.redCurveEnabled
       ? FilmProcessing.buildCurveLUT(controlPoints: parameters.redCurveControlPoints) : nil
     let greenLUT =
-      parameters.greenCurveEnabled
+      parameters.filmType.supportsColorCorrections && parameters.greenCurveEnabled
       ? FilmProcessing.buildCurveLUT(controlPoints: parameters.greenCurveControlPoints) : nil
     let blueLUT =
-      parameters.blueCurveEnabled
+      parameters.filmType.supportsColorCorrections && parameters.blueCurveEnabled
       ? FilmProcessing.buildCurveLUT(controlPoints: parameters.blueCurveControlPoints) : nil
 
     let width = 256
@@ -1227,7 +1227,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         }
       }
 
-      if (!isBW) {
+      {
         float idxR = clamp(rgb.r * 65535.0, 0.0, 65535.0);
         float idxG = clamp(rgb.g * 65535.0, 0.0, 65535.0);
         float idxB = clamp(rgb.b * 65535.0, 0.0, 65535.0);
@@ -1277,11 +1277,11 @@ private struct CurveLUTKey: Hashable {
   init(parameters: ProcessingParameters) {
     curveEnabled = parameters.curveEnabled
     curveControlPoints = parameters.curveControlPoints
-    redCurveEnabled = parameters.redCurveEnabled
+    redCurveEnabled = parameters.filmType.supportsColorCorrections && parameters.redCurveEnabled
     redCurveControlPoints = parameters.redCurveControlPoints
-    greenCurveEnabled = parameters.greenCurveEnabled
+    greenCurveEnabled = parameters.filmType.supportsColorCorrections && parameters.greenCurveEnabled
     greenCurveControlPoints = parameters.greenCurveControlPoints
-    blueCurveEnabled = parameters.blueCurveEnabled
+    blueCurveEnabled = parameters.filmType.supportsColorCorrections && parameters.blueCurveEnabled
     blueCurveControlPoints = parameters.blueCurveControlPoints
   }
 }

@@ -178,6 +178,92 @@ struct ScanStackingTests {
     }
   }
 
+  @Test("Sequential loading preserves the original captures for outlier rejection")
+  func sequentialStackRejectsEarlyContamination() async throws {
+    let truth = syntheticImage(width: 96, height: 72, channels: 3, seed: 51)
+    let contaminated = replacingPatch(
+      in: truth, xRange: 40..<48, yRange: 30..<38, linearValue: 0.9)
+    let captures = [truth, contaminated, truth, truth]
+    let expected = try MultiScanStacker.combine(images: captures, mode: .noiseReduction)
+    let result = try await MultiScanStacker.combine(
+      imageCount: captures.count, mode: .noiseReduction, loadImage: { captures[$0] })
+    let matchesOriginalMerge = result == expected
+    #expect(matchesOriginalMerge)
+    #expect(linearMeanSquaredError(result.image, truth) < 0.00001)
+  }
+
+  @Test(
+    "Stored row bands preserve registration, HDR weights, and edge samples",
+    arguments: [ScanStackMode.noiseReduction, .hdr, .automatic])
+  func storedBandsMatchOriginalMerge(mode: ScanStackMode) throws {
+    let captures = [
+      syntheticImage(width: 96, height: 72, channels: 3, seed: 38),
+      syntheticImage(
+        width: 96, height: 72, channels: 3, seed: 38,
+        exposureEV: 2, translationX: 4, translationY: -3),
+      syntheticImage(
+        width: 96, height: 72, channels: 3, seed: 38,
+        exposureEV: -1, translationX: -3, translationY: 4),
+    ]
+    let expected = try MultiScanStacker.combine(images: captures, mode: mode)
+    let store = try StoredScanStack()
+    for capture in captures { try store.append(capture) }
+    // Five rows per band exercises both translated borders and a partial last band.
+    let result = try store.finish(mode: mode, bandComponentLimit: 96 * 3 * captures.count * 5)
+    let matchesOriginalMerge = result == expected
+    #expect(matchesOriginalMerge)
+  }
+
+  @Test("Stored monochrome stacks match the original merge and clean up temporary files")
+  func storedMonochromeCleanup() throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let captures = (0..<3).map {
+      syntheticImage(
+        width: 88, height: 66, channels: 1, seed: 22,
+        noiseSeed: UInt64(100 + $0), noiseAmplitude: 0.025)
+    }
+    let expected = try MultiScanStacker.combine(images: captures, mode: .noiseReduction)
+    do {
+      let store = try StoredScanStack(temporaryDirectory: directory)
+      for capture in captures { try store.append(capture) }
+      let result = try store.finish(mode: .noiseReduction, bandComponentLimit: 88 * 3 * 5)
+      let matchesOriginalMerge = result == expected
+      #expect(matchesOriginalMerge)
+    }
+    #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+    do {
+      let store = try StoredScanStack(temporaryDirectory: directory)
+      try store.append(captures[0])
+      try store.append(syntheticImage(width: 40, height: 30, channels: 1, seed: 22))
+      Issue.record("Incompatible capture unexpectedly accepted")
+    } catch let error as ScanStackError {
+      #expect(
+        error
+          == .incompatibleDimensions(
+            index: 1, expectedWidth: 88, expectedHeight: 66, actualWidth: 40, actualHeight: 30))
+    }
+    #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+  }
+
+  @Test("Cancelling a stored stack removes its original capture files")
+  func storedCancellationCleanup() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let capture = syntheticImage(width: 96, height: 72, channels: 3, seed: 63)
+    let task = Task.detached {
+      let store = try StoredScanStack(temporaryDirectory: directory)
+      try store.append(capture)
+      try store.append(capture)
+      withUnsafeCurrentTask { $0?.cancel() }
+      return try store.finish(mode: .noiseReduction)
+    }
+    await #expect(throws: CancellationError.self) { try await task.value }
+    #expect(try FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty)
+  }
+
   private func syntheticImage(
     width: Int,
     height: Int,

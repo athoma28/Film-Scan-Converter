@@ -61,6 +61,17 @@ Film & Conversion panel now presents
 Natural, Darkroom, Classic, and Bypass as the visible conversion intents, with
 stock and paper choices progressively disclosed inside the relevant intent.
 
+The 2026-09-02 code-health fixes make full-resolution preview and export use
+the same original-capture stack merge as bounded previews. Captures decode
+sequentially into temporary storage, then merge in bounded row bands using
+their original alignment, exposure offsets, and HDR weights. Resident image
+storage no longer grows with every full-resolution capture; temporary disk
+usage is approximately two bytes per channel per pixel per capture. Files
+are removed on completion, failure, and cancellation. The app retains a
+bounded preview and reports a failed final upgrade. B&W overall tone curves
+now apply consistently to the CPU and GPU; color-channel controls are gated
+to color film types.
+
 A 2026-07-27 audit reopened a bounded performance slice, now complete.
 Camera-scan stage hashes and the repeated determinism
 mode landed on 2026-07-28 with a passing stock-build baseline, and the

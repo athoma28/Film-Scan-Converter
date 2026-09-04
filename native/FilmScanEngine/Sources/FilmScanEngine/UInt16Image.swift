@@ -187,28 +187,33 @@ public struct UInt16Image: Equatable, Sendable {
     var data = Data(count: pixelCount * 8)
     let singleChannel = channels == 1
     data.withUnsafeMutableBytes { (rbp: UnsafeMutableRawBufferPointer) in
-      let buf = rbp.bindMemory(to: UInt16.self)
-      pixels.withUnsafeBufferPointer { src in
+      guard let baseAddress = rbp.baseAddress?.assumingMemoryBound(to: UInt16.self) else {
+        return
+      }
+      let output = SendableMutableBuffer(baseAddress)
+      let workerCount = exportPackingWorkerCount(pixelCount: pixelCount)
+      let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
+      DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
+        let start = worker * pixelsPerWorker
+        let end = min(start + pixelsPerWorker, pixelCount)
+        guard start < end else { return }
         if singleChannel {
-          var di = 0
-          for i in 0..<pixelCount {
-            let v = src[i]
-            buf[di] = v
-            buf[di + 1] = v
-            buf[di + 2] = v
-            buf[di + 3] = .max
-            di += 4
+          for pixelIndex in start..<end {
+            let v = pixels[pixelIndex]
+            let destination = pixelIndex * 4
+            output.baseAddress[destination] = v
+            output.baseAddress[destination + 1] = v
+            output.baseAddress[destination + 2] = v
+            output.baseAddress[destination + 3] = .max
           }
         } else {
-          var si = 0
-          var di = 0
-          for _ in 0..<pixelCount {
-            buf[di] = src[si + 2]
-            buf[di + 1] = src[si + 1]
-            buf[di + 2] = src[si]
-            buf[di + 3] = .max
-            si += 3
-            di += 4
+          for pixelIndex in start..<end {
+            let source = pixelIndex * 3
+            let destination = pixelIndex * 4
+            output.baseAddress[destination] = pixels[source + 2]
+            output.baseAddress[destination + 1] = pixels[source + 1]
+            output.baseAddress[destination + 2] = pixels[source]
+            output.baseAddress[destination + 3] = .max
           }
         }
       }
@@ -337,7 +342,7 @@ public struct UInt16Image: Equatable, Sendable {
   }
 
   private func exportPackingWorkerCount(pixelCount: Int) -> Int {
-    guard pixelCount >= 1_000_000 else { return 1 }
+    guard pixelCount >= 100_000 else { return 1 }
     return max(1, min(8, ProcessInfo.processInfo.activeProcessorCount))
   }
 }
