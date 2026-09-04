@@ -102,5 +102,6 @@ let package = Package(
       dependencies: ["FilmScanEngine", "FilmScanPreviewRenderer", "FilmScanConverterMac"],
       resources: [.copy("Fixtures")]
     ),
-  ]
+  ],
+  cxxLanguageStandard: .cxx14
 )
