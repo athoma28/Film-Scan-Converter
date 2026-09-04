@@ -26,14 +26,18 @@ jobs:
   pixel-equivalence:
     name: Native regression (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    env:
+      DEVELOPER_DIR: ${{ matrix.developer_dir }}
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - macos-14
-          - macos-15
+        include:
+          - os: macos-14
+            developer_dir: /Applications/Xcode_16.2.app/Contents/Developer
+          - os: macos-15
+            developer_dir: /Applications/Xcode.app/Contents/Developer
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Check native formatting
         if: matrix.os == 'macos-15'
         run: >-
@@ -54,11 +58,12 @@ jobs:
           PROFILE=$(dirname "$COVERAGE_JSON")/default.profdata
           xcrun llvm-cov report "$TEST_BINARY" -instr-profile="$PROFILE" -ignore-filename-regex='Tests|\.build'
       - name: Upload native code coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-code-coverage-${{ matrix.os }}
           path: native/FilmScanEngine/.build/**/codecov/*.profdata
           if-no-files-found: error
+          include-hidden-files: true
       - name: Build native macOS app
         run: swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
       - name: Assemble and validate unsigned beta artifact
