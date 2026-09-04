@@ -211,6 +211,7 @@ final class AppModel: ObservableObject {
   private var retainedExportDecode = SelectedFileExportDecodeCache()
   /// Test seam that replaces LibRaw for selected-file export-cache tests.
   var fullResolutionExportDecoder: (@Sendable (URL) throws -> UInt16Image)?
+  var scanStackPreviewDecoder: (@Sendable (URL, ScanStackPreviewTier) throws -> UInt16Image)?
   private(set) var fullResolutionExportDecodeCount = 0
   private(set) var fullResolutionExportDecodeCacheHits = 0
 
@@ -263,6 +264,15 @@ final class AppModel: ObservableObject {
       )
     }
     return nil
+  }
+
+  var selectedDetectedFrameDimensions: PixelDimensions? {
+    guard let source = sourcePixelDimensions, parameters.cropRect != nil else { return nil }
+    var frameParameters = parameters
+    frameParameters.rotation = 0
+    frameParameters.straightenAngle = 0
+    frameParameters.manualCrop = nil
+    return ImageGeometry.outputDimensions(source: source, parameters: frameParameters)
   }
 
   var selectedCanvasDimensions: PixelDimensions? {
@@ -2601,48 +2611,10 @@ final class AppModel: ObservableObject {
     mode: ScanStackMode
   ) async throws -> UInt16Image {
     scanStackStatusID = stack.id
-    guard let firstMember = stack.members.first else {
-      throw ScanStackError.insufficientImages
-    }
+    let result = try await combinedFullResolutionStack(stack: stack, mode: mode, forExport: true)
     scanStackStatus =
-      "Decoding stack capture 1 of \(stack.members.count): \(firstMember.lastPathComponent)"
-    var composite = try await decodedImageForExport(firstMember)
-    var effectiveMode = mode == .automatic ? ScanStackMode.noiseReduction : mode
-    var automaticUsedHDR = false
-
-    for (index, member) in stack.members.enumerated().dropFirst() {
-      try Task.checkCancellation()
-      scanStackStatus =
-        "Decoding stack capture \(index + 1) of \(stack.members.count): \(member.lastPathComponent)"
-      let candidate = try await decodedImageForExport(member)
-      try Task.checkCancellation()
-      scanStackStatus =
-        "Aligning and combining capture \(index + 1) of \(stack.members.count)..."
-      // Weight the existing composite by the number of captures it already
-      // represents. Array copies share the immutable UInt16 pixel storage, so
-      // only the composite, current candidate, and new output are resident.
-      let accumulated = composite
-      let worker = Task.detached(priority: .userInitiated) {
-        let weightedComposite = Array(repeating: accumulated, count: index)
-        return try MultiScanStacker.combine(
-          images: weightedComposite + [candidate],
-          mode: mode)
-      }
-      let result = try await withTaskCancellationHandler {
-        try await worker.value
-      } onCancel: {
-        worker.cancel()
-      }
-      composite = result.image
-      if mode == .automatic {
-        automaticUsedHDR = automaticUsedHDR || result.effectiveMode == .hdr
-        effectiveMode = automaticUsedHDR ? .hdr : .noiseReduction
-      }
-    }
-    try Task.checkCancellation()
-    scanStackStatus =
-      "Built full-resolution \(Self.scanStackModeLabel(effectiveMode)) stack from \(stack.members.count) captures."
-    return composite
+      "Built full-resolution \(Self.scanStackModeLabel(result.effectiveMode)) stack from \(stack.members.count) captures."
+    return result.image
   }
 
   nonisolated static func requiresFullResolutionExportDecode(_ url: URL) -> Bool {
@@ -3528,6 +3500,7 @@ final class AppModel: ObservableObject {
     isUpgradingScanStack = false
     scanStackStatus = "Aligning \(stack.members.count) captures..."
     scanStackStatusID = stack.id
+    setStatus(scanStackStatus)
 
     scanStackPreviewTask = Task { [weak self] in
       guard let self else { return }
@@ -3553,8 +3526,10 @@ final class AppModel: ObservableObject {
           do {
             result = try await self.combinedStackResult(
               stack: stack, mode: mode, tier: tier)
+          } catch is CancellationError {
+            throw CancellationError()
           } catch {
-            if appliedImage == nil { throw error }
+            if appliedImage == nil || tier == .full { throw error }
             continue
           }
           try Task.checkCancellation()
@@ -3586,6 +3561,7 @@ final class AppModel: ObservableObject {
         if appliedImage != nil {
           self.scanStackStatus =
             "Showing the bounded stack; full-resolution upgrade failed: \(error.localizedDescription)"
+          self.setStatus(self.scanStackStatus, kind: .error)
         } else {
           self.scanStackStatus = "Stack could not be built: \(error.localizedDescription)"
           self.setStatus(self.scanStackStatus, kind: .error)
@@ -3600,14 +3576,15 @@ final class AppModel: ObservableObject {
     tier: ScanStackPreviewTier
   ) async throws -> MultiScanStackResult {
     if tier == .full {
-      return try await combinedFullResolutionStackPreview(stack: stack, mode: mode)
+      return try await combinedFullResolutionStack(stack: stack, mode: mode, forExport: false)
     }
+    let decoder = scanStackPreviewDecoder
     let worker = Task.detached(priority: .userInitiated) {
       var images: [UInt16Image] = []
       images.reserveCapacity(stack.members.count)
       for url in stack.members {
         try Task.checkCancellation()
-        images.append(try Self.makeStackPreviewSource(for: url, tier: tier))
+        images.append(try decoder?(url, tier) ?? Self.makeStackPreviewSource(for: url, tier: tier))
       }
       try Task.checkCancellation()
       return try MultiScanStacker.combine(images: images, mode: mode)
@@ -3619,74 +3596,48 @@ final class AppModel: ObservableObject {
     }
   }
 
-  private func combinedFullResolutionStackPreview(
+  private func combinedFullResolutionStack(
     stack: DetectedScanStack,
-    mode: ScanStackMode
+    mode: ScanStackMode,
+    forExport: Bool
   ) async throws -> MultiScanStackResult {
-    guard let firstMember = stack.members.first else {
-      throw ScanStackError.insufficientImages
+    try await MultiScanStacker.combine(imageCount: stack.members.count, mode: mode) { index in
+      try await self.loadFullResolutionStackMember(
+        stack.members[index], index: index, count: stack.members.count, forExport: forExport)
     }
-    scanStackStatus =
-      "Decoding stack capture 1 of \(stack.members.count): \(firstMember.lastPathComponent)"
-    var composite = try await decodeStackPreviewMember(firstMember, tier: .full)
-    var lastResult: MultiScanStackResult?
-    var automaticUsedHDR = false
+  }
 
-    for (index, member) in stack.members.enumerated().dropFirst() {
-      try Task.checkCancellation()
-      scanStackStatus =
-        "Decoding stack capture \(index + 1) of \(stack.members.count): \(member.lastPathComponent)"
-      let candidate = try await decodeStackPreviewMember(member, tier: .full)
-      try Task.checkCancellation()
-      scanStackStatus =
-        "Aligning full-resolution capture \(index + 1) of \(stack.members.count)..."
-      let accumulated = composite
-      let worker = Task.detached(priority: .userInitiated) {
-        let weightedComposite = Array(repeating: accumulated, count: index)
-        return try MultiScanStacker.combine(
-          images: weightedComposite + [candidate],
-          mode: mode)
-      }
-      let result = try await withTaskCancellationHandler {
-        try await worker.value
-      } onCancel: {
-        worker.cancel()
-      }
-      composite = result.image
-      lastResult = result
-      if mode == .automatic {
-        automaticUsedHDR = automaticUsedHDR || result.effectiveMode == .hdr
-      }
-    }
-
-    guard let lastResult else { throw ScanStackError.insufficientImages }
-    let effectiveMode: ScanStackMode
-    if mode == .automatic {
-      effectiveMode = automaticUsedHDR ? .hdr : .noiseReduction
+  private func loadFullResolutionStackMember(
+    _ url: URL, index: Int, count: Int, forExport: Bool
+  ) async throws -> UInt16Image {
+    try Task.checkCancellation()
+    scanStackStatus = "Decoding stack capture \(index + 1) of \(count): \(url.lastPathComponent)"
+    let image: UInt16Image
+    if forExport {
+      image = try await decodedImageForExport(url)
     } else {
-      effectiveMode = lastResult.effectiveMode
+      image = try await decodeStackPreviewMember(url, tier: .full)
     }
-    return MultiScanStackResult(
-      image: composite,
-      effectiveMode: effectiveMode,
-      alignments: lastResult.alignments,
-      exposureOffsetsEV: lastResult.exposureOffsetsEV)
+    try Task.checkCancellation()
+    scanStackStatus = "Aligning and combining \(count) captures..."
+    return image
   }
 
   private func decodeStackPreviewMember(
     _ url: URL,
     tier: ScanStackPreviewTier
   ) async throws -> UInt16Image {
+    let decoder = scanStackPreviewDecoder
     if tier == .full, FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased()) {
       let gate = rawFullPreviewDecodeGate
       return try await Task.detached(priority: .userInitiated) {
         try await gate.run {
-          try Self.makeStackPreviewSource(for: url, tier: .full)
+          try decoder?(url, tier) ?? Self.makeStackPreviewSource(for: url, tier: .full)
         }
       }.value
     }
     return try await Task.detached(priority: .userInitiated) {
-      try Self.makeStackPreviewSource(for: url, tier: tier)
+      try decoder?(url, tier) ?? Self.makeStackPreviewSource(for: url, tier: tier)
     }.value
   }
 
@@ -3941,7 +3892,8 @@ final class AppModel: ObservableObject {
         AppPerformanceSignposts.end(interval)
         pendingFirstPreviewInterval = nil
       }
-      if !status.localizedCaseInsensitiveContains("cancel") {
+      // A background redraw must not erase the outcome of a failed operation.
+      if statusKind != .error, !status.localizedCaseInsensitiveContains("cancel") {
         let filename = request.selection.lastPathComponent
         let renderer = result.rendererName
         switch previewSourceKind {

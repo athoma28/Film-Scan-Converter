@@ -840,6 +840,35 @@ struct AppModelTests {
     #expect(model.previewImage?.size == croppedSize)
   }
 
+  @Test("Frame and manual-crop dimensions count each geometry stage once")
+  func cropDimensionStages() async throws {
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png", subdirectory: "Fixtures/decode_png8"))
+    let model = AppModel()
+    model.importFiles([input])
+    try await waitUntil { model.previewImage != nil && !model.isRendering }
+    model.setFilmType(.cropOnly)
+    let rect = RotatedRect(centerX: 0.5, centerY: 0.5, width: 0.5, height: 0.5, angle: 0)
+    model.setCropRect(rect)
+    let frameDimensions = try #require(model.selectedDetectedFrameDimensions)
+    model.setManualCrop(.init(x: 0, y: 0, width: 0.5, height: 1))
+    #expect(model.selectedDetectedFrameDimensions == frameDimensions)
+    let source = try #require(model.decodedImage)
+    let cropped = FilmProcessing.correctedPreview(image: source, parameters: model.parameters)
+    #expect(
+      model.selectedCanvasDimensions
+        == PixelDimensions(width: cropped.width, height: cropped.height))
+    model.clearManualCrop()
+    #expect(model.cropRect == rect)
+    #expect(model.selectedCanvasDimensions == frameDimensions)
+    model.beginPerspectiveCrop()
+    let perspective = model.perspectiveCrop
+    model.setManualCrop(.init(x: 0, y: 0, width: 0.5, height: 1))
+    model.clearManualCrop()
+    #expect(model.perspectiveCrop == perspective)
+  }
+
   @Test("Reset corrections clears crop processing and inspector state")
   func resetCorrectionsClearsCropState() {
     let model = AppModel()

@@ -50,21 +50,35 @@ struct ScanStackAppModelTests {
 
     let firstURL = sourceDirectory.appendingPathComponent("frame-01.png")
     let secondURL = sourceDirectory.appendingPathComponent("frame-02.png")
+    let thirdURL = sourceDirectory.appendingPathComponent("frame-03.png")
+    let fourthURL = sourceDirectory.appendingPathComponent("frame-04.png")
     try syntheticCapture(noiseOffset: 0).write(
       to: firstURL,
       format: .png,
       parameters: ExportParameters(format: .png))
-    try syntheticCapture(noiseOffset: 37).write(
-      to: secondURL,
-      format: .png,
-      parameters: ExportParameters(format: .png))
+    let second = syntheticCapture(noiseOffset: 37)
+    var contaminated = second.pixels
+    for y in 30..<38 {
+      for x in 40..<48 {
+        for channel in 0..<3 { contaminated[(y * second.width + x) * 3 + channel] = 63000 }
+      }
+    }
+    try UInt16Image(width: second.width, height: second.height, channels: 3, pixels: contaminated)
+      .write(
+        to: secondURL,
+        format: .png,
+        parameters: ExportParameters(format: .png))
 
+    try syntheticCapture(noiseOffset: 0).write(
+      to: thirdURL, format: .png, parameters: ExportParameters(format: .png))
+    try syntheticCapture(noiseOffset: 0).write(
+      to: fourthURL, format: .png, parameters: ExportParameters(format: .png))
     let model = AppModel()
-    model.importFiles([firstURL, secondURL])
+    model.importFiles([firstURL, secondURL, thirdURL, fourthURL])
     try await waitUntil { model.detectedScanStacks.count == 1 }
 
     let stack = try #require(model.detectedScanStacks.first)
-    #expect(stack.members == [firstURL, secondURL])
+    #expect(stack.members == [firstURL, secondURL, thirdURL, fourthURL])
     #expect(stack.recommendedMode == .noiseReduction)
     #expect(model.thumbnail(for: firstURL) != nil)
     #expect(model.thumbnail(for: secondURL) != nil)
@@ -93,7 +107,8 @@ struct ScanStackAppModelTests {
     #expect(model.scanStackStatus.contains("full resolution"))
 
     model.setFilmType(.cropOnly)
-    let decodedInputs = try [firstURL, secondURL].map(StandardImageDecoder.decode)
+    let decodedInputs = try [firstURL, secondURL, thirdURL, fourthURL].map(
+      StandardImageDecoder.decode)
     let expectedStack = try MultiScanStacker.combine(
       images: decodedInputs,
       mode: .noiseReduction
@@ -169,6 +184,7 @@ struct ScanStackAppModelTests {
     let height = 160
     let firstURL = workDirectory.appendingPathComponent("frame-01.png")
     let secondURL = workDirectory.appendingPathComponent("frame-02.png")
+    let thirdURL = workDirectory.appendingPathComponent("frame-03.png")
     let capture = syntheticCapture(noiseOffset: 0, width: width, height: height)
     try capture.write(
       to: firstURL,
@@ -178,14 +194,16 @@ struct ScanStackAppModelTests {
       to: secondURL,
       format: .png,
       parameters: ExportParameters(format: .png))
+    try syntheticCapture(noiseOffset: 37, width: width, height: height).write(
+      to: thirdURL, format: .png, parameters: ExportParameters(format: .png))
     let written = try StandardImageDecoder.fullResolutionDimensions(firstURL)
     #expect(written.width == width)
     #expect(written.height == height)
 
     let model = AppModel()
-    model.importFiles([firstURL, secondURL])
+    model.importFiles([firstURL, secondURL, thirdURL])
     try await waitUntil(timeout: .seconds(20)) {
-      !model.isAnalyzingScanStacks && model.files.count == 2 && model.previewImage != nil
+      !model.isAnalyzingScanStacks && model.files.count == 3 && model.previewImage != nil
     }
     #expect(model.detectedScanStacks.count == 1)
 
@@ -204,6 +222,56 @@ struct ScanStackAppModelTests {
     #expect(model.scanStackStatus.contains("full resolution"))
     #expect(model.selectedImageDimensions?.width == width)
     #expect(model.selectedImageDimensions?.height == height)
+    let originals = try [firstURL, secondURL, thirdURL].map(StandardImageDecoder.decode)
+    let expected = try MultiScanStacker.combine(images: originals, mode: .noiseReduction)
+    let matchesOriginalMerge = model.decodedImage == expected.image
+    #expect(matchesOriginalMerge)
+  }
+
+  @Test("Failed final stack tier retains the bounded preview and reports the error")
+  func failedFullResolutionUpgradeReportsFallback() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let capture = syntheticCapture(
+      noiseOffset: 0,
+      width: AppModel.displayPreviewMaxDimension + 80, height: 160)
+    let urls = (0..<2).map { directory.appendingPathComponent("frame-\($0).png") }
+    for url in urls {
+      try capture.write(to: url, format: .png, parameters: ExportParameters(format: .png))
+    }
+    let draft = syntheticCapture(noiseOffset: 0)
+    let model = AppModel()
+    model.scanStackPreviewDecoder = { _, tier in
+      if tier == .draft { return draft }
+      throw CocoaError(.fileReadCorruptFile)
+    }
+    model.importFiles(urls)
+    try await waitUntil {
+      !model.isAnalyzingScanStacks && !model.isLoading && model.previewImage != nil
+    }
+    let stack = try #require(model.detectedScanStacks.first)
+    model.setScanStackEnabled(true, for: stack)
+    try await waitUntil {
+      model.previewSourceKind == .alignedStack && !model.isBuildingScanStack
+        && !model.isUpgradingScanStack && !model.isRendering
+    }
+    #expect(model.decodedImage?.width == draft.width)
+    #expect(model.selectedImageDimensions?.provisional == true)
+    #expect(model.scanStackStatus.contains("full-resolution upgrade failed"))
+    #expect(model.statusKind == .error)
+
+    model.scanStackPreviewDecoder = nil
+    model.setScanStackEnabled(false, for: stack)
+    try await waitUntil { !model.isLoading && !model.isRendering }
+    model.setScanStackEnabled(true, for: stack)
+    try await waitUntil {
+      model.previewSourceKind == .alignedStack && !model.isBuildingScanStack
+        && !model.isUpgradingScanStack && !model.isRendering
+    }
+    #expect(model.selectedImageDimensions?.provisional == false)
+    #expect(model.scanStackStatus.contains("full resolution"))
+    #expect(model.statusKind == .info)
   }
 
   private func syntheticCapture(

@@ -134,7 +134,7 @@ public struct PerspectiveCrop: Codable, Equatable, Sendable {
 }
 
 public enum PerspectiveTransform {
-  static let warpParallelPixelThreshold = 1_000_000
+  static let warpParallelPixelThreshold = 100_000
 
   /// Applies a simple axis-aligned crop in the current canvas coordinate
   /// system. Unlike film-frame and perspective crops, this is intended to run

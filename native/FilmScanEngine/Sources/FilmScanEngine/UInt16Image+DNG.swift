@@ -75,12 +75,12 @@ private final class DNGWriter {
     defer { try? FileManager.default.removeItem(at: stagingURL) }
 
     do {
-      try header.write(to: stagingURL, options: .atomic)
+      FileManager.default.createFile(atPath: stagingURL.path, contents: nil)
       let handle = try FileHandle(forWritingTo: stagingURL)
       defer { try? handle.close() }
-      try handle.seekToEnd()
+      try handle.write(contentsOf: header)
       try handle.write(contentsOf: imageStrip)
-      try handle.synchronize()
+      try handle.close()
 
       if FileManager.default.fileExists(atPath: url.path) {
         _ = try FileManager.default.replaceItemAt(url, withItemAt: stagingURL)
@@ -114,7 +114,7 @@ private final class DNGWriter {
       }
       let output = SendableMutableBuffer(baseAddress)
       let workerCount =
-        pixelCount >= 1_000_000
+        pixelCount >= 100_000
         ? max(1, min(8, ProcessInfo.processInfo.activeProcessorCount))
         : 1
       let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount

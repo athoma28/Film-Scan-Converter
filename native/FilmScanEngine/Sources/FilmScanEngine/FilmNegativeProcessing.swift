@@ -283,7 +283,7 @@ public struct DisplayRenderingParameters: Codable, Equatable, Sendable {
 public enum FilmNegativeProcessing {
   private static let maxOutput: Double = 65535.0
   public static let calibrationTargetFraction: Double = 1.0 / 24.0
-  static let fusedPowerLawParallelPixelThreshold = 1_000_000
+  static let fusedPowerLawParallelPixelThreshold = 100_000
 
   // ── Accelerated UInt16 → linear sRGB LUT ──
 
@@ -471,18 +471,12 @@ public enum FilmNegativeProcessing {
     let blueExp = -(params.greenExp * params.blueRatio)
     let inputFloor = 1.0 / maxOutput
 
-    let bMedian =
-      params.measuredMedians?.blue
-      ?? image.channelMedian(channel: 0, borderPercent: borderPercent)
-    let gMedian =
-      params.measuredMedians?.green
-      ?? image.channelMedian(channel: 1, borderPercent: borderPercent)
-    let rMedian =
-      params.measuredMedians?.red
-      ?? image.channelMedian(channel: 2, borderPercent: borderPercent)
+    let medians =
+      params.measuredMedians
+      ?? computeMedians(image: image, borderPercent: borderPercent)
 
     let multipliers = computeMultipliers(
-      medians: BGRChannelValues(blue: bMedian, green: gMedian, red: rMedian),
+      medians: medians,
       params: params
     )
 
@@ -1340,10 +1334,45 @@ public enum FilmNegativeProcessing {
     image: UInt16Image,
     borderPercent: Double = 20.0
   ) -> BGRChannelValues {
-    BGRChannelValues(
-      blue: image.channelMedian(channel: 0, borderPercent: borderPercent),
-      green: image.channelMedian(channel: 1, borderPercent: borderPercent),
-      red: image.channelMedian(channel: 2, borderPercent: borderPercent)
+    let bW = Int(Double(image.width) * borderPercent / 100.0)
+    let bH = Int(Double(image.height) * borderPercent / 100.0)
+    let x1 = bW
+    let y1 = bH
+    let x2 = image.width - bW
+    let y2 = image.height - bH
+
+    guard x2 > x1, y2 > y1 else {
+      return BGRChannelValues(blue: 0, green: 0, red: 0)
+    }
+
+    if image.channels == 1 {
+      let median = image.channelMedian(channel: 0, borderPercent: borderPercent)
+      return BGRChannelValues(blue: median, green: median, red: median)
+    }
+
+    var blueHist = [Int](repeating: 0, count: Int(UInt16.max) + 1)
+    var greenHist = [Int](repeating: 0, count: Int(UInt16.max) + 1)
+    var redHist = [Int](repeating: 0, count: Int(UInt16.max) + 1)
+
+    let width = image.width
+    let channels = image.channels
+    let pixels = image.pixels
+
+    for y in y1..<y2 {
+      var idx = (y * width + x1) * channels
+      for _ in x1..<x2 {
+        blueHist[Int(pixels[idx])] += 1
+        greenHist[Int(pixels[idx + 1])] += 1
+        redHist[Int(pixels[idx + 2])] += 1
+        idx += channels
+      }
+    }
+    let sampleCount = (y2 - y1) * (x2 - x1)
+
+    return BGRChannelValues(
+      blue: UInt16Histogram.median(blueHist, sampleCount: sampleCount),
+      green: UInt16Histogram.median(greenHist, sampleCount: sampleCount),
+      red: UInt16Histogram.median(redHist, sampleCount: sampleCount)
     )
   }
 
@@ -1730,36 +1759,16 @@ extension UInt16Image {
     }
 
     var histogram = [Int](repeating: 0, count: Int(UInt16.max) + 1)
-    var sampleCount = 0
     for y in y1..<y2 {
-      for x in x1..<x2 {
-        let value = pixels[(y * width + x) * channels + channel]
+      var idx = (y * width + x1) * channels + channel
+      for _ in x1..<x2 {
+        let value = pixels[idx]
         histogram[Int(value)] += 1
-        sampleCount += 1
+        idx += channels
       }
     }
 
-    guard sampleCount > 0 else { return 0 }
-    let lowerRank = (sampleCount - 1) / 2
-    let upperRank = sampleCount / 2
-    var cumulativeCount = 0
-    var lowerValue = 0
-    for (value, count) in histogram.enumerated() {
-      cumulativeCount += count
-      if cumulativeCount > lowerRank {
-        lowerValue = value
-        break
-      }
-    }
-    guard upperRank != lowerRank else { return Double(lowerValue) }
-
-    cumulativeCount = 0
-    for (value, count) in histogram.enumerated() {
-      cumulativeCount += count
-      if cumulativeCount > upperRank {
-        return (Double(lowerValue) + Double(value)) / 2
-      }
-    }
-    return Double(lowerValue)
+    let sampleCount = (y2 - y1) * (x2 - x1)
+    return UInt16Histogram.median(histogram, sampleCount: sampleCount)
   }
 }

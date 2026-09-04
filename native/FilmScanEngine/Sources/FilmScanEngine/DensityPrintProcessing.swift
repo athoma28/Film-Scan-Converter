@@ -125,7 +125,7 @@ public enum DensityPrintProcessing {
   public static let highlightLumaBand = (0.10, 0.30)
   public static let midtoneLumaBand = (0.40, 0.60)
   public static let shadowLumaBand = (0.72, 0.92)
-  static let parallelPixelThreshold = 1_000_000
+  static let parallelPixelThreshold = 100_000
 
   public static func resolvedProfile(from params: FilmNegativeParams) -> NegativeDensityProfile {
     NegativeDensityProfileCatalog.profile(id: params.densityProfileID)
