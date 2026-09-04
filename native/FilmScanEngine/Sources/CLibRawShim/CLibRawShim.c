@@ -245,7 +245,7 @@ int fsc_decode_raw_direct_with_profile(
         const char *message = image_error == LIBRAW_SUCCESS
             ? "LibRaw did not return a processed image."
             : libraw_strerror(image_error);
-        FSC_LOG("decode_raw_direct FAIL: make_mem_image error %d ù %s", image_error, message);
+        FSC_LOG("decode_raw_direct FAIL: make_mem_image error %d: %s", image_error, message);
         code = fail(
             image_error == LIBRAW_SUCCESS ? -1 : image_error,
             message,
@@ -473,7 +473,7 @@ int fsc_extract_thumbnail(
 
     code = check_libraw(libraw_unpack_thumb(raw), error_message, error_message_capacity);
     if (code != LIBRAW_SUCCESS) {
-        FSC_LOG("extract_thumbnail FAIL: libraw_unpack_thumb error %d ù no embedded preview", code);
+        FSC_LOG("extract_thumbnail FAIL: libraw_unpack_thumb error %d: no embedded preview", code);
         libraw_close(raw);
         munmap(mapped, (size_t)st.st_size);
         return code;
