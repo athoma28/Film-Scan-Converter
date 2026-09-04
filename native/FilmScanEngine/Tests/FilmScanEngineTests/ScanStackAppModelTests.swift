@@ -242,7 +242,7 @@ struct ScanStackAppModelTests {
   }
 
   private func descendantViews(in view: NSView) -> [NSView] {
-    [view] + view.subviews.flatMap(descendantViews)
+    [view] + view.subviews.flatMap { descendantViews(in: $0) }
   }
 
   private func waitUntil(
