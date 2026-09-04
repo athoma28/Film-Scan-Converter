@@ -1,5 +1,5 @@
 import CryptoKit
-import Darwin
+@preconcurrency import Darwin
 import FilmScanEngine
 import Foundation
 
