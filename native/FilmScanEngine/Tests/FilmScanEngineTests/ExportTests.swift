@@ -106,7 +106,8 @@ struct ExportTests {
     #expect(metrics.encodingFinalizationSeconds >= 0)
     #expect(metrics.packedPixelBytes == original.width * original.height * 6)
     #expect(metrics.outputBytes > 0)
-    #expect(metrics.outputBytes == (try url.resourceValues(forKeys: [.fileSizeKey])).fileSize)
+    let outputFileSize = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize
+    #expect(metrics.outputBytes == outputFileSize)
   }
 
   @Test func tiffExportWithLZWCompression() throws {
