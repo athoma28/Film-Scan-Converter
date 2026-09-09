@@ -114,23 +114,3 @@ Warm processing with cached histogram statistics:
 - Replaced adjusted-exposure masked-array arithmetic with pixel-exact NumPy operations.
 
 Detailed findings and measurements are in `SAMPLE_RAW_BENCHMARK_2026-06-13_21-06-32_PDT.md`.
-
-## 2026-06-14 Improvement Proposal Pass
-
-- Evaluated the external suggestions in `docs/improvements/`.
-- Recorded implemented, deferred, and high-risk proposals in
-  `docs/improvements/EVALUATION.md` for the next model handoff.
-- Fixed the lowercase GoPro RAW extension filter.
-- Made expected first-run missing-config behavior log at info level.
-- Protected background preload tracking with a lock and prevented eviction while loading.
-- Lazy-loaded `psutil` and added a conservative export fallback when no memory estimate exists.
-- Removed conflicting duplicate OpenCV packages from `source/requirements.txt`.
-- Simplified the fixed white-balance dispatch without changing output.
-- Added film-mode dispatch and frame/aspect-ratio regression tests.
-
-Verification:
-
-- Full suite: 16 tests passed, 1 opt-in benchmark skipped.
-- Opt-in performance suite: passed.
-- Python compilation and `git diff --check`: passed.
-- Direct GUI import was not runnable in the test interpreter because `rawpy` is not installed.

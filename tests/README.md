@@ -5,14 +5,29 @@ generators, and native benchmark helpers. The Python pipeline is no longer the
 design authority for new features. Shared historical behavior is frozen here
 for compatibility while new native behavior uses deterministic Swift CPU
 contracts. See
-[Native macOS Development](../docs/development/native-macos.md) for the current
-development step and [Legacy Python Application](../docs/legacy-python.md) for
+[Native macOS Development](../docs/development/native-macos.md) for current
+verification and [Legacy Python Application](../docs/legacy-python.md) for
 the retirement policy.
 
-The default suite is deterministic, dependency-light, and designed to run quickly:
+## Native Regression
+
+From the repository root, run with normal macOS graphics access:
 
 ```sh
-.venv/bin/python -m unittest discover -v
+swift test --package-path native/FilmScanEngine --no-parallel
+```
+
+Use `-c release` for performance comparisons. Default native runs skip opt-in
+benchmarks and the representative roll workflow. RAW-dependent tests explicitly
+skip when their local inputs are unavailable. Latest test counts and platform
+coverage are recorded in [development status](../docs/development/native-macos.md).
+
+## Legacy Python Regression
+
+The Python regression suite is deterministic and dependency-light:
+
+```sh
+.venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 ```
 
 It verifies pixel equivalence against reference implementations for thresholding, dust detection, histogram equalization, histogram rendering, exposure, white balance, and contour overlays. It also verifies cache invalidation, multiprocessing serialization, processing-counter cleanup after exceptions, failed-write reporting and retry behavior, batch-export UI restoration, and export error-dialog formatting.
@@ -20,7 +35,8 @@ It verifies pixel equivalence against reference implementations for thresholding
 `generate_native_snapshots.py` also writes the standard-image decode fixtures
 used by the Swift regression gate. They lock exact Python/OpenCV-equivalent
 pixels for 8-bit color PNG, 8-bit grayscale PNG, BMP, and 16-bit TIFF inputs.
-The JPEG fixture uses the documented native status-page tolerance because
+The JPEG fixture permits maximum UInt16 difference 2,560 and mean difference
+512 because
 ImageIO and OpenCV use different lossy JPEG decoders.
 
 `generate_raw_decode_reference.py` writes a compact manifest of dimensions,
@@ -44,14 +60,22 @@ RUN_PERFORMANCE_TESTS=1 .venv/bin/python -m unittest tests.test_performance -v
 ```
 
 The deterministic Metal adjustment benchmark runs a fixed 1080×720 workload
-with protected tone/color controls, curves, and color wheels:
+with dye crossover, protected tone/color controls, curves, and color wheels:
 
 ```sh
 swift run -c release --package-path native/FilmScanEngine \
   FilmScanAdjustmentBenchmark
 ```
 
-Benchmarks report best-of-several timings and do not enforce hardware-specific timing thresholds.
+The Python timing tests report best-of-several samples. Native benchmarks
+report their own raw samples and median/p95 summaries; the opt-in renderer
+burst gate also checks a 33 ms p95 target. Read each harness before comparing
+results across workloads or hardware.
+
+[Preview analysis](../docs/performance/preview-analysis.md) documents CPU
+diagnostics and Darkroom benchmarks, including exact analysis/output hashes.
+[40 MP export](../docs/performance/40mp-export.md) documents decode, packing,
+writer, queue, cancellation, and physical-footprint measurements.
 
 The representative RAF corpus benchmark uses decoded 16-bit BGR arrays and
 automatically selects the first root-relative frame in each top-level stock
@@ -75,7 +99,9 @@ folder. XMP grayscale metadata selects the B&W processing path.
   --output-dir /tmp/film_scan_benchmark
 ```
 
-The corpus manifest records film type, required rotation, representative scene type, and selected edit presets. Results include cold processing, warm cached processing, render timings, previews, and quality diagnostics.
+The corpus manifest records film type, rotation, scene metadata, and selected
+edit presets. Results include uncached and warm processing, render timings,
+previews, and quality diagnostics; these do not imply a physically cold disk.
 
 Compare native and RawPy decode performance and decoded-image quality:
 
@@ -99,7 +125,7 @@ current app export profile.
 
 ## Native Viewport And Roll Workflow
 
-The default native suite now exercises the actual AppKit scroll view through
+The default native suite exercises the actual AppKit scroll view through
 draft/inspect/full-resolution size changes, panning, Fit, resize, and pinch
 notifications. App-model comparison tests cover automatic crop, manual crop,
 perspective, straightening, and their combination, including temporary editor
@@ -126,3 +152,19 @@ new app model. Settings and TIFFs use a unique temporary directory; source
 hashes must remain unchanged and all outputs are removed. This automated check
 does not replace a hands-on assessment of focus, grain, gesture feel, or overlay
 dragging in the packaged app.
+
+## Independent-Viewer Output Contract
+
+App-path TIFF, JPEG, and PNG exports are reopened by ImageIO and `/usr/bin/sips`
+as a second macOS reader. The check requires named sRGB, baked orientation
+(tag 1), honest bit depth (16/8/16), and dimensions that match the on-canvas
+geometry plus export frame. Processed DNG is inspected from TIFF/DNG tags,
+including UniqueCameraModel `Film Scan Converter Processed RGB` and
+output-referred ColorimetricInterpretation; it is not required to open as a
+camera RAW in Preview. The opt-in three-frame RAW roll applies the same
+named-sRGB TIFF inspection to its exported files.
+
+```sh
+swift test --disable-sandbox --package-path native/FilmScanEngine --no-parallel \
+  --filter IndependentViewerOutputTests
+```

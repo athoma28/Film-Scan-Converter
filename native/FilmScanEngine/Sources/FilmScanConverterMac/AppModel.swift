@@ -19,6 +19,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var isUpgradingScanStack = false
   @Published private(set) var scanStackStatus = ""
   @Published private(set) var scanStackStatusID: String?
+  @Published private(set) var scanStackEffectiveMode: ScanStackMode?
   @Published private(set) var decodedImage: UInt16Image?
   @Published private(set) var parameters = ProcessingParameters()
   @Published private(set) var isRendering = false
@@ -188,6 +189,8 @@ final class AppModel: ObservableObject {
   private var scanAnalysisGeneration = 0
   private var scanStackPreviewTask: Task<Void, Never>?
   private var scanStackPreviewGeneration = 0
+  private var stackedPreviewMembers: StackPreviewMemberCache?
+  private var lastStackedPreviewMode: ScanStackMode?
   private var rebateTask: Task<Void, Never>?
   private var cropDetectionTask: Task<Void, Never>?
   private var dustDetectionTask: Task<Void, Never>?
@@ -475,6 +478,9 @@ final class AppModel: ObservableObject {
       scanStackPreviewTask = nil
       isBuildingScanStack = false
       isUpgradingScanStack = false
+      stackedPreviewMembers = nil
+      lastStackedPreviewMode = nil
+      scanStackEffectiveMode = nil
       scanStackStatus = "Stack disabled; showing the reference capture."
       scanStackStatusID = stack.id
       if selection.map(stack.contains) == true { loadSelection() }
@@ -482,9 +488,10 @@ final class AppModel: ObservableObject {
   }
 
   func setScanStackMode(_ mode: ScanStackMode, for stack: DetectedScanStack) {
-    guard !isExporting, !isAnalyzingScanStacks else { return }
+    guard !isExporting else { return }
+    let previous = scanStackMode(for: stack)
     scanStackModes[stack.id] = mode
-    guard enabledScanStackIDs.contains(stack.id) else { return }
+    guard enabledScanStackIDs.contains(stack.id), previous != mode else { return }
     buildScanStackPreview(stack)
   }
 
@@ -616,6 +623,14 @@ final class AppModel: ObservableObject {
     scanStackPreviewTask = nil
     isBuildingScanStack = false
     isUpgradingScanStack = false
+    let currentStackID = selection.flatMap { detectedScanStack(containing: $0)?.id }
+    if stackedPreviewMembers?.stackID != currentStackID {
+      stackedPreviewMembers = nil
+    }
+    if currentStackID == nil || !(currentStackID.map(enabledScanStackIDs.contains) ?? false) {
+      scanStackEffectiveMode = nil
+      lastStackedPreviewMode = nil
+    }
     if let interval = pendingFirstPreviewInterval {
       AppPerformanceSignposts.end(interval)
       pendingFirstPreviewInterval = nil
@@ -1912,6 +1927,9 @@ final class AppModel: ObservableObject {
       scanStackPreviewTask = nil
       isBuildingScanStack = false
       isUpgradingScanStack = false
+      stackedPreviewMembers = nil
+      lastStackedPreviewMode = nil
+      scanStackEffectiveMode = nil
       scanStackStatus =
         "Stack disabled because flat-field correction must be applied before alignment."
       scanStackStatusID = nil
@@ -2075,16 +2093,21 @@ final class AppModel: ObservableObject {
       cropStatus = "Keep the four corners in clockwise order."
       return
     }
+    if crop == perspectiveCrop { return }
     let historyBefore = currentEditingSnapshot()
     resetDustState(cancelTask: true)
     cropRect = nil
     perspectiveCrop = crop
+    manualCrop = nil
     parameters.cropRect = nil
     parameters.perspectiveCrop = crop
+    parameters.manualCrop = nil
     cropStatus = "Perspective warp is active. Drag corners to align the grid."
     if let selection { editedKeys.insert(settingsKey(selection)) }
     saveParameters()
-    scheduleRender(immediate: true)
+    if !isPreviewingSourceGeometry {
+      scheduleRender(immediate: true)
+    }
     recordCurrentEdit(actionName: "Perspective", before: historyBefore)
   }
 
@@ -2094,10 +2117,16 @@ final class AppModel: ObservableObject {
     resetDustState(cancelTask: true)
     perspectiveCrop = nil
     parameters.perspectiveCrop = nil
-    cropStatus = manualCrop == nil ? "" : "Manual canvas crop is active."
+    if manualCrop != nil {
+      manualCrop = nil
+      parameters.manualCrop = nil
+    }
+    cropStatus = ""
     if let selection { editedKeys.insert(settingsKey(selection)) }
     saveParameters()
-    scheduleRender(immediate: true)
+    if !isPreviewingSourceGeometry {
+      scheduleRender(immediate: true)
+    }
     recordCurrentEdit(actionName: "Clear Perspective", before: historyBefore)
   }
 
@@ -2110,6 +2139,7 @@ final class AppModel: ObservableObject {
       cropStatus = "Drag a crop box inside the image."
       return
     }
+    if crop == manualCrop { return }
     let historyBefore = currentEditingSnapshot()
     resetDustState(cancelTask: true)
     manualCrop = crop
@@ -2117,7 +2147,9 @@ final class AppModel: ObservableObject {
     cropStatus = "Manual canvas crop is active."
     if let selection { editedKeys.insert(settingsKey(selection)) }
     saveParameters()
-    scheduleRender(immediate: true)
+    if !isPreviewingUncroppedCanvas {
+      scheduleRender(immediate: true)
+    }
     recordCurrentEdit(actionName: "Crop", before: historyBefore)
   }
 
@@ -2173,7 +2205,9 @@ final class AppModel: ObservableObject {
     cropStatus = ""
     if let selection { editedKeys.insert(settingsKey(selection)) }
     saveParameters()
-    scheduleRender(immediate: true)
+    if !isPreviewingUncroppedCanvas {
+      scheduleRender(immediate: true)
+    }
     recordCurrentEdit(actionName: "Clear Crop", before: historyBefore)
   }
 
@@ -3367,6 +3401,9 @@ final class AppModel: ObservableObject {
       scanStackPreviewTask = nil
       isBuildingScanStack = false
       isUpgradingScanStack = false
+      stackedPreviewMembers = nil
+      lastStackedPreviewMode = nil
+      scanStackEffectiveMode = nil
       scanStackStatus = "Stack disabled while newly imported captures are analyzed."
       scanStackStatusID = nil
     }
@@ -3484,6 +3521,15 @@ final class AppModel: ObservableObject {
     guard let stack = detectedScanStack(containing: url),
       enabledScanStackIDs.contains(stack.id)
     else { return }
+    if previewSourceKind == .alignedStack,
+      let previewSource,
+      stackPreviewCoversSource(previewSource),
+      scanStackEffectiveMode != nil,
+      !isBuildingScanStack,
+      !isUpgradingScanStack
+    {
+      return
+    }
     buildScanStackPreview(stack)
   }
 
@@ -3496,16 +3542,50 @@ final class AppModel: ObservableObject {
     scanStackPreviewTask?.cancel()
     cancelPredecode()
     let mode = scanStackMode(for: stack)
-    isBuildingScanStack = true
-    isUpgradingScanStack = false
-    scanStackStatus = "Aligning \(stack.members.count) captures..."
+    isBuildingScanStack = previewSourceKind != .alignedStack
+    isUpgradingScanStack = previewSourceKind == .alignedStack
+    publishScanStackStatus("Aligning \(stack.members.count) captures...")
     scanStackStatusID = stack.id
-    setStatus(scanStackStatus)
 
     scanStackPreviewTask = Task { [weak self] in
       guard let self else { return }
       var appliedImage: UInt16Image?
+      var appliedTier: ScanStackPreviewTier?
       do {
+        if let cached = self.stackedPreviewMembers, cached.stackID == stack.id,
+          !cached.images.isEmpty
+        {
+          try Task.checkCancellation()
+          guard
+            self.stackPreviewSessionIsCurrent(
+              generation: generation, selectedURL: selectedURL, stack: stack)
+          else { return }
+          self.publishScanStackStatus(
+            "Updating \(Self.scanStackModeLabel(mode)) from the current stack...")
+          do {
+            let images = cached.images
+            let result = try await Task.detached(priority: .userInitiated) {
+              try MultiScanStacker.combine(images: images, mode: mode)
+            }.value
+            try Task.checkCancellation()
+            guard
+              self.stackPreviewSessionIsCurrent(
+                generation: generation, selectedURL: selectedURL, stack: stack)
+            else { return }
+            try self.applyAlignedStackPreview(
+              result, stack: stack, calibrateFromSource: false)
+            appliedImage = result.image
+            appliedTier = cached.tier
+            self.lastStackedPreviewMode = mode
+            self.isBuildingScanStack = false
+            self.isUpgradingScanStack = !self.stackPreviewCoversSource(result.image)
+          } catch is CancellationError {
+            throw CancellationError()
+          } catch {
+            // Rebuild from the source files if the cached members cannot be recombined.
+          }
+        }
+
         for tier in ScanStackPreviewTier.allCases {
           try Task.checkCancellation()
           guard
@@ -3515,21 +3595,35 @@ final class AppModel: ObservableObject {
           if let appliedImage, self.stackPreviewCoversSource(appliedImage) {
             break
           }
-
-          if appliedImage != nil {
-            self.isBuildingScanStack = false
-            self.isUpgradingScanStack = true
-            self.scanStackStatus = "Loading \(tier.statusLabel) stack..."
+          if let appliedTier, tier.rawValue <= appliedTier.rawValue {
+            continue
+          }
+          if self.lastStackedPreviewMode == mode,
+            self.alignedStackAlreadySatisfies(tier, stack: stack)
+          {
+            continue
+          }
+          if self.stackTierWouldRegressVisiblePreview(tier, stack: stack) {
+            continue
           }
 
-          let result: MultiScanStackResult
+          if appliedImage != nil || self.previewSourceKind == .alignedStack {
+            self.isBuildingScanStack = false
+            self.isUpgradingScanStack = true
+            self.publishScanStackStatus("Loading \(tier.statusLabel) stack...")
+          } else {
+            self.publishScanStackStatus(
+              "Aligning \(stack.members.count) captures at \(tier.statusLabel) resolution...")
+          }
+
+          let prepared: PreparedStackCombine
           do {
-            result = try await self.combinedStackResult(
+            prepared = try await self.combinedStackResult(
               stack: stack, mode: mode, tier: tier)
           } catch is CancellationError {
             throw CancellationError()
           } catch {
-            if appliedImage == nil || tier == .full { throw error }
+            if tier == .full { throw error }
             continue
           }
           try Task.checkCancellation()
@@ -3538,16 +3632,35 @@ final class AppModel: ObservableObject {
               generation: generation, selectedURL: selectedURL, stack: stack)
           else { return }
 
+          if self.stackImageWouldRegressVisiblePreview(prepared.result.image) {
+            continue
+          }
+
           try self.applyAlignedStackPreview(
-            result,
+            prepared.result,
             stack: stack,
             calibrateFromSource: appliedImage == nil)
-          appliedImage = result.image
+          appliedImage = prepared.result.image
+          appliedTier = tier
+          self.lastStackedPreviewMode = mode
+          if !prepared.members.isEmpty {
+            self.stackedPreviewMembers = StackPreviewMemberCache(
+              stackID: stack.id, tier: tier, images: prepared.members)
+          }
         }
         guard
           self.stackPreviewSessionIsCurrent(
             generation: generation, selectedURL: selectedURL, stack: stack)
         else { return }
+        if appliedImage == nil {
+          self.publishScanStackStatus(
+            "Stack could not be built from the current captures.",
+            kind: .error)
+          self.isBuildingScanStack = false
+          self.isUpgradingScanStack = false
+          self.scanStackPreviewTask = nil
+          return
+        }
         self.isBuildingScanStack = false
         self.isUpgradingScanStack = false
         self.scanStackPreviewTask = nil
@@ -3559,12 +3672,13 @@ final class AppModel: ObservableObject {
         self.isUpgradingScanStack = false
         self.scanStackPreviewTask = nil
         if appliedImage != nil {
-          self.scanStackStatus =
-            "Showing the bounded stack; full-resolution upgrade failed: \(error.localizedDescription)"
-          self.setStatus(self.scanStackStatus, kind: .error)
+          self.publishScanStackStatus(
+            "Showing the bounded stack; full-resolution upgrade failed: \(error.localizedDescription)",
+            kind: .error)
         } else {
-          self.scanStackStatus = "Stack could not be built: \(error.localizedDescription)"
-          self.setStatus(self.scanStackStatus, kind: .error)
+          self.publishScanStackStatus(
+            "Stack could not be built: \(error.localizedDescription)",
+            kind: .error)
         }
       }
     }
@@ -3574,26 +3688,40 @@ final class AppModel: ObservableObject {
     stack: DetectedScanStack,
     mode: ScanStackMode,
     tier: ScanStackPreviewTier
-  ) async throws -> MultiScanStackResult {
+  ) async throws -> PreparedStackCombine {
+    if let cached = stackedPreviewMembers, cached.stackID == stack.id, cached.tier == tier,
+      !cached.images.isEmpty
+    {
+      publishScanStackStatus("Combining \(cached.images.count) captures...")
+      let images = cached.images
+      let result = try await Task.detached(priority: .userInitiated) {
+        try MultiScanStacker.combine(images: images, mode: mode)
+      }.value
+      return PreparedStackCombine(result: result, members: images)
+    }
+
     if tier == .full {
-      return try await combinedFullResolutionStack(stack: stack, mode: mode, forExport: false)
+      let result = try await combinedFullResolutionStack(
+        stack: stack, mode: mode, forExport: false)
+      return PreparedStackCombine(result: result, members: [])
     }
-    let decoder = scanStackPreviewDecoder
-    let worker = Task.detached(priority: .userInitiated) {
-      var images: [UInt16Image] = []
-      images.reserveCapacity(stack.members.count)
-      for url in stack.members {
-        try Task.checkCancellation()
-        images.append(try decoder?(url, tier) ?? Self.makeStackPreviewSource(for: url, tier: tier))
-      }
+
+    var images: [UInt16Image] = []
+    images.reserveCapacity(stack.members.count)
+    for (index, url) in stack.members.enumerated() {
       try Task.checkCancellation()
-      return try MultiScanStacker.combine(images: images, mode: mode)
+      publishScanStackStatus(
+        "Decoding stack capture \(index + 1) of \(stack.members.count) (\(tier.statusLabel)): \(url.lastPathComponent)"
+      )
+      images.append(try await decodeStackPreviewMember(url, tier: tier))
     }
-    return try await withTaskCancellationHandler {
-      try await worker.value
-    } onCancel: {
-      worker.cancel()
-    }
+    try Task.checkCancellation()
+    publishScanStackStatus("Aligning and combining \(stack.members.count) captures...")
+    let captured = images
+    let result = try await Task.detached(priority: .userInitiated) {
+      try MultiScanStacker.combine(images: captured, mode: mode)
+    }.value
+    return PreparedStackCombine(result: result, members: images)
   }
 
   private func combinedFullResolutionStack(
@@ -3611,7 +3739,8 @@ final class AppModel: ObservableObject {
     _ url: URL, index: Int, count: Int, forExport: Bool
   ) async throws -> UInt16Image {
     try Task.checkCancellation()
-    scanStackStatus = "Decoding stack capture \(index + 1) of \(count): \(url.lastPathComponent)"
+    publishScanStackStatus(
+      "Decoding stack capture \(index + 1) of \(count): \(url.lastPathComponent)")
     let image: UInt16Image
     if forExport {
       image = try await decodedImageForExport(url)
@@ -3619,7 +3748,7 @@ final class AppModel: ObservableObject {
       image = try await decodeStackPreviewMember(url, tier: .full)
     }
     try Task.checkCancellation()
-    scanStackStatus = "Aligning and combining \(count) captures..."
+    publishScanStackStatus("Aligning and combining \(count) captures...")
     return image
   }
 
@@ -3653,18 +3782,73 @@ final class AppModel: ObservableObject {
     previewSource = result.image
     previewRenderer = renderer
     previewSourceKind = .alignedStack
+    scanStackEffectiveMode = result.effectiveMode
     if calibrateFromSource {
       populateFilmNegativeMedians(
         from: result.image.resizedToFit(maxDimension: Self.analysisPreviewMaxDimension))
     }
     let modeLabel = Self.scanStackModeLabel(result.effectiveMode)
     if stackPreviewCoversSource(result.image) {
-      scanStackStatus =
-        "Aligned \(stack.members.count) captures for \(modeLabel) at full resolution."
+      publishScanStackStatus(
+        "Aligned \(stack.members.count) captures for \(modeLabel) at full resolution.")
     } else {
-      scanStackStatus = "Aligned \(stack.members.count) captures for \(modeLabel)."
+      publishScanStackStatus(
+        "Aligned \(stack.members.count) captures for \(modeLabel).")
+    }
+    if let selection {
+      cacheCurrentSession(for: selection)
     }
     scheduleRender(immediate: true)
+  }
+
+  private func publishScanStackStatus(_ message: String, kind: StatusKind = .info) {
+    scanStackStatus = message
+    setStatus(message, kind: kind)
+  }
+
+  private func stackPreviewBound(
+    for tier: ScanStackPreviewTier, stack: DetectedScanStack
+  ) -> Int? {
+    let isRaw = FileDropPolicy.rawExtensions.contains(stack.anchor.pathExtension.lowercased())
+    switch tier {
+    case .draft:
+      return isRaw ? Self.rawDraftPreviewMaxDimension : Self.displayPreviewMaxDimension
+    case .inspect:
+      return Self.rawInspectPreviewMaxDimension
+    case .full:
+      return nil
+    }
+  }
+
+  /// A 640px RAW draft is much smaller than an inspect or full preview already
+  /// on the canvas. Applying it makes the viewport look pixelated and hides the
+  /// fact that a sharper stack is still loading.
+  private func stackTierWouldRegressVisiblePreview(
+    _ tier: ScanStackPreviewTier, stack: DetectedScanStack
+  ) -> Bool {
+    guard let current = previewSource else { return false }
+    guard let bound = stackPreviewBound(for: tier, stack: stack) else { return false }
+    return bound * 2 < max(current.width, current.height)
+  }
+
+  private func stackImageWouldRegressVisiblePreview(_ image: UInt16Image) -> Bool {
+    guard let current = previewSource else { return false }
+    if previewSourceKind == .alignedStack,
+      stackPreviewCoversSource(current),
+      !stackPreviewCoversSource(image)
+    {
+      return true
+    }
+    return max(image.width, image.height) * 2 < max(current.width, current.height)
+  }
+
+  private func alignedStackAlreadySatisfies(
+    _ tier: ScanStackPreviewTier, stack: DetectedScanStack
+  ) -> Bool {
+    guard previewSourceKind == .alignedStack, let current = previewSource else { return false }
+    if stackPreviewCoversSource(current) { return true }
+    guard let bound = stackPreviewBound(for: tier, stack: stack) else { return false }
+    return max(current.width, current.height) >= (bound * 9) / 10
   }
 
   nonisolated private static func scanStackModeLabel(_ mode: ScanStackMode) -> String {
@@ -3757,34 +3941,10 @@ final class AppModel: ObservableObject {
     return flatField.resized(width: image.width, height: image.height)
   }
 
-  nonisolated private static func previewStatistics(
+  nonisolated static func previewStatistics(
     for image: UInt16Image
   ) -> RenderReadyImageStatistics? {
-    let pixelCount = image.width * image.height
-    switch image.channels {
-    case 1:
-      var pixels = [Double](repeating: 0, count: pixelCount * 3)
-      for pixelIndex in 0..<pixelCount {
-        let value = Double(image.pixels[pixelIndex]) / 65_535
-        let destination = pixelIndex * 3
-        pixels[destination] = value
-        pixels[destination + 1] = value
-        pixels[destination + 2] = value
-      }
-      return RenderReadyLinearImage(
-        width: image.width,
-        height: image.height,
-        pixels: pixels
-      ).statistics()
-    case 3:
-      return RenderReadyLinearImage(
-        width: image.width,
-        height: image.height,
-        pixels: image.pixels.map { Double($0) / 65_535 }
-      ).statistics()
-    default:
-      return nil
-    }
+    image.previewStatistics()
   }
 
   private func compatibleFlatField(for image: UInt16Image) -> UInt16Image? {
@@ -3892,8 +4052,11 @@ final class AppModel: ObservableObject {
         AppPerformanceSignposts.end(interval)
         pendingFirstPreviewInterval = nil
       }
-      // A background redraw must not erase the outcome of a failed operation.
-      if statusKind != .error, !status.localizedCaseInsensitiveContains("cancel") {
+      // A background redraw must not erase the outcome of a failed operation,
+      // or hide in-flight stack alignment progress behind a generic renderer line.
+      if statusKind != .error, !status.localizedCaseInsensitiveContains("cancel"),
+        !isBuildingScanStack, !isUpgradingScanStack
+      {
         let filename = request.selection.lastPathComponent
         let renderer = result.rendererName
         switch previewSourceKind {
@@ -4263,6 +4426,17 @@ enum ScanStackPreviewTier: Int, CaseIterable, Sendable {
     case .full: "full-resolution"
     }
   }
+}
+
+private struct StackPreviewMemberCache: Sendable {
+  let stackID: String
+  let tier: ScanStackPreviewTier
+  let images: [UInt16Image]
+}
+
+private struct PreparedStackCombine: Sendable {
+  let result: MultiScanStackResult
+  let members: [UInt16Image]
 }
 
 private actor RawFullPreviewDecodeGate {

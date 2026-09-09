@@ -18,6 +18,7 @@ struct ContentView: View {
   @State private var profileName = ""
   @State private var previewZoomRequest = PreviewZoomRequest()
   @State private var previewZoomPercent = 100
+  @State private var previewMagnification: CGFloat = 1
   @State private var previewIsFit = true
 
   private enum PreviewOverlay {
@@ -31,6 +32,25 @@ struct ContentView: View {
   private var isPerspectiveEditing: Bool { activeOverlay == .perspective }
   private var isStraightening: Bool { activeOverlay == .straighten }
   private var isCropping: Bool { activeOverlay == .crop }
+  private var isAligningStack: Bool {
+    !showLivePreview && (model.isBuildingScanStack || model.isUpgradingScanStack)
+  }
+  private var statusBarMessage: String {
+    if isAligningStack, !model.scanStackStatus.isEmpty {
+      return model.scanStackStatus
+    }
+    return showLivePreview ? camera.status : model.status
+  }
+  private var previewNeedsDraftSoftening: Bool {
+    switch model.previewSourceKind {
+    case .rawDraft: true
+    case .alignedStack:
+      model.selectedImageDimensions?.provisional == true
+        && max(model.previewImage?.size.width ?? 0, model.previewImage?.size.height ?? 0)
+          <= CGFloat(AppModel.rawDraftPreviewMaxDimension + 16)
+    default: false
+    }
+  }
 
   private enum InspectorPage: String, CaseIterable, Identifiable {
     case develop = "Develop"
@@ -154,16 +174,31 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         Divider()
-        HStack(spacing: 6) {
-          Text(showLivePreview ? camera.status : model.status)
+        HStack(spacing: 8) {
+          if isAligningStack {
+            ProgressView()
+              .controlSize(.small)
+              .accessibilityHidden(true)
+          }
+          Text(statusBarMessage)
             .foregroundStyle(
               (showLivePreview ? camera.statusKind : model.statusKind) == .error
-                ? Color.red : Color.secondary)
+                ? Color.red : Color.secondary
+            )
+            .lineLimit(1)
+          if isAligningStack {
+            ProgressView()
+              .progressViewStyle(.linear)
+              .frame(maxWidth: 168)
+              .accessibilityHidden(true)
+          }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .font(.caption)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(statusBarMessage)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(dropTargeted ? Color.accentColor.opacity(0.12) : Color.clear)
@@ -239,7 +274,22 @@ struct ContentView: View {
         .pickerStyle(.segmented)
         .labelsHidden()
         .controlSize(.mini)
-        .disabled(model.isExporting || model.isAnalyzingScanStacks || model.isLoading)
+        .disabled(model.isExporting || model.isAnalyzingScanStacks)
+        .help(
+          "Auto chooses HDR for bracketed exposures and noise reduction otherwise. Switching modes updates the aligned preview."
+        )
+
+        if let effective = model.scanStackEffectiveMode,
+          !model.isBuildingScanStack, !model.isUpgradingScanStack
+        {
+          Text(
+            effective == .hdr
+              ? "Combining as HDR."
+              : "Combining for noise reduction."
+          )
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+        }
       }
 
       if model.isAnalyzingScanStacks {
@@ -1193,8 +1243,8 @@ struct ContentView: View {
 
             Button(action: toggleCropping) {
               Label(
-                isCropping ? "Cancel" : "Manual Crop",
-                systemImage: isCropping ? "xmark" : "crop"
+                isCropping ? "Done" : "Manual Crop",
+                systemImage: isCropping ? "checkmark" : "crop"
               )
             }
             .disabled(model.decodedImage == nil || isPerspectiveEditing)
@@ -1210,9 +1260,11 @@ struct ContentView: View {
           .controlSize(.small)
 
           if isCropping {
-            Text("Drag a rectangle over the preview to crop.")
-              .font(.caption2)
-              .foregroundStyle(.secondary)
+            Text(
+              "Drag a rectangle to crop, then adjust the handles. Drag inside the box to move it, or outside to replace it."
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
           }
 
           if isPerspectiveEditing {
@@ -1738,8 +1790,9 @@ struct ContentView: View {
           PreviewViewport(
             imageSize: image.size,
             request: previewZoomRequest,
-            onZoomChanged: { percent, isFit in
+            onZoomChanged: { percent, isFit, magnification in
               previewZoomPercent = percent
+              previewMagnification = magnification
               previewIsFit = isFit
             }
           ) {
@@ -1775,10 +1828,11 @@ struct ContentView: View {
   }
 
   private func previewDocument(image: NSImage) -> some View {
-    ZStack {
+    let magnification = previewMagnification
+    return ZStack {
       RasterImage(image: image, interpolation: .high)
         .frame(width: image.size.width, height: image.size.height)
-        .blur(radius: model.previewSourceKind == .rawDraft ? 1.6 : 0)
+        .blur(radius: previewNeedsDraftSoftening ? 1.6 : 0)
 
       if let dustMask = model.dustMaskImage {
         RasterImage(image: dustMask, interpolation: .none)
@@ -1791,6 +1845,7 @@ struct ContentView: View {
       RebateRegionSelectionOverlay(
         isActive: isPickingRebateRegion,
         imageSize: image.size,
+        magnification: magnification,
         dragStart: $rebateDragStart,
         dragEnd: $rebateDragEnd
       ) { x, y, width, height in
@@ -1811,12 +1866,14 @@ struct ContentView: View {
         rotation: model.parameters.rotation,
         flipHorizontally: model.parameters.flip,
         usesParallelAssist: usesPerspectiveParallelAssist,
+        magnification: magnification,
         onCropChanged: model.setPerspectiveCrop
       )
 
       StraightenLineOverlay(
         isActive: isStraightening,
         imageSize: image.size,
+        magnification: magnification,
         onGuideCompleted: { deviation in
           endStraightening()
           model.straighten(usingGuideDeviation: deviation)
@@ -1825,11 +1882,10 @@ struct ContentView: View {
 
       ManualCropOverlay(
         isActive: isCropping,
+        crop: model.manualCrop,
         imageSize: image.size,
-        onCropCompleted: { crop in
-          endCropping()
-          model.setManualCrop(crop)
-        }
+        magnification: magnification,
+        onCropChanged: model.setManualCrop
       )
     }
     .frame(width: image.size.width, height: image.size.height)
@@ -1837,51 +1893,106 @@ struct ContentView: View {
 
   @ViewBuilder
   private var previewCanvasChrome: some View {
-    let showDraftBar = model.previewSourceKind == .rawDraft
+    let stacking = isAligningStack
+    let provisionalStack =
+      model.previewSourceKind == .alignedStack
+      && model.selectedImageDimensions?.provisional == true
+    let showDraftBar = model.previewSourceKind == .rawDraft || stacking || provisionalStack
     let showBadge =
-      model.previewSourceKind == .embeddedRAW || model.previewSourceKind == .alignedStack
+      model.previewSourceKind == .embeddedRAW
+      || model.previewSourceKind == .alignedStack
+      || stacking
     if showDraftBar || showBadge {
-      VStack {
+      VStack(spacing: 0) {
         HStack {
           if showBadge {
             previewSourceBadge
           }
           Spacer()
         }
+        .padding(10)
         Spacer()
-        if showDraftBar {
+        if stacking {
+          alignmentCanvasStatusBar
+        } else if showDraftBar {
           RawPreviewUpgradeBar()
             .padding(.bottom, 14)
         }
       }
-      .padding(10)
       .allowsHitTesting(false)
     }
   }
 
+  private var alignmentCanvasStatusBar: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      HStack(spacing: 8) {
+        ProgressView()
+          .controlSize(.small)
+          .tint(.white)
+          .accessibilityHidden(true)
+        Text(model.scanStackStatus)
+          .font(.caption.weight(.medium))
+          .foregroundStyle(.white)
+          .lineLimit(1)
+        Spacer(minLength: 0)
+      }
+      ProgressView()
+        .progressViewStyle(.linear)
+        .tint(.white)
+        .accessibilityHidden(true)
+    }
+    .padding(.horizontal, 12)
+    .padding(.vertical, 8)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(.black.opacity(0.78))
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel(model.scanStackStatus)
+  }
+
   @ViewBuilder
   private var previewSourceBadge: some View {
-    switch model.previewSourceKind {
-    case .embeddedRAW:
-      Label("Embedded RAW preview", systemImage: "exclamationmark.triangle.fill")
-        .font(.caption2.weight(.medium))
-        .foregroundStyle(.yellow)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(.black.opacity(0.72), in: Capsule())
-        .help("A fast embedded camera preview, not RAW colour.")
-    case .alignedStack:
-      Label("Aligned stack preview", systemImage: "square.stack.3d.up.fill")
-        .font(.caption2.weight(.medium))
-        .foregroundStyle(.white)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 5)
-        .background(.black.opacity(0.72), in: Capsule())
-        .help(
-          "An aligned multi-capture preview. The canvas upgrades from a bounded draft to full resolution while you inspect; export still rebuilds from the sources."
-        )
-    default:
-      EmptyView()
+    if isAligningStack {
+      Label(
+        model.isUpgradingScanStack ? "Updating aligned stack" : "Aligning stack",
+        systemImage: "square.stack.3d.up.fill"
+      )
+      .font(.caption2.weight(.medium))
+      .foregroundStyle(.white)
+      .padding(.horizontal, 8)
+      .padding(.vertical, 5)
+      .background(.black.opacity(0.72), in: Capsule())
+      .help(model.scanStackStatus)
+    } else {
+      switch model.previewSourceKind {
+      case .embeddedRAW:
+        Label("Embedded RAW preview", systemImage: "exclamationmark.triangle.fill")
+          .font(.caption2.weight(.medium))
+          .foregroundStyle(.yellow)
+          .padding(.horizontal, 8)
+          .padding(.vertical, 5)
+          .background(.black.opacity(0.72), in: Capsule())
+          .help("A fast embedded camera preview, not RAW colour.")
+      case .alignedStack:
+        Label(alignedStackBadgeTitle, systemImage: "square.stack.3d.up.fill")
+          .font(.caption2.weight(.medium))
+          .foregroundStyle(.white)
+          .padding(.horizontal, 8)
+          .padding(.vertical, 5)
+          .background(.black.opacity(0.72), in: Capsule())
+          .help(
+            "An aligned multi-capture preview. The canvas upgrades from a bounded draft to full resolution while you inspect; export still rebuilds from the sources."
+          )
+      default:
+        EmptyView()
+      }
+    }
+  }
+
+  private var alignedStackBadgeTitle: String {
+    switch model.scanStackEffectiveMode {
+    case .hdr: "HDR stack"
+    case .noiseReduction: "Noise-reduction stack"
+    default: "Aligned stack"
     }
   }
 

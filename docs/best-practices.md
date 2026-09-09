@@ -7,7 +7,8 @@ Having consistent, high quality scans will go a long way to maximize the effecti
 _Note: It is possible to scan without a mask, however the app may have trouble distinguishing the edge of the photo from the film base, especially if the photo is underexposed._
 3. Use a blower brush or equivalent to remove dust from the film before scanning.
 4. Fill the image frame as much as possible with the desired photo.  
-_Note: It is not critical to precisely align the photo with the image frame; the automatic cropping should take care of this._
+_Use Geometry to review Auto Frame or correct alignment with Straighten Edge,
+Perspective, and Manual Crop. Detection is a starting point and can fail._
 5. Use a high CRI light source, or a high-quality LED display such as a high-end LCD or OLED display, as a backlight. Minimize stray light from external light sources.
 6. Expose "to the right" of the histogram, maximizing the exposure, while ensuring that no part of the image is clipped.
 7. Use a consistent exposure and orientation across the entire roll of film.

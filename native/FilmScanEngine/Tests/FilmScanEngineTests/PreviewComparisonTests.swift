@@ -109,6 +109,43 @@ struct PreviewComparisonTests {
     #expect(persisted == savedState)
   }
 
+  @Test("Clipping diagnostics stay populated through Original comparison")
+  func clippingDiagnosticsSurviveComparison() async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-clipping-nav-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let input = directory.appendingPathComponent("scan.png")
+    try makeSource().write(to: input, format: .png, parameters: .init(format: .png))
+
+    var parameters = ProcessingParameters()
+    parameters.filmType = .colourNegative
+    parameters.rotation = 1
+    parameters.manualCrop = .init(x: 0.12, y: 0.18, width: 0.65, height: 0.7)
+    parameters.photoAdjustments.exposureEV = 0.75
+    let store = PerFileSettingsStore(baseDirectory: directory)
+    try store.save(
+      .init(settingsByPath: [input.standardizedFileURL.path: parameters], editedPaths: []))
+    let model = AppModel(
+      profileStore: ProfileStore(baseDirectory: directory.appendingPathComponent("profiles")),
+      settingsStore: store)
+    model.importFiles([input])
+    try await waitForPreview(model)
+    #expect(model.previewStatistics.sampleCount > 0)
+    let corrected = model.previewStatistics
+
+    model.showOriginal = true
+    try await waitForPreview(model)
+    #expect(model.previewStatistics.sampleCount > 0)
+    #expect(model.previewStatistics != .empty)
+
+    model.showOriginal = false
+    try await waitForPreview(model)
+    #expect(model.previewStatistics.sampleCount == corrected.sampleCount)
+    #expect(model.previewStatistics.highClippingRatios == corrected.highClippingRatios)
+    #expect(model.previewStatistics.lowClippingRatios == corrected.lowClippingRatios)
+  }
+
   private func makeSource() -> UInt16Image {
     var pixels: [UInt16] = []
     for y in 0..<160 {

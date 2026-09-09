@@ -51,7 +51,9 @@ The tool:
     smaller stock folders still emit explicitly unvalidated fitted curves and
     base medians for experimental alternate looks.
 
-The July 27, 2026 corpus contains 32 triplets: 26 color and six monochrome.
+## Recorded Profile Provenance
+
+The July 27, 2026 fitting corpus contained 32 triplets: 26 color and six monochrome.
 The expanded generic-color candidate reached `0.120` stock-balanced
 leave-one-stock-out MAE. It was not promoted: its roughly 4.4% macro-average
 improvement missed the 5% threshold, and it regressed the current rendering on
@@ -62,9 +64,9 @@ A stock directory is not enough evidence to replace the generic default or
 drive automatic stock selection. Require at least three varied frames and a
 material held-out improvement (currently 5% relative) for that.
 
-- Harman Phoenix II now has 12 varied references. Its Camera Raw LUT fit
+- The Harman Phoenix II fit used 12 varied references. Its Camera Raw LUT fit
   reaches `0.090` leave-one-frame-out MAE versus `0.159` for the current generic
-  rendering, a roughly 43% reduction. That LUT still ships as the Harman
+  rendering, a roughly 43% reduction. That LUT is available in current source as the Harman
   Phoenix II stock choice under **Natural** (`harmanPhoenixIIAlternate`).
   Cyan/purple camera scans auto-select **Darkroom** with Harman Phoenix II,
   a log-density invert (independent channel stretch,
@@ -73,18 +75,18 @@ material held-out improvement (currently 5% relative) for that.
   physical profile is not a Camera Raw LUT; sampled MAE versus the ACR JPEGs
   is a collapse check (`physical ≈ 0.090` on three frames), not the color
   target.
-- CineStill 800T now has two references. Refitting both moves its matching-set
+- The CineStill 800T fit used two references. Refitting both moves its matching-set
   MAE from `0.116` to `0.093`; it remains labeled experimental because two
   frames cannot provide an independent held-out result.
-- Fuji 400 Fresh now has 11 references. A refit moves matching-set MAE only
+- The Fuji 400 Fresh comparison used 11 references. A refit moves matching-set MAE only
   from `0.123` to `0.122`, while leave-one-frame-out MAE is `0.128`. The
   existing eight-frame alternate is retained rather than churned for a
   sub-percent in-sample change.
-- Fuji 200 Expired still has one reference, and its existing alternate
+- The Fuji 200 Expired comparison used one reference, and its existing alternate
   (`0.0711`) already matches or slightly beats the new candidate (`0.0712`).
-- Shanghai GP3 now has six references, including a portrait scan that only
-  aligns after the `tiff:Orientation` fix. Its stock-specific curve reaches
+- The Shanghai GP3 fit used six references, including a portrait scan whose
+  alignment requires `tiff:Orientation`. Its stock-specific curve reaches
   `0.126` in-sample and `0.143` leave-one-frame-out MAE versus `0.137` for the
-  generic B&W curve, and `0.146` for Legacy. The GP3 curve ships as an explicit
+  generic B&W curve, and `0.146` for Legacy. The GP3 curve is available as an explicit
   **Shanghai GP3** stock choice under Natural (`shanghaiGP3Alternate`) with a
   half-strength exposure anchor; the generic B&W curve remains the default.

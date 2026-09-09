@@ -1,62 +1,16 @@
-# Swift Port Evaluation
+# Native Architecture Contracts
 
-**Status:** Historical architecture review, superseded by the native status page
+The native application is implemented. Use [development status](native-macos.md)
+and the [roadmap](../improvements/MacOS-Native-Roadmap.md) for current scope.
+This page retains only the architecture constraints that remain relevant:
 
-This document records the main conclusions from the June 2026 Swift-port
-evaluation. It is not a roadmap or implementation checklist. For current
-capabilities and limitations, use
-[Native macOS Development Status](native-macos.md). For ordered work, use the
-[Native macOS Product Roadmap](../improvements/MacOS-Native-Roadmap.md).
+- Keep LibRaw behind a narrow C/C++ bridge returning Swift-owned 16-bit BGR.
+- Keep preview and export adjustment/geometry semantics aligned while preserving
+  their separate source-resolution and demosaic-quality contracts.
+- Use deterministic Swift CPU results as the native processing authority, with
+  frozen Python/OpenCV fixtures only for explicitly shared behavior.
+- Bound preview caching, sequential RAW export, and original-sample stacking.
+- Verify real app wiring and recoverable errors as well as engine behavior.
 
-## Conclusions That Still Apply
-
-- Keep LibRaw behind a narrow C bridge and return owned 16-bit BGR buffers to
-  Swift.
-- Keep preview and export on the same adjustment and geometry semantics while
-  preserving their explicit image-source boundary: bounded thumbnails for
-  initial browsing and lookahead, selected-file full-sensor 1-pass preview,
-  and a separate three-pass decode for export. The selected RAW may retain its
-  last export decode for settings-only re-export. The Core Image renderer
-  accelerates interaction, while CPU processing remains the export reference.
-- Use exact frozen fixtures where deterministic Python/OpenCV equivalence is a
-  product requirement. Use documented tolerances only for genuinely different
-  decoder or interpolation implementations.
-- Keep large RAW batches memory bounded: decode, classify, process, and write
-  one unloaded file at a time.
-- Treat app wiring as part of completion. A standalone engine type or passing
-  unit test does not make a feature available to users.
-
-## Superseded Assumptions
-
-The original evaluation predated substantial implementation work. These items
-are now complete and should not be planned from this document:
-
-- pure-Swift contour detection and minimum-area crop geometry;
-- perspective-corrected preview and export;
-- TIFF, JPEG, PNG, and processed-RGB DNG export;
-- memory-bounded lazy Export All;
-- bounded latest-value-wins still preview rendering;
-- automatic film-kind classification and rebate selection;
-- density-pipeline preview/export integration and profile separation;
-- semantic photographic adjustments, curves, and color wheels;
-- per-file persistence, named presets, and correction copy/paste;
-- native pan/pinch preview navigation, per-file undo/redo, apply-to-selected,
-  and import-ordered previous/next.
-
-The standalone histogram-equalisation prototype, linear-capture diagnostics
-prototype, and unused density-display GPU prototype were removed because they
-had no live app path. If those capabilities return, they should land through a
-shared preview/export entry point with workflow-level tests.
-
-## Current Boundary
-
-Dust-mask detection exists, but Telea inpainting and applied dust removal do
-not. Self-contained app/ZIP packaging is complete; Developer ID notarization
-and Gatekeeper/clean-machine validation remain. Remaining product work includes
-hands-on representative-image and roll/stack checks, and distribution proof.
-Automated viewport, three-frame RAW roll, and B&W preview parity evidence is
-recorded in the status page. Roadmap item 5
-(open/inspect/re-export feel) is implemented:
-the selected file's last full-resolution three-pass decode is retained for
-settings-only re-export.
-The authoritative status page owns any changes to that boundary.
+See [preview architecture](realtime-preview-plan.md),
+[native package contracts](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/README.md), and [tests](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md).

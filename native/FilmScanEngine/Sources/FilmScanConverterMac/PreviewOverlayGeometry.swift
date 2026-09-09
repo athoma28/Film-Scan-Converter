@@ -2,6 +2,16 @@ import CoreGraphics
 import FilmScanEngine
 
 enum PreviewOverlayGeometry {
+  static let handleScreenLength: CGFloat = 28
+  static let handleHitPadding: CGFloat = 10
+  static let loupeScreenLength: CGFloat = 144
+  static let assistScreenLength: CGFloat = 18
+  static let straightenDotScreenLength: CGFloat = 12
+  static let minStraightenScreenLength: CGFloat = 8
+  static let minCropScreenLength: CGFloat = 4
+  static let cropHandleScreenLength: CGFloat = 14
+  static let strokeScreenLength: CGFloat = 2
+
   static func aspectFitRect(imageSize: CGSize, containerSize: CGSize) -> CGRect {
     guard imageSize.width > 0, imageSize.height > 0 else { return .zero }
 
@@ -16,6 +26,63 @@ enum PreviewOverlayGeometry {
       width: size.width,
       height: size.height
     )
+  }
+
+  static func documentRect(
+    for crop: NormalizedCropRect,
+    in imageRect: CGRect
+  ) -> CGRect {
+    CGRect(
+      x: imageRect.minX + crop.x * imageRect.width,
+      y: imageRect.minY + crop.y * imageRect.height,
+      width: crop.width * imageRect.width,
+      height: crop.height * imageRect.height
+    )
+  }
+
+  static func normalizedCrop(
+    for rect: CGRect,
+    in imageRect: CGRect
+  ) -> NormalizedCropRect {
+    NormalizedCropRect(
+      x: (rect.minX - imageRect.minX) / imageRect.width,
+      y: (rect.minY - imageRect.minY) / imageRect.height,
+      width: rect.width / imageRect.width,
+      height: rect.height / imageRect.height
+    )
+  }
+
+  static func documentPoint(
+    _ point: (x: Double, y: Double),
+    in imageRect: CGRect
+  ) -> CGPoint {
+    CGPoint(
+      x: imageRect.minX + point.x * imageRect.width,
+      y: imageRect.minY + point.y * imageRect.height
+    )
+  }
+
+  static func normalizedPoint(
+    _ point: CGPoint,
+    in imageRect: CGRect
+  ) -> (x: Double, y: Double) {
+    (
+      (point.x - imageRect.minX) / imageRect.width,
+      (point.y - imageRect.minY) / imageRect.height
+    )
+  }
+
+  /// Replacement drags start in the dimmed area outside the crop, including a
+  /// handle-sized margin so edge handles are not stolen by a new rectangle.
+  static func cropCanvasDragReplacesExisting(
+    start: CGPoint,
+    crop: NormalizedCropRect,
+    imageRect: CGRect,
+    handleHitPadding: CGFloat
+  ) -> Bool {
+    let existing = documentRect(for: crop, in: imageRect)
+    let handleRegion = existing.insetBy(dx: -handleHitPadding, dy: -handleHitPadding)
+    return !handleRegion.contains(start)
   }
 
   static func clampedPoint(_ point: CGPoint, to rect: CGRect) -> CGPoint {
@@ -54,6 +121,63 @@ enum PreviewOverlayGeometry {
     case 3: return .init(x: 1 - point.y, y: displayX)
     default: return .init(x: displayX, y: point.y)
     }
+  }
+
+  /// Converts a screen-pixel length into document pixels so handles, strokes,
+  /// and snap distances stay the same size on screen as the preview zooms.
+  static func documentLength(
+    _ screenLength: CGFloat,
+    magnification: CGFloat,
+    minimum: CGFloat = 1
+  ) -> CGFloat {
+    max(minimum, screenLength / max(magnification, 0.02))
+  }
+
+  /// SwiftUI drag locations embedded in a magnifying `NSScrollView` arrive in
+  /// viewport points even though the overlay is laid out in document pixels.
+  static func documentGesturePoint(
+    _ point: CGPoint,
+    magnification: CGFloat
+  ) -> CGPoint {
+    let scale = max(magnification, 0.02)
+    return CGPoint(x: point.x / scale, y: point.y / scale)
+  }
+
+  static func nearestCropHandle(
+    to point: CGPoint,
+    crop: NormalizedCropRect,
+    imageRect: CGRect,
+    hitRadius: CGFloat
+  ) -> NormalizedCropRect.Handle? {
+    NormalizedCropRect.Handle.allCases.min { first, second in
+      distance(
+        from: point,
+        to: documentPoint(crop.handlePosition(first), in: imageRect))
+        < distance(
+          from: point,
+          to: documentPoint(crop.handlePosition(second), in: imageRect))
+    }.flatMap { handle in
+      distance(
+        from: point,
+        to: documentPoint(crop.handlePosition(handle), in: imageRect)) <= hitRadius
+        ? handle : nil
+    }
+  }
+
+  static func nearestPointIndex(
+    to point: CGPoint,
+    points: [CGPoint],
+    hitRadius: CGFloat
+  ) -> Int? {
+    points.indices.min { first, second in
+      distance(from: point, to: points[first]) < distance(from: point, to: points[second])
+    }.flatMap { index in
+      distance(from: point, to: points[index]) <= hitRadius ? index : nil
+    }
+  }
+
+  private static func distance(from first: CGPoint, to second: CGPoint) -> CGFloat {
+    hypot(first.x - second.x, first.y - second.y)
   }
 
   private static func normalizedQuarterTurns(_ rotation: Int) -> Int {

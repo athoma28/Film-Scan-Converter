@@ -15,7 +15,7 @@ application bundle.
 
 ## NegPy density-print algorithms
 
-Colour-negative **Physical** profiles adapt NegPy's log-density dye unmix,
+Colour-negative **Darkroom** profiles adapt NegPy's log-density dye unmix,
 independent per-channel stretch, chroma-gated highlight colour refs, quadratic
 neutral-axis cast removal, H&D paper curve, and RA4 paper dye-coupling
 (GPL-3.0). Dye-unmix matrices for named stocks and the Endura / Crystal Archive
@@ -43,7 +43,8 @@ the GNU Lesser General Public License 2.1 option offered by the project.
 `native/FilmScanEngine/Sources/CLibRawShim/XTransDemosaicBody.inc` adapts the
 LibRaw 0.21.4 X-Trans implementation while preserving its pixel arithmetic and
 serial dependency order. Film Scan Converter adds bounded parallel execution
-only to independent row phases. The source file retains its attribution and is
+only to independent `2*row+col` wavefront diagonals, with serial work
+inside each overlapping tile. The source file retains its attribution and is
 distributed under LibRaw's LGPL-2.1-only option.
 
 - Project: <https://www.libraw.org/>

@@ -1,616 +1,115 @@
 # Native macOS Development Status
 
-This is the authoritative statement of what the native application does, what
-blocks a high-quality public release, and what is being worked on now. Use the
-[roadmap](../improvements/MacOS-Native-Roadmap.md) for priority and scope, the
-[feature inventory](../features.md) for user-visible behavior, and the
-[40 MP benchmark](../performance/40mp-export.md) for committed measurements.
-The audited
-[full-resolution performance guide](../../PERFORMANCE-OPPORTUNITIES-2026-07-27.md)
-records the completed full-resolution export-latency evidence. The subsequent
-open/inspect/re-export work is also complete: staged RAW previews and
-selected-file three-pass decode retention are implemented. The
-[native product roadmap](../improvements/MacOS-Native-Roadmap.md) tracks the
-remaining preview-correctness, hands-on workflow, and distribution gates.
+This page owns current implementation status, verification, and limitations.
+[Features](../features.md) describes the user tools; the
+[roadmap](../improvements/MacOS-Native-Roadmap.md) owns priority.
 
-**Last verified:** 2026-09-02 against the current working tree. Some
-representative-RAW tests require the untracked local `sample-raw/` corpus and
-are explicitly disabled when it is absent.
+**Verified September 8, 2026 against the current source.** Local RAW tests depend
+on the untracked `sample-raw/` corpus; CI cannot reproduce those cases without it.
 
 ## Release Position
 
-The Swift/SwiftUI application is the primary product and the only destination
-for new functionality. It is ready for an explicitly labeled, ad-hoc-signed,
-Apple Silicon technical beta on macOS 14 or later. It is not yet an
-Apple-notarized general release.
+The native Swift/SwiftUI app is the primary product. The latest published
+binary is [0.2.0 Beta 1](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.1)
+(August 14, 2026), an ad-hoc-signed Apple Silicon build for macOS 14 or later.
+Current source includes features and repairs beyond that binary. No newer
+release is implied by a source commit or a locally packaged app.
 
-The technical beta boundary is intentionally smaller than the high-quality
-first-release standard below. A deeper representative roll pass, Developer ID
-notarization, and independent-Mac validation remain important, but are
-disclosed beta limitations rather than reasons to withhold useful open-source
-software.
+The packager assembles and validates self-contained app/ZIP artifacts and
+supports Developer ID signing and notarization. A notarized distribution,
+no-bypass Gatekeeper check, and installation on an independent supported Mac
+have not been demonstrated. See the [release runbook](native-release.md).
 
-Stock-specific look learning and calibration are not part of the active plan.
-The existing generic controls, profile seams, fitter, and research notes remain
-available, but no further corpus preparation, named-stock fitting, or ML work
-should begin until the project owner explicitly reactivates that track.
+## Current Application
 
-## Current Work
-
-The bounded 40 MP measurement cycle and beta packaging/output correctness work
-are complete. The still-preview viewport has native pan/pinch navigation,
-Fit/step/100% commands, shared image and editing-overlay transforms,
-and viewport-stable comparison. An embedded-JPEG warning and an aligned-stack
-badge appear when those sources are on the canvas; inspect versus full-res is
-not labeled. A loading bar stays on the first RAW draft until the inspect
-preview arrives. Per-file undo/redo now covers processing, geometry, framing,
-reset, paste, and
-profile/preset application, with one history step per continuous editing
-gesture and transient history restored independently for each selected scan.
-**Apply Look to Selected** now transfers the active frame's look to the
-import-ordered multi-selection while preserving each target's geometry and
-measured film base. **Previous Scan** / **Next Scan** (Option-Command-Up/Down)
-move through import order, collapse a multi-selection to that file, and fit the
-new preview. Sidebar rows now distinguish edited, preview-ready, active-export,
-and pending-export states. The Scans sidebar now also proposes high-confidence
-adjacent repeated captures as opt-in aligned stacks; Auto selects HDR for
-bracketed exposures and robust noise-reducing averaging otherwise. The canvas
-upgrades from a bounded stack preview to full resolution while you inspect, and
-an enabled stack exports once under its first capture's name and settings. The
-Film & Conversion panel now presents
-Natural, Darkroom, Classic, and Bypass as the visible conversion intents, with
-stock and paper choices progressively disclosed inside the relevant intent.
-
-The 2026-09-02 code-health fixes make full-resolution preview and export use
-the same original-capture stack merge as bounded previews. Captures decode
-sequentially into temporary storage, then merge in bounded row bands using
-their original alignment, exposure offsets, and HDR weights. Resident image
-storage no longer grows with every full-resolution capture; temporary disk
-usage is approximately two bytes per channel per pixel per capture. Files
-are removed on completion, failure, and cancellation. The app retains a
-bounded preview and reports a failed final upgrade. B&W overall tone curves
-now apply consistently to the CPU and GPU; color-channel controls are gated
-to color film types.
-
-A 2026-07-27 audit reopened a bounded performance slice, now complete.
-Camera-scan stage hashes and the repeated determinism
-mode landed on 2026-07-28 with a passing stock-build baseline, and the
-full-resolution X-Trans camera-scan byte-identity fixture followed the same
-day. The 2026-07-30 forced-OpenMP sweep then isolated tiled X-Trans demosaic as
-the first changed and nondeterministic boundary while proving threaded Fuji
-unpack stayed byte-identical. The adjusted correction benchmark scenarios and
-full-resolution byte-identity fixture followed on 2026-08-03, locating the
-adjusted-path memory peak. The adjusted correction passes were then made
-in-place and parallel on 2026-08-12, halving the measured process-lifetime peak
-while preserving the committed scenario digests byte-for-byte. The X-Trans
-repair completed the bounded performance slice later on 2026-08-12: the shim
-kept LibRaw's serial tile/interpolation order and parallelized only independent
-back-half rows, reproducing all approved digests across five eight-worker runs.
-A 2026-08-13 follow-up keeps serial work inside each tile and the true overlap
-dependence, including the above-right 16-pixel halo, and runs independent
-`2*row+col` wavefront diagonals instead. Five eight-worker repetitions again
-matched every approved digest; warm demosaic on the same fixture fell from
-3.38–3.54 seconds to 2.85–2.86 seconds. That export-latency slice is closed.
-
-Roadmap item 5 slice 1 landed on 2026-08-14: camera-scan Fuji compressed unpack
-now runs independent strips concurrently through LibRaw's `fuji_decode_loop`
-hook, with a locking datastream wrapper for seek+read. `LIBRAW_FORCE_OPENMP`
-stays off. Five release repetitions reproduced every approved digest; a
-same-session eight-worker A/B reduced unpack from a 1.335-second serial median
-to 0.266 seconds. `FSC_UNPACK_WORKERS=1` remains the serial mosaic oracle.
-
-The **Darkroom** conversion landed on 2026-08-15: NegPy-style log-density
-unmix, independent channel stretch, H&D paper, and RA4 paper characters, with
-GPU/CPU preview parity. Cyan/purple camera scans auto-select **Darkroom** with
-Harman Phoenix II stock (Crystal Archive paper, 20% rebate inset) instead of the
-orange-mask Camera Raw LUT. The conversion panel now exposes the bundled stock
-and paper choices directly rather than requiring technical profile names.
-
-Roadmap item 5 slice 2 landed on 2026-08-18: camera-scan browsing ignores the
-embedded JPEG, paints a colour-accurate ~640px draft, upgrades the selected
-file to a ~4000px inspect preview then a 1-pass full-sensor preview, and
-prefetches the next three unseen files at 3200px. **Load RAW Preview** remains
-a skip-ahead to that selected-file 1-pass decode. Switching away demotes the
-unused full-res buffer to inspect size. Selecting a cached 3200px lookahead
-preview skips the inspect decode and proceeds directly to the full-sensor
-1-pass preview. Embedded JPEGs still supply sidebar thumbnails and repeated
-capture detection; they are not the main RAW canvas source.
-
-Roadmap item 5 slice 3 landed on 2026-08-30: export retains the selected
-file's last full-resolution three-pass decode so a settings-only re-export
-skips unpack and demosaic. The buffer is dropped on selection change. Other
-files still decode independently, and export pixels stay on the frozen
-camera-scan oracle.
-
-The 2026-09-02 viewport integration pass found and fixed two composition jumps:
-Original comparison discarded committed crop/perspective/straightening, and
-RAW resolution upgrades retained magnification but lost the panned position.
-Comparison now uses the same geometry as corrected preview; perspective and
-film-base editors explicitly request the whole oriented source. Native AppKit
-tests exercise the real scroll view across draft, inspect, and full-resolution
-upgrades, Fit, resize, and pinch notifications. Deferred zoom reports also keep
-their matching Fit state. Editor canvas changes clear stale dust overlays and
-use the displayed geometry for newly detected masks.
-
-The next product work is the remaining hands-on representative-image viewport
-and real-roll check, then distribution proof. The automated commands and
-coverage are in [the test guide](../../tests/README.md#native-viewport-and-roll-workflow).
-Do not begin a three-pass Metal port, a new X-Trans interpolator, writer
-replacement, or stock-look calibration.
-
-The following evidence includes historical baselines and later repairs, not
-one measurement of today's whole app. In particular, the July cache-depth
-measurements predate staged demosaiced previews and selected-file decode
-retention. See the dated [benchmark notes](../performance/40mp-export.md) for
-each workload and source contract:
-
-- colour-accurate ~640px RAW drafts that upgrade the selected file to a ~4000px
-  preview in about 4s, then a 1-pass full-resolution preview, plus
-  3200px neighbour lookahead and 1000px standard-image previews, are the
-  default interactive sources;
-- lookahead never prefetches a second full-resolution RAW; unused full-res
-  preview buffers demote back to inspect size;
-- app-path signposts cover selection-to-first-corrected-paint, preview extraction,
-  conversion, analysis, and export from queue wait through cleanup;
-- export cancellation now stops speculative lookahead decoding, checks each
-  decode/correction/geometry boundary before advancing, and reports every
-  unstarted batch item as cancelled;
-- the release export benchmark measures decode, correction, geometry, packing,
-  writer finalization, packed/output bytes and hashes, current resident and
-  reusable bytes, and current/peak physical footprint;
-- the benchmark's `--determinism` mode repeats full-resolution camera-scan
-  decodes with opt-in SHA-256 capture at eight pipeline boundaries (unpacked
-  mosaic, demosaiced image, processed image, post-ISO image, Swift image,
-  corrected image, writer-input pixels, output file) and reports per-boundary
-  agreement in pipeline order. On 2026-07-28 the stock Homebrew LibRaw 0.21.4
-  build agreed at every boundary across five repetitions of
-  `fuji400-fresh/DSCF2833.RAF`, with a fixed 683.9 MB process-lifetime peak
-  physical footprint and every output removed; the stable digests are recorded
-  in the 40 MP notes and anchor the byte-identity fixture committed the same
-  day;
-- one 40.19 MP RAF-to-TIFF smoke run took 27.51 seconds and reached a 1.20 GB
-  process-lifetime peak RSS;
-- 19.71 of 21.68 decode seconds were spent in final-quality three-pass X-Trans
-  demosaic;
-- an isolated audit build of LibRaw 0.21.4 with forced OpenMP reduced a separate
-  Fuji processed-DNG workload from 14.74 to 2.10 seconds, with demosaic falling
-  from 13.18 to 1.38 seconds and unpack from 0.89 to 0.11–0.13 seconds. A
-  one-thread forced build matched the stock output, but two 14-thread runs
-  differed from the reference and from each other. The 2026-07-30 pinned
-  follow-up swept 1/2/4/8/10/14 threads with five repetitions each: every
-  unpacked mosaic matched stock; 2 and 4 threads repeated but changed at
-  `demosaicedImage`; 8, 10, and 14 first became non-repeatable at that same
-  boundary. The 14-thread low-power run used 2.51–2.74 seconds for demosaic
-  versus 16.53–17.18 at one thread and held a 701.6 MB process-lifetime peak
-  physical footprint. This is a located opportunity and failed pixel candidate,
-  not a production result;
-- the production repair does not enable LibRaw's overlapping OpenMP tile loop.
-  It preserves serial work inside each tile and the overlapping-tile dependence
-  chain, including the above-right 16-pixel halo, while independent
-  `2*row+col` wavefront diagonals use at most eight workers. Five release
-  repetitions of `DSCF2833.RAF` reproduced all eight committed boundaries and
-  output bytes exactly. Warm demosaic measured 2.85–2.86 seconds versus the
-  2026-08-12 row-parallel 3.38–3.54-second result and the stock 12.72–12.77-second
-  baseline, with a 700.2 MB peak physical footprint;
-- camera-scan Fuji compressed unpack now parallelizes independent strips
-  without `LIBRAW_FORCE_OPENMP`. Five release repetitions of `DSCF2833.RAF`
-  reproduced all eight committed boundaries. A same-session eight-worker A/B
-  reduced unpack from a 1.335-second serial median to 0.266 seconds, with
-  peak physical footprint 699.4–701.8 MB;
-- the closing 18-output format matrix removed every output; `DSCF2833.RAF`
-  format medians were 6.33 seconds TIFF, 5.12 JPEG, 8.41 PNG, and 5.14 DNG.
-  A separate ten-file TIFF sequence removed all ten outputs, held post-release
-  footprint within 45.5–53.6 MB, and held the process peak to 686.8 MB. The
-  ten-job app path completed in 50.07 seconds without errors or retained output;
-  cancellation reached the post-decode boundary in 4.74 seconds and wrote no
-  output;
-- the 2026-08-03 correction-scenario matrix measured the neutral fused path and
-  tone, protected-color, dye-mixing, and combined adjusted paths over three
-  40.19 MP release repetitions. Corrected/output hashes repeated exactly and
-  all 15 TIFFs were removed. Corrected-stage medians were 0.105, 2.182, 2.266,
-  1.885, and 2.749 seconds respectively; post-scenario physical footprint stayed
-  within 47.3–54.2 MB, while the adjusted paths raised process-lifetime peak
-  physical footprint to 1.984 GB. The serial full-frame `Double` seam was then
-  reduced in place on 2026-08-12: tone, protected-color, and dye-mixing now run
-  in-place and in parallel, dropping the adjusted-scenario process-lifetime peak
-  to 1.017 GB while the committed scenario digests still reproduce byte-for-byte;
-- the in-place parallel adjusted seam cut the measured correction-scenario
-  medians (tone 2.182→0.954 s, protected color 2.266→0.993 s, dye mixing
-  1.885→0.944 s, combined 2.749→1.269 s) on a run whose decode had slowed to
-  21.5–22.5 s from the 14.3–14.9 s baseline, so those latencies are directional
-  while the footprint and byte-identity evidence applies to the measured local
-  workload, not all hardware;
-- parallel full-resolution power-law correction reduced that measured stage
-  from 3.685 seconds to a 0.926-second median with identical TIFF bytes and
-  SHA-256, reducing median total export to 24.874 seconds.
-- the repeated format baseline is complete: three TIFF/JPEG/PNG/DNG runs for
-  `DSCF0669.RAF` plus three TIFF runs for `DSCF0718.RAF` and `DSCF0729.RAF`;
-  final-quality decode remained the dominant stage across the 16.72–27.41
-  second median total range, and all 18 temporary outputs were removed.
-- the corrected ten-file sequential TIFF confirmation completed with every
-  output removed and no sustained live-memory growth: post-release physical
-  footprint fell from 52.74 MB to 42.78 MB and the process-lifetime physical
-  peak stayed fixed at 686.11 MB across all ten files;
-- the previously rising resident count tracked reclaimable allocator pages,
-  not live image buffers: resident bytes rose from 1.132 GB to 1.549 GB while
-  reusable bytes rose from 1.069 GB to 1.467 GB. All-zone `vmmap` snapshots
-  likewise identified reusable and empty allocator regions rather than dirty
-  retained data;
-- TIFF export now packs its three 16-bit RGB channels directly instead of
-  allocating a padded RGBA buffer. The 40.19 MP intermediate is 80.37 MB
-  smaller, the ten-file median packing interval fell from 29.73 ms to 22.88 ms
-  (23.0%), and all ten TIFF byte counts and SHA-256 hashes remained identical.
-- all four writers now split full-resolution channel packing across at most
-  eight workers. JPEG and PNG also use compact RGB rather than padded RGBA
-  inputs, removing 40.19 MB and 80.37 MB respectively at 40.19 MP. A same-RAW
-  release A/B reduced the combined packing/finalization interval by 1.5% for
-  TIFF, 2.4% for JPEG, 2.4% for PNG, and 30.0% for DNG while preserving each
-  format's output byte count and SHA-256;
-- the release-mode app-path benchmark now records first corrected paint,
-  cached and uncached switching, rapid-selection drain, preview-cache bytes,
-  and Mach physical footprint. On six local RAFs with three repetitions,
-  p50/p95 were 50.71/63.72 ms for first paint, 14.57/83.98 ms for a cached
-  switch, 126.32/126.32 ms for an uncached switch, and 81.55/133.77 ms for a
-  six-file rapid-selection drain. The largest two-file preview cache was
-  8.53 MB and the process ended at 28.79 MB physical footprint after a
-  155.57 MB process-lifetime peak;
-- the preview-cache depth run is complete on the same six-RAF corpus. Depth 2
-  populated two sessions and 8.53 MB of logical preview data; depths 8 and 32
-  both saturated at the six available files and 25.59 MB. Physical footprint
-  after releasing each model returned to 27.82, 26.23, and 26.49 MB,
-  respectively, so the run shows no sustained depth-by-depth growth. Absolute
-  in-capacity footprint is reported but is not directly ordered because later
-  samples reuse allocator pages from earlier samples;
-- the release app path completed ten sequential TIFF jobs in 225.21 seconds
-  over six unique local RAFs plus four duplicate queue additions. Per-job p50
-  and nearest-rank p95 were 22.57 and 22.80 seconds. The observed physical
-  footprint stayed between 71.03 and 74.14 MB, returned to 61.41 MB after model
-  release, and all ten temporary outputs were removed. Cancellation requested
-  250 ms into the first full-resolution decode stopped at the next safe boundary
-  in 21.57 seconds, wrote no output, and returned to 59.62 MB after model release;
-
-These numbers are diagnostic, not release claims. `ru_maxrss` and Mach
-`resident_size` include reusable pages and are not live-memory gates; use
-physical footprint plus allocator classification for that decision. The
-current camera-scan decode contract is not comparable with the faster
-RawPy-compatibility profile because the stage sets and demosaic algorithms
-differ.
-
-Both the original baseline cycle and the subsequent bounded performance work
-are closed. The still-preview zoom/pan surface is implemented and still needs
-a direct representative-image workflow check. Preserve final-quality demosaic,
-output contracts, and the one-full-resolution-RAW-decode-at-a-time bound in
-future work.
-
-## Implemented Product Scope
-
-| Area | Current behavior |
+| Area | Implemented behavior |
 |---|---|
-| Import | Drag/drop, file picker, Finder Open With, standard PNG/JPEG/BMP/TIFF decode, and LibRaw-backed camera RAW decode. Optional AVFoundation live preview when macOS exposes the camera or capture adapter as a video device, with invert/exposure/saturation on the live toolbar. |
-| First paint | Standard images use ImageIO thumbnails at most 1000px. Camera RAW files ignore the embedded JPEG and decode a colour-accurate ~640px demosaiced draft (about 0.3s). The selected RAW then upgrades to a ~4000px preview in about 4s, then a 1-pass full-sensor preview; the next three unseen files prefetch at 3200px. Switching away demotes an unused full-res buffer to inspect size. A separate 256px proxy drives classification and median calibration before the first filtered render. |
-| Processing | Color/B&W negative and slide startup classification plus a selectable Original (no-inversion) film type; visible Natural, Darkroom, Classic, and Bypass conversion intents; measured Natural starting looks; Darkroom log-density invert (dye unmix, independent channel stretch, H&D paper, Neutral/Endura/Crystal Archive) with cyan/purple-mask auto-select onto Darkroom/Harman Phoenix II; a reference-derived Kodachrome-like adaptive look; an optional density pipeline, film-base measurement, flat field, capture-profile 3x3-plus-offset density correction before curve inversion; a neutral-preserving six-control dye-crossover matrix shared by calibrated/power-law/density color-negative paths; protected color and tone controls with center-weighted UI response and pipeline-calibrated tone references; shape-preserving overall/per-channel curves; color wheels; neutral-white handling for clipped near-zero holder pixels; automatic frame detection; a centered two-click horizontal/vertical straighten guide; an immediately visible post-straighten drag-box crop with full-canvas replacement and reset; an independent four-corner perspective warp with targeting reticles, a 100×100-pixel drag loupe, soft parallel-edge assistance, and a visible grid; live full-resolution output dimensions, frame, and aspect ratio. |
-| Scan review and stacking | Scans sidebar with bounded inverted thumbnails from the embedded JPEG (or ImageIO thumbnail for standard files), native multi-selection, edit/cache/export indicators, and conservative adjacent same-size repeated-capture proposals. Opt-in translation-only alignment supports Auto, Noise, and HDR modes; low-texture or ambiguous captures are left separate, and enabled stacks export once under the first capture's name and settings. |
-| Preview | First paint uses a bounded 16-bit display source plus a 256px analysis source. Camera RAW sources are demosaiced at the preview bound, not Fuji JPEG renderings. A native scroll viewport supplies momentum pan, cursor-centered pinch zoom, Fit/step/100% commands, viewport-stable Original comparison, and shared editing-overlay transforms. An embedded-JPEG warning and aligned-stack badge appear when those sources are on the canvas; inspect versus full-res is not labeled. **Load RAW Preview** skips ahead to the selected-file 1-pass decode. The Core Image/Metal renderer uses latest-value-wins scheduling; CPU remains the reference and fallback. |
-| Editing state | Per-file settings plus session-local per-file Undo/Redo for processing, geometry, output framing, reset, paste, and profile/preset application. Continuous slider, curve, color-wheel, and perspective gestures coalesce to one step; the restored current state persists while history starts empty after relaunch. Named presets, a built-in Kodachrome-like Auto action, one-step preset removal, system-clipboard copy/paste, edited/preview-ready/active-export/pending-export markers, import-ordered previous/next scan, apply-to-selected/all with per-frame geometry and measured-base preservation, and a configurable 2/4/8/16/32-session preview cache are also implemented. Forward lookahead prefetches at most the next three unseen files. Lookahead caches preview sessions only and is bounded by count and 256 MiB. |
-| Export | Named-sRGB TIFF, JPEG, and PNG plus output-referred linear-sRGB processed DNG; individual, ordered multi-selection, and lazy memory-bounded batch-all workflows; collision-safe names; partial-file cleanup; progress, per-file errors, queued cancellation, and duplicate-friendly append-selected jobs with per-addition export-setting snapshots during an active sequential run. The selected RAW keeps its last three-pass decode for settings-only re-export. |
-| Dust | Native parity-tested candidate-mask detection and a non-destructive aligned overlay. Dust removal is not applied to preview or export. |
-| Packaging | Self-contained app/ZIP/checksum assembly, embedded non-system libraries, bundle-relative load paths, licenses/notices/library manifest, icon/document registration, ad-hoc beta signing, gated Developer ID/notary support, local bundle validation, archive extraction/revalidation, and local packaged launch. |
+| Import and browsing | Standard images use a 1000px ImageIO preview. Camera RAW uses a colour-accurate draft, selected-file inspect and full-sensor 1-pass previews, and bounded neighbour lookahead. Sidebar thumbnails are separate. |
+| Inspector | Develop, Geometry, Calibrate, and Export pages; full-output dimensions in the header. Develop contains Film & Inversion, Tone & Light, and Color & Balance. |
+| Processing | Color/B&W negative, slide, and Original; Natural/Darkroom/Classic/Bypass conversion; reference looks and paper choices; tone, color, curves, wheels, dye crossover, and optional measured-density processing. B&W overall tone curves work on CPU and GPU. |
+| Geometry | Auto Frame, manual crop, two-point straighten, four-corner perspective, rotation/flip, frame and aspect padding. Shared dimension prediction and preview/export geometry. Changing upstream geometry invalidates the dependent manual canvas crop; clearing that manual crop retains upstream geometry. |
+| Viewport | Fit, pan, pinch, zoom steps, and 100% current-preview pixels. Original comparison and source-resolution upgrades preserve the viewed region. Overlays convert gesture coordinates using native magnification. Selection changes fit the new image. |
+| Edits and rolls | Per-file persisted settings; session-local undo/redo with gesture coalescing; presets, clipboard transfer, selected/all look application, import-ordered navigation, and export-state sidebar markers. |
+| Stacks | Opt-in adjacent repeated captures, translation alignment, Auto/Noise/HDR modes, bounded-to-full-resolution preview, and one export under the first capture's name/settings. Original captures merge in row bands through temporary disk storage; failures retain a usable preview and report status. |
+| Export | Sequential full-resolution TIFF/JPEG/PNG/processed-RGB DNG, collision-safe naming, stage-boundary cancellation, and cleanup. The selected RAW may retain its last three-pass decode for settings-only re-export. |
+| Live camera | AVFoundation preview for devices exposed by macOS, with invert/exposure/saturation. Vendor-specific tethering is not implemented. |
 
-See [Features](../features.md) for a user-facing description and
-[`native/README.md`](../../native/README.md) for package-local implementation
-and command details.
+## Processing And Memory Contracts
 
-## Release Gates
-
-### 1. Large-File Performance And Memory — Follow-Up Closed 2026-08-12
-
-The 2026-07-15 app-path batch and cancellation run closed the baseline cycle.
-The 2026-07-27 audit added a bounded follow-up with this order:
-
-1. benchmark instrumentation and the camera-scan byte-identity fixture (both
-   landed 2026-07-28);
-2. isolation and repair of the existing LibRaw threaded-path divergence
-   (isolated 2026-07-30; deterministic row-parallel repair landed 2026-08-12);
-3. measured reduction of adjusted-correction allocations and serial passes
-   (landed 2026-08-12: in-place parallel tone/protected-color/dye-mixing with
-   byte-identical scenario digests and a 1.984 GB → 1.017 GB peak);
-4. only then, re-evaluation of compression writers, batch overlap, Bayer RCD,
-   or micro-optimizations.
-
-The standing contract is:
-
-- prompt bounded corrected feedback;
-- one full-resolution RAW export at a time; the selected file may keep its
-  last three-pass decode for settings-only re-export;
-- no overlapping in-flight authoritative full-resolution decode buffers;
-- no sustained physical-footprint growth through a representative batch;
-- stable output and metadata across optimizations;
-- documented p50/p95 latency and peak-live-memory baselines that future changes
-  can detect regressions against;
-- final-quality camera-scan threading must repeat deterministically at least
-  five times per fixture before its speed is considered;
-- any custom LibRaw dependency must pass packaging and clean-machine gates.
-
-### 2. Photographic Judgment And Editing Confidence
-
-Implemented in the current working tree:
-
-- native pan/pinch navigation plus Fit, zoom-in/out, and 100% commands;
-- original/corrected comparison at the same viewport and magnification;
-- a shared transform for image, dust, crop, straighten, and perspective layers;
-- an embedded-JPEG warning when RAW colour is unavailable, a draft loading
-  bar, and an aligned-stack canvas badge. Inspect versus full-res is not
-  labeled on the canvas.
-- native Undo/Redo with exact parameter snapshots, one history step per
-  continuous gesture, and safe per-file boundaries.
-
-The 2026-09-02 automated pass covers actual scroll-view remapping and
-comparison with automatic crop, manual crop, perspective, straightening, and
-combined geometry. It verifies exact corrected-pixel restoration, temporary
-source/canvas editing, aligned dust-mask dimensions, and editor-state reset on
-selection load. These checks do not certify gesture feel or photographic
-judgment in the packaged app.
-
-Still required before calling the application high quality:
-
-- complete a direct representative-image workflow check for focus, grain,
-  dust, crop-edge, overlay-drag, comparison, and clipping-diagnostic behavior;
-- preserve the named preview/export split: mosaic-binned 1-pass browsing versus
-  independent three-pass export, with the selected file's last three-pass
-  decode retained for settings-only re-export.
-
-### 3. Roll And Batch Workflow
-
-Exercise a real roll workflow: choose an anchor frame, establish a look, apply
-it to selected or all open frames, correct exceptions, choose intended exports,
-and complete the batch. Import-ordered previous/next, Apply Look to Selected,
-and edited/preview-ready/export sidebar states are implemented. Still verify
-immediate visible application, preserved per-frame geometry/base measurements,
-and import-ordered selection/export in a realistic roll.
-
-Sidebar reordering, ratings, or a larger queue become requirements only when
-this workflow demonstrates a need.
-
-On 2026-09-02, the supplemental release-mode `RepresentativeRollWorkflowTests`
-passed on macOS 15.7.7 using local Fuji 400 frames `DSCF2833`, `DSCF2851`, and
-`DSCF2856`. The app-model workflow applied an anchor look to two selected
-frames, preserved the third frame's crop/orientation/base measurement, left the
-unselected frame unchanged, undid/redid an exception, and compared the selected
-full-resolution preview without a composition jump. It then exported two
-import-ordered TIFFs, changed settings and re-exported using the retained
-three-pass decode, and restored the saved exception in a new app model. All
-three TIFFs reopened, the three source SHA-256 hashes were unchanged, and all
-temporary outputs were removed. There were two authoritative decodes and one
-cache hit. This is automated workflow evidence; a hands-on roll/stack usability
-pass and independent-viewer assessment remain pending.
-
-### 4. Representative Packaged-App And Output Correctness — Beta Contract Closed
-
-Exercise the actual packaged app, not only engine entry points:
-
-- import representative standard images and RAWs;
-- verify bounded corrected-preview orientation against reopened
-  full-resolution exports;
-- apply default calibrated inversion, legacy power-law, density/flat-field,
-  crop/perspective/frame, preset, batch, and relaunch workflows;
-- export TIFF, JPEG, PNG, and DNG, then inspect dimensions, pixels, orientation,
-  depth, metadata, and color interpretation;
-- preserve the named-sRGB contract for TIFF/JPEG/PNG and the explicit
-  output-referred linear-sRGB DNG metadata contract;
-- test cancellation, collision handling, unwritable destinations, corrupt
-  settings, relaunch, and partial-output cleanup;
-- reproduce the originally reported PNG source/destination case.
-
-The existing Fujifilm X-T5 RAF corpus is useful but insufficient as the entire
-product claim. A small legally distributable committed CI corpus is preferable;
-local-only files remain an explicitly supplemental gate.
-
-### 5. Distribution Hardening
-
-The release packager now provides a validated `unsigned-beta` path and a
-fail-closed `public` path. The following remain for the notarized build:
-
-- Developer ID sign;
-- notarize and staple;
-- pass Gatekeeper without a bypass;
-- install and run on a supported clean Mac without Homebrew or the source tree;
-- repeat the representative import/edit/export/relaunch smoke workflow.
-
-## Known Limitations
-
-- Telea dust inpainting and applying dust removal to preview/export are not
-  implemented natively.
-- Sidebar order remains import order. Manual reordering is unavailable and is
-  not a release gate unless the roll workflow demonstrates a need.
-- Lens-distortion correction and calibrated film-plane/sensor-plane
-  non-alignment correction are not implemented. The current four-corner warp
-  rectifies one planar film frame; it does not model curved or spatially varying
-  distortion.
-- RAW CI coverage depends partly on untracked local files; the committed corpus
-  does not yet prove the complete packaged-app path.
-- The camera-scan full-resolution byte-identity fixture
-  (`camera_scan_decode_reference.json` plus `CameraScanByteIdentityTests`)
-  pins the image shape, mosaic metadata, and all five decode-stage digests
-  from the 2026-07-28 stock-build baseline. It is a same-machine, same-build
-  contract, not a cross-platform identity proof; refresh it only from a
-  documented repeated determinism run. The separate exact full-output
-  reference still belongs to the faster `rawPyCompatibility` profile and must
-  not be presented as camera-scan proof.
-- LibRaw's forced-OpenMP path first changes pixels at tiled X-Trans demosaic,
-  as isolated by the 2026-07-30 worker-count sweep. It remains disabled. The
-  production shim instead runs independent overlapping-tile wavefront diagonals
-  and reproduces the approved pixels. This retains an adapted LibRaw 0.21.4
-  algorithm body that must be reviewed when LibRaw is upgraded.
-- The available real RAW corpus is X-Trans and does not provide a committed
-  real-file gate for the Bayer RCD path.
-- Camera-scan RAW browsing first paints a ~640px colour-accurate draft, then
-  upgrades the selected file to a ~4000px preview in about 4s, then a
-  1-pass full-sensor preview. Unseen neighbours prefetch at 3200px; unused
-  full-res buffers demote back to inspect size. Export retains the selected
-  file's last three-pass decode for settings-only re-export and drops it on
-  selection change. Other files still decode independently.
-- Fuji compressed unpack runs independent strips concurrently through
-  LibRaw's `fuji_decode_loop` hook. `LIBRAW_FORCE_OPENMP` and overlapping-tile
-  X-Trans OpenMP remain disabled. `FSC_UNPACK_WORKERS=1` is the serial mosaic
-  oracle.
-- The camera-scan export oracle is a frozen LibRaw 0.21.4 integer three-pass,
-  not live RawTherapee X-Trans. Camera-scan ISO denoise/sharpen policy is a
-  bounded native approximation, not an exact RawTherapee kernel port.
-- TIFF, JPEG, and PNG use named sRGB profiles. Processed DNG uses
-  output-referred linear-sRGB DNG metadata and may not open in applications
-  that only support known-camera sensor DNGs; use TIFF for broad interchange.
-- The density pipeline uses an authoritative CPU fallback rather than a fully
-  product-integrated GPU path.
-- Capture profiles can store a custom density correction, and the offline
-  fitter produces a candidate plus fit/held-out/identity-baseline metrics while
-  preventing frame leakage across the validation split. The repository does
-  not contain the paired measured corpus needed to validate or ship a built-in
-  capture correction matrix for this fitter. Preparing aligned density samples
-  and target log exposures remains upstream work. The separate reference
-  calibrator already aligns RAF/JPEG/XMP pairs and fits per-stock curves, and
-  Darkroom already includes stock dye-unmix matrices with recorded provenance;
-  neither validates a new capture correction matrix. Residual LUTs and halation
-  compensation are not implemented. Further calibration work is parked until
-  the project owner explicitly asks to resume it.
-- Processed-RGB DNG does not claim untouched sensor-RAW semantics.
-- Standard images with alpha are rejected because four-channel processing has
-  not been defined.
-- The technical beta is ad-hoc signed and Apple Silicon-only. Developer ID
-  notarization, no-bypass Gatekeeper assessment, and independent clean-machine
-  validation have not been completed.
+- Swift owns 16-bit BGR buffers returned through the narrow LibRaw C/C++ bridge.
+  The CPU pipeline is the deterministic export/reference authority.
+- Camera-scan export uses the frozen LibRaw 0.21.4 integer three-pass X-Trans
+  oracle. Independent wavefront diagonals and Fuji compressed strips run across
+  at most eight workers. `LIBRAW_FORCE_OPENMP` stays off because its overlapping
+  X-Trans tiles fail the exact-output contract. This is not live RawTherapee parity.
+- RAW preview bounds are 640 draft, 4000 inspect, and 3200 lookahead; actual
+  dimensions follow CFA binning. One selected-file full-sensor 1-pass preview
+  demotes on selection change. A separate selected-file export decode is also
+  dropped on selection change. No full-resolution lookahead or roll-sized RAW
+  cache is permitted. See [preview architecture](realtime-preview-plan.md).
+- The preview cache defaults to eight sessions and has a 256 MiB byte bound.
+  The model persists its count limit; the current inspector has no cache-size
+  control. Render scheduling retains only the latest pending request.
+- Stacks decode originals sequentially and use temporary disk space of roughly
+  two bytes per channel per pixel per capture. Temporary files are removed on
+  success, failure, and cancellation. A loaded flat field prevents stacking.
+- CPU clipping diagnostics sample at most 65,536 pixels without full-frame
+  Double expansion. Darkroom analysis shares sorted channel percentiles and
+  retains pixel/chroma pairs during neutral-axis selection.
+- TIFF/PNG are 16-bit sRGB; JPEG is 8-bit sRGB. Processed DNG stores 16-bit RGB
+  with output-referred linear-sRGB metadata. TIFF compression defaults to none;
+  LZW measurements must be identified explicitly.
 
 ## Verification Summary
 
-- On 2026-09-02 the release suite reported **533 tests passed** in 332.843
-  seconds with `RUN_REPRESENTATIVE_ROLL_TESTS=1`, including the local RAW
-  workflow above. Strict native formatting and `git diff --check` also passed.
-  The run used normal macOS graphics/window access: the restricted-sandbox
-  attempt could not render several Core Image thumbnails and stopped in a
-  native layout test. Those tests passed in the completed macOS run. Other
-  opt-in performance benchmarks remained disabled.
-- That recorded run covered 533 native tests across 41 Swift test files, including
-  import-order previous/next, sidebar export-state, repeated-scan detection,
-  aligned stacking, wavefront-vs-serial X-Trans identity,
-  parallel-vs-serial Fuji unpack identity, selected-file three-pass
-  export-decode retention, native scroll-view upgrades, geometric Original
-  comparison, single- and multi-channel zero-light neutralization, and the opt-in
-  representative RAW roll workflow.
-- The camera-scan byte-identity fixture
-  (`camera_scan_decode_reference.json` plus `CameraScanByteIdentityTests`)
-  pins the full-resolution X-Trans decode of `fuji400-fresh/DSCF2833.RAF` to
-  the 2026-07-28 determinism baseline: image shape, color description, mosaic
-  metadata, all five decode-stage digests, and the Swift pixel hash must
-  reproduce exactly.
-- Frozen Python-generated fixtures cover shared numerical behavior.
-- The 2026-09-02 release CPU/Metal comparator ran 2,725 image/parameter
-  comparisons with zero render failures, confirming full parity across all
-  modes within the documented 2/255 tolerance (colourNegative max 2/255,
-  blackAndWhiteNegative max 1/255, slide max 2/255). The previous B&W gradient
-  discrepancy (6/255 under legacy gamma `-35` and highlights `-45`) was resolved
-  by ensuring near-zero holder pixel neutralization applies to single-channel
-  B&W negatives on the CPU path matching the GPU kernel. The comparator was also
-  hardened to fail explicitly with non-zero exit if Metal is unavailable,
-  comparisons count is zero, render failures occur, or tolerance is exceeded.
-- A separate directed dye-crossover fixture verifies the new linear matrix
-  against the production Metal renderer within the same 2/255 tolerance.
-- Synthetic calibration tests recover a known density-space affine transform,
-  enforce frame-level fit/validation separation, compare held-out RMSE against
-  identity, and exercise capture-profile migration plus the app processing seam.
-- Export tests cover format round trips, manager behavior, cancellation,
-  collisions, partial cleanup, and app-level integration.
-- The isolated LibRaw audit established that existing upstream threading can
-  accelerate the tested Fuji workload. The completed six-count follow-up
-  isolated tiled X-Trans demosaic as the first changed boundary, proved
-  threaded unpack remains exact for the fixture, and confirmed that enabling
-  the candidate wholesale fails determinism and exactness. Production X-Trans
-  keeps serial work inside each tile and the overlapping-tile dependence
-  chain, including the above-right 16-pixel halo, then runs independent
-  `2*row+col` wavefront diagonals and reproduces the approved exact-output
-  fixture. The 2026-08-13 wavefront follow-up reduced the same-fixture warm
-  demosaic from the 2026-08-12 row-parallel 3.38–3.54 seconds to 2.85–2.86
-  seconds. Camera-scan Fuji compressed unpack now runs independent strips
-  concurrently without `LIBRAW_FORCE_OPENMP`; five release repetitions still
-  match every approved digest, and a same-session eight-worker A/B reduced
-  unpack from 1.335 to 0.266 seconds. The detailed experiment is in the
-  full-resolution performance guide and the 40 MP notes.
-- Local packaging validates the assembled app and extracted ZIP copy, bundled
-  license/notice/manifest resources, dependency closure, signature, and
-  checksum-oriented archive contract.
-- The native GitHub workflow runs tests with coverage and builds the app on
-  macOS 14 and 15. The macOS 15 lane also checks strict Swift formatting and
-  assembles/validates an unsigned beta archive. It does not run the standalone
-  preview comparator or opt-in RAW roll workflow, and does not prove a
-  notarized artifact or committed real RAW corpus.
+| Evidence | Latest recorded result | Scope |
+|---|---|---|
+| Full native release suite, September 8 | 580 tests reported: 570 passing records, 10 opt-in skips; 293.059 s | Includes available RAW corpus, camera-scan identity, CPU/GPU Darkroom parity, app/geometry, stack, independent-reader output, and exact analysis/pixel references. Run with macOS graphics access. |
+| CPU/Metal comparator, September 2 | 2,725 comparisons, zero render failures; maximum 2/255 (B&W 1/255) | Parameter-grid parity; fails if Metal is missing, no comparisons complete, rendering fails, or tolerance is exceeded. |
+| Three-frame Fuji roll, September 4 | Opt-in workflow passed, 38.8 s | Look transfer, reversible exception, comparison, ordered TIFF export, retained-decode re-export, persisted settings, independent reader checks; outputs removed and source hashes unchanged. |
+| Local packaged viewport, September 8 | Fit/100%/pan/Original and Fit-scale manual crop passed | Direct gesture mechanics on three RAFs; does not establish broad photographic quality. |
+| Local packaged stack, September 8 | Proposal, Auto noise mode, alignment, and full-resolution preview passed | Three copies of one JPEG; real repeated-capture quality remains unverified. |
+| Analysis benchmark, September 8 | Textured Darkroom 103.34 → 43.83 ms p50; flat 7.37 → 5.14 ms | Isolated stages, five timed repetitions. Textured process peak 13.84 → 16.76 MB. All nine analysis/pixel hashes unchanged. |
+| Formatting | Strict recursive Swift lint and diff whitespace check passed | Manifest, native sources, and tests. |
 
-## Development Rules
+The [analysis report](../performance/preview-analysis.md) contains raw samples,
+source hashes, and reproduction. The [40 MP export notes](../performance/40mp-export.md)
+retain dated before/after measurements and decode-oracle provenance. Those
+records are not a measurement of today's complete application.
 
-1. Protect data integrity, cancellation, and recoverable errors before adding
-   features.
-2. Test user-visible work through the real `AppModel`/packaged-app path where
-   practical, not only isolated engine helpers.
-3. Preserve exact shared legacy behavior only where compatibility is an actual
-   product contract. New native behavior gets a deterministic Swift CPU
-   authority and focused regression fixtures.
-4. Profile before optimizing. Compare identical stage sets and quality
-   contracts; never trade export fidelity for an unnamed speed mode. Preview
-   may use a cheaper already-known interpolator at the preview bound; that is
-   a named preview/export split, not an unnamed quality cut.
-5. Keep preview and export memory bounded. Do not retain a full import batch of
-   decoded RAW buffers. Interactive preview may keep one selected-file 1-pass
-   full-resolution buffer and must demote it to the ~4000px inspect size on
-   selection change. One selected-file full-resolution three-pass decode may be
-   kept for settings-only re-export and must be dropped on selection change.
-6. Treat implementation and documentation as one change. Update this page,
-   Features, the roadmap, and specialized evidence pages only where their owned
-   facts changed.
-7. Do not expand the legacy Python product surface.
+Frozen fixtures require exact shared Python/OpenCV behavior where specified.
+JPEG import has a separate decoder tolerance: maximum UInt16 difference 2,560,
+mean difference 512, because ImageIO and OpenCV decode JPEG differently.
+
+CI tests with coverage and builds the app on macOS 14 and 15. The macOS 15 lane
+also enforces formatting and validates an unsigned beta archive. The standalone
+comparator, opt-in roll/performance tests, and local RAW corpus are not default
+CI evidence. Current local success is not a claim that a future pushed commit
+has passed CI.
+
+## Remaining Verification And Limitations
+
+- Hands-on focus, grain, dust, tone, and color judgment across representative
+  scans, including a realistic roll and real repeated captures.
+- Preview/Photos judgment and install/launch proof on an independent Mac.
+- Developer ID notarization and final distributed-artifact checks.
+- Native dust removal/inpainting, lens-distortion correction, manual sidebar
+  reordering, and vendor-specific tethering are absent.
+- Stack alignment handles translation only; flat-field correction is not applied
+  to each capture before stacking, so the combination is disabled.
+- Standard-image alpha is rejected. Some viewers cannot open processed-RGB DNG.
+- The available real RAW regression set is X-Trans-focused and partly local-only;
+  Bayer RCD has no committed real-file gate. Decode identity is a same-machine
+  contract, not cross-platform byte identity. Review the adapted LibRaw body
+  whenever upgrading that dependency.
+- Measured-density processing uses CPU fallback. The offline affine fitter has
+  synthetic validation but no validated built-in capture correction. Existing
+  Natural curves and Darkroom unmix profiles have separate provenance.
+- Further corpus preparation, named-stock fitting, residual LUTs, halation work,
+  and ML are parked pending explicit owner direction.
 
 ## Build And Test
 
-The package requires macOS 14 or later and Homebrew LibRaw:
-
-```sh
-brew install libraw
-swift test --package-path native/FilmScanEngine --no-parallel
-swift build --package-path native/FilmScanEngine \
-  --product FilmScanConverterMac
-```
-
-Create and validate a local self-contained artifact:
-
-```sh
-native/package-release.sh
-```
-
-Run the staged export benchmark:
-
-```sh
-swift build -c release --package-path native/FilmScanEngine \
-  --product FilmScanExportBenchmark
-
-native/FilmScanEngine/.build/release/FilmScanExportBenchmark \
-  sample-raw /tmp/film-scan-export.json 3
-```
-
-Generated benchmark exports are hashed and removed after each repetition. See
-the [benchmark notes](../performance/40mp-export.md) for options and the exact
-measurement contract.
-
-## Document Ownership
-
-- [Roadmap](../improvements/MacOS-Native-Roadmap.md): ordered product work and
-  explicit deferrals.
-- [Features](../features.md): current user-visible capabilities and limitations.
-- [Native release](native-release.md): signing, notarization, Gatekeeper, and
-  clean-machine procedure.
-- [40 MP benchmark](../performance/40mp-export.md): commands, measurements, and
-  performance acceptance evidence.
-- [Full-resolution performance guide](../../PERFORMANCE-OPPORTUNITIES-2026-07-27.md):
-  closed export-latency evidence, rejected shortcuts, and the completed
-  developer handoff. Current product priority lives on the roadmap.
-- [Legacy Python](../legacy-python.md): maintenance boundary and retirement
-  gates.
-- [Film-processing research](../film-processing-research.md): scientific and
-  algorithmic background, not delivery priority.
-- [`native/README.md`](../../native/README.md): package structure, local build
-  commands, and implementation notes.
+Use [Building](building.md) for commands, the [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md)
+for opt-in coverage, [Contributing](../contributing.md) for invariants, and
+[native package documentation](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/README.md) for tool details.

@@ -1,169 +1,75 @@
 # Installation
 
-The native Swift/macOS application is the primary product. The legacy Python
-application is maintenance-only and remains available for workflows the native
-app has not replaced, primarily applied dust removal and cross-platform legacy
-use. See
-[Native macOS Development](development/native-macos.md) for the active product
-and [Legacy Python Application](legacy-python.md) for the retirement policy.
+## Published Beta
 
-## Native Swift/macOS Application
+The latest published download is
+[Film Scan Converter 0.2.0 Beta 1](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.1),
+released August 14, 2026 for Apple Silicon Macs running macOS 14 or later.
+It predates the current source's inspector and several documented features.
+Use a source build for the application described in [How to Use](how-to-use.md).
 
-### Install the public beta
-
-The current binary beta supports Apple Silicon Macs running macOS 14 or later.
-
-1. Download the newest prerelease ZIP and matching `.sha256` file from
-   [GitHub Releases](https://github.com/athoma28/Film-Scan-Converter/releases).
-2. In Terminal, verify the download from your Downloads folder:
+1. Download the ZIP and matching `.sha256` file from that release.
+2. From the download folder, verify the archive:
 
     ```sh
-    shasum -a 256 -c Film-Scan-Converter-*.zip.sha256
+    shasum -a 256 -c Film-Scan-Converter-0.2.0-beta.1-apple-silicon.zip.sha256
     ```
 
-3. Unzip the archive and move **Film Scan Converter.app** to Applications.
-4. Because this beta is ad-hoc signed rather than Apple-notarized,
-   Control-click the app, choose **Open**, then confirm **Open**. This approves
-   only this app. Do not disable Gatekeeper or remove quarantine attributes.
+3. Unzip it and move **Film Scan Converter.app** to Applications.
+4. The beta is ad-hoc signed, not Apple-notarized. Use the normal macOS
+   per-application [Open confirmation](https://support.apple.com/en-us/102445). Depending on macOS, use Control-click
+   **Open**, or attempt launch and then use **System Settings > Privacy & Security >
+   Open Anyway** if that option is offered. Do not disable Gatekeeper globally.
 
-The archive includes the GPL license, third-party notices, release notes, and
-an exact manifest of bundled libraries. Report problems with the
-[bug-report template](https://github.com/athoma28/Film-Scan-Converter/issues/new?template=bug_report.yml).
+The archive includes licensing, notices, release notes, and its bundled-library
+manifest. Its [release page](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.1)
+owns the binary-specific feature list and limitations.
 
-### Build from source
+## Current Source
 
-#### Prerequisites
+Requires macOS 14 or later, Swift 6 through Xcode/Command Line Tools, and Homebrew.
+Intel source builds are outside the distributed Apple Silicon test matrix.
 
-- macOS 14 or later
-- Xcode Command Line Tools or Xcode
-- [Homebrew](https://brew.sh)
+```sh
+brew install libraw
+git clone https://github.com/athoma28/Film-Scan-Converter.git
+cd Film-Scan-Converter
+swift run --package-path native/FilmScanEngine FilmScanConverterMac
+```
 
-#### Build and Run
+For an existing checkout, run the final command or `./run-swift.sh` from its root.
+To create a local self-contained app:
 
-1. Install the required system library:
+```sh
+RELEASE_MODE=local native/package-release.sh
+```
 
-    ```sh
-    brew install libraw
-    ```
+The result is `dist/Film Scan Converter.app` plus an archive. A local build is
+not a published or notarized release. See [Building](development/building.md)
+for tests and the [release runbook](development/native-release.md) for release
+modes and final-artifact verification.
 
-2. Clone or download the repository.
+## Legacy Python
 
-3. Build and run the native application:
+The Python/Tkinter application is maintenance-only and retains applied dust
+removal and cross-platform/ART use. See [legacy policy](legacy-python.md) and
+[legacy usage](legacy-usage.md).
 
-    ```sh
-    # Run the default regression suite (performance benchmark skipped)
-    swift test --package-path native/FilmScanEngine --no-parallel
+Install Python 3.10 or newer and Tkinter for the chosen interpreter. On macOS,
+Homebrew supplies Python/Tk packages; on Linux, use the distribution's Tkinter
+package. The Windows Python installer can include Tcl/Tk.
 
-    # Build the app
-    swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
+From the repository root, create and activate a virtual environment, then run:
 
-    # Run the app
-    swift run --package-path native/FilmScanEngine FilmScanConverterMac
-    ```
-
-4. Or use the provided launcher script from the project root:
-
-    ```sh
-    ./run-swift.sh
-    ```
-
-To assemble a self-contained local app and ZIP, run
-`native/package-release.sh`. See the
-[native release guide](development/native-release.md) for the explicit
-unsigned-beta and signed/notarized release modes.
-
-## Legacy Python Application (Maintenance Only)
-
-This section installs the maintenance-only legacy Python application.
-
-### Installation from Binaries
-
-Download a legacy build, when available, from
-[Film Scan Converter Releases](https://github.com/athoma28/Film-Scan-Converter/releases).
-
-If no binary exists for your platform yet, please use the manual installation.
-
-## Manual Installation
-
-1. Install Python 3.10 or newer from [python.org](https://www.python.org/downloads/).
-
-2. Download the source files from the repository using one of the following methods:
-    - Download ZIP:
-      Click the "Code" button on the repository page and select "Download ZIP". Extract the downloaded archive.
-    - Clone with Git:
-      Run the following command in your terminal: `git clone https://github.com/athoma28/Film-Scan-Converter.git`
-
-3. Open the `source` folder in the terminal.
-
-4. Install the required libraries by running the following command in the terminal:
-
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-5. Run the application by executing the following command in the terminal:
-
-    ```bash
-    python "Film Scan Converter.pyw"
-    ```
-
-## Manual Installation in Python venv
-
-1. Install Python 3.10 or newer from [python.org](https://www.python.org/downloads/).
-
-2. Download the source files from the repository using one of the following methods:
-    - Download ZIP:
-      Click the "Code" button on the repository page and select "Download ZIP". Extract the downloaded archive.
-    - Clone with Git:
-      Run the following command in your terminal: `git clone https://github.com/athoma28/Film-Scan-Converter.git`
-
-3. Open the `source` folder in the terminal.
-
-4. Create and activate a virtual environment:
-
-    ```bash
-    python -m venv venv
-    # On macOS/Linux (bash):
-    source venv/bin/activate
-    # On Linux (fish):
-    source venv/bin/activate.fish
-    # On Windows:
-    venv\Scripts\activate
-    ```
-
-5. Install the required libraries:
-
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-6. Run the application:
-
-```bash
+```sh
+python -m venv .venv
+# macOS/Linux: source .venv/bin/activate
+# Windows PowerShell: .venv\Scripts\Activate.ps1
+python -m pip install -r source/requirements.txt
+cd source
 python "Film Scan Converter.pyw"
 ```
 
-## Note on tkinter
-
-The application requires `tkinter` for the GUI. On some platforms this may not
-be installable in a venv or through pip.
-
-- On **macOS**, install it with Homebrew:
-
-    ```bash
-    brew install python-tk
-    ```
-
-- On **Linux** (Debian/Ubuntu):
-
-    ```bash
-    sudo apt-get install python3-tk
-    ```
-
-- On **Linux** (Arch):
-
-    ```bash
-    sudo pacman -S tk
-    ```
-
-- On **Windows**, `tkinter` is usually included with the standard Python installer. If you encounter issues, ensure you installed Python from [python.org](https://www.python.org/downloads/).
+Tkinter is an interpreter/system dependency, not a pip-installed package.
+Report installation problems with the app version, platform, interpreter, and
+error through the [bug template](https://github.com/athoma28/Film-Scan-Converter/issues/new?template=bug_report.yml).

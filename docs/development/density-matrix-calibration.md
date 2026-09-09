@@ -1,6 +1,6 @@
 # Density-Matrix Calibration
 
-> **Parked research infrastructure (2026-07-15).** Keep this implementation and
+> **Parked research infrastructure.** Keep this implementation and
 > its tests documented, but do not spend active roadmap time preparing a
 > corpus, fitting named stocks, generating LUTs, or extending this into an ML
 > experiment until the project owner explicitly asks to resume. The current
@@ -17,8 +17,7 @@ log_exposure = stock_slope * corrected_density + stock_offset
 ```
 
 This fitter does not supply a validated built-in capture correction matrix;
-that requires measured reference pairs and held-out validation. The app already
-ships separate Natural reference curves and Darkroom stock dye-unmix matrices.
+that requires measured reference pairs and held-out validation. The current source includes separate Natural reference curves and Darkroom stock dye-unmix matrices.
 Those catalogs have their own provenance and are not outputs of this affine
 capture-profile fitter.
 

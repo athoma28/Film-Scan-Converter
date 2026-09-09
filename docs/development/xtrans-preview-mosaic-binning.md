@@ -10,8 +10,11 @@ This is the camera-scan **preview** path only. Export still unpacks the full
 mosaic and runs three-pass Markesteijn. It never calls the shrink described
 here.
 
+Timing examples below are the dated local measurements, not guaranteed
+latencies on another file, machine, or current build.
+
 Code: `shrinkMosaicToBound` in
-[`native/FilmScanEngine/Sources/CLibRawShim/RawTherapeePipeline.cpp`](../../native/FilmScanEngine/Sources/CLibRawShim/RawTherapeePipeline.cpp).
+[`native/FilmScanEngine/Sources/CLibRawShim/RawTherapeePipeline.cpp`](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/FilmScanEngine/Sources/CLibRawShim/RawTherapeePipeline.cpp).
 
 ## The constraint
 
@@ -86,10 +89,8 @@ There is **no** preview that is “about 5000px” or “about 6000px” on this
 file. Anything from 3876px up to 7751px is factor 2 (~half). The next step
 is the full sensor.
 
-That is why the old “2400px detail preview” often looked like ~1200–2000px
-in the badge: 2400 requested → factor 4 → **1938px** on this body. A 1200
-request is factor 7 → **1104px**. Asking for 2400 does not interpolate at
-2400.
+For example, 2400 requested → factor 4 → **1938px** on this body. A 1200
+request is factor 7 → **1104px**. Requested bounds do not name exact output sizes.
 
 Bayer (period 2) has a finer staircase, but it is still integer-only:
 half, third, quarter, …

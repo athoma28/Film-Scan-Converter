@@ -80,7 +80,7 @@ Best of 3 cold processing runs; decode is measured separately below:
 
 Follow-up verification on 2026-07-05 corrected an initial implementation that
 scaled off-diagonal Rec.2020 contributions twice. The complete 312-test native
-suite now passes. The production GPU parameter-grid and tone-control comparisons
+suite passed in that follow-up. The production GPU parameter-grid and tone-control comparisons
 again pass their existing maximum tolerance of 2/255. The LUT remains a
 linearization optimization only; matrix and median-calibration semantics match
 the scalar/GPU contract.
@@ -98,9 +98,9 @@ as the Double pipeline.
 | DSCF2417.RAF | 1.054 s | 1.069 s |
 | DSCF2422.RAF | 1.072 s | 1.075 s |
 
-Half-resolution libraw_dcraw_process dominate at ~95% of decode time. No
-processing-level optimization can improve this without GPU-accelerated
-demosaicing or architectural changes (deferred full-res decode).
+In this compatibility-profile run, half-resolution `libraw_dcraw_process`
+accounted for about 95% of decode time. It does not measure the current staged
+camera-scan preview or deterministic parallel export path.
 
 ## Reproduce
 

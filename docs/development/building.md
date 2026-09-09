@@ -1,99 +1,69 @@
-# Building
+# Building And Testing
 
-The native Swift/macOS application is the primary product. The Python packaging
-notes below are retained only for maintenance of the legacy cross-platform
-workflow. See [Legacy Python Application](../legacy-python.md).
-
-The native package requires macOS 14 or later, Swift 6, and Homebrew LibRaw:
+The native package requires macOS 14 or later, Swift 6 (Xcode or Command Line
+Tools), and Homebrew LibRaw. Commands below run from the repository root.
 
 ```sh
 brew install libraw
-```
-
-Run the native regression gate and build the app:
-
-```sh
 swift format lint --strict --recursive native/FilmScanEngine/Package.swift native/FilmScanEngine/Sources native/FilmScanEngine/Tests
 swift test --package-path native/FilmScanEngine --no-parallel
 swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
 swift run --package-path native/FilmScanEngine FilmScanConverterMac
 ```
 
-Run the GPU-vs-CPU preview comparator:
+`./run-swift.sh` is a convenience launcher. Development launch does not prove
+Launch Services, bundled dependencies, signing, or the distributed ZIP. Use the
+[release runbook](native-release.md) for packaged-app validation.
+
+## Graphics And Release Checks
+
+Run AppKit/Core Image/Metal tests with normal macOS graphics/window access.
+A restricted process may fail to create thumbnails, render, or lay out native
+views even when CPU-only tests pass. `--disable-sandbox` affects SwiftPM's own
+sandbox; it does not grant an external runner access to graphics services.
+
+For release-mode regression with temporary module caches:
+
+```sh
+CLANG_MODULE_CACHE_PATH=/tmp/film-scan-clang-cache SWIFTPM_MODULECACHE_OVERRIDE=/tmp/film-scan-swiftpm-cache swift test --disable-sandbox -c release   --package-path native/FilmScanEngine --no-parallel
+```
+
+After building, use `--skip-build` to run the same binaries again. The standalone
+CPU/Metal comparator is an additional opt-in check:
 
 ```sh
 swift run -c release --package-path native/FilmScanEngine FilmScanPreviewComparator
 ```
 
-Run this with normal macOS graphics access. Confirm `Metal available: true`,
-2,725 completed comparisons, zero render failures, and maximum channel error
-at most 2/255. The tool exits with a non-zero status if Metal is unavailable,
-zero comparisons complete, render failures occur, or tolerance is exceeded.
-All 2,725 parameter cases pass within 2/255; see the
-[verification summary](native-macos.md#verification-summary).
+Require Metal availability, 2,725 completed comparisons, zero render failures,
+and maximum channel error at most 2/255. See the
+[verification summary](native-macos.md#verification-summary) for recorded results.
 
-For the opt-in three-frame RAW roll command and corpus requirements, see the
-[test guide](../../tests/README.md#native-viewport-and-roll-workflow).
+The [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md) describes local RAW corpus requirements,
+opt-in roll tests, and independent-reader checks. [Native package documentation](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/README.md)
+lists benchmark commands. [Analysis](../performance/preview-analysis.md) and
+[export](../performance/40mp-export.md) reports define comparable workloads.
 
-Or use the convenience launcher from the project root:
+## Documentation
 
-```sh
-./run-swift.sh
-```
-
-Refresh frozen legacy compatibility fixtures only when intentionally changing
-shared behavior:
+Build the documentation with MkDocs and the Material theme:
 
 ```sh
-.venv/bin/python tests/generate_native_snapshots.py
-.venv/bin/python tests/generate_raw_decode_reference.py
+python3 -m venv /tmp/film-scan-docs-venv
+/tmp/film-scan-docs-venv/bin/python -m pip install mkdocs-material
+/tmp/film-scan-docs-venv/bin/mkdocs build --strict --site-dir /tmp/film-scan-docs-site
 ```
 
-## Legacy Python Packaging
+## Legacy Python
 
-Run these historical packaging commands from `source/`, where
-`Film Scan Converter.pyw` and its supporting modules live.
-
-### PyInstaller
-
-PyInstaller bundles your Python app and its dependencies into a single executable.
+Set up dependencies using [Installation](../installation.md#legacy-python).
+Run the maintenance regression suite from the repository root:
 
 ```sh
-pyinstaller --onefile --windowed "Film Scan Converter.pyw"
+.venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 ```
 
-> **MacOS compatibility Warning:** This does not seem to work reliably on macos due to Tkinter. For MacOS use nuitka instead.
-
-### Nuitka
-
-Nuitka compiles Python code to optimized C executables, often resulting in faster and smaller binaries.
-
-> **Compatibility Warning:** Nuitka doesn’t support every Python package or feature out of the box. Some modules may need extra setup or might not work fully.
-
-Windows / Linux:
-
-```sh
-nuitka --onefile --standalone --enable-plugin=tk-inter "Film Scan Converter.pyw"
-```
-
-MacOS:
-
-```sh
-nuitka --standalone --macos-create-app-bundle --enable-plugin=tk-inter "Film Scan Converter.pyw"
-```
-
-### Platform Compilation and Cross Platform Compilation
-
-You can build binaries for Windows, Linux, and macOS (both Intel and Apple Silicon) using PyInstaller or Nuitka. However, not all platforms support full cross-compilation:
-
-- **Windows (x86, x64):**
-    Can be built natively on Windows, or cross-compiled from Linux using tools like MinGW. Some features may require native Windows builds for best compatibility.
-
-- **Linux (x86, x64, ARM):**
-    Can be built natively on Linux or cross-compiled from other platforms. ARM builds (e.g., Raspberry Pi) are easiest when built natively or using Docker with the correct architecture.
-
-- **macOS (x86_64, Apple Silicon):**
-  - **x86_64:** Can be built natively on Intel Macs or cross-compiled from Linux/macOS with the right SDKs.
-  - **Apple Silicon (arm64):** Native compilation on an Apple Silicon Mac is recommended due to SDK and architecture requirements. Cross-compilation is possible but more complex.
-
-> **Tip:** For best results, build on the target platform or use Docker images that match your target architecture.
+Fixture generators may be run only for an intentional shared-behavior change;
+see the [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md). Python packaging is a separate,
+platform-specific maintenance task. Build on the target platform and validate
+its Tkinter/native dependencies; it is not part of native macOS packaging.

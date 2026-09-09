@@ -36,6 +36,17 @@ struct ScanStackAppModelTests {
     host.layoutSubtreeIfNeeded()
     let splitView = try #require(descendantViews(in: host).first { $0 is NSSplitView })
     #expect(splitView.frame.size == host.bounds.size)
+
+    let stack = try #require(model.detectedScanStacks.first)
+    model.setScanStackEnabled(true, for: stack)
+    try await waitUntil {
+      model.isBuildingScanStack || model.isUpgradingScanStack
+        || model.previewSourceKind == .alignedStack
+    }
+    #expect(!model.scanStackStatus.isEmpty)
+    #expect(model.status == model.scanStackStatus)
+    host.layoutSubtreeIfNeeded()
+    #expect(splitView.frame.size == host.bounds.size)
   }
 
   @Test("Import proposes, previews, and exports one aligned stack")
@@ -228,7 +239,98 @@ struct ScanStackAppModelTests {
     #expect(matchesOriginalMerge)
   }
 
-  @Test("Failed final stack tier retains the bounded preview and reports the error")
+  @Test("Enabling a stack keeps the sharp preview instead of swapping in a tiny draft")
+  func enabledStackDoesNotReplaceSharpPreviewWithTinyDraft() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let width = AppModel.displayPreviewMaxDimension + 80
+    let height = 160
+    let capture = syntheticCapture(noiseOffset: 0, width: width, height: height)
+    let urls = (0..<2).map { directory.appendingPathComponent("frame-\($0).png") }
+    for url in urls {
+      try capture.write(to: url, format: .png, parameters: ExportParameters(format: .png))
+    }
+    let tinyDraft = syntheticCapture(noiseOffset: 0, width: 200, height: 32)
+    let model = AppModel()
+    model.scanStackPreviewDecoder = { _, tier in
+      if tier == .draft { return tinyDraft }
+      if tier == .inspect { Thread.sleep(forTimeInterval: 0.2) }
+      return capture
+    }
+    model.importFiles(urls)
+    try await waitUntil(timeout: .seconds(20)) {
+      !model.isAnalyzingScanStacks && !model.isLoading && model.previewImage != nil
+    }
+    let sharpWidth = try #require(model.selectedImageDimensions?.width)
+    #expect(sharpWidth >= AppModel.displayPreviewMaxDimension)
+
+    let stack = try #require(model.detectedScanStacks.first)
+    model.setScanStackEnabled(true, for: stack)
+    try await Task.sleep(for: .milliseconds(80))
+    #expect(model.selectedImageDimensions?.width == sharpWidth)
+    #expect(model.selectedImageDimensions?.width != tinyDraft.width)
+    #expect(model.isBuildingScanStack || model.scanStackStatus.contains("Aligning"))
+
+    try await waitUntil(timeout: .seconds(15)) {
+      model.previewSourceKind == .alignedStack && !model.isBuildingScanStack
+        && !model.isUpgradingScanStack
+    }
+    #expect(model.selectedImageDimensions?.width == width)
+    #expect(model.scanStackEffectiveMode == .noiseReduction)
+  }
+
+  @Test("Choosing HDR rebuilds the stacked preview without shrinking it")
+  func selectingHDRUpdatesStackedPreview() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let width = AppModel.displayPreviewMaxDimension + 80
+    let height = 160
+    let firstURL = directory.appendingPathComponent("frame-01.png")
+    let secondURL = directory.appendingPathComponent("frame-02.png")
+    let reference = syntheticCapture(noiseOffset: 0, width: width, height: height)
+    let brighter = syntheticCapture(
+      noiseOffset: 0, seed: 7, width: width, height: height, exposureEV: 1.1)
+    try reference.write(to: firstURL, format: .png, parameters: ExportParameters(format: .png))
+    try brighter.write(to: secondURL, format: .png, parameters: ExportParameters(format: .png))
+
+    let model = AppModel()
+    model.importFiles([firstURL, secondURL])
+    try await waitUntil(timeout: .seconds(20)) {
+      !model.isAnalyzingScanStacks && model.detectedScanStacks.count == 1
+        && model.previewImage != nil
+    }
+    let stack = try #require(model.detectedScanStacks.first)
+    model.setScanStackEnabled(true, for: stack)
+    try await waitUntil(timeout: .seconds(15)) {
+      model.previewSourceKind == .alignedStack && !model.isBuildingScanStack
+        && !model.isUpgradingScanStack
+    }
+    #expect(model.selectedImageDimensions?.width == width)
+
+    model.setScanStackMode(.noiseReduction, for: stack)
+    try await waitUntil(timeout: .seconds(15)) {
+      model.scanStackEffectiveMode == .noiseReduction && !model.isBuildingScanStack
+        && !model.isUpgradingScanStack && model.previewSourceKind == .alignedStack
+    }
+    let before = try #require(model.decodedImage)
+    #expect(before.width == width)
+    #expect(model.scanStackMode(for: stack) == .noiseReduction)
+
+    model.setScanStackMode(.hdr, for: stack)
+    try await waitUntil(timeout: .seconds(15)) {
+      model.scanStackEffectiveMode == .hdr && !model.isBuildingScanStack
+        && !model.isUpgradingScanStack && model.previewSourceKind == .alignedStack
+    }
+    let after = try #require(model.decodedImage)
+    #expect(after.width == width)
+    #expect(after.height == height)
+    #expect(after != before)
+    #expect(model.scanStackStatus.localizedCaseInsensitiveContains("HDR"))
+  }
+
+  @Test("Failed higher stack tiers keep the sharp preview and report the error")
   func failedFullResolutionUpgradeReportsFallback() async throws {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -240,32 +342,33 @@ struct ScanStackAppModelTests {
     for url in urls {
       try capture.write(to: url, format: .png, parameters: ExportParameters(format: .png))
     }
-    let draft = syntheticCapture(noiseOffset: 0)
+    let tinyDraft = syntheticCapture(noiseOffset: 0)
     let model = AppModel()
     model.scanStackPreviewDecoder = { _, tier in
-      if tier == .draft { return draft }
+      if tier == .draft { return tinyDraft }
       throw CocoaError(.fileReadCorruptFile)
     }
     model.importFiles(urls)
-    try await waitUntil {
+    try await waitUntil(timeout: .seconds(20)) {
       !model.isAnalyzingScanStacks && !model.isLoading && model.previewImage != nil
     }
     let stack = try #require(model.detectedScanStacks.first)
+    let sharpWidth = try #require(model.selectedImageDimensions?.width)
     model.setScanStackEnabled(true, for: stack)
-    try await waitUntil {
-      model.previewSourceKind == .alignedStack && !model.isBuildingScanStack
-        && !model.isUpgradingScanStack && !model.isRendering
+    try await waitUntil(timeout: .seconds(20)) {
+      !model.isBuildingScanStack && !model.isUpgradingScanStack && model.statusKind == .error
     }
-    #expect(model.decodedImage?.width == draft.width)
-    #expect(model.selectedImageDimensions?.provisional == true)
-    #expect(model.scanStackStatus.contains("full-resolution upgrade failed"))
-    #expect(model.statusKind == .error)
+    #expect(model.previewSourceKind != .alignedStack)
+    #expect(model.selectedImageDimensions?.width == sharpWidth)
+    #expect(
+      model.scanStackStatus.contains("could not be built")
+        || model.scanStackStatus.contains("upgrade failed"))
 
     model.scanStackPreviewDecoder = nil
     model.setScanStackEnabled(false, for: stack)
-    try await waitUntil { !model.isLoading && !model.isRendering }
+    try await waitUntil(timeout: .seconds(20)) { !model.isLoading && !model.isRendering }
     model.setScanStackEnabled(true, for: stack)
-    try await waitUntil {
+    try await waitUntil(timeout: .seconds(20)) {
       model.previewSourceKind == .alignedStack && !model.isBuildingScanStack
         && !model.isUpgradingScanStack && !model.isRendering
     }
@@ -278,10 +381,12 @@ struct ScanStackAppModelTests {
     noiseOffset: Int,
     seed: Int = 7,
     width: Int = 96,
-    height: Int = 72
+    height: Int = 72,
+    exposureEV: Double = 0
   ) -> UInt16Image {
     var pixels: [UInt16] = []
     pixels.reserveCapacity(width * height * 3)
+    let exposure = pow(2.0, exposureEV)
     for y in 0..<height {
       for x in 0..<width {
         var hash = UInt64(bitPattern: Int64(x &* 73_856_093 ^ y &* 19_349_663 ^ seed &* 83_492_791))
@@ -290,7 +395,7 @@ struct ScanStackAppModelTests {
         hash ^= hash >> 33
         let random = Double(hash & 0xffff) / 65_535
         let wave = 0.5 + 0.5 * sin(Double(x + seed) * 0.19) * cos(Double(y - seed) * 0.13)
-        let base = 0.04 + 0.68 * (0.72 * wave + 0.28 * random)
+        let base = (0.04 + 0.68 * (0.72 * wave + 0.28 * random)) * exposure
         for scale in [0.86, 1.0, 0.93] {
           let encoded = encodeSRGB(min(0.88, base * scale))
           let signedNoise = (x &* 17 + y &* 29 + noiseOffset) % 73 - 36

@@ -89,7 +89,7 @@ struct PreviewScrollViewTests {
   @Test(
     "A panned view retains its photo region through draft, inspect, and full-resolution upgrades")
   func resolutionUpgradesPreservePan() {
-    let coordinator = PreviewViewport<Color>.Coordinator(rootView: .black) { _, _ in }
+    let coordinator = PreviewViewport<Color>.Coordinator(rootView: .black) { _, _, _ in }
     let scrollView = coordinator.makeScrollView()
     scrollView.frame = CGRect(x: 0, y: 0, width: 600, height: 400)
     scrollView.layoutSubtreeIfNeeded()
@@ -127,9 +127,10 @@ struct PreviewScrollViewTests {
 
   @Test("Fit follows window resize and pinch leaves fit mode")
   func fitResizeAndPinch() async throws {
-    var reports: [(percent: Int, isFit: Bool)] = []
-    let coordinator = PreviewViewport<Color>.Coordinator(rootView: .black) { percent, isFit in
-      reports.append((percent, isFit))
+    var reports: [(percent: Int, isFit: Bool, magnification: CGFloat)] = []
+    let coordinator = PreviewViewport<Color>.Coordinator(rootView: .black) {
+      percent, isFit, magnification in
+      reports.append((percent, isFit, magnification))
     }
     let scrollView = coordinator.makeScrollView()
     scrollView.frame = CGRect(x: 0, y: 0, width: 800, height: 600)
@@ -159,6 +160,7 @@ struct PreviewScrollViewTests {
     }
     #expect(reports.map(\.percent) == [40, 50, 150, 100])
     #expect(reports.map(\.isFit) == [true, true, false, false])
+    #expect(reports.map(\.magnification) == [0.4, 0.5, 1.5, 1])
   }
 
   private func normalizedVisibleRect(_ scrollView: NSScrollView, size: CGSize) -> CGRect {

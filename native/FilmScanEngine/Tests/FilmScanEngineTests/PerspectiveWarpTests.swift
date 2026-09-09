@@ -60,6 +60,23 @@ struct PerspectiveWarpTests {
     #expect(cropped.pixels == image.pixels)
   }
 
+  @Test("Interactive crop refuses a folded corner drag and keeps the previous quad")
+  func replacingCornerRejectsFoldedQuad() {
+    let crop = PerspectiveCrop.fullFrame
+    let folded = crop.replacing(1, with: .init(x: 0.1, y: 0.9))
+    #expect(folded == crop)
+    #expect(folded.isValid)
+  }
+
+  @Test("A hundred-percent border inset is rejected instead of collapsing the canvas")
+  func fullBorderInsetIsRejected() {
+    let image = UInt16Image(
+      width: 8, height: 6, channels: 1, pixels: [UInt16](repeating: 1, count: 48))
+    #expect(
+      PerspectiveTransform.crop(image, perspectiveCrop: .fullFrame, borderPercent: 100) == nil)
+    #expect(!PerspectiveCrop.fullFrame.inset(borderPercent: 100).isValid)
+  }
+
   @Test("Interactive crop rejects a folded or degenerate quadrilateral")
   func invalidPerspectiveCropIsRejected() {
     let folded = PerspectiveCrop(
@@ -175,6 +192,10 @@ struct PerspectiveWarpTests {
         filmType: .cropOnly,
         cropRect: RotatedRect(
           centerX: 0.5, centerY: 0.5, width: 0.7, height: 0.8, angle: 8)),
+      ProcessingParameters(
+        filmType: .cropOnly,
+        cropRect: RotatedRect(
+          centerX: 0.5, centerY: 0.5, width: 0.8, height: 0.35, angle: 60)),
     ]
 
     for parameters in cases {
@@ -194,6 +215,43 @@ struct PerspectiveWarpTests {
       pixels: [UInt16](repeating: 1, count: canvas.width * canvas.height)
     ).addingFrame(percent: 5, aspectRatio: AspectRatio(width: 1, height: 1))
     #expect(predictedFrame == PixelDimensions(width: actualFrame.width, height: actualFrame.height))
+  }
+
+  @Test("A 60-degree landscape crop rect stays long-edge-horizontal")
+  func sixtyDegreeLandscapeCropStaysLandscape() throws {
+    let image = UInt16Image(
+      width: 120, height: 80, channels: 1,
+      pixels: [UInt16](repeating: 1, count: 9_600))
+    let cropped = try #require(
+      PerspectiveTransform.crop(
+        image,
+        normalizedRect: RotatedRect(
+          centerX: 0.5, centerY: 0.5, width: 0.7, height: 0.3, angle: 60)))
+    #expect(cropped.width > cropped.height)
+  }
+
+  @Test("Axis-aligned film-frame crop keeps unique corners upright")
+  func axisAlignedFilmFrameCropKeepsCornersUpright() throws {
+    let width = 8
+    let height = 6
+    var pixels = [UInt16](repeating: 1_000, count: width * height)
+    pixels[0] = 11
+    pixels[width - 1] = 22
+    pixels[(height - 1) * width] = 33
+    pixels[pixels.count - 1] = 44
+    let image = UInt16Image(width: width, height: height, channels: 1, pixels: pixels)
+    let cropped = try #require(
+      PerspectiveTransform.crop(
+        image,
+        normalizedRect: RotatedRect(
+          centerX: 0.5, centerY: 0.5, width: 1, height: 1, angle: 0)))
+
+    #expect(cropped.width == width)
+    #expect(cropped.height == height)
+    #expect(cropped.pixels[0] == 11)
+    #expect(cropped.pixels[width - 1] == 22)
+    #expect(cropped.pixels[(height - 1) * cropped.width] == 33)
+    #expect(cropped.pixels[cropped.pixels.count - 1] == 44)
   }
 
   // MARK: - Homography computation
@@ -383,6 +441,19 @@ struct PerspectiveWarpTests {
       img, homography: translatedHomography, outputWidth: w, outputHeight: h)
 
     #expect(warped.pixels[0] == 0)
+  }
+
+  @Test("Near-edge samples clamp instead of blending with empty pixels")
+  func warpPerspectiveNearEdgeClamp() {
+    let width = 8
+    let height = 6
+    let pixels = [UInt16](repeating: 40_000, count: width * height)
+    let image = UInt16Image(width: width, height: height, channels: 1, pixels: pixels)
+    let homography: [Float] = [1, 0, 1e-4, 0, 1, 0, 0, 0, 1]
+    let warped = PerspectiveTransform.warpPerspective(
+      image, homography: homography, outputWidth: width, outputHeight: height)
+
+    #expect(warped.pixels.allSatisfy { $0 == 40_000 })
   }
 
   @Test("warpPerspective handles single-channel and multi-channel images")

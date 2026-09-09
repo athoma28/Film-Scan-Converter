@@ -81,10 +81,10 @@ not a product profile. See the
 
 ## Packaged-App Validation
 
-Build a self-contained, locally ad-hoc-signed app and ZIP:
+Build a self-contained, locally ad-hoc-signed development app and ZIP:
 
 ```sh
-RELEASE_MODE=unsigned-beta RELEASE_LABEL=beta.1 APP_VERSION=0.2.0 native/package-release.sh
+RELEASE_MODE=local native/package-release.sh
 open "dist/Film Scan Converter.app"
 ```
 
@@ -98,6 +98,11 @@ submission, stapling, and Gatekeeper assessment. Follow the
 stapling, Gatekeeper, and clean-machine validation.
 
 ## Benchmarks And Diagnostics
+
+The [preview-analysis benchmark](../docs/performance/preview-analysis.md)
+isolates CPU clipping/tone diagnostics and Darkroom neutral-axis analysis,
+including release timing, physical footprint, exact pre-change references, and
+Darkroom percentile-sort reuse.
 
 Run the staged 40 MP export benchmark:
 
@@ -293,10 +298,10 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
 - Treat manual film-frame geometry as a persisted, validated clockwise
   four-corner quadrilateral. Its reticle/loupe editor may softly snap either
   incident edge parallel to its opposite edge, but must preserve an explicit
-  free-drag path. Perspective state is independent from the later normalized
-  canvas crop: changing or clearing one must not clear the other. Preview,
-  dust-overlay alignment, density flat
-  field, and export must use the same CPU perspective warp; this corrects one
+  free-drag path. The normalized canvas crop depends on the perspective result.
+  Clearing manual crop preserves perspective; changing or clearing perspective
+  invalidates the dependent manual crop. Preview, dust-overlay alignment,
+  density flat field, and export must use the same CPU perspective warp; this corrects one
   planar frame and is not a lens-distortion model.
 - Resolve each two-point straighten guide against its nearest horizontal or
   vertical axis, then apply the persisted angle after quarter-turn rotation and

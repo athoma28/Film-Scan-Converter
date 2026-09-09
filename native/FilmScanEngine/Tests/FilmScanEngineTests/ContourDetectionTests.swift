@@ -309,4 +309,149 @@ struct ContourDetectionTests {
     #expect(rect.width > 0 && rect.height > 0)
     #expect(rect.centerX > 0 && rect.centerY > 0)
   }
+
+  @Test("findOptimalCrop hull uses the component boundary rather than every pixel")
+  func findOptimalCropUsesBoundaryHull() throws {
+    let width = 120
+    let height = 90
+    var pixels = [UInt16](repeating: 0, count: width * height)
+    for y in 20..<70 {
+      for x in 15..<105 {
+        pixels[y * width + x] = 255
+      }
+    }
+    let threshold = UInt16Image(width: width, height: height, channels: 1, pixels: pixels)
+    let result = try #require(ContourDetection.findOptimalCrop(threshold: threshold))
+    #expect(result.contourPoints.count <= 8)
+  }
+
+  @Test("findOptimalCrop maps an odd-sized proxy back with independent axes")
+  func findOptimalCropOddProxyScale() throws {
+    let width = 1_001
+    let height = 800
+    var pixels = [UInt16](repeating: 0, count: width * height)
+    for y in 160..<640 {
+      for x in 200..<800 {
+        pixels[y * width + x] = 255
+      }
+    }
+    let threshold = UInt16Image(width: width, height: height, channels: 1, pixels: pixels)
+    let result = try #require(
+      ContourDetection.findOptimalCrop(threshold: threshold, maxDimension: 400))
+    #expect(abs(result.rect.centerX - 0.5) < 0.03)
+    #expect(abs(result.rect.centerY - 0.5) < 0.03)
+  }
+
+  @Test("Automatic crop keeps a landscape frame landscape")
+  func automaticCropPreservesLandscape() throws {
+    let cropped = try cropFilledRect(width: 200, height: 160, rectWidth: 100, rectHeight: 60)
+    #expect(cropped.width > cropped.height)
+  }
+
+  @Test("Automatic crop outputs a portrait in-scan gate as long-edge-horizontal")
+  func automaticCropOutputsPortraitGateLandscape() throws {
+    let cropped = try cropFilledRect(width: 200, height: 160, rectWidth: 50, rectHeight: 100)
+    #expect(cropped.width > cropped.height)
+  }
+
+  @Test("Automatic crop keeps a 60-degree landscape frame landscape")
+  func automaticCropPreservesRotatedLandscape() throws {
+    let cropped = try cropRotatedRect(
+      width: 240, height: 240, rectWidth: 120, rectHeight: 48, angleDegrees: 60)
+    #expect(cropped.width > cropped.height)
+  }
+
+  @Test("Automatic crop of an axis-aligned frame keeps unique corners upright")
+  func automaticCropKeepsAxisAlignedCornersUpright() throws {
+    let width = 80
+    let height = 60
+    let minX = 20
+    let minY = 15
+    let rectWidth = 40
+    let rectHeight = 20
+    var thresholdPixels = [UInt16](repeating: 0, count: width * height)
+    var sourcePixels = [UInt16](repeating: 0, count: width * height)
+    for y in minY..<(minY + rectHeight) {
+      for x in minX..<(minX + rectWidth) {
+        thresholdPixels[y * width + x] = 255
+        sourcePixels[y * width + x] = 1_000
+      }
+    }
+    sourcePixels[minY * width + minX] = 11
+    sourcePixels[minY * width + (minX + rectWidth - 1)] = 22
+    sourcePixels[(minY + rectHeight - 1) * width + minX] = 33
+    sourcePixels[(minY + rectHeight - 1) * width + (minX + rectWidth - 1)] = 44
+
+    let result = try #require(
+      ContourDetection.findOptimalCrop(
+        threshold: UInt16Image(
+          width: width, height: height, channels: 1, pixels: thresholdPixels)))
+    let cropped = try #require(
+      PerspectiveTransform.crop(
+        UInt16Image(width: width, height: height, channels: 1, pixels: sourcePixels),
+        normalizedRect: result.rect,
+        coordinateSpace: .imageAxes))
+
+    #expect(abs(cropped.width - rectWidth) <= 1)
+    #expect(abs(cropped.height - rectHeight) <= 1)
+    #expect(cropped.pixels[0] == 11)
+    #expect(cropped.pixels[cropped.width - 1] == 22)
+    #expect(cropped.pixels[(cropped.height - 1) * cropped.width] == 33)
+    #expect(cropped.pixels[cropped.pixels.count - 1] == 44)
+  }
+
+  private func cropFilledRect(
+    width: Int, height: Int, rectWidth: Int, rectHeight: Int
+  ) throws -> UInt16Image {
+    var pixels = [UInt16](repeating: 0, count: width * height)
+    let minX = (width - rectWidth) / 2
+    let minY = (height - rectHeight) / 2
+    for y in minY..<(minY + rectHeight) {
+      for x in minX..<(minX + rectWidth) {
+        pixels[y * width + x] = 255
+      }
+    }
+    return try cropThreshold(
+      UInt16Image(width: width, height: height, channels: 1, pixels: pixels))
+  }
+
+  private func cropRotatedRect(
+    width: Int,
+    height: Int,
+    rectWidth: Double,
+    rectHeight: Double,
+    angleDegrees: Double
+  ) throws -> UInt16Image {
+    var pixels = [UInt16](repeating: 0, count: width * height)
+    let centerX = Double(width) / 2
+    let centerY = Double(height) / 2
+    let radians = angleDegrees * .pi / 180
+    let cosine = cos(radians)
+    let sine = sin(radians)
+    let halfWidth = rectWidth / 2
+    let halfHeight = rectHeight / 2
+    for y in 0..<height {
+      for x in 0..<width {
+        let dx = Double(x) + 0.5 - centerX
+        let dy = Double(y) + 0.5 - centerY
+        let localX = dx * cosine + dy * sine
+        let localY = -dx * sine + dy * cosine
+        if abs(localX) <= halfWidth && abs(localY) <= halfHeight {
+          pixels[y * width + x] = 255
+        }
+      }
+    }
+    return try cropThreshold(
+      UInt16Image(width: width, height: height, channels: 1, pixels: pixels))
+  }
+
+  private func cropThreshold(_ threshold: UInt16Image) throws -> UInt16Image {
+    let result = try #require(ContourDetection.findOptimalCrop(threshold: threshold))
+    let source = UInt16Image(
+      width: threshold.width, height: threshold.height, channels: 1,
+      pixels: [UInt16](repeating: 30_000, count: threshold.width * threshold.height))
+    return try #require(
+      PerspectiveTransform.crop(
+        source, normalizedRect: result.rect, coordinateSpace: .imageAxes))
+  }
 }
