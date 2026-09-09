@@ -840,6 +840,66 @@ struct AppModelTests {
     #expect(model.previewImage?.size == croppedSize)
   }
 
+  @Test("Manual crop editing keeps the uncropped canvas until editing ends")
+  func manualCropEditingPersistsUntilEnded() async throws {
+    let model = AppModel()
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input",
+        withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"
+      )
+    )
+
+    model.importFiles([input])
+    try await waitUntil { model.previewImage != nil && !model.isRendering }
+    let originalSize = try #require(model.previewImage?.size)
+    let crop = NormalizedCropRect(
+      x: 1.0 / 3.0, y: 0.5, width: 1.0 / 3.0, height: 0.5)
+
+    model.beginManualCropEditing()
+    try await waitUntil { model.previewImage?.size == originalSize && !model.isRendering }
+    model.setManualCrop(crop)
+    #expect(model.manualCrop == crop)
+    try await waitUntil { !model.isRendering }
+    #expect(model.previewImage?.size == originalSize)
+
+    let displayedBeforeApplying = model.renderStats.displayedRenders
+    model.endManualCropEditing()
+    try await waitUntil {
+      model.renderStats.displayedRenders > displayedBeforeApplying && !model.isRendering
+    }
+    let croppedSize = try #require(model.previewImage?.size)
+    #expect(croppedSize.width < originalSize.width)
+    #expect(croppedSize.height < originalSize.height)
+  }
+
+  @Test("Manual crop edits during overlay editing do not submit extra previews")
+  func manualCropEditingDoesNotRerenderUncroppedCanvas() async throws {
+    let model = AppModel()
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input",
+        withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"
+      )
+    )
+
+    model.importFiles([input])
+    try await waitUntil { model.previewImage != nil && !model.isRendering }
+    model.beginManualCropEditing()
+    try await waitUntil { !model.isRendering }
+    let displayedBeforeEdit = model.renderStats.displayedRenders
+    let submittedBeforeEdit = model.renderStats.submittedSnapshots
+
+    model.setManualCrop(NormalizedCropRect(x: 0.2, y: 0.2, width: 0.5, height: 0.4))
+    model.setManualCrop(NormalizedCropRect(x: 0.22, y: 0.18, width: 0.48, height: 0.42))
+    try await waitUntil { !model.isRendering }
+
+    #expect(model.renderStats.displayedRenders == displayedBeforeEdit)
+    #expect(model.renderStats.submittedSnapshots == submittedBeforeEdit)
+  }
+
   @Test("Frame and manual-crop dimensions count each geometry stage once")
   func cropDimensionStages() async throws {
     let input = try #require(
@@ -896,8 +956,8 @@ struct AppModelTests {
     #expect(model.cropStatus.isEmpty)
   }
 
-  @Test("Perspective warp and manual crop remain independent")
-  func perspectiveWarpAndCropRemainIndependent() {
+  @Test("Perspective warp changes invalidate a stale canvas crop")
+  func perspectiveWarpInvalidatesCanvasCrop() {
     let model = AppModel()
     let crop = NormalizedCropRect(x: 0.1, y: 0.15, width: 0.8, height: 0.7)
     let perspective = PerspectiveCrop(
@@ -909,16 +969,18 @@ struct AppModelTests {
     model.setManualCrop(crop)
     model.setPerspectiveCrop(perspective)
 
-    #expect(model.manualCrop == crop)
-    #expect(model.parameters.manualCrop == crop)
+    #expect(model.manualCrop == nil)
+    #expect(model.parameters.manualCrop == nil)
     #expect(model.perspectiveCrop == perspective)
 
+    model.setManualCrop(crop)
+    #expect(model.manualCrop == crop)
     model.clearPerspectiveCrop()
 
     #expect(model.perspectiveCrop == nil)
     #expect(model.parameters.perspectiveCrop == nil)
-    #expect(model.manualCrop == crop)
-    #expect(model.parameters.manualCrop == crop)
+    #expect(model.manualCrop == nil)
+    #expect(model.parameters.manualCrop == nil)
   }
 
   @Test("Manual film-base selection maps oriented preview coordinates to source")

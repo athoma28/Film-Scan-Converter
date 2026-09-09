@@ -156,7 +156,8 @@ public enum DensityPrintProcessing {
       unmixRed: unmix.2,
       borderPercent: borderPercent
     )
-    let bounds = logBounds(from: samples)
+    let channelStatistics = LogChannelStatistics(samples)
+    let bounds = logBounds(from: samples, statistics: channelStatistics)
     let lumRange = luminanceRange(bounds)
     let textural = texturalRange(samples)
     let gradeRange = effectiveGradeRange(
@@ -191,7 +192,7 @@ public enum DensityPrintProcessing {
     )
     var curvatures = BGRChannelValues(blue: 0, green: 0, red: 0)
     if profile.castRemovalStrength > 0 {
-      let refs = shadowRefs(samples)
+      let refs = channelStatistics.shadowRefs
       let axis = measureNeutralAxis(samples, bounds: bounds)
       let applied = applyCastRemoval(
         baseSlope: baseSlope,
@@ -516,10 +517,11 @@ public enum DensityPrintProcessing {
   }
 
   static func logBounds(
-    from samples: [(blue: Double, green: Double, red: Double)]
+    from samples: [(blue: Double, green: Double, red: Double)],
+    statistics: LogChannelStatistics
   ) -> (floors: BGRChannelValues, ceils: BGRChannelValues) {
-    let luma = percentileBounds(samples, clip: baseLumaClip)
-    var color = percentileBounds(samples, clip: baseColorClip)
+    let luma = statistics.lumaBounds
+    var color = statistics.colorBounds
     if let gated = samePixelColorFloors(
       samples,
       lumaFloors: luma.floors,
@@ -549,29 +551,41 @@ public enum DensityPrintProcessing {
     )
   }
 
-  static func percentileBounds(
-    _ samples: [(blue: Double, green: Double, red: Double)],
-    clip: Double
-  ) -> (floors: BGRChannelValues, ceils: BGRChannelValues) {
-    let clipped = min(max(clip, 0.00001), 50)
-    return (
-      BGRChannelValues(
-        blue: percentile(samples.map(\.blue), clipped),
-        green: percentile(samples.map(\.green), clipped),
-        red: percentile(samples.map(\.red), clipped)
-      ),
-      BGRChannelValues(
-        blue: percentile(samples.map(\.blue), 100 - clipped),
-        green: percentile(samples.map(\.green), 100 - clipped),
-        red: percentile(samples.map(\.red), 100 - clipped)
-      )
-    )
+  /// Compute all whole-channel percentiles from one sort per channel. Keep
+  /// only the results so sorted storage is released before neutral-axis work.
+  struct LogChannelStatistics {
+    let lumaBounds: (floors: BGRChannelValues, ceils: BGRChannelValues)
+    let colorBounds: (floors: BGRChannelValues, ceils: BGRChannelValues)
+    let shadowRefs: BGRChannelValues
+
+    init(_ samples: [(blue: Double, green: Double, red: Double)]) {
+      let blue = samples.map(\.blue).sorted()
+      let green = samples.map(\.green).sorted()
+      let red = samples.map(\.red).sorted()
+
+      func channels(at percent: Double) -> BGRChannelValues {
+        BGRChannelValues(
+          blue: percentileOfSorted(blue, percent),
+          green: percentileOfSorted(green, percent),
+          red: percentileOfSorted(red, percent)
+        )
+      }
+      func bounds(clip: Double) -> (floors: BGRChannelValues, ceils: BGRChannelValues) {
+        let clipped = min(max(clip, 0.00001), 50)
+        return (channels(at: clipped), channels(at: 100 - clipped))
+      }
+
+      lumaBounds = bounds(clip: baseLumaClip)
+      colorBounds = bounds(clip: baseColorClip)
+      shadowRefs = channels(at: shadowNeutralPercentile)
+    }
   }
 
   static func texturalRange(_ samples: [(blue: Double, green: Double, red: Double)]) -> Double {
-    let luma = samples.map { lumaB * $0.blue + lumaG * $0.green + lumaR * $0.red }
+    let luma = samples.map { lumaB * $0.blue + lumaG * $0.green + lumaR * $0.red }.sorted()
     return abs(
-      percentile(luma, 100 - texturalRangeClip) - percentile(luma, texturalRangeClip))
+      percentileOfSorted(luma, 100 - texturalRangeClip)
+        - percentileOfSorted(luma, texturalRangeClip))
   }
 
   static func meteredAnchor(
@@ -587,16 +601,6 @@ public enum DensityPrintProcessing {
     let measured = percentile(luma, 50)
     let pulled = assumedAnchor + anchorMeterStrength * (measured - assumedAnchor)
     return min(max(pulled, assumedAnchor - anchorMeterBand), assumedAnchor + anchorMeterBand)
-  }
-
-  static func shadowRefs(
-    _ samples: [(blue: Double, green: Double, red: Double)]
-  ) -> BGRChannelValues {
-    BGRChannelValues(
-      blue: percentile(samples.map(\.blue), shadowNeutralPercentile),
-      green: percentile(samples.map(\.green), shadowNeutralPercentile),
-      red: percentile(samples.map(\.red), shadowNeutralPercentile)
-    )
   }
 
   static func applyCastRemoval(
@@ -770,8 +774,9 @@ public enum DensityPrintProcessing {
     }
     let luma = norms.map { lumaB * $0.blue + lumaG * $0.green + lumaR * $0.red }
     let clip = min(max(colorClip, 0.00001), 50.0 - colorBoundsBandWidth)
-    let lo = percentile(luma, clip)
-    let hi = percentile(luma, clip + colorBoundsBandWidth)
+    let sortedLuma = luma.sorted()
+    let lo = percentileOfSorted(sortedLuma, clip)
+    let hi = percentileOfSorted(sortedLuma, clip + colorBoundsBandWidth)
     let band = samples.indices.filter { luma[$0] >= lo && luma[$0] <= hi }
     guard band.count >= minPixels else { return nil }
 
@@ -787,12 +792,15 @@ public enum DensityPrintProcessing {
         return rmsChroma(blue: dB, green: dG, red: dR)
       }
       let threshold = percentile(chroma, neutralAxisChromaQuantile * 100)
-      let selected = zip(band, chroma).compactMap { $0.1 <= threshold ? $0.0 : nil }
-      guard selected.count >= minPixels else { return nil }
-      let selectedChroma = selected.map { index -> Double in
-        let pos = band.firstIndex(of: index).map { chroma[$0] } ?? 0
-        return pos
+      var selected = [Int]()
+      var selectedChroma = [Double]()
+      // Keep the paired values while selecting. Searching band again for
+      // every selected pixel becomes quadratic when many samples tie.
+      for (index, value) in zip(band, chroma) where value <= threshold {
+        selected.append(index)
+        selectedChroma.append(value)
       }
+      guard selected.count >= minPixels else { return nil }
       return (selected, percentile(selectedChroma, 50))
     }
 
@@ -993,8 +1001,11 @@ public enum DensityPrintProcessing {
   }
 
   static func percentile(_ values: [Double], _ percent: Double) -> Double {
-    guard !values.isEmpty else { return 0 }
-    let sorted = values.sorted()
+    percentileOfSorted(values.sorted(), percent)
+  }
+
+  static func percentileOfSorted(_ sorted: [Double], _ percent: Double) -> Double {
+    guard !sorted.isEmpty else { return 0 }
     let clamped = min(max(percent, 0), 100)
     let position = (Double(sorted.count - 1) * clamped) / 100
     let lower = Int(position.rounded(.down))

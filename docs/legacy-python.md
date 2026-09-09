@@ -28,8 +28,8 @@ is not.
 
 ## Retirement Policy
 
-Python retirement is repository cleanup, not a blocker for the first sound
-native release. The native app may ship while dust removal remains explicitly
+Python retirement is repository cleanup, not a gate for a notarized native
+release. The native app may ship while dust removal remains explicitly
 legacy-only.
 
 Archive or remove the Python product only when all of the following are true:
@@ -67,3 +67,6 @@ change:
 
 See [Native macOS Development Status](development/native-macos.md) for current
 native evidence and limitations.
+
+See [legacy usage](legacy-usage.md), [installation](installation.md#legacy-python),
+and [ART integration](how-to-add-to-ART.md) for the supported Python workflow.

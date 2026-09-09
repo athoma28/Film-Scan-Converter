@@ -1,5 +1,11 @@
 # 40 MP Native Export Benchmark
 
+The commands describe the maintained harness. Measurement sections retain dated
+workloads, source states, and hashes for regression/provenance; they are not a
+single current-app timing claim or a list of pending tasks. Current behavior is
+in [development status](../development/native-macos.md), and CPU diagnostics /
+Darkroom timings are in [preview analysis](preview-analysis.md).
+
 `FilmScanExportBenchmark` measures the production engine's decode, processing,
 geometry, pixel-packing, and writer path for full-resolution RAW export. It is
 intended to identify the dominant stage before implementation changes are made.
@@ -7,7 +13,7 @@ It is not a complete app-path benchmark: stored-settings resolution, automatic
 classification, flat-field lookup, destination reservation, queue management,
 and app-level cancellation/error reporting remain outside this executable.
 The production app supplies separate correlated signposts from queue wait
-through cleanup. Release-mode app-path benchmarks now cover selection and
+through cleanup. Release-mode app-path benchmarks cover selection and
 preview-cache latency plus a ten-job sequential export and active-decode
 cancellation without requiring Instruments; Instruments remains useful for
 stage-level traces. Destination reservation is included in the app-path total
@@ -158,8 +164,8 @@ per-depth physical-footprint growth.
 `AppPathExportPerformanceTests` exercises the production `AppModel` queue,
 destination reservation, stored/default settings resolution, full-resolution
 camera-scan decode, correction, geometry, TIFF write, progress state, cleanup,
-and cancellation reporting. The local corpus currently contains six RAFs, so
-the benchmark starts Export All and appends the first four files again through
+and cancellation reporting. The measured corpus contained six RAFs, so the
+run started Export All and appended the first four files again through
 the duplicate-friendly queue contract to reach ten independent export jobs.
 
 Run the release benchmark with writable Swift caches:
@@ -256,7 +262,7 @@ resource-safety regression.
 ## Compact And Parallel Export Packing
 
 TIFF previously built a padded 64-bit RGBA `CGImage` buffer even though the
-writer emits three 16-bit RGB channels. The production TIFF path now builds a
+writer emits three 16-bit RGB channels. The production TIFF path builds a
 48-bit RGB buffer directly; the follow-up below applies the same compact layout
 to PNG.
 For a 7752 x 5184 image, the packed intermediate fell from 321,490,944 bytes to
@@ -270,8 +276,8 @@ so no broader latency claim is warranted. The output remained 179,226,416 bytes 
 The ten-file confirmation preserved every prior TIFF byte count and hash.
 
 The follow-up applies the same bounded packing strategy to every writer. Pixel
-ranges are independent, so images of at least one megapixel now use at most
-eight workers for BGR-to-RGB conversion. TIFF and DNG retain their 48-bit RGB
+ranges are independent. In this measurement, images of at least one megapixel
+used at most eight workers for BGR-to-RGB conversion. TIFF and DNG retain their 48-bit RGB
 buffers; JPEG moves from padded 32-bit RGBA to 24-bit RGB, and PNG moves from
 padded 64-bit RGBA to 48-bit RGB. At 7752 x 5184 this removes 40,186,368 bytes
 from the JPEG intermediate and 80,372,736 bytes from PNG.
@@ -335,10 +341,9 @@ must preserve the three-pass quality guard and full-resolution output.
 
 ## First Correction Optimization
 
-The next safe stage was the 3.685-second fused power-law correction. Images at
-least one megapixel now divide independent pixel ranges across at most eight CPU
-workers. Smaller images remain serial so the bounded interactive path does not
-pay dispatch overhead. The arithmetic, lookup table, and output conversion are
+This experiment targeted the 3.685-second fused power-law correction. Images
+of at least one megapixel divided independent pixel ranges across at most eight
+CPU workers. Smaller images ran serially to avoid dispatch overhead. The arithmetic, lookup table, and output conversion are
 unchanged, and a large-image regression compares every output pixel with the
 authoritative render-ready-linear plus display path.
 
@@ -394,13 +399,9 @@ whether the first divergent stage is threaded unpack, X-Trans demosaic, or
 another OpenMP boundary, and it must not be quoted as an available application
 speedup.
 
-The first benchmark change—stage-boundary hashing with repeated determinism
-runs—landed on 2026-07-28; see the next section. The correction matrix covering
-neutral, tone, protected color, dye mixing, and combined adjustments remains
-pending. See the audited
-[full-resolution performance guide](../../PERFORMANCE-OPPORTUNITIES-2026-07-27.md)
-for the source findings, rejected shortcuts, worker-count matrix, packaging
-gate, and first-developer handoff.
+Stage-boundary hashing, worker-count isolation, and the adjusted-correction
+scenario matrix are recorded in the dated sections below. The failed OpenMP
+result does not satisfy the [RAW performance contracts](https://github.com/athoma28/Film-Scan-Converter/blob/main/PERFORMANCE-OPPORTUNITIES-2026-07-27.md).
 
 ## 2026-07-28 Camera-Scan Stage-Boundary Determinism Instrumentation
 
@@ -469,7 +470,7 @@ per sample in the JSON report, are:
 
 `correctedImage` and `writerInputPixels` match because this run requested no
 frame; a `--frame-percent` run separates them. The five decode-stage digests
-above now anchor the committed camera-scan byte-identity fixture
+above anchor the committed camera-scan byte-identity fixture
 (`native/FilmScanEngine/Tests/FilmScanEngineTests/Fixtures/camera_scan_decode_reference.json`
 plus `CameraScanByteIdentityTests`), which proves the final-quality three-pass
 decode of `DSCF2833.RAF` reproduces every stage digest and the Swift pixel
@@ -483,7 +484,7 @@ section.
 
 ## 2026-07-30 Forced-OpenMP Boundary Isolation
 
-The next bounded roadmap step used the committed determinism instrumentation
+This experiment used the committed determinism instrumentation
 against an isolated LibRaw 0.21.4 build compiled with OpenMP and
 `LIBRAW_FORCE_OPENMP`. The source archive SHA-256 was
 `6be43f19397e43214ff56aab056bf3ff4925ca14012ce5a1538a172406a09e63`,
@@ -532,19 +533,18 @@ above remain independently established by the per-sample digests. The original
 forced-OpenMP run produced no JSON artifact, so its console evidence remains
 the durable record.
 
-To make failure evidence durable, determinism mode now prints all eight full
+To make failure evidence durable, determinism mode prints all eight full
 stage digests plus peak and post-release physical footprint immediately after
 each repetition, before it computes the final agreement or writes JSON.
 
-Decision: do not enable LibRaw OpenMP, do not accept the repeatable-but-wrong
-two- or four-thread output, and do not replace X-Trans demosaic. The first
-divergent boundary is now known. The representative adjusted-correction matrix
-was completed next, as documented below. A later RAW fix must make the tiled
-X-Trans stage exact and repeatable before any speedup can ship.
+The repeatable-but-wrong two- or four-thread outputs and nondeterministic
+higher-worker outputs failed the exactness gate. Production therefore keeps
+forced OpenMP disabled; its deterministic wavefront implementation is documented
+in the August 13 measurement below.
 
 ## 2026-08-03 Adjusted-Correction Scenario Matrix
 
-The next roadmap slice added `FilmScanExportBenchmark --corrections` and ran
+This measurement used `FilmScanExportBenchmark --corrections` and ran
 the five representative correction paths against the same full-resolution
 camera-scan decode in each repetition:
 
@@ -574,9 +574,9 @@ Post-scenario physical footprint, sampled after corrected/output buffers left
 the autorelease scope while the shared decoded image remained authoritative,
 stayed within 47.3–54.2 MB. The process-lifetime peak rose from 685.6 MB after
 the first neutral sample to 1.984 GB after entering the adjusted linear seam.
-This confirms the serial full-frame `Double` path as the next correction-memory
-target; current footprint returns after each scenario, so the evidence does not
-show a sustained leak.
+This located avoidable serial full-frame `Double` storage; the August 12
+in-place repair is measured below. Footprint returned after each scenario,
+so this run did not show a sustained leak.
 
 The five corrected-image digests are committed in
 `correction_scenario_reference.json`. Its schema test always runs, and its
@@ -591,7 +591,7 @@ full-frame `Double` buffer for each active pass. The 2026-08-12 slice made tone,
 protected-color, and dye-mixing in-place and parallel, parallelized
 `powerLawRenderReadyLinear`, `renderPowerLawDisplay`, and the calibrated-color
 `UInt16`↔`Double` conversion passes, and left the exact-neutral and fused
-neutral paths unchanged. In-place tone and color now write through one
+neutral paths unchanged. In-place tone and color write through one
 scene-linear buffer, so the combined scenario no longer allocates a second
 full-frame `Double` per adjustment.
 
@@ -613,7 +613,7 @@ effective but did not refresh this full-resolution oracle. A current release
 `--corrections` run on `DSCF2833.RAF` repeated three times reproduced one exact
 corrected-image hash and one exact TIFF hash per scenario. Neutral, tone, and
 dye-mixing retained their existing hashes; only protected-color and combined
-changed. All 15 generated TIFFs were removed, and the fixture now records the
+changed. All 15 generated TIFFs were removed, and the fixture records the
 current intentional processing contract rather than accepting unexplained
 drift.
 
@@ -674,7 +674,7 @@ pixels, so a later tile can read the 16-pixel halo of its left, above,
 above-left, and above-right neighbors. A `row+col` wavefront races with the
 above-right tile; `2*row+col` keeps those four neighbors on earlier diagonals.
 
-The production path now runs those independent diagonals across at most eight
+The production path runs those independent diagonals across at most eight
 workers, with one tile buffer per worker and serial work inside each tile.
 `FSC_XTRANS_WORKERS=1` remains the serial oracle. Working tree at this
 measurement: `24c298b` plus the wavefront change.
@@ -706,13 +706,13 @@ Warm demosaic is 2.848–2.859 seconds versus 3.38–3.54 seconds for the
 2026-08-12 row-parallel repair and 12.72–12.77 seconds for the stock serial
 reference. This is a same-fixture follow-up, not a replacement of the 18-output
 format matrix. Unpack was still about 0.89–0.91 seconds in that session.
-Writer and batch-overlap work stay deferred. Mosaic-binned RAW browsing
-landed after this measurement; last-decode retention remains the next product
-work. Parallel Fuji unpack landed on 2026-08-14, below.
+This measurement predates parallel Fuji unpack and selected-file decode
+retention, whose evidence is recorded below. It must not be presented as a
+timing of those combined changes.
 
 ## 2026-08-14 Parallel Fuji Compressed Unpack
 
-Roadmap item 5 slice 1 parallelizes independent Fuji compressed strips without
+The implementation parallelizes independent Fuji compressed strips without
 enabling LibRaw's overlapping-tile X-Trans OpenMP. Camera-scan overrides
 `fuji_decode_loop` with GCD, caps workers at eight, and wraps the datastream
 so LibRaw's existing `lock()`/`unlock()` I/O seam is a real mutex. Serial
@@ -749,13 +749,12 @@ compared to that earlier run.
 
 Warm eight-worker unpack was 0.2664–0.2665 seconds. Both A/B arms wrote the
 same TIFF hash and removed all six outputs. This is a same-fixture unpack
-follow-up, not a replacement of the 18-output format matrix. Mosaic-binned
-RAW browsing and selected-file three-pass decode retention are complete. See
-roadmap item 5.
+follow-up, not a replacement of the 18-output format matrix. For staged browsing and selected-file decode ownership, see
+[preview architecture](../development/realtime-preview-plan.md).
 
 ## 2026-08-30 Selected-File Three-Pass Decode Retention
 
-App-path export now keeps one three-pass camera-scan buffer for the currently
+App-path export keeps one three-pass camera-scan buffer for the currently
 selected RAW. A settings-only re-export of that file skips unpack and demosaic
 and reapplies correction, geometry, and the writer. The buffer is dropped on
 selection change, session reset, and teardown. Other files still decode
@@ -769,63 +768,11 @@ buffer, and that changing selection drops it. A timed 40 MP app-path A/B of
 first export versus settings-only re-export remains optional local evidence;
 the decode-stage cost already recorded above is the work being skipped.
 
-## Closed Baseline Cycle And Bounded Follow-Up
+## Using This Evidence
 
-These milestones were run in order so each optimization decision had a measured
-input and a regression gate. The original baseline cycle is closed and remains
-regression evidence. Parallel Fuji unpack (2026-08-14) is recorded above as
-roadmap item 5 slice 1; it is not a reopening of this cycle. The isolated audit
-above supplied the measured reason for one bounded follow-up; it does not reopen
-an unrestricted performance rewrite.
-
-1. **Repeated format baseline.** Complete. Three TIFF/JPEG/PNG/DNG runs for
-   `DSCF0669.RAF` plus three TIFF runs for `DSCF0718.RAF` and `DSCF0729.RAF`
-   now have per-sample, median, and nearest-rank p95 timing. Keep `first-run`
-   as a repetition label; do not call it physically cold unless the storage
-   cache was independently controlled.
-2. **Decode-stage decomposition.** Complete. Release timing now covers RAW
-   open/unpack, demosaic, remaining `dcraw_process` work, ISO policy,
-   processed-image creation, and the Swift copy/swizzle boundary. On the first
-   decomposed run, three-pass X-Trans demosaic consumed 19.710 of 21.678 decode
-   seconds. Keep these fields in every repeated/corpus report.
-3. **App-path coverage.** Instrumentation and the first reproducible latency
-   baseline are complete. Each export item carries one
-   correlation ID across queue wait, settings/classification resolution, decode,
-   flat-field lookup, correction, crop/perspective/frame geometry,
-   write/finalize, and cleanup. Loading spans selection-to-first-corrected-paint,
-   conversion, and bounded analysis. RAW browsing later moved from embedded
-   JPEGs to colour-accurate drafts. The benchmark records first paint,
-   cached/uncached switching, rapid-selection drain, cache
-   bytes, and physical footprint. Use Instruments only when a later regression
-   needs deeper render-stage attribution.
-4. **Memory envelope.** Engine, preview-cache, and app-export gates complete. The corrected
-   ten-file report
-   records physical footprint, peak physical footprint, reusable bytes, legacy
-   resident size, and default-zone statistics. Post-release physical footprint
-   fell from 52.74 MB to 42.78 MB and peak stayed at 686.11 MB; the prior RSS
-   growth was reclaimable allocator memory. The app benchmark now samples
-   preview-cache depths 2, 8, and 32 with the same physical-footprint contract;
-   its six-file corpus saturates the latter two depths at six sessions and
-   returns to roughly 26-28 MB after each model release. The ten-job app export
-   stayed within a 71.03–74.14 MB observed band and returned to 61.41 MB after
-   model release; the following cancellation run returned to 59.62 MB.
-5. **Large-file handling.** First corrected paint, cached and uncached
-   switching, rapid-selection drain, ten-job sequential export, active-decode
-   cancellation, and process memory now have reproducible release baselines.
-   The bounded browsing contract has no authoritative
-   replacement stage. Preview-cache depth sampling is complete for the local
-   six-RAF corpus; retain the realized-session count in future larger-corpus
-   reports rather than implying depth 32 was fully populated here.
-6. **Optimization slice.** Three safe measured slices are complete:
-   multicore fused power-law correction is 74.9% faster at the measured median,
-   and compact TIFF packing removes 80.37 MB while cutting the ten-file median
-   interval 23.0%. Deterministic X-Trans row parallelism reduced the warm
-   three-pass demosaic from 12.72–12.77 seconds to 3.38–3.54 seconds; the
-   2026-08-13 wavefront follow-up further reduced the same-fixture warm
-   demosaic to 2.85–2.86 seconds without changing any approved stage or output
-   digest. Do not substitute a one-pass X-Trans quality mode or enable the
-   failed overlapping-tile OpenMP path.
-7. **Batch confirmation.** Complete. Engine confirmation covers ten sequential
-   TIFF exports with output contracts and physical memory. The app-path run adds
-   ten queue completions, preview-cache effects, post-batch physical footprint,
-   per-run output removal, and measured safe-boundary cancellation latency.
+Re-run the relevant harness after a change to its input tiers, processing,
+queue, or ownership. Preserve source state, quality settings, raw repetitions,
+output hashes, cleanup, and physical footprint. Historical cache-depth and
+export figures apply to their specified stages; do not add them together as a
+current end-to-end claim. The [roadmap](../improvements/MacOS-Native-Roadmap.md)
+owns any new performance scope.

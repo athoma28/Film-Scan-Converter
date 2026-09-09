@@ -1,11 +1,10 @@
-site_name: Film-Scan-Converter
+site_name: Film Scan Converter
+repo_url: https://github.com/athoma28/Film-Scan-Converter
+repo_name: athoma28/Film-Scan-Converter
 theme:
   name: material
   features:
     - navigation.instant
-exclude:
-  - images/
-
 
 nav:
   - Home: index.md
@@ -15,21 +14,33 @@ nav:
   - Best Practices: best-practices.md
   - Developer Guide:
       - Overview: development/index.md
-      - Native macOS Status: development/native-macos.md
-      - Native macOS Product Roadmap: improvements/MacOS-Native-Roadmap.md
-      - Native macOS Release: development/native-release.md
-      - Real-Time Still Preview Outcome: development/realtime-preview-plan.md
-      - X-Trans Preview Mosaic Binning: development/xtrans-preview-mosaic-binning.md
-      - Native RAW Benchmark: development/native-raw-benchmark.md
-      - Film Processing Research: film-processing-research.md
-      - Density-Matrix Calibration (Parked): development/density-matrix-calibration.md
-      - Reference Negative Calibration: development/reference-negative-calibration.md
-      - Building: development/building.md
+      - Current Status: development/native-macos.md
+      - Product Roadmap: improvements/MacOS-Native-Roadmap.md
+      - Planning Guide: improvements/README.md
+      - Maintenance Scope: improvements/EVALUATION.md
+      - Building and Testing: development/building.md
+      - Release Runbook: development/native-release.md
       - Contributing: contributing.md
+      - Preview Architecture: development/realtime-preview-plan.md
+      - Architecture Contracts: development/swift-port-evaluation.md
+      - X-Trans Mosaic Binning: development/xtrans-preview-mosaic-binning.md
+  - Benchmarks:
+      - Preview Analysis: performance/preview-analysis.md
+      - 40 MP Export: performance/40mp-export.md
+      - RAW Compatibility: development/native-raw-benchmark.md
+  - Calibration Reference:
+      - Scope (Parked): film-processing-research.md
+      - Density-Matrix Fitter: development/density-matrix-calibration.md
+      - Reference Curve Provenance: development/reference-negative-calibration.md
+      - Experiment Requirements: research-brief-film-inversion.md
   - Legacy Python:
-      - Status and Retirement Gates: legacy-python.md
+      - Maintenance Policy: legacy-python.md
+      - Usage: legacy-usage.md
       - ART Integration: how-to-add-to-ART.md
 
+validation:
+  links:
+    anchors: warn
 
 markdown_extensions:
   - pymdownx.highlight:

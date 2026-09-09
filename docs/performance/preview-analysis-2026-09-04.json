@@ -1,0 +1,151 @@
+{
+  "measuredOn": "2026-09-04",
+  "sourceRevision": "42c194325417527a67521457f12e101534a703de",
+  "sourceState": "Working tree with pre-existing documentation and viewer-test changes; baseline adds only test instrumentation and internal access to AppModel.previewStatistics. Candidate adds bounded UInt16 statistics and paired chroma selection.",
+  "hardware": {
+    "model": "Mac16,7",
+    "chip": "Apple M4 Pro",
+    "memoryGB": 48,
+    "cpuCores": 14
+  },
+  "swift": "6.1.2",
+  "configuration": "release",
+  "warmupsPerCase": 1,
+  "timedRepetitionsPerCase": 5,
+  "execution": "One process per case, sequential, same host and tool sandbox; input construction excluded from timing, included in peak physical footprint.",
+  "note": "Isolated analysis-stage timings, not end-to-end preview/export latency. Flat Darkroom is a stress case for tied samples. Baseline and candidate exact-output equivalence is covered by PreviewAnalysisTests.",
+  "results": [
+    {
+      "case": "statistics-40mp-3ch",
+      "baseline": {
+        "case": "statistics-40mp-3ch",
+        "p50Milliseconds": 147.162,
+        "p95Milliseconds": 151.305958,
+        "peakPhysicalFootprintBytes": 1217267056,
+        "physicalFootprintBytes": 252330680,
+        "samplesMilliseconds": [
+          151.305958,
+          136.687792,
+          145.118375,
+          147.790041,
+          147.162
+        ]
+      },
+      "candidate": {
+        "case": "statistics-40mp-3ch",
+        "p50Milliseconds": 7.083208,
+        "p95Milliseconds": 8.189,
+        "peakPhysicalFootprintBytes": 249856672,
+        "physicalFootprintBytes": 249856672,
+        "samplesMilliseconds": [
+          8.189,
+          6.836041,
+          6.653958,
+          7.083208,
+          7.821375
+        ]
+      }
+    },
+    {
+      "case": "statistics-40mp-1ch",
+      "baseline": {
+        "case": "statistics-40mp-1ch",
+        "p50Milliseconds": 97.815667,
+        "p95Milliseconds": 100.798,
+        "peakPhysicalFootprintBytes": 1057817848,
+        "physicalFootprintBytes": 92881472,
+        "samplesMilliseconds": [
+          99.392667,
+          100.798,
+          97.815667,
+          93.971041,
+          93.714417
+        ]
+      },
+      "candidate": {
+        "case": "statistics-40mp-1ch",
+        "p50Milliseconds": 6.720958,
+        "p95Milliseconds": 6.930458,
+        "peakPhysicalFootprintBytes": 87163408,
+        "physicalFootprintBytes": 87163408,
+        "samplesMilliseconds": [
+          6.930458,
+          6.720958,
+          6.770792,
+          6.634959,
+          6.575541
+        ]
+      }
+    },
+    {
+      "case": "darkroom-textured",
+      "baseline": {
+        "case": "darkroom-textured",
+        "p50Milliseconds": 73.437,
+        "p95Milliseconds": 75.155875,
+        "peakPhysicalFootprintBytes": 24494776,
+        "physicalFootprintBytes": 20988600,
+        "samplesMilliseconds": [
+          69.925,
+          71.106792,
+          74.479959,
+          75.155875,
+          73.437
+        ]
+      },
+      "candidate": {
+        "case": "darkroom-textured",
+        "p50Milliseconds": 73.790291,
+        "p95Milliseconds": 76.360292,
+        "peakPhysicalFootprintBytes": 20283944,
+        "physicalFootprintBytes": 15696424,
+        "samplesMilliseconds": [
+          68.991708,
+          69.675875,
+          73.790291,
+          76.360292,
+          76.114542
+        ]
+      }
+    },
+    {
+      "case": "darkroom-flat",
+      "baseline": {
+        "case": "darkroom-flat",
+        "p50Milliseconds": 450.670708,
+        "p95Milliseconds": 464.77475,
+        "peakPhysicalFootprintBytes": 34833056,
+        "physicalFootprintBytes": 31916704,
+        "samplesMilliseconds": [
+          450.670708,
+          464.77475,
+          450.541542,
+          458.378625,
+          441.761584
+        ]
+      },
+      "candidate": {
+        "case": "darkroom-flat",
+        "p50Milliseconds": 5.541833,
+        "p95Milliseconds": 5.613416,
+        "peakPhysicalFootprintBytes": 13566408,
+        "physicalFootprintBytes": 11190728,
+        "samplesMilliseconds": [
+          5.613416,
+          5.53025,
+          5.541833,
+          5.573708,
+          5.428209
+        ]
+      }
+    }
+  ],
+  "macOS": "15.7.9",
+  "validation": {
+    "nativeReleaseSuite": "547 tests passed in 228.444 seconds",
+    "defaultOptInSkips": 10,
+    "densityAnalysisAndPixelReferences": 9,
+    "strictRecursiveSwiftLint": "passed",
+    "gitDiffCheck": "passed"
+  }
+}

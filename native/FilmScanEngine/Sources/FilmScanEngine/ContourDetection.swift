@@ -44,13 +44,10 @@ public enum ContourDetection {
     precondition(threshold.channels == 1, "Threshold image must be single-channel")
 
     let working: UInt16Image
-    let scale: Double
     let largestDim = max(threshold.width, threshold.height)
     if largestDim > maxDimension {
-      scale = Double(maxDimension) / Double(largestDim)
       working = threshold.resizedToFit(maxDimension: maxDimension)
     } else {
-      scale = 1.0
       working = threshold
     }
 
@@ -59,30 +56,16 @@ public enum ContourDetection {
     let hull = convexHull(components.points)
     guard hull.count >= 3 else { return nil }
 
-    let rect = minAreaRect(hull)
-
-    let scaledRect: RotatedRect
-    if scale < 1.0 {
-      let invScale = 1.0 / scale
-      scaledRect = RotatedRect(
-        centerX: rect.centerX * invScale,
-        centerY: rect.centerY * invScale,
-        width: rect.width * invScale,
-        height: rect.height * invScale,
-        angle: rect.angle
-      )
-    } else {
-      scaledRect = rect
-    }
-
     let scaledHull: [SIMD2<Double>]
-    if scale < 1.0 {
-      let invScale = 1.0 / scale
-      scaledHull = hull.map { SIMD2($0.x * invScale, $0.y * invScale) }
+    if working.width != threshold.width || working.height != threshold.height {
+      let scaleX = Double(threshold.width) / Double(working.width)
+      let scaleY = Double(threshold.height) / Double(working.height)
+      scaledHull = hull.map { SIMD2($0.x * scaleX, $0.y * scaleY) }
     } else {
       scaledHull = hull
     }
 
+    let scaledRect = minAreaRect(scaledHull)
     let normalized = normalizeToUnit(
       scaledRect, imageWidth: threshold.width, imageHeight: threshold.height)
     return (threshold, normalized, scaledHull)
@@ -204,18 +187,45 @@ public enum ContourDetection {
     }
 
     var points: [SIMD2<Double>] = []
-    points.reserveCapacity(uf.sizes[largestRoot])
+    points.reserveCapacity(min(uf.sizes[largestRoot], w * 2 + h * 2))
     for y in 0..<h {
       for x in 0..<w {
         let idx = y * w + x
         guard binary.pixels[idx] == foregroundValue else { continue }
-        if uf.find(idx) == largestRoot {
+        if uf.find(idx) == largestRoot,
+          isBoundaryPixel(
+            x: x, y: y, width: w, height: h, pixels: binary.pixels, foreground: foregroundValue)
+        {
           points.append(SIMD2(Double(x), Double(y)))
         }
       }
     }
 
     return ComponentResult(points: points, pixelCount: uf.sizes[largestRoot])
+  }
+
+  private static func isBoundaryPixel(
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    pixels: [UInt16],
+    foreground: UInt16
+  ) -> Bool {
+    for dy in -1...1 {
+      for dx in -1...1 {
+        if dx == 0 && dy == 0 { continue }
+        let nx = x + dx
+        let ny = y + dy
+        if nx < 0 || ny < 0 || nx >= width || ny >= height {
+          return true
+        }
+        if pixels[ny * width + nx] != foreground {
+          return true
+        }
+      }
+    }
+    return false
   }
 
   // MARK: - Convex Hull (Andrew's Monotone Chain)

@@ -107,12 +107,24 @@ struct RepresentativeRollWorkflowTests {
     let firstOutput = destination.appendingPathComponent("DSCF2833.tiff")
     let exceptionOutput = destination.appendingPathComponent("DSCF2856.tiff")
     #expect(FileManager.default.fileExists(atPath: firstOutput.path))
-    _ = try reopenedHash(
-      firstOutput, dimensions: RawImageDecoder.fullResolutionDimensions(files[0]))
+    let firstDimensions = try RawImageDecoder.fullResolutionDimensions(files[0])
+    _ = try reopenedHash(firstOutput, dimensions: firstDimensions)
+    _ = try IndependentViewerInspection.inspectNamedSRGB(
+      at: firstOutput,
+      expectedWidth: firstDimensions.width,
+      expectedHeight: firstDimensions.height,
+      expectedDepth: 16
+    )
     #expect(
       !FileManager.default.fileExists(
         atPath: destination.appendingPathComponent("DSCF2851.tiff").path))
     let exportedHash = try reopenedHash(exceptionOutput, dimensions: dimensions)
+    _ = try IndependentViewerInspection.inspectNamedSRGB(
+      at: exceptionOutput,
+      expectedWidth: dimensions.width,
+      expectedHeight: dimensions.height,
+      expectedDepth: 16
+    )
     let firstFileHash = try fileHash(exceptionOutput)
 
     model.selectedFiles = [files[2]]

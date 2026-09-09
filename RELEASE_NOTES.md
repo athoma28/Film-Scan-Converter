@@ -1,84 +1,47 @@
-# Film Scan Converter 0.2.0 Beta 1
+# Release Notes
 
-This technical beta advances the native macOS application from a capable first
-release workflow into a more dependable tool for real camera-scanned film. It
-is intended for photographers comfortable testing beta software and reporting
-reproducible problems.
+## Current Source — Unreleased
 
-## Supported system
+The development source targets macOS 14 or later and contains changes beyond
+the published 0.2.0 Beta 1. This section describes source behavior; it does not
+announce a new binary release.
 
-- macOS 14 or later
-- Apple Silicon (`arm64`) for the downloadable application
-- Intel users and developers may build from source with Swift 6 and Homebrew
-  LibRaw, but that path is not part of the Beta 1 binary test matrix
+- Develop, Geometry, Calibrate, and Export inspector pages with contextual
+  conversion, tone/color, film-base, crop, and output controls.
+- Colour-accurate staged RAW previews, parallel Fuji unpack and deterministic
+  X-Trans wavefront demosaic, plus selected-file three-pass decode retention
+  for settings-only re-export.
+- Darkroom film/paper inversion, B&W tone curves with CPU/GPU parity, presets,
+  roll-wide look transfer, and import-ordered navigation.
+- Original-capture Noise/HDR stacking with bounded memory and temporary disk
+  storage, explicit upgrade failures, and one output per enabled stack.
+- Shared viewport/overlay coordinates, stable Original comparison and source
+  upgrades, truthful full-output dimensions, and dependent manual-crop
+  invalidation when upstream geometry changes.
+- Bounded CPU preview statistics and faster Darkroom analysis. The latest
+  isolated textured-input benchmark measured 103.34 → 43.83 ms p50; process
+  peak increased 13.84 → 16.76 MB. Exact output references remain unchanged.
 
-## What’s improved since 0.1
+The September 8 native release run reported 580 tests: 570 passing records and
+10 opt-in skips. Local packaged viewport/manual-crop and duplicate-stack
+mechanics, and automated independent-reader export checks, are recorded in
+[development status](docs/development/native-macos.md). Detailed timings and
+source states are in the [analysis benchmark](docs/performance/preview-analysis.md).
 
-- **Session undo and redo.** Correction edits can now be stepped backward and
-  forward without changing source files; all editing remains non-destructive.
-- **More reliable negative profiles.** Reference calibration now respects frame
-  orientation, validates held-out frames, and adds a Shanghai GP3 alternate
-  profile for better real-film matching.
-- **Faster, leaner full-resolution exports.** The adjusted correction path now
-  works in place and in parallel, cutting the measured process peak from 1.984
-  GB to 1.017 GB while retaining approved output digests.
-- **Deterministic parallel X-Trans RAW processing.** Final-quality three-pass
-  Fuji X-Trans demosaic keeps LibRaw’s order-sensitive results while safely
-  parallelizing independent row phases. Five eight-worker runs matched every
-  approved decode/output digest; warm demosaic fell from 12.72–12.77 seconds
-  to 3.38–3.54 seconds on the measured 40 MP fixture.
-- **Stronger release and performance evidence.** The 40 MP format matrix,
-  ten-file engine and app-path export checks, cancellation check, and packaged
-  bundle validation now document both output correctness and bounded memory.
+Remaining validation includes broader photographic and real-roll/stack
+judgment, Preview/Photos review on an independent Mac, and notarized distribution.
+Native dust detection is diagnostic only. Processed DNG contains RGB output,
+not untouched sensor RAW. See [Features](docs/features.md) for current limitations.
 
-The existing 0.1 workflow remains: camera RAW and standard-image import;
-color-negative, black-and-white, slide, and Original (no-inversion) workflows;
-film-base measurement; curves and color controls; crop, straighten, and
-perspective; presets; roll-wide application; and TIFF, JPEG, PNG, and
-processed-RGB DNG export.
+## Published Download
 
-## What’s next
+[Film Scan Converter 0.2.0 Beta 1](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.1)
+was published August 14, 2026 for Apple Silicon Macs on macOS 14 or later.
+It is ad-hoc signed and is not Apple-notarized. Its release page preserves the
+artifact-specific feature list and verification; current-source claims above
+must not be attributed to that ZIP.
 
-Since this beta, development added import-ordered previous/next, active/pending
-export sidebar status, parallel Fuji compressed unpack, Darkroom log-density
-inversion for cyan/purple-mask stocks, repeated-scan stacking, and
-colour-accurate RAW drafts that upgrade the selected file to a ~4000px inspect
-preview and a 1-pass full-resolution preview. Export now retains the selected
-file’s last full-resolution three-pass decode so a settings-only re-export
-does not repeat unpack and demosaic. Automated viewport, three-frame RAW roll, and B&W preview parity checks are
-now recorded. Remaining first-release work includes hands-on
-representative-image and roll/stack checks, Apple notarization, and
-independent-Mac installation. See the
-[current development status](docs/development/native-macos.md) for working-tree
-evidence; the Beta 1 verification below describes that earlier candidate.
-
-## Known limitations
-
-- This beta is ad-hoc signed because the project does not yet have a Developer
-  ID signing identity. macOS will not treat it as a notarized application; see
-  `docs/installation.md` for the normal Finder Control-click/Open flow.
-- Native dust detection currently provides a diagnostic overlay; it does not
-  apply dust removal to preview or export.
-- DNG output contains processed RGB, not untouched sensor mosaics. TIFF is the
-  recommended 16-bit interchange format when an application has limited DNG
-  support.
-- Full-resolution X-Trans export prioritizes final-quality demosaic over speed.
-- The downloadable beta is Apple-Silicon-only.
-
-## Verification
-
-The 0.2 candidate has 456 native regression tests across 32 files, including
-the camera-scan byte-identity fixture and the deterministic X-Trans regression
-gate. The 2026-08-12 measured export cycle verified 18 format outputs, ten
-sequential engine TIFFs, ten queued app exports, and active-decode cancellation;
-all test outputs scheduled for cleanup were removed. The unsigned-beta packager
-validates dependency closure, architectures, bundled license resources, strict
-signature, extracted archive, checksum, and bundled-library hashes.
-
-Publication additionally requires green native and legacy GitHub Actions runs.
-Independent-Mac installation remains a disclosed follow-up beta check; see
-`docs/development/native-release.md`.
-
-Report bugs at:
-
-<https://github.com/athoma28/Film-Scan-Converter/issues>
+Download the ZIP and matching SHA-256 file from the release page and follow
+[Installation](docs/installation.md). New artifacts must identify their own
+source commit, version/build, checksums, and validation under the
+[release runbook](docs/development/native-release.md).

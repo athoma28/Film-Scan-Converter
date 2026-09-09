@@ -32,8 +32,8 @@ The C bridge provides two decode paths in `CLibRawShim.c`:
 
 | Path | Function | I/O | Memory | Notes |
 |---|---|---|---|---|
-| Direct (current) | `fsc_decode_raw_direct` | mmap + `libraw_open_buffer` | Single copy: LibRaw BGR → Swift `[UInt16]` with in-pass swizzle | Primary path; mmap freed after `libraw_unpack` |
-| Legacy | `fsc_decode_raw` | `libraw_open_file` | Double copy: C-side malloc + BGR→RGB swizzle, then Swift `[UInt16]` copy | Kept for caller compatibility |
+| Direct compatibility path | `fsc_decode_raw_direct` | mmap + `libraw_open_buffer` | Single copy: LibRaw BGR → Swift `[UInt16]` with in-pass swizzle | Primary path; mmap freed after `libraw_unpack` |
+| Compatibility wrapper | `fsc_decode_raw` | `libraw_open_file` | Double copy: C-side malloc + BGR→RGB swizzle, then Swift `[UInt16]` copy | Kept for caller compatibility |
 
 Both paths produce identical pixel output. The direct path eliminates the
 C-side `malloc` + BGR→RGB swizzle loop, reducing the full-resolution decode
@@ -113,11 +113,9 @@ Full-resolution decode is dominated by `libraw_dcraw_process` (demosaicing via
 PPG interpolation, color space conversion, gamma, brightness). The direct decode
 path eliminates the C-side `malloc` + BGR→RGB swizzle copy previously noted as
 a 19.7% overhead source; these compatibility-profile measurements show no
-measurable overhead from the bridge layer. The architectural change suggested
-by this snapshot—embedded-preview browsing with full-resolution decode deferred
-to export—is now implemented. Further performance decisions must use the
-separately measured camera-scan profile, whose quality stages and three-pass
-X-Trans demosaic are intentionally different.
+measurable overhead from the bridge layer. Current RAW browsing uses demosaiced draft/inspect/full-preview tiers, not
+embedded-preview main-canvas browsing. Performance decisions for that path or
+export must use the separately measured camera-scan profile and quality stages.
 
 ## Selected-Edit Quality
 
@@ -134,10 +132,8 @@ buffers. These metrics therefore apply equally to RawPy and native decode.
 
 Across all 23 edit variants, best cold processing totaled **17.22 seconds** and
 best warm cached processing totaled **10.52 seconds**. These are historical
-legacy-Python selected-edit baselines, not current native app-path timings. The
-native app now has correction, crop, perspective, and TIFF/JPEG/PNG/DNG export
-coverage; native applied dust removal remains absent. Use the status page and
-40 MP report for current workflow and performance evidence.
+legacy-Python selected-edit baselines, not current native app-path timings. Use [development status](native-macos.md) for current workflow and
+[40 MP export](../performance/40mp-export.md) for camera-scan evidence.
 
 ## Reproduce
 

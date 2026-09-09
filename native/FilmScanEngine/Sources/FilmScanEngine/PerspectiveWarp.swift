@@ -39,6 +39,40 @@ public struct PerspectiveCrop: Codable, Equatable, Sendable {
 
   public var points: [Point] { [topLeft, topRight, bottomRight, bottomLeft] }
 
+  /// Pulls every corner toward the quadrilateral centroid by `borderPercent`.
+  public func inset(borderPercent: Double) -> PerspectiveCrop {
+    let insetScale = max(0, 1 - max(0, borderPercent) / 100)
+    let centerX = points.map(\.x).reduce(0, +) / 4
+    let centerY = points.map(\.y).reduce(0, +) / 4
+    func inset(_ point: Point) -> Point {
+      Point(
+        x: centerX + (point.x - centerX) * insetScale,
+        y: centerY + (point.y - centerY) * insetScale)
+    }
+    return PerspectiveCrop(
+      topLeft: inset(topLeft),
+      topRight: inset(topRight),
+      bottomRight: inset(bottomRight),
+      bottomLeft: inset(bottomLeft))
+  }
+
+  /// Pixel size of the rectified canvas, matching the warp destination.
+  public func outputPixelSize(imageWidth: Int, imageHeight: Int) -> (width: Int, height: Int) {
+    let scaleX = Double(max(0, imageWidth - 1))
+    let scaleY = Double(max(0, imageHeight - 1))
+    func distance(_ a: Point, _ b: Point) -> Double {
+      hypot((a.x - b.x) * scaleX, (a.y - b.y) * scaleY)
+    }
+    return (
+      width: max(
+        1,
+        Int(((distance(topLeft, topRight) + distance(bottomLeft, bottomRight)) / 2).rounded()) + 1),
+      height: max(
+        1,
+        Int(((distance(topLeft, bottomLeft) + distance(topRight, bottomRight)) / 2).rounded()) + 1)
+    )
+  }
+
   public var isValid: Bool {
     guard
       points.allSatisfy({
@@ -63,16 +97,10 @@ public struct PerspectiveCrop: Codable, Equatable, Sendable {
   }
 
   public func replacing(_ corner: Int, with point: Point) -> PerspectiveCrop {
-    let clamped = Point(x: min(max(point.x, 0), 1), y: min(max(point.y, 0), 1))
-    var result = self
-    switch corner {
-    case 0: result.topLeft = clamped
-    case 1: result.topRight = clamped
-    case 2: result.bottomRight = clamped
-    case 3: result.bottomLeft = clamped
-    default: preconditionFailure("Perspective crop corner must be in 0...3")
-    }
-    return result
+    let moved = moving(
+      corner,
+      to: Point(x: min(max(point.x, 0), 1), y: min(max(point.y, 0), 1)))
+    return moved.isValid ? moved : self
   }
 
   /// Moves one corner while softly snapping either incident edge parallel to
@@ -108,7 +136,22 @@ public struct PerspectiveCrop: Codable, Equatable, Sendable {
     else {
       return replacing(corner, with: clamped)
     }
-    return replacing(corner, with: closest)
+    let snapped = moving(
+      corner,
+      to: Point(x: min(max(closest.x, 0), 1), y: min(max(closest.y, 0), 1)))
+    return snapped.isValid ? snapped : replacing(corner, with: clamped)
+  }
+
+  private func moving(_ corner: Int, to point: Point) -> PerspectiveCrop {
+    var result = self
+    switch corner {
+    case 0: result.topLeft = point
+    case 1: result.topRight = point
+    case 2: result.bottomRight = point
+    case 3: result.bottomLeft = point
+    default: preconditionFailure("Perspective crop corner must be in 0...3")
+    }
+    return result
   }
 
   private func vector(from start: Point, to end: Point) -> Point {
@@ -221,27 +264,14 @@ public enum PerspectiveTransform {
     borderPercent: Double = 0
   ) -> UInt16Image? {
     guard perspectiveCrop.isValid else { return nil }
-    let insetScale = max(0, 1 - max(0, borderPercent) / 100)
-    let center = PerspectiveCrop.Point(
-      x: perspectiveCrop.points.map(\.x).reduce(0, +) / 4,
-      y: perspectiveCrop.points.map(\.y).reduce(0, +) / 4
-    )
-    let points = perspectiveCrop.points.map {
-      PerspectiveCrop.Point(
-        x: center.x + ($0.x - center.x) * insetScale,
-        y: center.y + ($0.y - center.y) * insetScale
-      )
-    }
-    let source = points.map {
+    let inset = perspectiveCrop.inset(borderPercent: borderPercent)
+    guard inset.isValid else { return nil }
+    let outputSize = inset.outputPixelSize(imageWidth: image.width, imageHeight: image.height)
+    let outputWidth = outputSize.width
+    let outputHeight = outputSize.height
+    let source = inset.points.map {
       (x: Float($0.x * Double(image.width - 1)), y: Float($0.y * Double(image.height - 1)))
     }
-    func distance(_ a: (x: Float, y: Float), _ b: (x: Float, y: Float)) -> Double {
-      hypot(Double(a.x - b.x), Double(a.y - b.y))
-    }
-    let outputWidth = max(
-      1, Int(((distance(source[0], source[1]) + distance(source[3], source[2])) / 2).rounded()) + 1)
-    let outputHeight = max(
-      1, Int(((distance(source[0], source[3]) + distance(source[1], source[2])) / 2).rounded()) + 1)
     let destination: [(x: Float, y: Float)] = [
       (0, 0),
       (Float(outputWidth - 1), 0),
@@ -286,26 +316,33 @@ public enum PerspectiveTransform {
     )
     let destinationHeight = max(1, Int(rect.height * (1 - xCrop / 100)))
     let destinationWidth = max(1, Int(rect.width * (1 - yCrop / 100)))
-    let source = box.map { (x: Float($0.x), y: Float($0.y)) }
+    let maxSrcX = Float(image.width - 1)
+    let maxSrcY = Float(image.height - 1)
+    let source = box.map { point in
+      (
+        x: min(max(Float(point.x), 0), maxSrcX),
+        y: min(max(Float(point.y), 0), maxSrcY)
+      )
+    }
+    // boxPoints are TR, BR, BL, TL in the long-edge-horizontal local frame.
     let destination: [(x: Float, y: Float)] = [
-      (0, Float(destinationHeight - 1)),
-      (0, 0),
       (Float(destinationWidth - 1), 0),
       (Float(destinationWidth - 1), Float(destinationHeight - 1)),
+      (0, Float(destinationHeight - 1)),
+      (0, 0),
     ]
     guard let homography = computeHomography(srcPoints: source, dstPoints: destination) else {
       return nil
     }
-    var result = warpPerspective(
+    // minAreaRect stores the longer side as width, so this canvas is already
+    // long-edge-horizontal. A further 90° turn used to snap to the scan's
+    // nearest axis and turned 45–90° landscape frames on their side.
+    return warpPerspective(
       image,
       homography: homography,
       outputWidth: destinationWidth,
       outputHeight: destinationHeight
     )
-    if rect.angle > 45 {
-      result = result.rotated(quarterTurns: 1)
-    }
-    return result
   }
 
   public static func computeHomography(
@@ -427,10 +464,22 @@ public enum PerspectiveTransform {
         let srcY = dy / dz
         guard srcX.isFinite, srcY.isFinite else { continue }
 
-        let x0f = floor(srcX)
-        let y0f = floor(srcY)
-        let wx = srcX - x0f
-        let wy = srcY - y0f
+        let maxSrcX = Double(srcWidth - 1)
+        let maxSrcY = Double(srcHeight - 1)
+        let sampleX: Double
+        let sampleY: Double
+        if srcX >= -1e-3, srcX <= maxSrcX + 1e-3, srcY >= -1e-3, srcY <= maxSrcY + 1e-3 {
+          sampleX = min(max(srcX, 0), maxSrcX)
+          sampleY = min(max(srcY, 0), maxSrcY)
+        } else {
+          sampleX = srcX
+          sampleY = srcY
+        }
+
+        let x0f = floor(sampleX)
+        let y0f = floor(sampleY)
+        let wx = sampleX - x0f
+        let wy = sampleY - y0f
         let iwx = 1.0 - wx
         let iwy = 1.0 - wy
 

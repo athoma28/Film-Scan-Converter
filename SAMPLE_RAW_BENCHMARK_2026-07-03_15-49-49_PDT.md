@@ -11,7 +11,7 @@ Branch: `dev`
 Hardware: Apple M4 Pro, 14 cores, 48 GB memory
 
 Rerunning the [June 13 selected-edit benchmark](SAMPLE_RAW_BENCHMARK_2026-06-13_21-06-32_PDT.md)
-with the current `dev` codebase.
+with the `dev` checkout used for this July 3 measurement.
 
 ## Decode (half-resolution RawPy)
 

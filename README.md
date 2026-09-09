@@ -1,74 +1,56 @@
 # Film Scan Converter
 
-Film Scan Converter is a free, open-source macOS application for turning
-camera-scanned film negatives and slides into finished images. The current app
-is a native Swift/SwiftUI workflow with responsive previews, non-destructive
-editing, roll-wide settings, and full-resolution export.
+Film Scan Converter is a free, open-source macOS application for converting
+camera-scanned negatives and slides into finished images. The native
+Swift/SwiftUI app provides non-destructive editing, staged RAW previews,
+roll-wide corrections, and full-resolution export.
 
-## Current Status
+## Source And Download
 
-**Film Scan Converter 0.2.0 Beta 1** is available for Apple Silicon Macs running
-macOS 14 or later. The native macOS app is the primary product and the only
-target for new features.
+This README describes the current development source. The latest downloadable
+release is [0.2.0 Beta 1](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.1),
+published August 14, 2026. That release predates several features described here.
+Build from source to use the current application; see [Installation](docs/installation.md).
+The published beta is ad-hoc signed, supports Apple Silicon and macOS 14 or
+later, and is not Apple-notarized.
 
-The beta currently includes:
+## Current Application
 
-- Camera RAW, TIFF, PNG, JPEG, and BMP import with colour-accurate RAW drafts
-  that sharpen in place to a ~4000px preview, then a full-resolution 1-pass
-  preview. The next files load a ~3200px preview in the background.
-- Color-negative, black-and-white-negative, slide, and Original (no-inversion)
-  workflows with the Film & Conversion panel, Natural/Darkroom/Classic/Bypass
-  conversion choices, visible film-stock and paper options, film-base
-  measurement, tone and color controls, curves, and color wheels.
-- Automatic frame detection, straighten, crop, four-corner perspective
-  correction, original/corrected comparison, and pan/zoom inspection.
-- A Scans sidebar with bounded thumbnails, multi-selection, export state, and
-  opt-in aligned stacks for repeated captures. Auto chooses HDR for exposure
-  brackets or noise-reducing averaging for same-exposure captures; an enabled
-  stack exports once under its first capture's name.
-- Per-file settings and session-local undo/redo, presets, copy/paste,
-  apply-to-selected/all, import-ordered previous/next, ordered batch export
-  with active/pending sidebar status, and full-resolution TIFF, JPEG, PNG, and
-  processed-RGB DNG output.
+- Camera RAW, TIFF, PNG, JPEG, and BMP import. RAW previews sharpen from a
+  colour-accurate draft to an inspect preview and then full-sensor detail.
+- Develop, Geometry, Calibrate, and Export inspector pages. Natural, Darkroom,
+  Classic, and Bypass negative conversion; tone, color, curves, and color wheels.
+- Automatic frame detection, manual crop, straighten, perspective correction,
+  and viewport-stable Original comparison with Fit, pan, pinch, and 100% viewing.
+- Per-file settings and undo/redo, presets, correction copy/paste, selected/all
+  look application, and import-ordered scan navigation.
+- Opt-in repeated-capture stacks with translation alignment and Noise/HDR modes.
+- Sequential TIFF, JPEG, PNG, and processed-RGB DNG export with collision-safe
+  names and cancellation. Settings-only re-export of the selected RAW reuses
+  its last full-quality decode.
 
-This is an ad-hoc-signed technical beta, not yet an Apple-notarized general
-release. Applied dust removal is not yet available; native dust detection is
-currently a diagnostic overlay only. See the
-[0.2.0 Beta 1 release notes](RELEASE_NOTES.md) and
-[native macOS development status](docs/development/native-macos.md) for the
-verified release position and known limitations.
+Native dust detection displays candidates but does not remove dust. Broader
+hands-on photographic and roll/stack validation, Preview/Photos judgment, and
+notarized distribution on an independent Mac remain open. See the
+[feature inventory](docs/features.md), [current verification](docs/development/native-macos.md),
+and [roadmap](docs/improvements/MacOS-Native-Roadmap.md).
 
-Download the newest prerelease from
-[GitHub Releases](https://github.com/athoma28/Film-Scan-Converter/releases),
-verify the included SHA-256 checksum, unzip it, and move **Film Scan Converter**
-to Applications. On first launch, Control-click the app, choose **Open**, then
-confirm **Open**. See [Installation](docs/installation.md) for details.
+## Build And Run
 
-The former Python/Tkinter application remains available as a maintenance-only
-legacy workflow, primarily for applied dust removal and existing cross-platform
-users. See [Legacy Python Application](docs/legacy-python.md).
+Requires macOS 14 or later, Swift 6, and Homebrew LibRaw:
 
-## Documentation
+```sh
+brew install libraw
+swift run --package-path native/FilmScanEngine FilmScanConverterMac
+```
 
-The documentation is located in the [/docs](docs/index.md) directory.
+Use `./run-swift.sh` as a convenience launcher. See
+[Building](docs/development/building.md) for tests and packaging.
 
-Quick Links:
+## Documentation And Contributions
 
-- [Installation](docs/installation.md)
-- [How to Use](docs/how-to-use.md)
-- [Native macOS development status](docs/development/native-macos.md)
-- [Native macOS product roadmap](docs/improvements/MacOS-Native-Roadmap.md)
-- [Legacy Python application](docs/legacy-python.md)
-
-Developer documentation and contribution guidelines are available in the
-[developer guide](docs/development/index.md).
-
-## ART Integration
-
-The legacy Python application can be integrated into [Art Raw Editor](https://artraweditor.github.io). This integration is maintenance-only and is documented in [docs/how-to-add-to-ART.md](docs/how-to-add-to-ART.md).
-
-## Contributing
-
-If you're reading this, thanks for helping me take this project further beyond what I can accomplish on my own. The analog community has long been deprived of a free, intuitive, and standalone film inversion application, and your contribution will help film photography be more accessible to many more people.
-
-Please continue reading in the [contributing](docs/contributing.md) chapter.
+Start with [How to Use](docs/how-to-use.md) or the [documentation home](docs/index.md).
+Development guidance is in the [developer guide](docs/development/index.md) and
+[contribution guide](docs/contributing.md). New product work belongs in the
+native app. The [Python application](docs/legacy-python.md) is maintenance-only
+and retains applied dust removal, cross-platform use, and [ART integration](docs/how-to-add-to-ART.md).

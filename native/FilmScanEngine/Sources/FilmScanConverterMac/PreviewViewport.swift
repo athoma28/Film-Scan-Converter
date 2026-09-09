@@ -137,12 +137,12 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
   let imageSize: CGSize
   let request: PreviewZoomRequest
   let content: Content
-  let onZoomChanged: (Int, Bool) -> Void
+  let onZoomChanged: (Int, Bool, CGFloat) -> Void
 
   init(
     imageSize: CGSize,
     request: PreviewZoomRequest,
-    onZoomChanged: @escaping (Int, Bool) -> Void,
+    onZoomChanged: @escaping (Int, Bool, CGFloat) -> Void,
     @ViewBuilder content: () -> Content
   ) {
     self.imageSize = imageSize
@@ -175,16 +175,17 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
   final class Coordinator: NSObject {
     let hostingView: NSHostingView<Content>
     weak var scrollView: PreviewScrollView?
-    var onZoomChanged: (Int, Bool) -> Void
+    var onZoomChanged: (Int, Bool, CGFloat) -> Void
 
     private var documentSize: CGSize = .zero
     private var lastRequestSequence = -1
     private var lastViewportSize: CGSize = .zero
     private var lastReportedPercent = -1
     private var lastReportedFit = false
+    private var lastReportedMagnification: CGFloat = -1
     private var isFitMode = true
 
-    init(rootView: Content, onZoomChanged: @escaping (Int, Bool) -> Void) {
+    init(rootView: Content, onZoomChanged: @escaping (Int, Bool, CGFloat) -> Void) {
       hostingView = NSHostingView(rootView: rootView)
       hostingView.sizingOptions = []
       hostingView.clipsToBounds = true
@@ -348,14 +349,19 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
 
     private func reportZoom() {
       guard let scrollView else { return }
-      let percent = PreviewViewportZoom.percent(for: scrollView.magnification)
-      guard percent != lastReportedPercent || isFitMode != lastReportedFit else { return }
+      let magnification = scrollView.magnification
+      let percent = PreviewViewportZoom.percent(for: magnification)
+      guard
+        percent != lastReportedPercent || isFitMode != lastReportedFit
+          || abs(magnification - lastReportedMagnification) > 0.0001
+      else { return }
       lastReportedPercent = percent
       lastReportedFit = isFitMode
+      lastReportedMagnification = magnification
       let callback = onZoomChanged
       let reportedFit = isFitMode
       DispatchQueue.main.async {
-        callback(percent, reportedFit)
+        callback(percent, reportedFit, magnification)
       }
     }
   }

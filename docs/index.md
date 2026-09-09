@@ -1,23 +1,24 @@
 # Film Scan Converter
 
-Welcome to the documentation for the Film Scan Converter!
+Film Scan Converter converts camera-scanned film negatives and slides in a
+native macOS application. These guides describe the current source, whose
+features extend beyond the downloadable 0.2.0 Beta 1. See
+[Installation](installation.md) for that distinction and supported systems.
 
-The native Swift/macOS application is the primary product direction and the only
-target for new features. Start with
-[Native macOS Development Status](development/native-macos.md) for implemented
-scope, evidence, limitations, and release position. The
-[Native macOS Product Roadmap](improvements/MacOS-Native-Roadmap.md) is the
-single ordered plan. Parallel Fuji unpack, mosaic-binned RAW browsing, and
-selected-file three-pass decode retention for settings-only re-export are
-complete. Stock-look learning is
-explicitly parked until the project owner chooses to resume it.
+## Use The Application
 
-The Python/Tkinter application is retained as a maintenance-only legacy
-workflow because dust removal remains Python-only and fixture tools still use
-legacy modules. Python retirement is not itself a blocker for the first native
-release. Native automatic frame detection, manual crop/perspective correction,
-self-contained app/ZIP assembly, and TIFF, JPEG, PNG, and processed-RGB DNG
-export are implemented. The legacy
-installation and usage guides remain available for users who need dust removal
-or the historical all-in-one workflow. See
-[Legacy Python Application](legacy-python.md) for the retirement policy.
+- [Features](features.md): available tools and limitations.
+- [How to Use](how-to-use.md): Develop, Geometry, Calibrate, and Export workflow.
+- [Scanning Best Practices](best-practices.md): prepare consistent input scans.
+
+## Develop And Verify
+
+- [Development status](development/native-macos.md): current evidence and gaps.
+- [Product roadmap](improvements/MacOS-Native-Roadmap.md): remaining priorities.
+- [Building](development/building.md) and [release runbook](development/native-release.md).
+- [Developer guide](development/index.md): architecture, tests, and benchmarks.
+
+The native app is the only target for new features. The
+[legacy Python application](legacy-python.md) retains applied dust removal and
+cross-platform/ART workflows. Stock/capture calibration research is parked;
+[research documentation](film-processing-research.md) describes its boundaries.

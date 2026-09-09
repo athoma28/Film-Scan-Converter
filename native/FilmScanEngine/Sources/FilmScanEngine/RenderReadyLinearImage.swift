@@ -258,6 +258,20 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
   public func statistics(
     maximumSampleCount: Int = 65_536
   ) -> RenderReadyImageStatistics {
+    Self.sampleStatistics(pixelCount: pixelCount, maximumSampleCount: maximumSampleCount) { index in
+      let base = index * 3
+      return (pixels[base], pixels[base + 1], pixels[base + 2])
+    }
+  }
+
+  /// Read and convert only the pixels used by the bounded statistics sample.
+  /// Sharing the sampler preserves identical ranks and clipping rules for
+  /// scene-linear buffers and normalized display-code diagnostics.
+  static func sampleStatistics(
+    pixelCount: Int,
+    maximumSampleCount: Int,
+    pixelAt: (Int) -> (blue: Double, green: Double, red: Double)
+  ) -> RenderReadyImageStatistics {
     precondition(maximumSampleCount > 0, "Maximum sample count must be positive")
     guard pixelCount > 0 else { return .empty }
 
@@ -280,10 +294,10 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
       } else {
         pixelIndex = sampleIndex * (pixelCount - 1) / (sampleCount - 1)
       }
-      let base = pixelIndex * 3
-      let blue = ScalarMath.finiteClamped(pixels[base], bound: statisticsBound)
-      let green = ScalarMath.finiteClamped(pixels[base + 1], bound: statisticsBound)
-      let red = ScalarMath.finiteClamped(pixels[base + 2], bound: statisticsBound)
+      let pixel = pixelAt(pixelIndex)
+      let blue = ScalarMath.finiteClamped(pixel.blue, bound: statisticsBound)
+      let green = ScalarMath.finiteClamped(pixel.green, bound: statisticsBound)
+      let red = ScalarMath.finiteClamped(pixel.red, bound: statisticsBound)
       if blue <= 0 { lowClips[0] += 1 }
       if green <= 0 { lowClips[1] += 1 }
       if red <= 0 { lowClips[2] += 1 }

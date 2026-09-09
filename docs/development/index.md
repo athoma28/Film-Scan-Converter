@@ -1,76 +1,51 @@
-# Development and Contribution
+# Developer Guide
 
-## Active Product Development
+New product work belongs in the native Swift/macOS app. Use
+[development status](native-macos.md) for current behavior and evidence and the
+[roadmap](../improvements/MacOS-Native-Roadmap.md) for remaining work.
 
-The native Swift/macOS application is now the primary product and the only
-target for new features. Start with
-[Native macOS Development Status](native-macos.md) for verified behavior,
-limitations, release position, and the bounded current work.
+## Build, Test, And Release
 
-The [native product roadmap](../improvements/MacOS-Native-Roadmap.md) is the
-single ordered plan. Selected-file three-pass decode retention for
-settings-only re-export, mosaic-binned RAW browsing, and parallel Fuji unpack
-are complete. The remaining first-release work is a real-roll and
-representative-image check, resolution of the known B&W CPU/GPU preview
-discrepancy, and distribution proof. Automated viewport and three-frame RAW
-roll checks are recorded; hands-on photographic validation remains open. The
-plan separates work required before the first public release from
-evidence-driven post-release candidates and explicitly unplanned ideas.
+- [Building](building.md): Swift toolchain, regression commands, and local launch.
+- [Test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md): fixtures, RAW corpus, roll workflow, and
+  independent-reader checks.
+- [Release runbook](native-release.md): self-contained packaging, signing,
+  notarization, and clean-machine validation.
+- [Contributing](../contributing.md): source ownership and change requirements.
+- [Native package](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/README.md): targets, commands, and contracts.
 
-The [film-processing research](../film-processing-research.md) remains parked
-reference material. The opt-in
-[density-matrix calibration contract](density-matrix-calibration.md) and
-[reference negative calibrator](reference-negative-calibration.md) document
-separate workflows: synthetic/held-out capture-matrix fitting and the paired
-reference-curve fits behind existing Natural profiles. Further fitting is
-parked; adding a stock folder does not authorize new named profiles. Residual
-LUTs and ML work are also not active priorities.
+## Architecture And Performance
 
-The [native RAW decode and quality benchmark](native-raw-benchmark.md) records
-the eight-file `rawPyCompatibility` decode snapshot. The local regression
-manifest uses a five-file half-resolution subset plus one full-resolution
-sample; neither should be confused with the app's camera-scan export profile.
+- [Still preview architecture](realtime-preview-plan.md): image tiers,
+  scheduling, viewport, and preview/export boundaries.
+- [X-Trans mosaic binning](xtrans-preview-mosaic-binning.md): why requested
+  preview bounds produce discrete pixel sizes.
+- [40 MP export benchmark](../performance/40mp-export.md): workload definitions,
+  stage timing, deterministic decode evidence, and memory/cancellation checks.
+- [Preview analysis benchmark](../performance/preview-analysis.md): bounded CPU
+  diagnostics and Darkroom analysis, including current sort-reuse measurements.
+- [RAW compatibility benchmark](native-raw-benchmark.md): the frozen
+  `rawPyCompatibility` decoder evidence, separate from camera-scan export.
 
-A [real-time still preview outcome](realtime-preview-plan.md) records the
-historical interactive design, the retired idle-replacement proposal, and
-deferred display-surface options. It does not set current priority.
-
-X-Trans preview bounds are not continuous pixel sizes. Mosaic shrink bins
-by an integer number of 6×6 CFA periods before 1-pass demosaic, so 4000px
-and 5000px can be the same image and 2400px often lands near 1900px. See
-[X-Trans preview mosaic binning](xtrans-preview-mosaic-binning.md).
-
-The `FilmScanPreviewComparator` tool
-(`swift run -c release --package-path native/FilmScanEngine FilmScanPreviewComparator`)
-supports visual review of GPU and CPU rendering. The current automated
-parameter grids perform 2,725 image/parameter comparisons. The 2026-09-02 run
-reported zero render failures and all combinations within the 2/255 channel
-tolerance (maximum channel diff: 2/255 colourNegative, 1/255 B&W, 2/255 slide).
-The comparator fails closed with a non-zero exit status if Metal is unavailable,
-comparisons are missing, or tolerance is exceeded. See the status page's
-[verification summary](native-macos.md#verification-summary).
-
-A [Swift port evaluation](swift-port-evaluation.md) records an earlier
-architecture review. Treat it as historical evidence rather than a checklist.
-
-## Legacy Python Maintenance
-
-The Python application is maintenance-only. It remains in place for dust
-handling, the historical all-in-one batch workflow, and fixture/benchmark tools
-that still import it. Python retirement is not a blocker for the first native
-release when the remaining Python-only workflows are documented honestly.
-Shared legacy behavior is preserved by frozen fixtures; new native-only
-behavior is governed by deterministic Swift CPU contracts. See
-[Legacy Python Application](../legacy-python.md) for retirement gates.
-
-Useful development commands:
+Run the CPU/Metal comparator with normal macOS graphics access:
 
 ```sh
-.venv/bin/python -m unittest discover -v
-swift test --package-path native/FilmScanEngine --no-parallel
-swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
+swift run -c release --package-path native/FilmScanEngine FilmScanPreviewComparator
 ```
 
-See [Building](building.md) for native build commands and legacy Python
-packaging notes, and
-[Contributing](../contributing.md) for contribution guidance.
+It must complete 2,725 comparisons with zero render failures and maximum channel
+error at most 2/255. It exits unsuccessfully if Metal is unavailable, no
+comparisons complete, a render fails, or the tolerance is exceeded. Recorded
+results are in the [verification summary](native-macos.md#verification-summary).
+
+## Supporting Workflows
+
+[Density-matrix fitting](density-matrix-calibration.md) and
+[reference-curve calibration](reference-negative-calibration.md) document
+existing offline tools and profile provenance. Further fitting is parked under
+the [research scope](../film-processing-research.md).
+
+The [Python application](../legacy-python.md) remains maintenance-only for
+applied dust removal, cross-platform/ART workflows, and fixture tools. Frozen
+compatibility fixtures govern shared behavior; new native features use Swift
+CPU contracts.

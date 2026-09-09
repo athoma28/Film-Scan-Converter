@@ -21,28 +21,30 @@ are met:
   with the hardened runtime, submits to Apple, staples, validates the ticket,
   and runs Gatekeeper assessment before rebuilding the final ZIP.
 
-The current project can publish an unsigned technical beta. It cannot claim an
-Apple-notarized release until a Developer ID certificate and notary credentials
-are available.
+The published download is an ad-hoc-signed technical beta; current source is
+unreleased. A new artifact must have its own version/build and matching source
+commit. Successful local assembly is not evidence of notarization or an
+independent-Mac installation.
 
 ## Build the unsigned beta
 
-Install LibRaw, start from a clean release commit, and run:
+Install LibRaw and start from a clean release commit. Set `RELEASE_VERSION`,
+`RELEASE_SUFFIX`, and `RELEASE_BUILD` to unused release identifiers, then run:
 
 ```sh
 brew install libraw
 RELEASE_MODE=unsigned-beta \
-RELEASE_LABEL=beta.1 \
-APP_VERSION=0.2.0 \
-BUILD_NUMBER=1 \
+RELEASE_LABEL="${RELEASE_SUFFIX:?set a prerelease suffix}" \
+APP_VERSION="${RELEASE_VERSION:?set a release version}" \
+BUILD_NUMBER="${RELEASE_BUILD:?set a build number}" \
 native/package-release.sh
 ```
 
 On an Apple Silicon build machine this creates:
 
 - `dist/Film Scan Converter.app`
-- `dist/Film-Scan-Converter-0.2.0-beta.1-apple-silicon.zip`
-- `dist/Film-Scan-Converter-0.2.0-beta.1-apple-silicon.zip.sha256`
+- `dist/Film-Scan-Converter-<version>-<suffix>-apple-silicon.zip`
+- `dist/Film-Scan-Converter-<version>-<suffix>-apple-silicon.zip.sha256`
 
 The architecture suffix is derived from the built executable; a future
 two-architecture build is automatically labeled `universal`. The archive
@@ -85,9 +87,9 @@ Then run the complete gated path:
 
 ```sh
 RELEASE_MODE=public \
-RELEASE_LABEL=beta.1 \
-APP_VERSION=0.2.0 \
-BUILD_NUMBER=1 \
+RELEASE_LABEL="${RELEASE_SUFFIX:?set a prerelease suffix}" \
+APP_VERSION="${RELEASE_VERSION:?set a release version}" \
+BUILD_NUMBER="${RELEASE_BUILD:?set a build number}" \
 SIGNING_IDENTITY="Developer ID Application: Example (TEAMID)" \
 NOTARY_PROFILE=film-scan-notary \
 native/package-release.sh
@@ -102,7 +104,9 @@ signature, or archived-copy failure stops the build.
 
 Before attaching artifacts to a GitHub prerelease:
 
-1. Run the native and legacy test suites and require green GitHub Actions runs.
+1. Update `RELEASE_NOTES.md` for the exact artifact and its validation, removing
+   the unreleased label only for the version being published. Run native and
+   legacy test suites and require green GitHub Actions runs for the release commit.
 2. Confirm the source commit is the commit represented by the release tag.
 3. Verify the checksum with `shasum -a 256 -c <artifact>.sha256`.
 4. Inspect the ZIP for unexpected `._`/AppleDouble files and confirm all four
@@ -121,8 +125,9 @@ or Homebrew LibRaw:
 
 1. Download the GitHub asset and verify its checksum.
 2. Expand it, move the app to Applications, and launch it using the documented
-   path. An unsigned beta uses Control-click **Open** once; a notarized artifact
-   must pass Gatekeeper without a bypass.
+   path. An unsigned beta follows the per-app confirmation in
+   [Installation](../installation.md#published-beta); a notarized artifact must
+   pass Gatekeeper without a bypass.
 3. Import a standard image and representative camera RAW, compare corrected
    preview orientation to reopened full-resolution output, and exercise Fit,
    pan, zoom, Original comparison, previous/next scan, and Load RAW Preview

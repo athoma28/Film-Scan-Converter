@@ -1,0 +1,148 @@
+{
+  "measuredOn": "2026-09-08",
+  "sourceRevision": "42c194325417527a67521457f12e101534a703de",
+  "sourceState": "Baseline is the existing working tree, including the September 4 preview diagnostics and paired-chroma repairs plus the existing geometry, viewport, viewer-test and documentation changes. Candidate adds only Darkroom percentile sort reuse and its focused tests. No reference hashes were refreshed.",
+  "initialGitStatus": [
+    " M RELEASE_NOTES.md",
+    " M docs/contributing.md",
+    " M docs/development/index.md",
+    " M docs/development/native-macos.md",
+    " M docs/development/swift-port-evaluation.md",
+    " M docs/improvements/MacOS-Native-Roadmap.md",
+    " M native/FilmScanEngine/Sources/FilmScanConverterMac/AppModel.swift",
+    " M native/FilmScanEngine/Sources/FilmScanConverterMac/ContentView.swift",
+    " M native/FilmScanEngine/Sources/FilmScanConverterMac/PreviewOverlayGeometry.swift",
+    " M native/FilmScanEngine/Sources/FilmScanConverterMac/PreviewOverlays.swift",
+    " M native/FilmScanEngine/Sources/FilmScanConverterMac/PreviewViewport.swift",
+    " M native/FilmScanEngine/Sources/FilmScanEngine/ContourDetection.swift",
+    " M native/FilmScanEngine/Sources/FilmScanEngine/DensityPrintProcessing.swift",
+    " M native/FilmScanEngine/Sources/FilmScanEngine/ImageGeometry.swift",
+    " M native/FilmScanEngine/Sources/FilmScanEngine/PerspectiveWarp.swift",
+    " M native/FilmScanEngine/Sources/FilmScanEngine/RenderReadyLinearImage.swift",
+    " M native/FilmScanEngine/Tests/FilmScanEngineTests/AppModelTests.swift",
+    " M native/FilmScanEngine/Tests/FilmScanEngineTests/ContourDetectionTests.swift",
+    " M native/FilmScanEngine/Tests/FilmScanEngineTests/PerspectiveWarpTests.swift",
+    " M native/FilmScanEngine/Tests/FilmScanEngineTests/PreviewComparisonTests.swift",
+    " M native/FilmScanEngine/Tests/FilmScanEngineTests/PreviewOverlayGeometryTests.swift",
+    " M native/FilmScanEngine/Tests/FilmScanEngineTests/PreviewViewportTests.swift",
+    " M native/FilmScanEngine/Tests/FilmScanEngineTests/RepresentativeRollWorkflowTests.swift",
+    " M native/FilmScanEngine/Tests/FilmScanEngineTests/ScanStackAppModelTests.swift",
+    " M native/README.md",
+    " M tests/README.md",
+    "?? docs/performance/preview-analysis-2026-09-04.json",
+    "?? docs/performance/preview-analysis.md",
+    "?? native/FilmScanEngine/Sources/FilmScanEngine/UInt16Image+Statistics.swift",
+    "?? native/FilmScanEngine/Tests/FilmScanEngineTests/ImageGeometryTests.swift",
+    "?? native/FilmScanEngine/Tests/FilmScanEngineTests/IndependentViewerInspection.swift",
+    "?? native/FilmScanEngine/Tests/FilmScanEngineTests/IndependentViewerOutputTests.swift",
+    "?? native/FilmScanEngine/Tests/FilmScanEngineTests/PreviewAnalysisPerformanceTests.swift",
+    "?? native/FilmScanEngine/Tests/FilmScanEngineTests/PreviewAnalysisTests.swift"
+  ],
+  "densityPrintSourceSHA256": {
+    "baseline": "cb59a9c043efd45b7d4545edcb7b95d3d6f77c259c2a61bf77a81841434b2386",
+    "candidate": "3d88bb2440601fc969f8e18b9351eb1ea77e6c50cde5bc6f4c81346fe98a43eb"
+  },
+  "hardware": {
+    "model": "Mac16,7",
+    "chip": "Apple M4 Pro",
+    "memoryBytes": 51539607552,
+    "cpuCores": 14
+  },
+  "os": {
+    "version": "15.7.9",
+    "build": "24G830"
+  },
+  "swift": "6.1.2",
+  "configuration": "release",
+  "warmupsPerCase": 1,
+  "timedRepetitionsPerCase": 5,
+  "execution": "One process per case, sequential, same host and tool sandbox. Input construction excluded from timing and included in process peak physical footprint. Full graphics-enabled regression tests ran separately, after timing.",
+  "input": {
+    "width": 1000,
+    "height": 667,
+    "channels": 3,
+    "profile": "harmanPhoenixII",
+    "paper": "fujiCrystalArchive",
+    "borderPercent": 20,
+    "generator": "analysisBenchmarkImage in PreviewAnalysisPerformanceTests.swift"
+  },
+  "note": "Isolated analysis-stage measurements, not overall slider latency or export throughput. Flat input stresses ties. Compare these same-session baselines with their candidates; September 4 timings were from a different session. Peak memory is process-wide, in bytes.",
+  "results": [
+    {
+      "case": "darkroom-textured",
+      "baseline": {
+        "case": "darkroom-textured",
+        "p50Milliseconds": 103.336541,
+        "p95Milliseconds": 103.559167,
+        "peakPhysicalFootprintBytes": 13844912,
+        "physicalFootprintBytes": 11682224,
+        "samplesMilliseconds": [
+          103.550083,
+          103.063125,
+          103.559167,
+          103.336541,
+          102.8535
+        ]
+      },
+      "candidate": {
+        "case": "darkroom-textured",
+        "p50Milliseconds": 43.831584,
+        "p95Milliseconds": 44.381291,
+        "peakPhysicalFootprintBytes": 16761264,
+        "physicalFootprintBytes": 13042096,
+        "samplesMilliseconds": [
+          43.866333,
+          43.831584,
+          43.793833,
+          44.381291,
+          43.495584
+        ]
+      }
+    },
+    {
+      "case": "darkroom-flat",
+      "baseline": {
+        "case": "darkroom-flat",
+        "p50Milliseconds": 7.371667,
+        "p95Milliseconds": 7.927417,
+        "peakPhysicalFootprintBytes": 15778272,
+        "physicalFootprintBytes": 13812192,
+        "samplesMilliseconds": [
+          7.618375,
+          7.927417,
+          7.3145,
+          7.343041,
+          7.371667
+        ]
+      },
+      "candidate": {
+        "case": "darkroom-flat",
+        "p50Milliseconds": 5.136875,
+        "p95Milliseconds": 5.213417,
+        "peakPhysicalFootprintBytes": 14483936,
+        "physicalFootprintBytes": 12124640,
+        "samplesMilliseconds": [
+          5.213417,
+          5.173416,
+          5.079042,
+          5.136875,
+          5.072
+        ]
+      }
+    }
+  ],
+  "validation": {
+    "fullSuite": {
+      "result": "passed",
+      "reportedTests": 580,
+      "passedTestRecords": 570,
+      "skippedTestRecords": 10,
+      "seconds": 293.059,
+      "configuration": "release",
+      "graphicsAccess": true
+    },
+    "focusedReleaseTests": "5 passed; existing 9 analysis-plus-rendered-pixel digests unchanged",
+    "formatting": "strict recursive Swift lint passed",
+    "diffCheck": "passed"
+  }
+}
