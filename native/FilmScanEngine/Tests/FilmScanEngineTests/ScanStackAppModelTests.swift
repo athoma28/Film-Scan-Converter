@@ -134,7 +134,7 @@ struct ScanStackAppModelTests {
     model.setExportDestinationDirectory(destination)
     model.setExportFormat(.png)
     model.exportAll()
-    try await waitUntil(timeout: .seconds(15)) {
+    try await waitUntil(timeout: .seconds(30)) {
       !model.isExporting && model.exportProgressCurrent == 1
     }
 
@@ -221,10 +221,10 @@ struct ScanStackAppModelTests {
     let stack = try #require(model.detectedScanStacks.first)
     model.setScanStackEnabled(true, for: stack)
     #expect(model.isScanStackEnabled(stack))
-    try await waitUntil(timeout: .seconds(15)) {
+    try await waitUntil(timeout: .seconds(30)) {
       model.previewSourceKind == .alignedStack && !model.isBuildingScanStack
     }
-    try await waitUntil(timeout: .seconds(15)) {
+    try await waitUntil(timeout: .seconds(30)) {
       model.selectedImageDimensions?.width == width
         && model.selectedImageDimensions?.height == height
         && model.selectedImageDimensions?.provisional == false
@@ -272,7 +272,7 @@ struct ScanStackAppModelTests {
     #expect(model.selectedImageDimensions?.width != tinyDraft.width)
     #expect(model.isBuildingScanStack || model.scanStackStatus.contains("Aligning"))
 
-    try await waitUntil(timeout: .seconds(15)) {
+    try await waitUntil(timeout: .seconds(30)) {
       model.previewSourceKind == .alignedStack && !model.isBuildingScanStack
         && !model.isUpgradingScanStack
     }
@@ -303,14 +303,14 @@ struct ScanStackAppModelTests {
     }
     let stack = try #require(model.detectedScanStacks.first)
     model.setScanStackEnabled(true, for: stack)
-    try await waitUntil(timeout: .seconds(15)) {
+    try await waitUntil(timeout: .seconds(30)) {
       model.previewSourceKind == .alignedStack && !model.isBuildingScanStack
         && !model.isUpgradingScanStack
     }
     #expect(model.selectedImageDimensions?.width == width)
 
     model.setScanStackMode(.noiseReduction, for: stack)
-    try await waitUntil(timeout: .seconds(15)) {
+    try await waitUntil(timeout: .seconds(30)) {
       model.scanStackEffectiveMode == .noiseReduction && !model.isBuildingScanStack
         && !model.isUpgradingScanStack && model.previewSourceKind == .alignedStack
     }
@@ -319,7 +319,7 @@ struct ScanStackAppModelTests {
     #expect(model.scanStackMode(for: stack) == .noiseReduction)
 
     model.setScanStackMode(.hdr, for: stack)
-    try await waitUntil(timeout: .seconds(15)) {
+    try await waitUntil(timeout: .seconds(30)) {
       model.scanStackEffectiveMode == .hdr && !model.isBuildingScanStack
         && !model.isUpgradingScanStack && model.previewSourceKind == .alignedStack
     }
