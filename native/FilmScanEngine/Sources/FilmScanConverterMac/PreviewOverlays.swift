@@ -141,6 +141,7 @@ struct ManualCropOverlay: View {
   let crop: NormalizedCropRect?
   let imageSize: CGSize
   var magnification: CGFloat = 1
+  var aspectRatio: Double?
   let onCropChanged: (NormalizedCropRect) -> Void
 
   @State private var drawStart: CGPoint?
@@ -251,12 +252,8 @@ struct ManualCropOverlay: View {
 
   private func displayedCropRect(in imageRect: CGRect) -> CGRect? {
     if let drawStart, let drawEnd {
-      return CGRect(
-        x: min(drawStart.x, drawEnd.x),
-        y: min(drawStart.y, drawEnd.y),
-        width: abs(drawEnd.x - drawStart.x),
-        height: abs(drawEnd.y - drawStart.y)
-      )
+      return PreviewOverlayGeometry.drawnCropRect(
+        from: drawStart, to: drawEnd, in: imageRect, aspectRatio: aspectRatio)
     }
     if let crop {
       return PreviewOverlayGeometry.documentRect(for: crop, in: imageRect)
@@ -322,9 +319,16 @@ struct ManualCropOverlay: View {
         case .handle(let handle):
           guard let dragOrigin else { return }
           let point = PreviewOverlayGeometry.normalizedPoint(current, in: imageRect)
-          onCropChanged(
-            dragOrigin.movingHandle(
-              handle, to: point, minWidth: minWidth, minHeight: minHeight))
+          if let aspectRatio {
+            onCropChanged(
+              dragOrigin.movingHandle(
+                handle, to: point, minWidth: minWidth, minHeight: minHeight,
+                aspectRatio: aspectRatio))
+          } else {
+            onCropChanged(
+              dragOrigin.movingHandle(
+                handle, to: point, minWidth: minWidth, minHeight: minHeight))
+          }
         }
       }
       .onEnded { value in
@@ -334,17 +338,16 @@ struct ManualCropOverlay: View {
           dragOperation = nil
           dragOrigin = nil
           dragStart = nil
+          editingGestureAction("Crop", false)
         }
         guard let dragOperation else { return }
-        editingGestureAction("Crop", false)
         guard case .drawing = dragOperation, let drawStart else { return }
         let end = PreviewOverlayGeometry.clampedPoint(
           PreviewOverlayGeometry.documentGesturePoint(
             value.location, magnification: magnification),
           to: imageRect)
-        let rect = CGRect(
-          x: min(drawStart.x, end.x), y: min(drawStart.y, end.y),
-          width: abs(end.x - drawStart.x), height: abs(end.y - drawStart.y))
+        let rect = PreviewOverlayGeometry.drawnCropRect(
+          from: drawStart, to: end, in: imageRect, aspectRatio: aspectRatio)
         guard rect.width >= minSize, rect.height >= minSize else { return }
         onCropChanged(PreviewOverlayGeometry.normalizedCrop(for: rect, in: imageRect))
       }

@@ -109,6 +109,17 @@ struct FilmScanConverterMacApp: App {
         .disabled(
           model.files.isEmpty || model.exportParameters.destinationDirectory == nil
             || model.isExporting || model.isLoading)
+
+        Divider()
+
+        Button("Export Selected Contact Sheet") { model.exportContactSheet() }
+          .disabled(
+            model.selectedExportItemCount == 0 || model.exportParameters.destinationDirectory == nil
+              || model.isExporting || model.isLoading || model.isBuildingScanStack)
+        Button("Export All Contact Sheet") { model.exportContactSheet(allFiles: true) }
+          .disabled(
+            model.files.isEmpty || model.exportParameters.destinationDirectory == nil
+              || model.isExporting || model.isLoading || model.isBuildingScanStack)
       }
 
       CommandMenu("Corrections") {

@@ -21,10 +21,9 @@ are met:
   with the hardened runtime, submits to Apple, staples, validates the ticket,
   and runs Gatekeeper assessment before rebuilding the final ZIP.
 
-The published download is an ad-hoc-signed technical beta; current source is
-unreleased. A new artifact must have its own version/build and matching source
-commit. Successful local assembly is not evidence of notarization or an
-independent-Mac installation.
+The published download is an ad-hoc-signed technical beta. A new artifact must
+have its own version/build and matching source commit. Successful local
+assembly is not evidence of notarization or an independent-Mac installation.
 
 ## Build the unsigned beta
 
