@@ -361,6 +361,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
   public var cropRectCoordinateSpace: NormalizedCropCoordinateSpace
   public var perspectiveCrop: PerspectiveCrop?
   public var manualCrop: NormalizedCropRect?
+  public var manualCropAspectRatio: CropAspectRatio
 
   public init(
     borderCrop: Double = 0,
@@ -398,7 +399,8 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     cropRect: RotatedRect? = nil,
     cropRectCoordinateSpace: NormalizedCropCoordinateSpace = .imageAxes,
     perspectiveCrop: PerspectiveCrop? = nil,
-    manualCrop: NormalizedCropRect? = nil
+    manualCrop: NormalizedCropRect? = nil,
+    manualCropAspectRatio: CropAspectRatio = .free
   ) {
     self.borderCrop = borderCrop
     self.flip = flip
@@ -445,6 +447,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     self.cropRectCoordinateSpace = cropRectCoordinateSpace
     self.perspectiveCrop = perspectiveCrop
     self.manualCrop = manualCrop
+    self.manualCropAspectRatio = manualCropAspectRatio
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -461,7 +464,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     case densityPipelineEnabled, densityBaseDensity
     case densityCorrection, densityC41Profile, densityDisplayParams
     case darkThreshold, lightThreshold, cropRect, cropRectCoordinateSpace
-    case perspectiveCrop, manualCrop
+    case perspectiveCrop, manualCrop, manualCropAspectRatio
   }
 
   public init(from decoder: Decoder) throws {
@@ -539,6 +542,8 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
       ) ?? (cropRect == nil ? .imageAxes : .legacyTransposedAxes)
     perspectiveCrop = try container.decodeIfPresent(PerspectiveCrop.self, forKey: .perspectiveCrop)
     manualCrop = try container.decodeIfPresent(NormalizedCropRect.self, forKey: .manualCrop)
+    manualCropAspectRatio =
+      try container.decodeIfPresent(CropAspectRatio.self, forKey: .manualCropAspectRatio) ?? .free
   }
 
   /// Keeps the frozen integer color fields aligned with semantic intent so the

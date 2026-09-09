@@ -1,9 +1,10 @@
 # Features
 
-This inventory describes the current native source, including features beyond
-the downloadable 0.2.0 Beta 1. See [Installation](installation.md), the
-[usage guide](how-to-use.md), and [development status](development/native-macos.md)
-for version boundaries, instructions, and verification.
+This inventory describes the native application shipped in 0.2.0 Beta 2 and
+the current development source. See [Installation](installation.md), the
+[usage guide](how-to-use.md), and
+[development status](development/native-macos.md) for instructions and
+verification.
 
 ## Import And Preview
 
@@ -66,6 +67,9 @@ for version boundaries, instructions, and verification.
   canvas. Clearing manual crop preserves upstream geometry; changing upstream
   geometry clears the dependent crop. Preview, export, and full-output dimension
   prediction share geometry semantics.
+- Fixed manual-crop ratios: 1:1, 3:2, 4:3, 5:4, 16:9, and portrait equivalents.
+  Drawing and resize handles preserve the ratio; Free unlocks the current box.
+  Each scan saves its ratio with its crop, including Undo/Redo and relaunch.
 - Diagnostic dust-candidate overlay aligned to the displayed geometry.
 - **Calibrate**: film-base edge detection/manual sampling, flat field,
   measured-density conversion, and persisted capture/film-response/roll profiles.
@@ -106,6 +110,14 @@ and snapshots each job's output options. Names are collision-safe, errors are
 per-file, and cancellation occurs at safe boundaries. PNG uses staged commit;
 all formats clean up failed destinations. The selected RAW retains its last
 three-pass decode for settings-only re-export and drops it on selection change.
+
+**Contact Sheet** saves selected or all scans to a Letter-size PDF, with 12
+corrected previews per page, filenames, and page numbers. Settings are captured
+when the sheet starts; each enabled stack contributes one merged tile under its
+anchor name. Sheets use bounded demosaiced RAW previews, preserve import order,
+and support progress, cancellation, collision-safe naming, and failure cleanup.
+They show committed crop/corrections, independently of Original comparison or
+an open geometry editor. Export borders and aspect padding are not included.
 
 Local app/ZIP packaging embeds dependencies, licenses, icon/document registration,
 and a library manifest; it validates the app and extracted archive. Developer

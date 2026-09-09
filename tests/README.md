@@ -130,6 +130,19 @@ draft/inspect/full-resolution size changes, panning, Fit, resize, and pinch
 notifications. App-model comparison tests cover automatic crop, manual crop,
 perspective, straightening, and their combination, including temporary editor
 canvases and exact corrected-pixel restoration.
+Source-editor regressions also exercise perspective edits, Reset, exposure,
+and presets through Undo/Redo with Original comparison initially on and off.
+They require the oriented original pixels to remain visible until the editor
+closes, persisted settings to restore, and later history to reveal corrections
+normally. GPU source previews use the existing 2/255 channel tolerance.
+
+`CropAspectRatioTests` covers centered fitting, all eight handle anchors,
+bounds, minimum sizes, landscape/portrait canvases, Fit/100%/zoomed drawing,
+legacy settings, and preservation of destination geometry during look transfer.
+`CropAspectRatioAppTests` exercises ratio changes and coalesced resize history,
+uncropped editing, Free mode, per-file isolation, relaunch, and TIFF output
+against CPU pixels after rotation, perspective, and straightening. Run these
+with `--filter CropAspectRatio` and normal macOS graphics access.
 
 Run the supplemental three-frame RAW workflow in a release build:
 
@@ -154,6 +167,28 @@ does not replace a hands-on assessment of focus, grain, gesture feel, or overlay
 dragging in the packaged app.
 
 ## Independent-Viewer Output Contract
+
+Contact-sheet tests exercise the actual app export path with selected/all
+scans, edits changed after the export snapshot, active comparison/crop tools,
+case-insensitive filename collisions, cancellation, failure/retry, and enabled
+stack consolidation. PDFKit checks filenames and pagination at 12/13/25 scans;
+Core Graphics checks corrected tile pixels. A local three-RAF case verifies
+bounded preview export without populating the full-resolution export cache.
+
+To retain the three-RAW PDF and a pagination fixture for file-based visual review:
+
+```sh
+CONTACT_SHEET_QA_OUTPUT=/tmp/fsc-contact-sheet-qa/contact-sheet.pdf \
+CLANG_MODULE_CACHE_PATH=/tmp/film-scan-clang-cache \
+SWIFTPM_MODULECACHE_OVERRIDE=/tmp/film-scan-swiftpm-cache \
+swift test --disable-sandbox -c release --package-path native/FilmScanEngine \
+  --no-parallel --filter ContactSheetExportTests
+```
+
+The RAW case requires `fuji400-fresh/DSCF2833.RAF`,
+`cinestill800t/DSCF3247.RAF`, and `shanghaigp3/DSCF3200.RAF`; it explicitly
+skips when those local files are missing. Without the output environment
+variable, all generated PDFs are removed after testing.
 
 App-path TIFF, JPEG, and PNG exports are reopened by ImageIO and `/usr/bin/sips`
 as a second macOS reader. The check requires named sRGB, baked orientation

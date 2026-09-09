@@ -7,12 +7,11 @@ roll-wide corrections, and full-resolution export.
 
 ## Source And Download
 
-This README describes the current development source. The latest downloadable
-release is [0.2.0 Beta 1](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.1),
-published August 14, 2026. That release predates several features described here.
-Build from source to use the current application; see [Installation](docs/installation.md).
-The published beta is ad-hoc signed, supports Apple Silicon and macOS 14 or
-later, and is not Apple-notarized.
+The latest downloadable release is
+[0.2.0 Beta 2](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.2),
+published September 9, 2026. It is ad-hoc signed, supports Apple Silicon and
+macOS 14 or later, and is not Apple-notarized. See
+[Installation](docs/installation.md) for the download and source-build paths.
 
 ## Current Application
 
@@ -20,14 +19,17 @@ later, and is not Apple-notarized.
   colour-accurate draft to an inspect preview and then full-sensor detail.
 - Develop, Geometry, Calibrate, and Export inspector pages. Natural, Darkroom,
   Classic, and Bypass negative conversion; tone, color, curves, and color wheels.
-- Automatic frame detection, manual crop, straighten, perspective correction,
-  and viewport-stable Original comparison with Fit, pan, pinch, and 100% viewing.
+- Automatic frame detection, freeform/fixed-ratio crop, straighten, perspective
+  correction, and viewport-stable Original comparison with Fit, pan, pinch,
+  and 100% viewing.
 - Per-file settings and undo/redo, presets, correction copy/paste, selected/all
   look application, and import-ordered scan navigation.
 - Opt-in repeated-capture stacks with translation alignment and Noise/HDR modes.
 - Sequential TIFF, JPEG, PNG, and processed-RGB DNG export with collision-safe
   names and cancellation. Settings-only re-export of the selected RAW reuses
   its last full-quality decode.
+- PDF contact sheets with corrected, labeled previews of selected or all scans,
+  including one tile per enabled stack.
 
 Native dust detection displays candidates but does not remove dust. Broader
 hands-on photographic and roll/stack validation, Preview/Photos judgment, and

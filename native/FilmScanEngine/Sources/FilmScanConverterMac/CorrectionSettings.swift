@@ -28,6 +28,7 @@ struct CorrectionSettings: Codable, Equatable {
     result.cropRectCoordinateSpace = destination.cropRectCoordinateSpace
     result.perspectiveCrop = destination.perspectiveCrop
     result.manualCrop = destination.manualCrop
+    result.manualCropAspectRatio = destination.manualCropAspectRatio
     result.densityPipelineEnabled = destination.densityPipelineEnabled
     result.densityBaseDensity = destination.densityBaseDensity
     return result

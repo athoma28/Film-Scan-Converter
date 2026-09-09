@@ -52,6 +52,33 @@ enum PreviewOverlayGeometry {
     )
   }
 
+  /// Uses the same constraint for the drag reticle and its committed rectangle.
+  /// The ratio is in normalized canvas coordinates, derived from output pixels.
+  static func drawnCropRect(
+    from start: CGPoint, to end: CGPoint, in imageRect: CGRect, aspectRatio: Double?
+  ) -> CGRect {
+    let start = clampedPoint(start, to: imageRect)
+    let end = clampedPoint(end, to: imageRect)
+    let freeRect = CGRect(
+      x: min(start.x, end.x), y: min(start.y, end.y),
+      width: abs(end.x - start.x), height: abs(end.y - start.y))
+    guard let aspectRatio, aspectRatio.isFinite, aspectRatio > 0,
+      imageRect.width > 0, imageRect.height > 0
+    else { return freeRect }
+    let ratio = aspectRatio * imageRect.width / imageRect.height
+    let growsRight = end.x >= start.x
+    let growsDown = end.y >= start.y
+    let availableWidth = growsRight ? imageRect.maxX - start.x : start.x - imageRect.minX
+    let availableHeight = growsDown ? imageRect.maxY - start.y : start.y - imageRect.minY
+    let width = min(
+      availableWidth, availableHeight * ratio, max(freeRect.width, freeRect.height * ratio))
+    let height = width / ratio
+    return CGRect(
+      x: growsRight ? start.x : start.x - width,
+      y: growsDown ? start.y : start.y - height,
+      width: width, height: height)
+  }
+
   static func documentPoint(
     _ point: (x: Double, y: Double),
     in imageRect: CGRect

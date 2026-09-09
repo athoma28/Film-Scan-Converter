@@ -1,9 +1,10 @@
 # How To Use
 
-This guide describes the current native source. The downloadable
-[0.2.0 Beta 1](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.1)
-predates this inspector and some workflows. See [Installation](installation.md)
-for source builds. Python instructions are in [Legacy Usage](legacy-usage.md).
+This guide describes the native application shipped in downloadable
+[0.2.0 Beta 2](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.2)
+and the current development source. See [Installation](installation.md) for
+download and source-build paths. Python instructions are in
+[Legacy Usage](legacy-usage.md).
 
 ## Import And Inspect
 
@@ -75,6 +76,21 @@ In **Crop & Framing**:
   to display the cropped result. Use its **Clear** control to remove only the
   manual crop and retain earlier geometry.
 
+While Manual Crop is open, **Crop Ratio** offers Free, 1:1, 3:2, 4:3, 5:4,
+16:9, and the corresponding portrait ratios. Choosing a fixed ratio fits a
+centered rectangle inside the current crop (or the full canvas if no crop is
+set). Drawing and all eight handles keep that ratio; dragging inside moves the
+box without resizing it. **Free** unlocks the existing box without changing it.
+The ratio is saved per scan and restored with Undo/Redo. Clearing the crop
+keeps the chosen ratio for the next drag. Output edges round outward to whole
+pixels, so very small crops can differ slightly from the nominal ratio.
+
+Undo/Redo keeps an open Manual Crop or Straighten editor on the full canvas,
+so you can restore an edit and continue adjusting it without leaving the tool.
+Perspective and Film Base Sample Area keep the oriented original scan visible
+through adjustments, presets, Reset, and Undo/Redo. Original comparison is
+locked while either tool is open; finishing restores the prior comparison view.
+
 Manual crop is expressed on the canvas created by earlier geometry. Changing
 rotation, flip, straighten, automatic frame, or perspective invalidates that
 manual crop. Clearing perspective also clears its dependent manual crop.
@@ -131,6 +147,20 @@ RAW exports decode one file at a time at final quality. The selected file keeps
 its last three-pass decode for settings-only re-export and releases it on
 selection change. Source files are preserved. Failed outputs are removed and
 errors are shown on the Export page.
+
+### Contact Sheets
+
+Choose a Destination folder, then use **Contact Sheet → Save Selected PDF** or
+**Save All PDF** on the Export page. The File menu also offers both actions.
+The PDF contains 12 scans per Letter-size page, in import order, with filenames
+and current crops/corrections. Each enabled stack appears once under the first
+capture's name. **Open Contact Sheet** opens the completed PDF.
+
+The sheet captures edits when export starts, so later adjustments do not change
+its remaining tiles. It uses review-size previews and omits export borders and
+aspect padding. Existing PDFs receive numbered alternatives such as
+`Contact Sheet-2.pdf`. **Cancel** or a failed scan removes the unfinished sheet;
+the PDF appears only after every scan succeeds.
 
 ## Keyboard Shortcuts
 

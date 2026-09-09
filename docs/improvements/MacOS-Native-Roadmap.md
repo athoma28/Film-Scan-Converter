@@ -9,7 +9,11 @@ judge, adjust, transfer a look across a roll, and export predictable files.
 New work must prevent incorrect results, improve that frequent workflow, close
 a measured performance problem, or establish distribution evidence.
 
-## Active Sequence
+Computer Use testing is deferred at the owner's request while new feature
+development proceeds. Automated and file-based verification continue; the
+photographic and distribution acceptance below remains open.
+
+## Validation Sequence
 
 ### 1. Verify Photographic Judgment In The Packaged App
 
@@ -76,7 +80,7 @@ roadmap items. New profiling can justify another bounded repair.
 - Preview tiling using an established interpolator, if full-detail inspection
   remains slow under the current staged preview contract.
 - Applied dust removal, with representative masks and restoration quality.
-- Film-edge assistance, broader batch organization, or contact sheets when a
+- Film-edge assistance or broader batch organization when a
   real photographic workflow needs them.
 - Calibration beyond one planar perspective warp, supported by repeatable
   geometric defects in real scans.

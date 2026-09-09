@@ -38,6 +38,8 @@ final class AppModel: ObservableObject {
   @Published private(set) var previewSourceKind: PreviewSourceKind?
   @Published private(set) var exportParameters = ExportParameters()
   @Published private(set) var isExporting = false
+  @Published private(set) var isExportingContactSheet = false
+  @Published private(set) var lastContactSheetURL: URL?
   @Published private(set) var exportProgressCurrent = 0
   @Published private(set) var exportProgressTotal = 0
   @Published private(set) var exportErrors: [String] = []
@@ -215,6 +217,7 @@ final class AppModel: ObservableObject {
   /// Test seam that replaces LibRaw for selected-file export-cache tests.
   var fullResolutionExportDecoder: (@Sendable (URL) throws -> UInt16Image)?
   var scanStackPreviewDecoder: (@Sendable (URL, ScanStackPreviewTier) throws -> UInt16Image)?
+  var contactSheetPreviewDecoder: (@Sendable (URL) throws -> UInt16Image)?
   private(set) var fullResolutionExportDecodeCount = 0
   private(set) var fullResolutionExportDecodeCacheHits = 0
 
@@ -281,6 +284,18 @@ final class AppModel: ObservableObject {
   var selectedCanvasDimensions: PixelDimensions? {
     guard let source = sourcePixelDimensions else { return nil }
     return ImageGeometry.outputDimensions(source: source, parameters: parameters)
+  }
+
+  var selectedUncroppedCanvasDimensions: PixelDimensions? {
+    guard let source = sourcePixelDimensions else { return nil }
+    var uncropped = parameters
+    uncropped.manualCrop = nil
+    return ImageGeometry.outputDimensions(source: source, parameters: uncropped)
+  }
+
+  var normalizedManualCropAspectRatio: Double? {
+    guard let canvas = selectedUncroppedCanvasDimensions else { return nil }
+    return parameters.manualCropAspectRatio.normalizedRatio(in: canvas)
   }
 
   var selectedOutputDimensions: PixelDimensions? {
@@ -1392,11 +1407,7 @@ final class AppModel: ObservableObject {
     if let selection { editedKeys.insert(settingsKey(selection)) }
     resetCropState(cancelTask: true)
     saveParameters()
-    if showOriginal {
-      showOriginal = false
-    } else {
-      scheduleRender(immediate: true)
-    }
+    renderAfterEditing()
     recordCurrentEdit(actionName: "Reset Corrections", before: historyBefore)
   }
 
@@ -1495,11 +1506,7 @@ final class AppModel: ObservableObject {
     manualCrop = parameters.manualCrop
     straightenAngle = parameters.straightenAngle
     saveParameters()
-    if showOriginal {
-      showOriginal = false
-    } else {
-      scheduleRender(immediate: true)
-    }
+    renderAfterEditing()
     recordCurrentEdit(actionName: actionName, before: historyBefore)
   }
 
@@ -1619,9 +1626,102 @@ final class AppModel: ObservableObject {
     exportFiles(consolidatedExportURLs(files))
   }
 
+  func exportContactSheet(allFiles: Bool = false) {
+    guard !isExporting else { return }
+    guard !isLoading, !isBuildingScanStack else {
+      setStatus("Wait for the current preview to finish before exporting.", kind: .error)
+      return
+    }
+    let urls = consolidatedExportURLs(allFiles ? files : orderedSelectedFiles)
+    guard !urls.isEmpty else {
+      setStatus("Select at least one scan for the contact sheet.", kind: .error)
+      return
+    }
+    guard let directory = exportParameters.destinationDirectory else {
+      setStatus("Select an export destination folder first.", kind: .error)
+      return
+    }
+    let items = urls.map { url in
+      let stack = enabledScanStack(containing: url)
+      return ContactSheetItem(
+        sources: stack?.members ?? [url], parameters: settingsByPath[settingsKey(url)],
+        stackMode: stack.map(scanStackMode) ?? .automatic)
+    }
+    let prior = sameRollFilmTypeHint
+    let field = flatFieldImage
+    let gate = rawFullPreviewDecodeGate
+    let decoder = contactSheetPreviewDecoder
+    cancelPredecode()
+    cancelScanStackUpgradePreservingPreview()
+    isExporting = true
+    isExportingContactSheet = true
+    exportWasCancelled = false
+    exportErrors = []
+    lastContactSheetURL = nil
+    activeExportQueue = urls
+    activeExportFilename = urls.first?.lastPathComponent
+    exportProgressCurrent = 0
+    exportProgressTotal = urls.count
+    exportQueueCount = max(0, urls.count - 1)
+    setStatus("Creating contact sheet...")
+
+    exportTask = Task { [weak self] in
+      guard let self else { return }
+      defer {
+        self.isExporting = false
+        self.isExportingContactSheet = false
+        self.activeExportQueue = []
+        self.activeExportFilename = nil
+        self.exportQueueCount = 0
+        self.exportTask = nil
+      }
+      do {
+        let output = try await ContactSheetExport.write(
+          items: items, destinationDirectory: directory, weakPrior: prior, flatField: field,
+          decode: { url in
+            try await gate.run {
+              try Task.checkCancellation()
+              let image: UInt16Image
+              if let decoder {
+                image = try decoder(url)
+              } else if StandardImageDecoder.supportedExtensions.contains(
+                url.pathExtension.lowercased())
+              {
+                image = try StandardImageDecoder.decodePreview(
+                  url, maxDimension: ContactSheetExport.previewMaxDimension)
+              } else {
+                image = try Self.decodeRawPreview(
+                  url, maxDimension: ContactSheetExport.previewMaxDimension)
+              }
+              try Task.checkCancellation()
+              return image
+            }
+          },
+          progress: { [weak self] completed, filename in
+            await self?.updateContactSheetProgress(completed: completed, filename: filename)
+          })
+        self.lastContactSheetURL = output
+        self.setStatus("Saved \(items.count)-scan contact sheet to \(output.lastPathComponent).")
+      } catch is CancellationError {
+        self.exportErrors = []
+        self.setStatus("Contact sheet cancelled; no PDF was saved.")
+      } catch {
+        self.exportErrors = [error.localizedDescription]
+        self.setStatus(
+          "Contact sheet could not be saved: \(error.localizedDescription)", kind: .error)
+      }
+    }
+  }
+
+  private func updateContactSheetProgress(completed: Int, filename: String?) {
+    exportProgressCurrent = completed
+    activeExportFilename = filename
+    exportQueueCount = max(0, exportProgressTotal - completed - (filename == nil ? 0 : 1))
+  }
+
   func addSelectedToExportQueue() {
     let urls = consolidatedExportURLs(orderedSelectedFiles)
-    guard isExporting, !urls.isEmpty,
+    guard isExporting, !isExportingContactSheet, !urls.isEmpty,
       let destinationDirectory = exportParameters.destinationDirectory
     else {
       return
@@ -2130,8 +2230,27 @@ final class AppModel: ObservableObject {
     recordCurrentEdit(actionName: "Clear Perspective", before: historyBefore)
   }
 
+  func setManualCropAspectRatio(_ ratio: CropAspectRatio) {
+    guard parameters.manualCropAspectRatio != ratio,
+      let canvas = selectedUncroppedCanvasDimensions
+    else { return }
+    let historyBefore = currentEditingSnapshot()
+    parameters.manualCropAspectRatio = ratio
+    if let normalizedRatio = ratio.normalizedRatio(in: canvas) {
+      let crop = (manualCrop ?? .fullFrame).fitted(toAspectRatio: normalizedRatio)
+      manualCrop = crop
+      parameters.manualCrop = crop
+      cropStatus = "Manual canvas crop is active."
+      resetDustState(cancelTask: true)
+    }
+    if let selection { editedKeys.insert(settingsKey(selection)) }
+    saveParameters()
+    if !isPreviewingUncroppedCanvas { scheduleRender(immediate: true) }
+    recordCurrentEdit(actionName: "Crop Aspect Ratio", before: historyBefore)
+  }
+
   func setManualCrop(_ crop: NormalizedCropRect?) {
-    guard let crop else {
+    guard var crop else {
       clearManualCrop()
       return
     }
@@ -2139,6 +2258,7 @@ final class AppModel: ObservableObject {
       cropStatus = "Drag a crop box inside the image."
       return
     }
+    if let ratio = normalizedManualCropAspectRatio { crop = crop.fitted(toAspectRatio: ratio) }
     if crop == manualCrop { return }
     let historyBefore = currentEditingSnapshot()
     resetDustState(cancelTask: true)
@@ -2308,7 +2428,7 @@ final class AppModel: ObservableObject {
   }
 
   private func exportFiles(_ urls: [URL]) {
-    guard !urls.isEmpty else { return }
+    guard !isExporting, !urls.isEmpty else { return }
     guard !isBuildingScanStack else {
       setStatus(
         "Wait for the aligned stack preview to finish before exporting.",
@@ -2711,7 +2831,7 @@ final class AppModel: ObservableObject {
     }
   }
 
-  private static func automaticallyClassifiedParameters(
+  nonisolated static func automaticallyClassifiedParameters(
     base: ProcessingParameters,
     image: UInt16Image,
     weakPrior: FilmType? = nil
@@ -2887,7 +3007,8 @@ final class AppModel: ObservableObject {
   ) {
     guard selection.map(settingsKey) == key else { return }
     resetDustState(cancelTask: true)
-    isPreviewingUncroppedCanvas = false
+    // History restores edits, not editor lifetime. Crop and Straighten keep
+    // their overlays open, so their canvas must stay uncropped until Done.
     parameters = snapshot.parameters
     cropRect = snapshot.parameters.cropRect
     perspectiveCrop = snapshot.parameters.perspectiveCrop
@@ -2921,11 +3042,7 @@ final class AppModel: ObservableObject {
     appliedPresetName = snapshot.appliedPresetName
 
     saveParameters()
-    if showOriginal {
-      showOriginal = false
-    } else {
-      scheduleRender(immediate: true)
-    }
+    renderAfterEditing()
   }
 
   private func refreshHistoryAvailability() {
@@ -2955,12 +3072,18 @@ final class AppModel: ObservableObject {
     }
     update(&parameters)
     saveParameters()
-    if showOriginal {
+    renderAfterEditing(immediate: false)
+    recordCurrentEdit(actionName: actionName, before: historyBefore)
+  }
+
+  private func renderAfterEditing(immediate: Bool = true) {
+    // Edits reveal the corrected result during ordinary comparison. Perspective
+    // and film-base tools still need original pixels until their overlays close.
+    if showOriginal && !isPreviewingSourceGeometry {
       showOriginal = false
     } else {
-      scheduleRender()
+      scheduleRender(immediate: immediate)
     }
-    recordCurrentEdit(actionName: actionName, before: historyBefore)
   }
 
   private func saveParameters() {

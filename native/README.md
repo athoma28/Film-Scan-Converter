@@ -303,6 +303,11 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   invalidates the dependent manual crop. Preview, dust-overlay alignment,
   density flat field, and export must use the same CPU perspective warp; this corrects one
   planar frame and is not a lens-distortion model.
+- Manual-crop ratios constrain editing in full-output canvas coordinates after
+  upstream geometry. The normalized rectangle remains the processing authority;
+  the saved ratio is an editing constraint and does not add export padding.
+  Preserve each destination's ratio during look transfer, and include it in
+  edit history. Old settings default to Free.
 - Resolve each two-point straighten guide against its nearest horizontal or
   vertical axis, then apply the persisted angle after quarter-turn rotation and
   flip. Apply the simple normalized canvas crop after that expanded rotation.
@@ -321,6 +326,11 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
 - Keep full-resolution RAW export one-file-at-a-time. Retain the selected
   file's last three-pass decode for settings-only re-export; drop it on
   selection change. Do not prefetch file N+1 or keep a roll-sized decode cache.
+- Contact-sheet PDFs snapshot selected/all settings and stack membership at
+  start, preserve import order, and use corrected demosaiced previews bounded
+  to 1000px. Decode captures sequentially through the shared RAW gate; never
+  populate the authoritative export cache. Stage the complete PDF and commit
+  only after all tiles succeed, with cancellation and collision-safe naming.
 - Give export priority over speculative lookahead work and check cancellation
   between decode, correction, geometry, and write stages.
 - Preserve PNG's staged commit, collision-safe naming, and destination cleanup

@@ -1,9 +1,9 @@
 # Film Scan Converter
 
 Film Scan Converter converts camera-scanned film negatives and slides in a
-native macOS application. These guides describe the current source, whose
-features extend beyond the downloadable 0.2.0 Beta 1. See
-[Installation](installation.md) for that distinction and supported systems.
+native macOS application. These guides describe the application shipped in
+0.2.0 Beta 2 and the current development source. See
+[Installation](installation.md) for download and source-build instructions.
 
 ## Use The Application
 

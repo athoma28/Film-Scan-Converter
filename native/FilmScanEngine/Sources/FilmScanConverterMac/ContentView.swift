@@ -441,7 +441,7 @@ struct ContentView: View {
           Label("Original", systemImage: "rectangle.on.rectangle")
         }
         .toggleStyle(.button)
-        .disabled(isPickingRebateRegion)
+        .disabled(isPickingRebateRegion || isPerspectiveEditing)
         .help("Press and hold the comparison visually by toggling the original")
 
         HStack(spacing: 4) {
@@ -1260,6 +1260,18 @@ struct ContentView: View {
           .controlSize(.small)
 
           if isCropping {
+            Picker(
+              "Crop Ratio",
+              selection: Binding(
+                get: { model.parameters.manualCropAspectRatio },
+                set: { model.setManualCropAspectRatio($0) })
+            ) {
+              ForEach(CropAspectRatio.allCases, id: \.self) { ratio in
+                Text(ratio.rawValue).tag(ratio)
+              }
+            }
+            .controlSize(.small)
+            .help("Fit the current crop to a ratio and keep it fixed while adjusting the handles.")
             Text(
               "Drag a rectangle to crop, then adjust the handles. Drag inside the box to move it, or outside to replace it."
             )
@@ -1745,21 +1757,25 @@ struct ContentView: View {
 
         if model.isExporting {
           HStack(spacing: 8) {
-            Button(
-              model.selectedExportItemCount > 1
-                ? "Add Selected (\(model.selectedExportItemCount))"
-                : "Add Selected",
-              action: model.addSelectedToExportQueue
-            )
-            .buttonStyle(.borderedProminent)
-            .frame(maxWidth: .infinity)
+            if !model.isExportingContactSheet {
+              Button(
+                model.selectedExportItemCount > 1
+                  ? "Add Selected (\(model.selectedExportItemCount))"
+                  : "Add Selected",
+                action: model.addSelectedToExportQueue
+              )
+              .buttonStyle(.borderedProminent)
+              .frame(maxWidth: .infinity)
+            }
             Button("Cancel", role: .cancel, action: model.cancelExport)
               .buttonStyle(.bordered)
               .frame(maxWidth: .infinity)
           }
           Text(
-            model.exportQueueCount == 1
-              ? "1 output waiting" : "\(model.exportQueueCount) outputs waiting"
+            model.isExportingContactSheet
+              ? "\(model.exportQueueCount) scans waiting"
+              : model.exportQueueCount == 1
+                ? "1 output waiting" : "\(model.exportQueueCount) outputs waiting"
           )
           .font(.caption)
           .foregroundStyle(.secondary)
@@ -1769,6 +1785,27 @@ struct ContentView: View {
           Text(error)
             .font(.caption)
             .foregroundStyle(.red)
+        }
+      }
+
+      InspectorSection("Contact Sheet", systemImage: "square.grid.3x3") {
+        Text(
+          "A Letter-size PDF with 12 scans per page, filenames, and current crops and corrections."
+        )
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+        HStack {
+          Button("Save Selected PDF") { model.exportContactSheet() }
+            .disabled(model.selectedExportItemCount == 0)
+          Button("Save All PDF") { model.exportContactSheet(allFiles: true) }
+            .disabled(model.files.isEmpty)
+        }
+        .disabled(
+          model.exportParameters.destinationDirectory == nil || model.isExporting || model.isLoading
+            || model.isBuildingScanStack)
+        if let url = model.lastContactSheetURL {
+          Button("Open Contact Sheet") { NSWorkspace.shared.open(url) }
         }
       }
     }
@@ -1885,6 +1922,7 @@ struct ContentView: View {
         crop: model.manualCrop,
         imageSize: image.size,
         magnification: magnification,
+        aspectRatio: model.normalizedManualCropAspectRatio,
         onCropChanged: model.setManualCrop
       )
     }
