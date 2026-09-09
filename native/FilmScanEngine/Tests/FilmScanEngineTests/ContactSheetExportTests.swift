@@ -185,7 +185,7 @@ struct ContactSheetExportTests {
   @Test(
     "Real RAW contact sheets use bounded demosaiced previews",
     .enabled(
-      if: contactSheetRAWs.allSatisfy { FileManager.default.fileExists(atPath: $0.path) },
+      if: contactSheetRAWCorpusAvailable,
       "sample-raw contact-sheet corpus unavailable"))
   func rawContactSheet() async throws {
     let fixture = try Fixture(names: ["placeholder.png"])
@@ -299,6 +299,10 @@ struct ContactSheetExportTests {
 private let contactSheetRAWs = [
   "fuji400-fresh/DSCF2833.RAF", "cinestill800t/DSCF3247.RAF", "shanghaigp3/DSCF3200.RAF",
 ].map { SampleRawCorpus.url(relativePath: $0) }
+
+private var contactSheetRAWCorpusAvailable: Bool {
+  contactSheetRAWs.allSatisfy { FileManager.default.fileExists(atPath: $0.path) }
+}
 
 private final class ContactSheetDecodeProbe: @unchecked Sendable {
   private let lock = NSLock()
