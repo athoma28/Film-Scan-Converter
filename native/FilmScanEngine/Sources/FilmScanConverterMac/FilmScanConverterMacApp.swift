@@ -2,10 +2,28 @@ import AppKit
 import FilmScanEngine
 import SwiftUI
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+  weak var model: AppModel?
+
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApplication.shared.setActivationPolicy(.regular)
     NSApplication.shared.activate(ignoringOtherApps: true)
+  }
+
+  func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+    guard let model else { return .terminateNow }
+    Task {
+      do {
+        try await model.flushSettings()
+        sender.reply(toApplicationShouldTerminate: true)
+      } catch {
+        // Keep the changed settings in memory and let the user fix/retry saving.
+        // The persistence failure is also reported in the app's status area.
+        sender.reply(toApplicationShouldTerminate: false)
+      }
+    }
+    return .terminateLater
   }
 }
 
@@ -29,6 +47,7 @@ struct FilmScanConverterMacApp: App {
     WindowGroup {
       ContentView(model: model, camera: camera)
         .frame(minWidth: 980, minHeight: 640)
+        .onAppear { appDelegate.model = model }
         .onOpenURL { url in
           model.importFiles([url])
         }

@@ -855,28 +855,7 @@ public enum FilmNegativeProcessing {
   ) -> UInt16Image {
     precondition(image.channels == 3, "Monochrome inversion requires 3-channel BGR image")
 
-    let profile = params.calibratedMonochromeProfile
-    let definition = calibratedMonochromeDefinition(for: profile)
-    let inputGain = calibratedMonochromeInputGain(
-      measuredMedians: params.measuredMedians,
-      profile: profile
-    )
-    let lut = (0...65_535).map { input in
-      UInt16(
-        min(
-          max(
-            calibratedCurveValue(
-              Double(input) / maxOutput,
-              curve: definition.curve,
-              inputGain: inputGain,
-              negativeExposureEV: params.monochromeExposureEV
-            ) * maxOutput,
-            0
-          ),
-          maxOutput
-        ).rounded()
-      )
-    }
+    let lut = calibratedMonochromeInversionLUT(params: params)
     let pixelCount = image.width * image.height
     var output = [UInt16](repeating: 0, count: image.pixels.count)
 
@@ -919,6 +898,32 @@ public enum FilmNegativeProcessing {
       channels: image.channels,
       pixels: output
     )
+  }
+
+  /// Retains the ordinary inversion's UInt16 rounding boundary for table composition.
+  static func calibratedMonochromeInversionLUT(params: FilmNegativeParams) -> [UInt16] {
+    let profile = params.calibratedMonochromeProfile
+    let definition = calibratedMonochromeDefinition(for: profile)
+    let inputGain = calibratedMonochromeInputGain(
+      measuredMedians: params.measuredMedians,
+      profile: profile
+    )
+    return (0...65_535).map { input in
+      UInt16(
+        min(
+          max(
+            calibratedCurveValue(
+              Double(input) / maxOutput,
+              curve: definition.curve,
+              inputGain: inputGain,
+              negativeExposureEV: params.monochromeExposureEV
+            ) * maxOutput,
+            0
+          ),
+          maxOutput
+        ).rounded()
+      )
+    }
   }
 
   public static func applyCalibratedMonochromeInversion(

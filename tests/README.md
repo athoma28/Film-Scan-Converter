@@ -14,8 +14,14 @@ the retirement policy.
 From the repository root, run with normal macOS graphics access:
 
 ```sh
+bash native/test-raw-compatibility.sh
 swift test --package-path native/FilmScanEngine --no-parallel
 ```
+
+The C/C++ compatibility checks require LibRaw headers and `pkg-config`, and run
+without RAW files. They guard the X-T5 adapter's geometry/color boundaries;
+the Swift camera-scan and RawPy fixtures remain the actual pixel authority.
+See [RAW upgrade compatibility](../docs/development/raw-decode-compatibility.md).
 
 Use `-c release` for performance comparisons. Default native runs skip opt-in
 benchmarks and the representative roll workflow. RAW-dependent tests explicitly
@@ -165,6 +171,33 @@ new app model. Settings and TIFFs use a unique temporary directory; source
 hashes must remain unchanged and all outputs are removed. This automated check
 does not replace a hands-on assessment of focus, grain, gesture feel, or overlay
 dragging in the packaged app.
+
+### Full-resolution edit scaling
+
+The default real-RAW app-model test verifies that an active point-control
+gesture on a selected full-sensor preview publishes a raster no larger than
+2048px without changing the document's logical size. Ending the gesture must
+then publish a full-size backing with the exact current parameters. Publication
+ordering, source/selection/geometry rejection, and manual-crop GPU tests remain
+separate default gates.
+
+Run the opt-in release probe for raw timing and Mach physical-footprint samples:
+
+```sh
+RUN_PREVIEW_SCALE_BENCHMARK=1 \
+FSC_PREVIEW_SCALE_OUTPUT=/tmp/fsc-preview-scale.json \
+CLANG_MODULE_CACHE_PATH=/tmp/fsc-preview-scale-clang \
+SWIFTPM_MODULECACHE_OVERRIDE=/tmp/fsc-preview-scale-swift \
+swift test --disable-sandbox -c release \
+  --package-path native/FilmScanEngine --jobs 2 --no-parallel \
+  --filter PreviewScalePerformanceTests
+```
+
+It uses `fuji400-fresh/DSCF2833.RAF`, alternates three consumed renders with
+and without a fixed crop at each app tier, and also measures the exact 2048px
+full-session proxy. Three samples are reported as a median and maximum, not a
+p95. The probe does not measure native input or screen presentation. See the
+[recorded measurement](../docs/performance/preview-scale-2026-09-14.md).
 
 ## Independent-Viewer Output Contract
 

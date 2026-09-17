@@ -393,6 +393,22 @@ struct ContentView: View {
       Divider()
         .frame(height: 18)
 
+      Button(action: { model.moveSelectedSidebarFile(by: -1) }) {
+        Image(systemName: "arrow.up.to.line")
+          .frame(width: 18)
+      }
+      .disabled(!model.canMoveSelectedSidebarFileUp)
+      .help("Move selected scan up")
+      .accessibilityLabel("Move selected scan up")
+
+      Button(action: { model.moveSelectedSidebarFile(by: 1) }) {
+        Image(systemName: "arrow.down.to.line")
+          .frame(width: 18)
+      }
+      .disabled(!model.canMoveSelectedSidebarFileDown)
+      .help("Move selected scan down")
+      .accessibilityLabel("Move selected scan down")
+
       Toggle("Live Camera", isOn: $showLivePreview)
         .toggleStyle(.button)
         .labelStyle(.titleAndIcon)
@@ -1831,7 +1847,8 @@ struct ContentView: View {
               previewZoomPercent = percent
               previewMagnification = magnification
               previewIsFit = isFit
-            }
+            },
+            onRenderDemandChanged: model.setPreviewRenderDemand
           ) {
             previewDocument(image: image)
           }
@@ -1870,6 +1887,13 @@ struct ContentView: View {
       RasterImage(image: image, interpolation: .high)
         .frame(width: image.size.width, height: image.size.height)
         .blur(radius: previewNeedsDraftSoftening ? 1.6 : 0)
+
+      if let detail = model.previewDetail {
+        RasterImage(image: detail.image, interpolation: .high)
+          .frame(width: detail.rect.width, height: detail.rect.height)
+          .position(x: detail.rect.midX, y: detail.rect.midY)
+          .allowsHitTesting(false)
+      }
 
       if let dustMask = model.dustMaskImage {
         RasterImage(image: dustMask, interpolation: .none)

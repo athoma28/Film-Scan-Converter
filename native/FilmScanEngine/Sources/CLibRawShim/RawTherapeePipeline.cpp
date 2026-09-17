@@ -4,6 +4,7 @@
  * Rodriguez and Ingo Weyrich). This project is GPLv3 as well.
  */
 #include "CLibRawShim.h"
+#include "RawDecodeCompatibility.h"
 
 #include <libraw/libraw.h>
 #include <dispatch/dispatch.h>
@@ -26,6 +27,18 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 #include <CommonCrypto/CommonDigest.h>
+
+struct fsc_raw_cancellation { std::atomic<bool> cancelled{false}; };
+extern "C" fsc_raw_cancellation *fsc_raw_cancellation_create(void) {
+    return new (std::nothrow) fsc_raw_cancellation;
+}
+extern "C" void fsc_raw_cancellation_cancel(fsc_raw_cancellation *token) {
+    if (token) token->cancelled.store(true, std::memory_order_relaxed);
+}
+extern "C" int fsc_raw_cancellation_is_cancelled(const fsc_raw_cancellation *token) {
+    return token && token->cancelled.load(std::memory_order_relaxed);
+}
+extern "C" void fsc_raw_cancellation_free(fsc_raw_cancellation *token) { delete token; }
 
 namespace {
 
@@ -128,8 +141,13 @@ private:
     std::mutex mutex_;
 };
 
-class FSCRawTherapeeDecoder final : public LibRaw {
+class FSCRawDecoder final : public LibRaw {
 public:
+    fsc_raw_cancellation *cancellation = nullptr;
+    bool isCancelled() const { return fsc_raw_cancellation_is_cancelled(cancellation); }
+    void checkCancellation() const {
+        if (isCancelled()) throw LIBRAW_EXCEPTION_CANCELLED_BY_CALLBACK;
+    }
     bool usedRCD = false;
     bool usedXTransThreePass = false;
     bool usedDeterministicParallelXTrans = false;
@@ -142,22 +160,26 @@ public:
     // hash imgdata.image immediately after interpolation returns.
     fsc_raw_stage_hashes *stageHashes = nullptr;
 
-    explicit FSCRawTherapeeDecoder(bool fullResolution)
-        : LibRaw(LIBRAW_OPTIONS_NONE), xtransPasses(fullResolution ? 3 : 1) {
-        callbacks.interpolate_bayer_cb = &FSCRawTherapeeDecoder::rcdCallback;
-        callbacks.interpolate_xtrans_cb = &FSCRawTherapeeDecoder::xtransCallback;
+    explicit FSCRawDecoder(bool fullResolution, bool rawPyCompatibility = false)
+        : LibRaw(LIBRAW_OPTIONS_NONE), rawPyCompatibility(rawPyCompatibility),
+          xtransPasses(fullResolution && !rawPyCompatibility ? 3 : 1) {
+        if (!rawPyCompatibility) {
+            callbacks.interpolate_bayer_cb = &FSCRawDecoder::rcdCallback;
+        }
+        callbacks.interpolate_xtrans_cb = &FSCRawDecoder::xtransCallback;
     }
 
 private:
+    const bool rawPyCompatibility;
     const int xtransPasses;
     bool ioLockInstalled = false;
 
     static void rcdCallback(void *context) {
-        static_cast<FSCRawTherapeeDecoder *>(context)->rcdDemosaic();
+        static_cast<FSCRawDecoder *>(context)->rcdDemosaic();
     }
 
     static void xtransCallback(void *context) {
-        static_cast<FSCRawTherapeeDecoder *>(context)->xtransDemosaic();
+        static_cast<FSCRawDecoder *>(context)->xtransDemosaic();
     }
 
     void xtransDemosaic() {
@@ -168,8 +190,8 @@ private:
         // 16-pixel halo that can read the above-right neighbor, then run
         // independent 2*row+col wavefront diagonals concurrently.
         const auto start = std::chrono::steady_clock::now();
-        if (imgdata.sizes.width < LIBRAW_AHD_TILE
-            || imgdata.sizes.height < LIBRAW_AHD_TILE)
+        if (!rawPyCompatibility && (imgdata.sizes.width < LIBRAW_AHD_TILE
+            || imgdata.sizes.height < LIBRAW_AHD_TILE))
         {
             // The interpolator rejects frames smaller than one AHD tile
             // (512px). Linear interpolation keeps camera WB and colour matrix
@@ -177,6 +199,7 @@ private:
             lin_interpolate();
         } else {
             deterministicParallelXTransInterpolate(xtransPasses);
+            checkCancellation();
             usedXTransThreePass = xtransPasses == 3;
         }
         demosaicSeconds = std::chrono::duration<double>(
@@ -186,6 +209,30 @@ private:
 
     static int configuredXTransWorkerCount() {
         return configuredWorkerCount("FSC_XTRANS_WORKERS");
+    }
+
+    void copy_bayer(unsigned short cblack[4], unsigned short *dmaxp) override {
+        const auto &s = imgdata.sizes;
+        const auto &io = libraw_internal_data.internal_output_params;
+        if (!rawPyCompatibility || imgdata.idata.filters != 9 || io.shrink != 1) {
+            LibRaw::copy_bayer(cblack, dmaxp);
+            return;
+        }
+        // Preserve LibRaw 0.21.4's serial copy_bayer order. In half-size
+        // X-Trans, adjacent source rows can write the same destination channel.
+        // The stock OpenMP row loop races those writes; the later source pixel
+        // must win deterministically before pre_interpolate fills the gaps.
+        const int rows = std::min(int(s.height), int(s.raw_height) - int(s.top_margin));
+        for (int row = 0; row < rows; ++row) {
+            for (int col = 0; col < s.width && col + s.left_margin < s.raw_width; ++col) {
+                const int channel = fcol(row, col);
+                const unsigned short source = imgdata.rawdata.raw_image[
+                    (size_t(row) + s.top_margin) * s.raw_pitch / 2 + col + s.left_margin];
+                const unsigned short value = source > cblack[channel] ? source - cblack[channel] : 0;
+                *dmaxp = std::max(*dmaxp, value);
+                imgdata.image[size_t(row >> 1) * s.iwidth + (col >> 1)][channel] = value;
+            }
+        }
     }
 
     void installIOLock() {
@@ -209,12 +256,21 @@ private:
         unsigned *sizes,
         uchar *q_bases
     ) override {
-        const int configured = configuredWorkerCount("FSC_UNPACK_WORKERS");
+        const int configured = rawPyCompatibility ? 1 : configuredWorkerCount("FSC_UNPACK_WORKERS");
         const int workerCount = limited(configured, 1, std::max(1, count));
         unpackWorkerCount = workerCount;
         usedParallelFujiUnpack = workerCount > 1;
         if (!usedParallelFujiUnpack) {
-            LibRaw::fuji_decode_loop(common_info, count, offsets, sizes, q_bases);
+            // The linked library may enable OpenMP in its default loop.
+            // Calling strips directly keeps a requested one-worker decode
+            // serial even in that build, including the compatibility profile.
+            const int lineStep =
+                (libraw_internal_data.unpacker_data.fuji_total_lines + 0xF) & ~0xF;
+            for (int block = 0; block < count; ++block) {
+                checkCancellation();
+                fuji_decode_strip(common_info, block, offsets[block], sizes[block],
+                                  q_bases ? q_bases + block * lineStep : nullptr);
+            }
             return;
         }
 
@@ -223,7 +279,7 @@ private:
             (libraw_internal_data.unpacker_data.fuji_total_lines + 0xF) & ~0xF;
         std::atomic<int> errorCode{LIBRAW_EXCEPTION_NONE};
         struct Context {
-            FSCRawTherapeeDecoder *decoder;
+            FSCRawDecoder *decoder;
             fuji_compressed_params *commonInfo;
             int count;
             int workerCount;
@@ -249,6 +305,7 @@ private:
                         return;
                     }
                     try {
+                        context->decoder->checkCancellation();
                         context->decoder->fuji_decode_strip(
                             context->commonInfo,
                             block,
@@ -317,7 +374,10 @@ private:
 
         if (xtransWorkerCount <= 1 || bufferCount <= 1) {
             for (int row = 0; row < rowTiles; ++row) {
-                for (int col = 0; col < colTiles; ++col) { runTile(row, col, 0); }
+                for (int col = 0; col < colTiles; ++col) {
+                    if (isCancelled()) return;
+                    runTile(row, col, 0);
+                }
             }
             return;
         }
@@ -333,6 +393,7 @@ private:
         // tiles to the worker pool.
         const int lastDiag = 2 * (rowTiles - 1) + (colTiles - 1);
         for (int diag = 0; diag <= lastDiag; ++diag) {
+            if (isCancelled()) return;
             diagRows.clear();
             diagCols.clear();
             for (int row = 0; row < rowTiles; ++row) {
@@ -389,7 +450,7 @@ private:
     // overlapping-tile dependence chain. Independent wavefront diagonals use
     // the bounded helper above; work inside a tile stays serial.
     void deterministicParallelXTransInterpolate(int passes) {
-        xtransWorkerCount = configuredXTransWorkerCount();
+        xtransWorkerCount = rawPyCompatibility ? 1 : configuredXTransWorkerCount();
         usedDeterministicParallelXTrans = xtransWorkerCount > 1;
 #define fcol(row, col) xtrans[(row + 6) % 6][(col + 6) % 6]
 #define image (imgdata.image)
@@ -698,7 +759,7 @@ bool isValidRGB16Bitmap(const libraw_processed_image_t *image) {
 // can run at the preview bound. Same-CFA photosites are averaged; the 6x6
 // X-Trans or 2x2 Bayer pattern is preserved. Full-resolution export never
 // calls this.
-bool shrinkMosaicToBound(LibRaw &raw, int maxDimension) {
+bool shrinkMosaicToBound(FSCRawDecoder &raw, int maxDimension) {
     auto &sizes = raw.imgdata.sizes;
     ushort *rawImage = raw.imgdata.rawdata.raw_image;
     if (!rawImage || maxDimension <= 0) { return false; }
@@ -733,6 +794,7 @@ bool shrinkMosaicToBound(LibRaw &raw, int maxDimension) {
     const uint32_t rounding = samples / 2;
 
     for (int ty = 0; ty < outTilesY; ++ty) {
+        if (raw.isCancelled()) return false;
         for (int tx = 0; tx < outTilesX; ++tx) {
             for (int py = 0; py < period; ++py) {
                 for (int px = 0; px < period; ++px) {
@@ -805,18 +867,39 @@ libraw_processed_image_t *downsampleTwoByTwo(libraw_processed_image_t *source) {
 
 } // namespace
 
-extern "C" int fsc_decode_rawtherapee_direct(
+// Keep the C compatibility path's parameters and ownership contract while
+// pinning its one-pass X-Trans interpolation to the same 0.21.4 arithmetic as
+// the export oracle. LibRaw 0.22 changed the stock interpolator's pixels.
+// libraw_close deletes the parent through LibRaw's virtual destructor.
+extern "C" libraw_data_t *fsc_init_rawpy_compatibility_decoder(void) {
+    try {
+        return &(new FSCRawDecoder(false, true))->imgdata;
+    } catch (...) {
+        return nullptr;
+    }
+}
+
+extern "C" int fsc_decode_raw_cancellable(
     const char *path, int full_resolution, int max_dimension, fsc_raw_direct *output,
-    fsc_raw_stage_hashes *stage_hashes,
+    fsc_raw_stage_hashes *stage_hashes, fsc_raw_cancellation *cancellation,
     char *error_message, size_t error_capacity
 ) {
     using Clock = std::chrono::steady_clock;
+    if (!path || !output) return LIBRAW_UNSPECIFIED_ERROR;
+    std::memset(output, 0, sizeof(*output));
+    if (fsc_raw_cancellation_is_cancelled(cancellation)) return LIBRAW_CANCELLED_BY_CALLBACK;
     if (stage_hashes) {
         std::memset(stage_hashes, 0, sizeof(*stage_hashes));
     }
-    std::unique_ptr<FSCRawTherapeeDecoder> raw(
-        new FSCRawTherapeeDecoder(full_resolution != 0));
+    std::unique_ptr<FSCRawDecoder> raw(
+        new FSCRawDecoder(full_resolution != 0));
     raw->stageHashes = stage_hashes;
+    raw->cancellation = cancellation;
+    if (cancellation) {
+        raw->set_progress_handler([](void *context, enum LibRaw_progress, int, int) -> int {
+            return static_cast<FSCRawDecoder *>(context)->isCancelled();
+        }, raw.get());
+    }
     const auto openStart = Clock::now();
     int code = raw->open_file(path);
     output->open_seconds = std::chrono::duration<double>(Clock::now() - openStart).count();
@@ -824,6 +907,7 @@ extern "C" int fsc_decode_rawtherapee_direct(
         std::snprintf(error_message, error_capacity, "%s", libraw_strerror(code));
         return code;
     }
+    fsc_restore_legacy_raw_geometry(&raw->imgdata);
     auto &p = raw->imgdata.params;
     p.output_bps = 16; p.use_camera_wb = 1; p.user_qual = 2;
     p.output_color = 1; p.gamm[0] = 1.0 / 2.4; p.gamm[1] = 12.92;
@@ -835,6 +919,9 @@ extern "C" int fsc_decode_rawtherapee_direct(
     const auto unpackStart = Clock::now();
     code = raw->unpack();
     output->unpack_seconds = std::chrono::duration<double>(Clock::now() - unpackStart).count();
+    if (code == LIBRAW_SUCCESS) {
+        fsc_restore_legacy_raw_color(&raw->imgdata);
+    }
     if (code == LIBRAW_SUCCESS && stage_hashes) {
         hashUnpackedMosaic(*raw, stage_hashes);
     }
@@ -842,6 +929,7 @@ extern "C" int fsc_decode_rawtherapee_direct(
     if (code == LIBRAW_SUCCESS && previewBound > 0) {
         shrunkToPreviewBound = shrinkMosaicToBound(*raw, previewBound);
     }
+    if (raw->isCancelled()) return LIBRAW_CANCELLED_BY_CALLBACK;
     if (code == LIBRAW_SUCCESS) {
         const auto processStart = Clock::now();
         const double stageHashSecondsBeforeProcess = raw->stageHashSeconds;
@@ -927,4 +1015,12 @@ extern "C" int fsc_decode_rawtherapee_direct(
     }
     cleanup->processed = processed; output->_internal = cleanup;
     return LIBRAW_SUCCESS;
+}
+
+extern "C" int fsc_decode_rawtherapee_direct(
+    const char *path, int full_resolution, int max_dimension, fsc_raw_direct *output,
+    fsc_raw_stage_hashes *stage_hashes, char *error_message, size_t error_capacity
+) {
+    return fsc_decode_raw_cancellable(path, full_resolution, max_dimension, output,
+        stage_hashes, nullptr, error_message, error_capacity);
 }

@@ -27,24 +27,24 @@ public enum FilmProcessing {
     return correctedPreviewPowerLaw(image: image, parameters: parameters)
   }
 
-  private static func correctedPreviewPowerLaw(
+  static func correctedPreviewPowerLaw(
     image: UInt16Image,
-    parameters: ProcessingParameters
+    parameters: ProcessingParameters,
+    useNaturalMonochromeLookup: Bool = true,
+    preparedGeometry: UInt16Image? = nil,
+    densityAnalysis: DensityPrintAnalysis? = nil
   ) -> UInt16Image {
-    let cropped = applyAutomaticCrop(to: image, parameters: parameters)
-    var working = cropped.rotated(
-      quarterTurns: parameters.rotation,
-      flipHorizontally: parameters.flip
-    )
-    working = PerspectiveTransform.rotate(
-      working, clockwiseDegrees: -parameters.straightenAngle)
-    working =
-      parameters.manualCrop.flatMap {
-        PerspectiveTransform.crop(working, canvasRect: $0)
-      } ?? working
+    var working = preparedGeometry ?? prepareGeometry(image: image, parameters: parameters)
     let sensorSource = working
     guard parameters.filmType != .cropOnly else {
       return working
+    }
+
+    // Geometry must run on scan values before compiling/applying point operations.
+    if useNaturalMonochromeLookup,
+      NaturalMonochromeLookupCache.shouldUse(image: working, parameters: parameters)
+    {
+      return NaturalMonochromeLookupCache.shared.apply(image: working, parameters: parameters)
     }
 
     var usedLinearColorSeam = false
@@ -66,14 +66,7 @@ public enum FilmProcessing {
           }
         case .powerLaw, .calibratedColor, .densityPrint:
           if parameters.photoAdjustments.hasToneAdjustment {
-            var renderReady = FilmNegativeProcessing.powerLawRenderReadyLinear(
-              image: working, params: parameters.filmNegativeParams
-            )
-            renderReady.applyLinearToneAdjustments(
-              parameters.photoAdjustments,
-              referenceLuminance: FilmNegativeProcessing.calibrationTargetFraction
-            )
-            working = FilmNegativeProcessing.renderPowerLawDisplay(renderReady)
+            working = adjustedPowerLaw(image: working, parameters: parameters, applyColor: false)
             usedLinearToneSeam = true
           } else {
             working = FilmNegativeProcessing.applyFusedPowerLawInversion(
@@ -109,10 +102,12 @@ public enum FilmProcessing {
             usedLinearColorSeam = parameters.photoAdjustments.hasColorAdjustment
           }
         case .densityPrint:
-          working = DensityPrintProcessing.apply(
-            image: working,
-            params: parameters.filmNegativeParams
-          )
+          if let densityAnalysis {
+            working = DensityPrintProcessing.apply(image: working, analysis: densityAnalysis)
+          } else {
+            working = DensityPrintProcessing.apply(
+              image: working, params: parameters.filmNegativeParams)
+          }
           if needsLinearSeam {
             working = applySemanticLinearAdjustmentsToDisplayImage(
               working,
@@ -125,25 +120,9 @@ public enum FilmProcessing {
           }
         case .powerLaw, .calibratedMonochrome:
           if needsLinearSeam {
-            var renderReady = FilmNegativeProcessing.powerLawRenderReadyLinear(
-              image: working,
-              params: parameters.filmNegativeParams
-            )
-            if needsDyeMixing {
-              renderReady.applyFilmDyeMixing(parameters.filmDyeMixing)
-            }
-            if parameters.photoAdjustments.hasToneAdjustment {
-              renderReady.applyLinearToneAdjustments(
-                parameters.photoAdjustments,
-                referenceLuminance: FilmNegativeProcessing.calibrationTargetFraction
-              )
-              usedLinearToneSeam = true
-            }
-            if parameters.photoAdjustments.hasColorAdjustment {
-              renderReady.applyProtectedColorAdjustments(parameters.photoAdjustments)
-              usedLinearColorSeam = true
-            }
-            working = FilmNegativeProcessing.renderPowerLawDisplay(renderReady)
+            working = adjustedPowerLaw(image: working, parameters: parameters, applyColor: true)
+            usedLinearToneSeam = parameters.photoAdjustments.hasToneAdjustment
+            usedLinearColorSeam = parameters.photoAdjustments.hasColorAdjustment
           } else {
             working = FilmNegativeProcessing.applyFusedPowerLawInversion(
               image: working, params: parameters.filmNegativeParams
@@ -164,6 +143,41 @@ public enum FilmProcessing {
       }
     }
 
+    working = applyDisplayPointAdjustments(
+      image: working,
+      parameters: parameters,
+      usedLinearColorSeam: usedLinearColorSeam,
+      usedLinearToneSeam: usedLinearToneSeam
+    )
+    preserveSensorBlack(source: sensorSource, output: &working, parameters: parameters)
+    return working
+  }
+
+  static func prepareGeometry(image: UInt16Image, parameters: ProcessingParameters) -> UInt16Image {
+    let cropped = applyAutomaticCrop(to: image, parameters: parameters)
+    var working = cropped.rotated(
+      quarterTurns: parameters.rotation,
+      flipHorizontally: parameters.flip
+    )
+    working = PerspectiveTransform.rotate(
+      working, clockwiseDegrees: -parameters.straightenAngle)
+    working =
+      parameters.manualCrop.flatMap {
+        PerspectiveTransform.crop(working, canvasRect: $0)
+      } ?? working
+    return working
+  }
+
+  /// Shared by ordinary rendering and the exact Natural B&W table compiler.
+  /// This stage has no geometry, inversion, or source-dependent zero-light mask.
+  static func applyDisplayPointAdjustments(
+    image: UInt16Image,
+    parameters: ProcessingParameters,
+    usedLinearColorSeam: Bool = false,
+    usedLinearToneSeam: Bool = false
+  ) -> UInt16Image {
+    var working = image
+    var usedLinearToneSeam = usedLinearToneSeam
     if parameters.photoAdjustments.hasToneAdjustment && !usedLinearToneSeam {
       working = applySemanticLinearAdjustmentsToDisplayImage(
         working,
@@ -194,7 +208,6 @@ public enum FilmProcessing {
       adjustWhiteBalance || adjustExposure || adjustCurves || adjustColorWheels
         || adjustSaturation
     else {
-      preserveSensorBlack(source: sensorSource, output: &working, parameters: parameters)
       return working
     }
 
@@ -214,7 +227,7 @@ public enum FilmProcessing {
       let overallLUT =
         parameters.curveEnabled
         ? buildCurveLUT(controlPoints: parameters.curveControlPoints) : nil
-      var output = UInt16Image(
+      let output = UInt16Image(
         width: working.width,
         height: working.height,
         channels: channels,
@@ -223,7 +236,6 @@ public enum FilmProcessing {
           return overallLUT?[Int(encoded)] ?? encoded
         }
       )
-      preserveSensorBlack(source: sensorSource, output: &output, parameters: parameters)
       return output
     }
 
@@ -402,13 +414,12 @@ public enum FilmProcessing {
       pixelCount: pixelCount,
       processPixel: processPixel)
 
-    var output = UInt16Image(
+    let output = UInt16Image(
       width: working.width,
       height: working.height,
       channels: working.channels,
       pixels: outputPixels
     )
-    preserveSensorBlack(source: sensorSource, output: &output, parameters: parameters)
     return output
   }
 
@@ -628,7 +639,7 @@ public enum FilmProcessing {
     return output
   }
 
-  private static func processCorrectionPixels(
+  static func processCorrectionPixels(
     _ output: inout [UInt16],
     pixelCount: Int,
     processPixel: @Sendable (Int, UnsafeMutablePointer<UInt16>) -> Void
@@ -711,7 +722,69 @@ public enum FilmProcessing {
       pixels: pixels)
   }
 
-  private static func applySemanticLinearAdjustmentsToDisplayImage(
+  /// Bound linear scratch independently of sensor size. All operators in this
+  /// seam are point operations; global inversion analysis has already run.
+  static func applySemanticLinearAdjustmentsToDisplayImage(
+    _ image: UInt16Image,
+    parameters: PhotoAdjustmentParameters,
+    dyeMixing: FilmDyeMixingParameters? = nil,
+    applyColorAdjustments: Bool = false
+  ) -> UInt16Image {
+    mapCorrectionBands(image) { band in
+      applySemanticLinearAdjustmentsToDisplayBand(
+        band, parameters: parameters, dyeMixing: dyeMixing,
+        applyColorAdjustments: applyColorAdjustments)
+    }
+  }
+
+  static let correctionBandPixelLimit = 131_072
+
+  static func mapCorrectionBands(
+    _ image: UInt16Image, transform: (UInt16Image) -> UInt16Image
+  ) -> UInt16Image {
+    guard image.width * image.height > correctionBandPixelLimit else { return transform(image) }
+    let rows = max(1, correctionBandPixelLimit / image.width)
+    let componentsPerRow = image.width * image.channels
+    var output = [UInt16](repeating: 0, count: image.pixels.count)
+    for firstRow in stride(from: 0, to: image.height, by: rows) {
+      let height = min(rows, image.height - firstRow)
+      let range = (firstRow * componentsPerRow)..<((firstRow + height) * componentsPerRow)
+      let band = UInt16Image(
+        width: image.width, height: height, channels: image.channels,
+        pixels: Array(image.pixels[range]))
+      let result = transform(band)
+      output.replaceSubrange(range, with: result.pixels)
+    }
+    return UInt16Image(
+      width: image.width, height: image.height, channels: image.channels, pixels: output)
+  }
+
+  private static func adjustedPowerLaw(
+    image: UInt16Image, parameters: ProcessingParameters, applyColor: Bool
+  ) -> UInt16Image {
+    var inversion = parameters.filmNegativeParams
+    if inversion.enabled && inversion.measuredMedians == nil {
+      inversion.measuredMedians = FilmNegativeProcessing.computeMedians(
+        image: image, borderPercent: 20)
+    }
+    return mapCorrectionBands(image) { band in
+      var linear = FilmNegativeProcessing.powerLawRenderReadyLinear(image: band, params: inversion)
+      if applyColor && !parameters.filmDyeMixing.isNeutral {
+        linear.applyFilmDyeMixing(parameters.filmDyeMixing)
+      }
+      if parameters.photoAdjustments.hasToneAdjustment {
+        linear.applyLinearToneAdjustments(
+          parameters.photoAdjustments,
+          referenceLuminance: FilmNegativeProcessing.calibrationTargetFraction)
+      }
+      if applyColor && parameters.photoAdjustments.hasColorAdjustment {
+        linear.applyProtectedColorAdjustments(parameters.photoAdjustments)
+      }
+      return FilmNegativeProcessing.renderPowerLawDisplay(linear)
+    }
+  }
+
+  static func applySemanticLinearAdjustmentsToDisplayBand(
     _ image: UInt16Image,
     parameters: PhotoAdjustmentParameters,
     dyeMixing: FilmDyeMixingParameters? = nil,

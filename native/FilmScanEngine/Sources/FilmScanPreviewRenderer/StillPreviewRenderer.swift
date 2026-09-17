@@ -5,6 +5,11 @@ import Metal
 
 public final class StillPreviewRenderer: @unchecked Sendable {
   private let source: CIImage
+  /// RGBA16 bitmap retained by the Core Image source, in addition to the
+  /// caller's UInt16 source and analysis arrays. Excludes transient GPU/output
+  /// allocations, which Core Image manages separately.
+  public let retainedRGBAByteCount: Int
+  private let densityAnalysisCache = DensityPrintAnalysisCache()
   private let curveLUTLock = NSLock()
   private var curveLUTCache: [CurveLUTKey: CIImage] = [:]
 
@@ -45,6 +50,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
     }
 
     self.analysisImage = analysisImage ?? image
+    retainedRGBAByteCount = rgba.count
     source = CIImage(
       bitmapData: rgba,
       bytesPerRow: image.width * 4 * MemoryLayout<UInt16>.stride,
@@ -58,8 +64,85 @@ public final class StillPreviewRenderer: @unchecked Sendable {
   private let analysisImage: UInt16Image
   private let correctionKernel: CIKernel
 
-  public func render(parameters: ProcessingParameters, showOriginal: Bool) -> CGImage? {
-    let oriented = orientedSource(parameters: parameters)
+  /// The per-pixel graph supports quarter turns, flipping, and manual crops.
+  /// Darkroom's CPU path analyzes the cropped image, so a cropped Darkroom
+  /// correction must use that path until its analysis contract is shared.
+  /// Cropped Original/crop-only views retain exact CPU UInt16-to-UInt8 packing.
+  public static func supports(parameters: ProcessingParameters, showOriginal: Bool) -> Bool {
+    guard !parameters.densityPipelineEnabled,
+      parameters.cropRect == nil,
+      parameters.perspectiveCrop == nil,
+      abs(parameters.straightenAngle) < 0.000_001
+    else { return false }
+    if parameters.manualCrop != nil && (showOriginal || parameters.filmType == .cropOnly) {
+      return false
+    }
+    if parameters.manualCrop != nil,
+      parameters.filmNegativeParams.enabled,
+      parameters.filmNegativeParams.rendering == .powerLaw,
+      parameters.filmNegativeParams.measuredMedians == nil,
+      parameters.filmType == .colourNegative || parameters.filmType == .blackAndWhiteNegative
+    {
+      // The CPU computes missing medians from the cropped source. The GPU
+      // power-law branch requires medians already resolved by the model.
+      return false
+    }
+    let croppedDensityPrint =
+      parameters.manualCrop != nil
+      && parameters.filmType == .colourNegative
+      && parameters.filmNegativeParams.enabled
+      && parameters.filmNegativeParams.rendering == .densityPrint
+    return !croppedDensityPrint
+  }
+
+  /// Correction precedes resampling. Regions use normalized, top-left image
+  /// coordinates; Core Image propagates the crop/scale's sampling halo upstream.
+  public func render(
+    parameters: ProcessingParameters, showOriginal: Bool,
+    maximumDimension: Int? = nil, normalizedRegion: CGRect? = nil
+  ) -> CGImage? {
+    guard var output = correctedGraph(parameters: parameters, showOriginal: showOriginal) else {
+      return nil
+    }
+    if let region = normalizedRegion {
+      guard !region.isNull, !region.isInfinite, region.width > 0, region.height > 0 else {
+        return nil
+      }
+      let rect = Self.regionBounds(region, in: output.extent)
+      guard !rect.isEmpty else { return nil }
+      output = output.cropped(to: rect)
+    }
+    if let maximumDimension {
+      guard maximumDimension > 0 else { return nil }
+      let scale = min(1, CGFloat(maximumDimension) / max(output.extent.width, output.extent.height))
+      if scale < 1 {
+        output = output.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+      }
+    }
+    return Self.sharedContext.createCGImage(
+      output, from: output.extent, format: .RGBA8, colorSpace: Self.outputColorSpace,
+      deferred: false)
+  }
+
+  static func regionBounds(_ region: CGRect, in extent: CGRect) -> CGRect {
+    // Normalizing an integer source coordinate and multiplying it back can
+    // produce 63.99999999999999. Snap numerical noise before outward rounding
+    // so a native-pixel viewport does not gain a pixel and stretch its raster.
+    func snap(_ value: CGFloat) -> CGFloat {
+      let integer = value.rounded()
+      return abs(value - integer) < 1e-7 ? integer : value
+    }
+    let left = snap(extent.minX + region.minX * extent.width)
+    let right = snap(extent.minX + region.maxX * extent.width)
+    let bottom = snap(extent.maxY - region.maxY * extent.height)
+    let top = snap(extent.maxY - region.minY * extent.height)
+    return CGRect(x: left, y: bottom, width: right - left, height: top - bottom)
+      .integral.intersection(extent)
+  }
+
+  private func correctedGraph(parameters: ProcessingParameters, showOriginal: Bool) -> CIImage? {
+    guard Self.supports(parameters: parameters, showOriginal: showOriginal) else { return nil }
+    let oriented = croppedSource(parameters: parameters)
     let output: CIImage
 
     if showOriginal || parameters.filmType == .cropOnly {
@@ -171,11 +254,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
 
       let densityAnalysis =
         usesDensityPrint && fnEnabled
-        ? DensityPrintProcessing.analyze(
-          image: analysisImage,
-          profile: DensityPrintProcessing.resolvedProfile(from: fnp),
-          paper: DensityPrintProcessing.resolvedPaper(from: fnp)
-        )
+        ? densityPrintAnalysis(parameters: fnp)
         : nil
       let dp = densityAnalysis
       func densityFloat(_ value: Double) -> Float { Float(value) }
@@ -285,12 +364,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       output = corrected
     }
 
-    return Self.sharedContext.createCGImage(
-      output,
-      from: output.extent,
-      format: .RGBA8,
-      colorSpace: Self.outputColorSpace
-    )
+    return output
   }
 
   /// Computes bounded clipping and tone statistics from the displayed image.
@@ -351,6 +425,14 @@ public final class StillPreviewRenderer: @unchecked Sendable {
     return image
   }
 
+  private func densityPrintAnalysis(parameters: FilmNegativeParams) -> DensityPrintAnalysis {
+    let profile = DensityPrintProcessing.resolvedProfile(from: parameters)
+    let paper = DensityPrintProcessing.resolvedPaper(from: parameters)
+    return densityAnalysisCache.analysis(profile: profile, paper: paper) {
+      DensityPrintProcessing.analyze(image: analysisImage, profile: profile, paper: paper)
+    }
+  }
+
   private func orientedSource(parameters: ProcessingParameters) -> CIImage {
     let rotated: CIImage
     switch ((parameters.rotation % 4) + 4) % 4 {
@@ -371,6 +453,23 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       by: CGAffineTransform(translationX: rotated.extent.maxX, y: 0)
         .scaledBy(x: -1, y: 1)
     )
+  }
+
+  private func croppedSource(parameters: ProcessingParameters) -> CIImage {
+    let oriented = orientedSource(parameters: parameters)
+    guard let crop = parameters.manualCrop,
+      let bounds = ImageGeometry.pixelBounds(
+        for: crop,
+        imageWidth: Int(oriented.extent.width),
+        imageHeight: Int(oriented.extent.height))
+    else { return oriented }
+    let rect = CGRect(
+      x: oriented.extent.minX + CGFloat(bounds.x),
+      y: oriented.extent.maxY - CGFloat(bounds.y + bounds.height),
+      width: CGFloat(bounds.width),
+      height: CGFloat(bounds.height))
+    return oriented.cropped(to: rect).transformed(
+      by: CGAffineTransform(translationX: -rect.minX, y: -rect.minY))
   }
 
   static func makeCurveLUTImage(parameters: ProcessingParameters) -> CIImage {

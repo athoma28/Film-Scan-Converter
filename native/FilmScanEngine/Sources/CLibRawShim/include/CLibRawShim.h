@@ -100,6 +100,17 @@ int fsc_decode_raw_direct_with_profile_diagnostics(
     size_t error_message_capacity
 );
 
+// Cooperative cancellation shared with the custom strip/wavefront workers.
+typedef struct fsc_raw_cancellation fsc_raw_cancellation;
+fsc_raw_cancellation *fsc_raw_cancellation_create(void);
+void fsc_raw_cancellation_cancel(fsc_raw_cancellation *token);
+int fsc_raw_cancellation_is_cancelled(const fsc_raw_cancellation *token);
+void fsc_raw_cancellation_free(fsc_raw_cancellation *token);
+int fsc_decode_raw_cancellable(
+    const char *path, int full_resolution, int max_dimension,
+    fsc_raw_direct *output, fsc_raw_stage_hashes *stage_hashes,
+    fsc_raw_cancellation *cancellation, char *error_message, size_t error_capacity);
+
 void fsc_free_raw_direct(fsc_raw_direct *output);
 
 typedef struct {

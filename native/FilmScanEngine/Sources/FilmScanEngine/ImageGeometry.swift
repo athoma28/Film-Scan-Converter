@@ -244,7 +244,9 @@ public enum ImageGeometry {
     )
   }
 
-  static func pixelBounds(
+  /// Shared by the CPU crop and preview graph so fractional selections use
+  /// identical outward pixel rounding in the top-left-origin image canvas.
+  package static func pixelBounds(
     for crop: NormalizedCropRect,
     imageWidth: Int,
     imageHeight: Int

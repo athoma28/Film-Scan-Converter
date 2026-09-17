@@ -467,6 +467,47 @@ struct AppModelTests {
       FileManager.default.fileExists(atPath: destination.appendingPathComponent("input.png").path))
   }
 
+  @Test(
+    "Deferred preview flat fields preserve density pixels through geometry",
+    arguments: [false, true])
+  func deferredPreviewFlatFieldPreservesDensityPixels(hasFlatField: Bool) async throws {
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"))
+    let model = AppModel()
+    model.importFiles([input])
+    try await waitUntil { model.decodedImage != nil && !model.isRendering }
+    let source = try #require(model.decodedImage)
+    model.setFilmNegativePreset(.legacyColourNegative)
+    if hasFlatField { model.setFlatField(source) }
+    model.measureRebateRegion(
+      normalizedX: 0, normalizedY: 0, normalizedWidth: 1, normalizedHeight: 1)
+    try await waitUntil { model.parameters.densityPipelineEnabled && !model.isRendering }
+    model.rotateClockwise()
+    model.setStraightenAngle(7)
+    model.setManualCrop(.init(x: 0.1, y: 0.1, width: 0.8, height: 0.8))
+    model.setExposureEV(0.25)
+    try await waitUntil { !model.isRendering }
+
+    // The old scheduler prepared unity in sensor coordinates, before geometry.
+    let field =
+      hasFlatField
+      ? source
+      : UInt16Image(
+        width: source.width, height: source.height, channels: source.channels,
+        pixels: [UInt16](repeating: .max, count: source.pixels.count))
+    let expected = try #require(
+      FilmProcessing.correctedPreview(
+        image: source, parameters: model.parameters, flatField: field
+      ).makePreviewCGImage())
+    let actual = try #require(model.previewImage.flatMap(PreviewBitmap.cgImage))
+    #expect(actual.width == expected.width && actual.height == expected.height)
+    let actualBytes = try #require(rgba8Bytes(actual))
+    let expectedBytes = try #require(rgba8Bytes(expected))
+    #expect(actualBytes == expectedBytes)
+  }
+
   @Test("RAW exports request full-resolution camera-scan decoding")
   func rawExportDecodePolicy() {
     #expect(
@@ -1149,6 +1190,7 @@ struct AppModelTests {
     }
     try await waitUntil(timeout: .seconds(90)) {
       model.previewSourceKind == .rawFull && !model.isLoading && !model.isUpgradingRawPreview
+        && !model.isRendering
     }
     let dimensions = try #require(model.selectedImageDimensions)
     let full = try RawImageDecoder.fullResolutionDimensions(raw)
@@ -1157,6 +1199,35 @@ struct AppModelTests {
     #expect(max(dimensions.width, dimensions.height) > AppModel.rawDetailPreviewMaxDimension)
     #expect(max(dimensions.width, dimensions.height) >= max(full.width, full.height) * 9 / 10)
     #expect(!model.canLoadRawDetailPreview)
+
+    let logicalSize = try #require(model.previewImage?.size)
+    let fullBacking = try #require(model.previewImage.flatMap(PreviewBitmap.cgImage))
+    #expect(max(fullBacking.width, fullBacking.height) > AppModel.continuousEditPreviewMaxDimension)
+    let revisionBeforeGesture = model.publishedRenderRevision
+    model.beginEditingGesture(named: "Exposure")
+    model.setExposureEV(0.25)
+    try await waitUntil(timeout: .seconds(15)) {
+      model.publishedRenderRevision > revisionBeforeGesture && !model.isRendering
+    }
+    let proxyRevision = model.publishedRenderRevision
+    let proxyImage = try #require(model.previewImage)
+    let proxyBacking = try #require(PreviewBitmap.cgImage(from: proxyImage))
+    #expect(proxyImage.size == logicalSize)
+    #expect(
+      max(proxyBacking.width, proxyBacking.height) <= AppModel.continuousEditPreviewMaxDimension)
+    #expect(model.status.contains("GPU edit preview"))
+
+    model.endEditingGesture()
+    try await waitUntil(timeout: .seconds(15)) {
+      model.publishedRenderRevision > proxyRevision && !model.isRendering
+    }
+    let refinedImage = try #require(model.previewImage)
+    let refinedBacking = try #require(PreviewBitmap.cgImage(from: refinedImage))
+    #expect(refinedImage.size == logicalSize)
+    #expect(
+      max(refinedBacking.width, refinedBacking.height) > AppModel.continuousEditPreviewMaxDimension)
+    #expect(model.publishedPreviewParameters == model.parameters)
+    #expect(!model.status.contains("edit preview"))
   }
 
   @Test("Lookahead prefetches the next three unseen files")
@@ -1366,6 +1437,7 @@ struct AppModelTests {
     first.setFilmType(.colourNegative)
     first.setExposureEV(1.25)
     first.setVibrance(0.4)
+    try await first.flushSettings()
 
     let restored = AppModel(settingsStore: PerFileSettingsStore(baseDirectory: workDir))
     restored.importFiles([input])
@@ -1588,6 +1660,7 @@ struct AppModelTests {
     let baseline = first.parameters.photoAdjustments.exposureEV
     first.setExposureEV(1.75)
     first.undo()
+    try await first.flushSettings()
 
     let restored = AppModel(settingsStore: store)
     restored.importFiles([input])
@@ -1966,6 +2039,7 @@ struct AppModelTests {
     model.selectedFiles = [first, second]
     model.applyCurrentLookToSelectedFiles()
 
+    try await model.flushSettings()
     let applied = try store.loadState()
     let appliedSecond = try #require(
       applied.settingsByPath[second.standardizedFileURL.path])
@@ -2209,6 +2283,68 @@ struct AppModelTests {
     #expect(!model.selectAdjacentScan(offset: -1))
   }
 
+  @Test("Sidebar reorder updates order and preserves primary selection")
+  func moveSidebarFilesReordersAndPreservesSelection() async throws {
+    let fixture = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png",
+        subdirectory: "Fixtures/decode_png8"))
+    let workDir = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-sidebar-reorder-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: workDir) }
+
+    let first = workDir.appendingPathComponent("first.png")
+    let second = workDir.appendingPathComponent("second.png")
+    let third = workDir.appendingPathComponent("third.png")
+    for destination in [first, second, third] {
+      try FileManager.default.copyItem(at: fixture, to: destination)
+    }
+
+    let model = AppModel()
+    model.importFiles([first, second, third])
+    try await waitUntil { !model.isLoading && !model.isAnalyzingScanStacks }
+    #expect(model.files == [first, second, third])
+
+    model.selectedFiles = [first, third]
+    #expect(!model.canMoveSelectedSidebarFileUp)
+    #expect(model.canMoveSelectedSidebarFileDown)
+    model.moveSelectedSidebarFile(by: -1)
+    #expect(model.files == [first, second, third])
+    model.moveSelectedSidebarFile(by: 1)
+    #expect(model.files == [second, first, third])
+    #expect(model.selection == first)
+    #expect(model.selectedFiles == [first, third])
+    model.moveSelectedSidebarFile(by: 1)
+    #expect(model.files == [second, third, first])
+    #expect(!model.canMoveSelectedSidebarFileDown)
+    model.moveSelectedSidebarFile(by: 1)
+    #expect(model.files == [second, third, first])
+    model.moveSelectedSidebarFile(by: -1)
+    model.moveSelectedSidebarFile(by: -1)
+    #expect(model.files == [first, second, third])
+
+    // Invalid requests are harmless, and no-op moves preserve stack state.
+    model.moveSelectedSidebarFile(by: Int.max)
+    model.moveSidebarFiles(fromOffsets: IndexSet(integer: 3), toOffset: 0)
+    model.moveSidebarFiles(fromOffsets: IndexSet(integer: 0), toOffset: 4)
+    model.moveSidebarFiles(fromOffsets: IndexSet(integer: 0), toOffset: -1)
+    #expect(model.files == [first, second, third])
+
+    model.moveSidebarFiles(fromOffsets: IndexSet(integer: 2), toOffset: 0)
+    #expect(model.files == [third, first, second])
+    #expect(model.selection == first)
+    #expect(model.selectedFiles == [first, third])
+
+    #expect(model.canSelectPreviousScan)
+    #expect(model.selectAdjacentScan(offset: -1))
+    #expect(model.selection == third)
+
+    model.moveSidebarFiles(fromOffsets: IndexSet([0, 1]), toOffset: 3)
+    #expect(model.files == [second, third, first])
+    #expect(model.selection == third)
+  }
+
   @Test("Sidebar export state distinguishes the active file from waiting files")
   func sidebarExportStateTracksActiveAndPendingJobs() async throws {
     let input = try #require(
@@ -2234,6 +2370,11 @@ struct AppModelTests {
 
     #expect(model.isExporting)
     #expect(model.isActiveExport(for: files[0]))
+    #expect(!model.canMoveSelectedSidebarFileUp)
+    #expect(!model.canMoveSelectedSidebarFileDown)
+    model.moveSelectedSidebarFile(by: 1)
+    model.moveSidebarFiles(fromOffsets: IndexSet(integer: 0), toOffset: files.count)
+    #expect(model.files == files)
     #expect(!model.isPendingExport(for: files[0]))
     #expect(model.isPendingExport(for: files[files.count - 1]))
     for file in files.dropFirst() {

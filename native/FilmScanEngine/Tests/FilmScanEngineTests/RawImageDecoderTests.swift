@@ -338,6 +338,26 @@ struct RawImageDecoderTests {
   }
 
   @Test(
+    "Repeated half-size X-Trans compatibility decodes match the serial reference",
+    .enabled(
+      if: rawReferenceCorpusAvailable,
+      "referenced sample-raw corpus unavailable; half-size determinism test skipped")
+  )
+  func halfSizeCompatibilityIsDeterministic() throws {
+    let reference = try loadReference()
+    let entry = try #require(
+      reference.entries.first { $0.file == "fuji400-fresh/DSCF2833.RAF" })
+    let rawURL = try #require(SampleRawCorpus.uniqueURL(named: entry.file))
+    for _ in 0..<3 {
+      let result = try RawImageDecoder.decode(rawURL, profile: .rawPyCompatibility)
+      #expect([result.image.height, result.image.width, result.image.channels] == entry.shape)
+      #expect(sha256(result.image.pixels) == entry.sha256)
+      #expect(result.demosaicWorkerCount == 1)
+      #expect(result.unpackWorkerCount == 1)
+    }
+  }
+
+  @Test(
     "Full-resolution RAF decode matches RawPy reference pixels",
     .enabled(
       if: rawReferenceCorpusAvailable,
@@ -542,7 +562,8 @@ struct RawImageDecoderTests {
     #expect(!result.processing.contains(.previewBound))
     #expect(!result.processing.contains(.xTransThreePass))
     #expect(max(result.image.width, result.image.height) > 2_400)
-    #expect(max(result.image.width, result.image.height) >= max(full.width, full.height) * 9 / 10)
+    #expect(result.image.width == full.width)
+    #expect(result.image.height == full.height)
   }
 
   @Test(

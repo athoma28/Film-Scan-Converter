@@ -63,8 +63,9 @@ The [release runbook](../development/native-release.md) owns the procedure.
 
 ## Standing Regression Requirements
 
-Maintain deterministic CPU/export pixels and the frozen three-pass camera-scan
-oracle. Preserve bounded latest-value-wins preview work, one authoritative RAW
+Maintain deterministic CPU/export pixels and the
+[frozen three-pass camera-scan oracle](../development/raw-decode-compatibility.md).
+Preserve bounded latest-value-wins preview work, one authoritative RAW
 export decode at a time, selected-file cache invalidation, safe cancellation,
 collision handling, and cleanup. Geometry edits and comparison share coordinate
 semantics; upstream geometry changes invalidate dependent canvas crops.
@@ -72,8 +73,11 @@ semantics; upstream geometry changes invalidate dependent canvas crops.
 Performance work requires a measured bottleneck, identical workload/quality in
 before/after runs, physical-footprint reporting, and equivalence tests. Current
 [export](../performance/40mp-export.md) and [analysis](../performance/preview-analysis.md)
-evidence supplies regression baselines; completed optimizations are not pending
-roadmap items. New profiling can justify another bounded repair.
+evidence supplies regression baselines. The bounded
+[full-resolution edit proxy](../performance/preview-scale-2026-09-14.md) is also
+implemented and requires an exact final frame after every gesture. Completed
+optimizations are not pending roadmap items. New profiling can justify another
+bounded repair.
 
 ## Evidence-Driven Candidates After First Release
 

@@ -2,7 +2,7 @@ import FilmScanEngine
 import Foundation
 
 /// Atomic, versioned persistence for correction state keyed by source file path.
-final class PerFileSettingsStore {
+final class PerFileSettingsStore: Sendable {
   struct Document: Codable, Equatable {
     var schemaVersion: Int = 2
     var settingsByPath: [String: ProcessingParameters]
@@ -31,7 +31,7 @@ final class PerFileSettingsStore {
     }
   }
 
-  struct State: Equatable {
+  struct State: Equatable, Sendable {
     var settingsByPath: [String: ProcessingParameters]
     var editedPaths: Set<String>
   }
@@ -41,14 +41,8 @@ final class PerFileSettingsStore {
   }
 
   let fileURL: URL
-  private let encoder: JSONEncoder
-  private let decoder: JSONDecoder
-
   init(baseDirectory: URL) {
     fileURL = baseDirectory.appendingPathComponent("PerFileSettings.json")
-    encoder = JSONEncoder()
-    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    decoder = JSONDecoder()
   }
 
   convenience init(applicationName: String) {
@@ -64,7 +58,7 @@ final class PerFileSettingsStore {
     guard FileManager.default.fileExists(atPath: fileURL.path) else {
       return State(settingsByPath: [:], editedPaths: [])
     }
-    let document = try decoder.decode(Document.self, from: Data(contentsOf: fileURL))
+    let document = try JSONDecoder().decode(Document.self, from: Data(contentsOf: fileURL))
     guard document.schemaVersion == 1 || document.schemaVersion == 2 else {
       throw StoreError.unsupportedSchemaVersion(document.schemaVersion)
     }
@@ -80,6 +74,8 @@ final class PerFileSettingsStore {
       at: fileURL.deletingLastPathComponent(),
       withIntermediateDirectories: true
     )
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
     let data = try encoder.encode(
       Document(
         settingsByPath: state.settingsByPath,

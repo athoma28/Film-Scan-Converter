@@ -203,6 +203,9 @@ public enum RawImageDecoder {
       throw RawImageDecoderError.decodeFailed("Preview bound must be positive.")
     }
 
+    try Task.checkCancellation()
+    let cancellation = RawDecodeCancellation.current
+    try cancellation?.checkCancellation()
     DecodeLog.rawDecodeStarted(path: url.lastPathComponent, fullResolution: fullResolution)
 
     var output = fsc_raw_direct()
@@ -210,6 +213,14 @@ public enum RawImageDecoder {
     var errorBytes = [CChar](repeating: 0, count: 512)
     let previewBound = Int32(maxDimension ?? 0)
     let code = url.withUnsafeFileSystemRepresentation { path in
+      if profile == .rawTherapeeCameraScan, let cancellation {
+        return withUnsafeMutablePointer(to: &stageHashes) { hashes in
+          fsc_decode_raw_cancellable(
+            path, fullResolution ? 1 : 0, previewBound, &output,
+            collectDiagnostics ? hashes : nil, cancellation.handle,
+            &errorBytes, errorBytes.count)
+        }
+      }
       if collectDiagnostics {
         return fsc_decode_raw_direct_with_profile_diagnostics(
           path,
@@ -232,14 +243,14 @@ public enum RawImageDecoder {
         errorBytes.count
       )
     }
+    defer { fsc_free_raw_direct(&output) }
+    try cancellation?.checkCancellation()
+    try Task.checkCancellation()
     guard code == 0 else {
       let message = decodedCString(errorBytes)
       DecodeLog.rawDecodeFailed(
         path: url.lastPathComponent, error: message.isEmpty ? "Unknown LibRaw error." : message)
       throw RawImageDecoderError.decodeFailed(message.isEmpty ? "Unknown LibRaw error." : message)
-    }
-    defer {
-      fsc_free_raw_direct(&output)
     }
     guard let sourcePixels = output.bgr_pixels,
       output.width > 0,

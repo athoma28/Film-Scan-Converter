@@ -19,6 +19,9 @@ verification.
 - Core Image/Metal correction preview with latest-value-wins scheduling and a
   deterministic CPU fallback. Preview sessions are bounded by count and bytes;
   the default count is eight. No cache-size control appears in the current UI.
+- Supported point-control gestures on a selected full-sensor RAW use a retained
+  2048px GPU raster without changing the logical canvas; release publishes the
+  exact full-source refinement. CPU fallbacks and export are unchanged.
 - Native Fit, momentum pan, cursor-centered pinch, step zoom, and 100% current
   preview pixels. Image and editing/dust overlays share the viewport transform.
 - Original comparison preserves geometry, pan, and magnification. Source-tier
@@ -81,10 +84,11 @@ verification.
 
 ## Rolls, Stacks, And Settings
 
-- Scans sidebar with multi-selection, import-ordered Previous/Next Scan,
+- Scans sidebar with multi-selection, Previous/Next Scan in sidebar order,
   edited/preview-ready/export markers, and stack badges.
 - Per-file persisted corrections and session-local Undo/Redo. Continuous slider,
   curve, wheel, and perspective gestures coalesce into one history entry.
+  Background saves coalesce rapid edits; normal quit waits for pending saves.
 - Correction copy/paste and selected/all look application preserve destination
   geometry and measured film base. User film-response profiles retain inversion,
   crossover, density, and display settings.
@@ -114,7 +118,7 @@ three-pass decode for settings-only re-export and drops it on selection change.
 **Contact Sheet** saves selected or all scans to a Letter-size PDF, with 12
 corrected previews per page, filenames, and page numbers. Settings are captured
 when the sheet starts; each enabled stack contributes one merged tile under its
-anchor name. Sheets use bounded demosaiced RAW previews, preserve import order,
+anchor name. Sheets use bounded demosaiced RAW previews, preserve sidebar order,
 and support progress, cancellation, collision-safe naming, and failure cleanup.
 They show committed crop/corrections, independently of Original comparison or
 an open geometry editor. Export borders and aspect padding are not included.
@@ -125,8 +129,10 @@ ID/notarization support exists, but the published beta is ad-hoc signed.
 
 ## Limitations
 
-Native dust removal, manual sidebar reordering, lens-distortion modeling, and
-vendor-specific tethering are absent. Stacking handles translation only and is
+Development source after Beta 2 adds session-local up/down sidebar reordering.
+
+Native dust removal, lens-distortion modeling, and vendor-specific tethering
+are absent. Stacking handles translation only and is
 disabled with a loaded flat field. Alpha-channel standard images are rejected.
 Processed DNG support varies by reader; TIFF is the broad-interchange option.
 

@@ -1,0 +1,487 @@
+{
+  "curveCandidate" : {
+    "candidateOutputRange16" : [
+      5906,
+      8859
+    ],
+    "distinctCandidateOutputCodes8" : 12,
+    "distinctCandidateOutputCodes16" : 2954,
+    "distinctInputCodes" : 13107,
+    "edgeCandidateCodes16Gain1" : [
+      8564,
+      7973,
+      7383,
+      6792,
+      6201
+    ],
+    "edgeCandidateCodes16Median20000" : [
+      4430,
+      4430,
+      4430,
+      4430,
+      4430
+    ],
+    "edgeInputSamples" : [
+      0.71999999999999997,
+      0.76000000000000001,
+      0.80000000000000004,
+      0.83999999999999997,
+      0.88
+    ],
+    "gainForMedian20000" : 1.43425,
+    "inputCodeRange16" : [
+      45875,
+      58981
+    ],
+    "kind" : "Analytical candidate only; app profile unchanged",
+    "maximumChangeOnFullRampIn8BitCodeUnits" : 7.4857879377431864,
+    "resampling" : {
+      "averageEncodedThenInvert" : 0.105823,
+      "invertThenAverageEncoded" : 0.13176650000000001,
+      "sourcePair" : [
+        0.59999999999999998,
+        0.90000000000000002
+      ]
+    }
+  },
+  "hdrNoiseWeighting" : {
+    "exposureOffsetsEV" : [
+      0,
+      -2,
+      -4
+    ],
+    "idealEqualWeightVarianceRatio" : 2.3333333333333335,
+    "idealInverseVarianceWeightRatio" : 0.76190476190476186,
+    "kind" : "Eight constructed independent sign combinations; known alignment\/exposure",
+    "linearTruth" : 0.80000000000000004,
+    "longestCaptureMSE" : 9.8102132815294078e-07,
+    "mergedLinearValues" : [
+      0.79767206212139707,
+      0.79831111546576705,
+      0.79898092013935507,
+      0.79965105252255464,
+      0.80035199591032447,
+      0.80099230060095594,
+      0.8016634163877171,
+      0.80230433278593727
+    ],
+    "mergedToLongestMSERatio" : 2.372193470408495,
+    "normalizedNoiseAmplitudes" : [
+      0.001,
+      0.002,
+      0.0040000000000000001
+    ],
+    "productionMergedMSE" : 2.3271723889758757e-06
+  },
+  "kind" : "Bounded research pass; no RAW decode, full app, or GPU benchmark",
+  "naturalBWLookup" : [
+    {
+      "comparedComponents" : 196608,
+      "differentComponents" : 0,
+      "maximumAbsoluteCodeError" : 0,
+      "pixelCount" : 65536,
+      "referenceMSOneSample" : 0.840916,
+      "scenario" : "natural",
+      "tableApplyMSOneSample" : 0.341167,
+      "tableBuildMSOneSample" : 7.669791,
+      "tableBytes" : 393216
+    },
+    {
+      "comparedComponents" : 196608,
+      "differentComponents" : 0,
+      "maximumAbsoluteCodeError" : 0,
+      "pixelCount" : 65536,
+      "referenceMSOneSample" : 8.1117089999999994,
+      "scenario" : "semanticToneAndCurve",
+      "tableApplyMSOneSample" : 0.235125,
+      "tableBuildMSOneSample" : 14.000959,
+      "tableBytes" : 393216
+    },
+    {
+      "comparedComponents" : 196608,
+      "differentComponents" : 0,
+      "maximumAbsoluteCodeError" : 0,
+      "pixelCount" : 65536,
+      "referenceMSOneSample" : 2.536041,
+      "scenario" : "legacyTone",
+      "tableApplyMSOneSample" : 0.232042,
+      "tableBuildMSOneSample" : 9.2596249999999998,
+      "tableBytes" : 393216
+    }
+  ],
+  "os" : "Version 15.7.9 (Build 24G830)",
+  "probeWallMS" : 1014.506833,
+  "settingsPersistence" : [
+    {
+      "encodingOnly" : [
+        {
+          "bytes" : 3031,
+          "compact" : false,
+          "encodeMS" : [
+            0.078084000000000001,
+            0.073749999999999996,
+            0.068834000000000006
+          ]
+        },
+        {
+          "bytes" : 1770,
+          "compact" : true,
+          "encodeMS" : [
+            0.065542000000000003,
+            0.062333,
+            0.060916999999999999
+          ]
+        }
+      ],
+      "productionFileBytes" : 3031,
+      "productionSaveMS" : [
+        1.4653750000000001,
+        1.035417,
+        1.07525
+      ],
+      "storedPaths" : 1
+    },
+    {
+      "encodingOnly" : [
+        {
+          "bytes" : 295936,
+          "compact" : false,
+          "encodeMS" : [
+            5.4719579999999999,
+            5.4610000000000003,
+            5.8354590000000002
+          ]
+        },
+        {
+          "bytes" : 172014,
+          "compact" : true,
+          "encodeMS" : [
+            5.1733750000000001,
+            5.0753750000000002,
+            5.2028340000000002
+          ]
+        }
+      ],
+      "productionFileBytes" : 295936,
+      "productionSaveMS" : [
+        6.9064579999999998,
+        6.8453330000000001,
+        6.5633749999999997
+      ],
+      "storedPaths" : 100
+    },
+    {
+      "encodingOnly" : [
+        {
+          "bytes" : 1894768,
+          "compact" : false,
+          "encodeMS" : [
+            36.992458999999997,
+            37.444125,
+            37.469124999999998
+          ]
+        },
+        {
+          "bytes" : 1101786,
+          "compact" : true,
+          "encodeMS" : [
+            34.445124999999997,
+            34.169249999999998,
+            34.747667
+          ]
+        }
+      ],
+      "productionFileBytes" : 1894768,
+      "productionSaveMS" : [
+        39.361333000000002,
+        39.697665999999998,
+        39.075833000000003
+      ],
+      "storedPaths" : 640
+    },
+    {
+      "encodingOnly" : [
+        {
+          "bytes" : 2960656,
+          "compact" : false,
+          "encodeMS" : [
+            59.582707999999997,
+            58.468667000000003,
+            58.623916000000001
+          ]
+        },
+        {
+          "bytes" : 1721634,
+          "compact" : true,
+          "encodeMS" : [
+            55.259959000000002,
+            54.804541,
+            54.444499999999998
+          ]
+        }
+      ],
+      "productionFileBytes" : 2960656,
+      "productionSaveMS" : [
+        61.708125000000003,
+        60.91825,
+        60.776125
+      ],
+      "storedPaths" : 1000
+    }
+  ],
+  "transferPrecision" : {
+    "interpolatedTableBytes" : 32776,
+    "kind" : "Unit-exposure 16-bit encoded ramp round trip; no HDR range or GPU arithmetic test",
+    "methods" : [
+      {
+        "changedCodes" : 18817,
+        "distinctOutputCodes16" : 46719,
+        "low51UniqueCodes" : [
+          0,
+          13,
+          26,
+          39,
+          52
+        ],
+        "maximumAbsoluteCodeError" : 6,
+        "method" : "currentMerge"
+      },
+      {
+        "changedCodes" : 0,
+        "distinctOutputCodes16" : 65536,
+        "low51UniqueCodes" : [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50
+        ],
+        "maximumAbsoluteCodeError" : 0,
+        "method" : "directTransfer"
+      },
+      {
+        "changedCodes" : 839,
+        "distinctOutputCodes16" : 65526,
+        "low51UniqueCodes" : [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50
+        ],
+        "maximumAbsoluteCodeError" : 1,
+        "method" : "interpolated4096"
+      },
+      {
+        "changedCodes" : 54665,
+        "distinctOutputCodes16" : 10871,
+        "low51UniqueCodes" : [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50
+        ],
+        "maximumAbsoluteCodeError" : 10,
+        "method" : "linearFloat16"
+      },
+      {
+        "changedCodes" : 0,
+        "distinctOutputCodes16" : 65536,
+        "low51UniqueCodes" : [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50
+        ],
+        "maximumAbsoluteCodeError" : 0,
+        "method" : "linearFloat32"
+      }
+    ]
+  }
+}

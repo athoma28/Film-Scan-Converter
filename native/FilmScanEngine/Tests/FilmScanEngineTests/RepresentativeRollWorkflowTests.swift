@@ -142,6 +142,7 @@ struct RepresentativeRollWorkflowTests {
     #expect(model.retainedExportDecodePath == nil)
     try await waitUntil("return to unselected frame") { !model.isLoading && !model.isRendering }
     #expect(model.parameters.photoAdjustments.exposureEV == 0)
+    try await model.flushSettings()
     let relaunched = AppModel(
       profileStore: ProfileStore(baseDirectory: directory.appendingPathComponent("profiles")),
       settingsStore: store)

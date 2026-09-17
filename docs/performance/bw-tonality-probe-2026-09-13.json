@@ -1,0 +1,137 @@
+{
+  "diagnostic" : "B&W Natural tonality, production CPU pipeline, no RAW decode",
+  "dimensions" : [
+    256,
+    256
+  ],
+  "hdrMerge" : {
+    "alignment" : "identity; exposure offsets supplied, not estimated",
+    "brightReferenceOutputCodes16" : [
+      65535,
+      65535,
+      65535,
+      65535
+    ],
+    "captureExposureOffsetsEV" : [
+      0,
+      -1,
+      -2
+    ],
+    "referenceRelativeLinearRadiance" : [
+      1.05,
+      1.2,
+      1.3999999999999999,
+      1.6000000000000001
+    ],
+    "shortReferenceOutputCodes16" : [
+      35996,
+      38261,
+      41038,
+      43593
+    ]
+  },
+  "mergePrecision" : {
+    "captures" : "three identical, noiseless, zero exposure offset",
+    "distinctInputCodes" : 51,
+    "distinctOutputCodes16" : 5,
+    "inputCodeRange16" : [
+      0,
+      50
+    ],
+    "outputCodes16" : [
+      0,
+      13,
+      26,
+      39,
+      52
+    ]
+  },
+  "profiles" : [
+    {
+      "distinctInputCodes" : 13107,
+      "distinctOutputCodes16" : 1,
+      "inputCodeRange" : [
+        45875,
+        58981
+      ],
+      "outputRange16" : [
+        6935,
+        6935
+      ],
+      "profile" : "generic",
+      "toneSamples" : [
+        {
+          "input" : 0.65000000000000002,
+          "output" : 0.13176650000000001
+        },
+        {
+          "input" : 0.69999999999999996,
+          "output" : 0.105823
+        },
+        {
+          "input" : 0.75,
+          "output" : 0.105823
+        },
+        {
+          "input" : 0.80000000000000004,
+          "output" : 0.105823
+        },
+        {
+          "input" : 0.84999999999999998,
+          "output" : 0.105823
+        },
+        {
+          "input" : 0.90000000000000002,
+          "output" : 0.105823
+        },
+        {
+          "input" : 0.94999999999999996,
+          "output" : 0.086708000000000007
+        }
+      ]
+    },
+    {
+      "distinctInputCodes" : 13107,
+      "distinctOutputCodes16" : 3117,
+      "inputCodeRange" : [
+        45875,
+        58981
+      ],
+      "outputRange16" : [
+        6064,
+        9180
+      ],
+      "profile" : "shanghaiGP3",
+      "toneSamples" : [
+        {
+          "input" : 0.65000000000000002,
+          "output" : 0.16962050000000001
+        },
+        {
+          "input" : 0.69999999999999996,
+          "output" : 0.14007700000000001
+        },
+        {
+          "input" : 0.75,
+          "output" : 0.13604250000000001
+        },
+        {
+          "input" : 0.80000000000000004,
+          "output" : 0.13200799999999999
+        },
+        {
+          "input" : 0.84999999999999998,
+          "output" : 0.112271
+        },
+        {
+          "input" : 0.90000000000000002,
+          "output" : 0.092534000000000005
+        },
+        {
+          "input" : 0.94999999999999996,
+          "output" : 0.080045000000000005
+        }
+      ]
+    }
+  ]
+}

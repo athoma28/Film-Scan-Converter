@@ -10,13 +10,26 @@ download and source-build paths. Python instructions are in
 
 Open files with Command-O or drag RAW, TIFF, PNG, JPEG, or BMP scans into the
 window. Choose a scan in the Scans sidebar. Command-click or Shift-click selects
-multiple files; Previous/Next Scan moves through import order and fits the new
+multiple files; Previous/Next Scan moves through sidebar order and fits the new
 selection.
+
+In development source after Beta 2, the **Move selected scan up/down** toolbar
+buttons move the primary scan one row while preserving selection. Reordering is
+session-local and unavailable during export. Changing capture order within a
+stack disables that stack and restores the selected original; enable the new
+proposal explicitly if desired. Navigation and newly queued exports follow the
+resulting sidebar order.
 
 Camera RAW first displays a colour-accurate draft, then sharpens to an inspect
 preview and full-sensor detail. You can edit while it loads. **Load RAW Preview**
 skips ahead to full detail. A loading bar marks the first draft; a warning
 identifies an embedded camera JPEG if RAW colour is unavailable.
+
+After full-sensor detail arrives, dragging a supported adjustment temporarily
+uses a sharp 2048px GPU raster while keeping the same full-size canvas, pan, and
+zoom. Releasing the control automatically replaces it with the exact
+full-resolution result. Original comparison and processing modes that require
+the CPU continue to use their full-source path.
 
 Pan with a trackpad or mouse wheel, pinch to zoom, or use Fit and the zoom
 buttons. **100% Preview Pixels** means one current-preview pixel per view point;
@@ -51,7 +64,9 @@ film types. B&W uses an overall Tone curve; color-channel curves are restricted
 to color film types. Positive **Negative Exposure** values in Natural darken
 the resulting positive by adjusting the negative before inversion.
 
-Edits save automatically for the source path. Command-Z and Command-Shift-Z
+Edits save automatically in the background for the source path. Finishing a
+gesture requests a save, and normal application quit waits for pending saves.
+Command-Z and Command-Shift-Z
 undo/redo per file; each continuous slider, curve, wheel, or perspective gesture
 forms one step. Relaunch restores saved settings and starts fresh undo history.
 
@@ -136,7 +151,7 @@ on the Export page. TIFF and PNG are 16-bit sRGB; JPEG is 8-bit sRGB. TIFF defau
 to no compression and optionally supports LZW. DNG contains processed 16-bit RGB
 in output-referred linear sRGB; TIFF has broader viewer compatibility.
 
-**Export Selected** follows import order; **Export All** queues every import.
+**Export Selected** follows sidebar order; **Export All** queues every import.
 During export, **Add Selected** appends independent jobs using the currently
 shown format, destination, compression, and framing settings. Duplicate jobs
 are allowed and receive collision-safe names. The sidebar marks active and
@@ -152,7 +167,7 @@ errors are shown on the Export page.
 
 Choose a Destination folder, then use **Contact Sheet → Save Selected PDF** or
 **Save All PDF** on the Export page. The File menu also offers both actions.
-The PDF contains 12 scans per Letter-size page, in import order, with filenames
+The PDF contains 12 scans per Letter-size page, in sidebar order, with filenames
 and current crops/corrections. Each enabled stack appears once under the first
 capture's name. **Open Contact Sheet** opens the completed PDF.
 

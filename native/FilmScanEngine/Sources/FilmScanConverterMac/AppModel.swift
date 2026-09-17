@@ -9,6 +9,14 @@ final class AppModel: ObservableObject {
   @Published var selection: URL?
   @Published var selectedFiles: Set<URL> = []
   @Published private(set) var previewImage: NSImage?
+  @Published private(set) var previewDetail: PreviewDetail?
+  @Published private(set) var previewStatisticsRevision = 0
+  private var previewRenderDemand: PreviewRenderDemand?
+  private var viewportRevision = 0
+  private var statisticsTask: Task<Void, Never>?
+  private var pendingStatistics: PreviewStatisticsRequest?
+  private var lastStatisticsSubmission: ContinuousClock.Instant?
+
   @Published private(set) var thumbnailImages: [String: NSImage] = [:]
   @Published private(set) var thumbnailLoadingPaths: Set<String> = []
   @Published private(set) var detectedScanStacks: [DetectedScanStack] = []
@@ -51,7 +59,9 @@ final class AppModel: ObservableObject {
   @Published private(set) var isRebateDetectionRunning = false
   @Published private(set) var rollProfile: RollProfile?
   @Published private(set) var rebateStatus: String = ""
-  @Published private(set) var flatFieldImage: UInt16Image?
+  @Published private(set) var flatFieldImage: UInt16Image? {
+    didSet { previewSourceGeneration += 1 }
+  }
   @Published private(set) var flatFieldURL: URL?
   @Published private(set) var cropRect: RotatedRect?
   @Published private(set) var perspectiveCrop: PerspectiveCrop?
@@ -79,7 +89,9 @@ final class AppModel: ObservableObject {
   @Published private(set) var redoActionName: String?
 
   let profileStore: ProfileStore
-  private let settingsStore: PerFileSettingsStore?
+  private var settingsPersistence: PerFileSettingsPersistence?
+  private var latestSettingsCompletionRevision: UInt64 = 0
+  private var latestSavedSettingsRevision: UInt64 = 0
   private let presetStore: NamedCorrectionPresetStore?
   private let settingsClipboard: CorrectionSettingsClipboard
   private let preferences: UserDefaults
@@ -92,7 +104,6 @@ final class AppModel: ObservableObject {
     settingsClipboard: CorrectionSettingsClipboard = CorrectionSettingsClipboard(),
     preferences: UserDefaults = .standard
   ) {
-    self.settingsStore = settingsStore
     self.presetStore = presetStore
     self.settingsClipboard = settingsClipboard
     self.preferences = preferences
@@ -120,6 +131,14 @@ final class AppModel: ObservableObject {
           "Saved corrections could not be loaded; defaults are being used.",
           kind: .error)
       }
+      settingsPersistence = PerFileSettingsPersistence(
+        initialState: .init(settingsByPath: settingsByPath, editedPaths: editedKeys),
+        save: { try settingsStore.save($0) },
+        onCompletion: { [weak self] revision, result in
+          Task { @MainActor [weak self] in
+            self?.handleSettingsPersistenceCompletion(revision: revision, result: result)
+          }
+        })
     }
     if let presetStore {
       do {
@@ -141,6 +160,11 @@ final class AppModel: ObservableObject {
     public var lastLatencyMs: Double = 0
     public var peakLatencyMs: Double = 0
     public var totalSubmissionLatencyMs: Double = 0
+    public var lastPreparationMs: Double = 0
+    public var lastQueueWaitMs: Double = 0
+    public var lastRenderMs: Double = 0
+    public var lastInteractionLatencyMs: Double = 0
+    public var longestPublicationGapMs: Double = 0
   }
 
   private func setStatus(_ message: String, kind: StatusKind = .info) {
@@ -171,8 +195,24 @@ final class AppModel: ObservableObject {
   private var previewCache: [String: CachedPreviewSession] = [:]
   private var previewCacheOrder: [String] = []
   private var previewCacheBytes = 0
-  private var previewSource: UInt16Image?
+  private var previewSource: UInt16Image? {
+    didSet { previewSourceGeneration += 1 }
+  }
+  private var cpuPreviewPreparation: CPUPreviewPreparationCache?
+  private var previewSourceGeneration = 0 {
+    didSet {
+      cpuPreviewPreparation = previewSource.map { CPUPreviewPreparationCache(image: $0) }
+      previewDetail = nil
+    }
+  }
+  /// Reuse the earlier decoded tier when the selected full preview is demoted.
+  /// Its payload remains inside the background-cache byte budget.
+  private var selectedPreviewFallback: (key: String, session: CachedPreviewSession)?
+
   private var previewRenderer: StillPreviewRenderer?
+  private var continuousEditPreviewSource: UInt16Image?
+  private var continuousEditPreviewRenderer: StillPreviewRenderer?
+  private var continuousEditPreviewNeedsRefinement = false
   private var isPreviewingUncroppedCanvas = false
   private var isPreviewingSourceGeometry = false
   private var presetRollbacks: [String: CorrectionSettings] = [:]
@@ -181,6 +221,7 @@ final class AppModel: ObservableObject {
   private var editTransaction: EditTransaction?
   private var loadTask: Task<Void, Never>?
   private var predecodeTask: Task<Void, Never>?
+  private var previewWorkRevision = 0
   private var thumbnailTasks: [String: Task<Void, Never>] = [:]
   private var thumbnailCacheOrder: [String] = []
   private var thumbnailCacheBytes = 0
@@ -198,6 +239,15 @@ final class AppModel: ObservableObject {
   private var dustDetectionTask: Task<Void, Never>?
   private var renderTask: Task<Void, Never>?
   private var pendingRender: PreviewRenderRequest?
+  private var renderRevision = 0
+  private var renderContextGeneration = 0
+  private var lastRenderContext: PreviewRenderContext?
+  private var pendingInteractionStart: ContinuousClock.Instant?
+  private var lastPublicationTime: ContinuousClock.Instant?
+  private(set) var publishedRenderRevision = 0
+  private(set) var publishedPreviewParameters: ProcessingParameters?
+  /// Allows integration tests to hold a completed frame while newer edits arrive.
+  var previewRenderCompletionHook: (@MainActor (ProcessingParameters) async -> Void)?
   private var activeExportQueue: [URL] = []
   private var activeExportDestinations: [URL] = []
   private var activeExportItemParameters: [ExportParameters] = []
@@ -206,11 +256,9 @@ final class AppModel: ObservableObject {
   private var exportTask: Task<Void, Never>?
   private var exportWasCancelled = false
   private var renderLoopGeneration = 0
-  private var lastSubmitTime: Date = .distantPast
   private var lastRenderEnd: ContinuousClock.Instant = .now
   private var pendingFirstPreviewInterval: AppPerformanceInterval?
-  private let rawFullPreviewDecodeGate = RawFullPreviewDecodeGate()
-  private var rawFullDecodeURL: URL?
+  private let rawDecodeScheduler = RawDecodeScheduler()
   /// Last three-pass camera-scan decode of the selected file. Settings-only
   /// re-export skips unpack and demosaic. Dropped on selection change.
   private var retainedExportDecode = SelectedFileExportDecodeCache()
@@ -244,10 +292,13 @@ final class AppModel: ObservableObject {
   nonisolated static let analysisPreviewMaxDimension = 256
   nonisolated static let rawLookaheadDetailCount = 3
   nonisolated static let defaultPreviewCacheLimit = 8
-  /// Bounded sessions exclude the selected full-res buffer. A 4000px inspect
-  /// frame is about 57 MiB of UInt16 RGB on the 40MP RAF; a 3200px lookahead
-  /// frame is about 25 MiB. This cap therefore holds about four inspect frames
-  /// or about ten lookahead frames before LRU demotion or eviction.
+  /// A temporary raster used only while a point-control gesture is active on
+  /// a retained full-sensor RAW. Its logical document size remains full scale,
+  /// and gesture release always queues an exact full-resolution refinement.
+  nonisolated static let continuousEditPreviewMaxDimension = 2_048
+  /// Bounded sessions exclude the selected full-res buffer. Count retained
+  /// UInt16 source/analysis storage and the renderer's RGBA16 backing. Driver
+  /// allocations and transient render surfaces are additional, untracked memory.
   nonisolated static let previewCacheByteLimit = 256 * 1_024 * 1_024
   nonisolated static let thumbnailMaxDimension = 192
   nonisolated static let thumbnailCacheCountLimit = 256
@@ -524,6 +575,34 @@ final class AppModel: ObservableObject {
     return true
   }
 
+  var canMoveSelectedSidebarFileUp: Bool { sidebarSelectionMoveDestination(by: -1) != nil }
+
+  var canMoveSelectedSidebarFileDown: Bool { sidebarSelectionMoveDestination(by: 1) != nil }
+
+  func moveSelectedSidebarFile(by offset: Int) {
+    guard let selection,
+      let source = files.firstIndex(of: selection),
+      let destination = sidebarSelectionMoveDestination(by: offset)
+    else {
+      return
+    }
+    // SwiftUI's destination is an insertion offset in the original array.
+    moveSidebarFiles(
+      fromOffsets: IndexSet(integer: source),
+      toOffset: destination > source ? destination + 1 : destination)
+  }
+
+  private func sidebarSelectionMoveDestination(by offset: Int) -> Int? {
+    guard !isExporting, let selection, let source = files.firstIndex(of: selection),
+      offset == -1 || offset == 1
+    else {
+      return nil
+    }
+    let destination = source + offset
+    guard files.indices.contains(destination) else { return nil }
+    return destination
+  }
+
   func isActiveExport(for url: URL) -> Bool {
     guard isExporting, activeExportQueue.indices.contains(exportProgressCurrent) else {
       return false
@@ -587,6 +666,39 @@ final class AppModel: ObservableObject {
     selection = supported.first
     selectedFiles = selection.map { Set([$0]) } ?? []
     loadSelection()
+  }
+
+  func moveSidebarFiles(fromOffsets source: IndexSet, toOffset destination: Int) {
+    guard !isExporting, !source.isEmpty,
+      source.allSatisfy({ files.indices.contains($0) }),
+      (0...files.count).contains(destination)
+    else { return }
+    var reordered = files
+    reordered.move(fromOffsets: source, toOffset: destination)
+    guard reordered != files else { return }
+
+    let selectedStack = selection.flatMap { enabledScanStack(containing: $0) }
+    files = reordered
+    cancelPredecode()
+    // Reconcile cached proposals before returning: export must never observe
+    // the new order with stack membership from the old order.
+    scanAnalysisGeneration += 1
+    scanAnalysisTask?.cancel()
+    scanAnalysisTask = nil
+    applyDetectedScanStackProposals(
+      Self.detectedScanStackProposals(files: files, records: scanAnalysisRecords))
+    if let selectedStack, !enabledScanStackIDs.contains(selectedStack.id) {
+      scanStackStatus = "Stack disabled because its capture order changed."
+      scanStackStatusID = nil
+      loadSelection()
+    } else if let selection {
+      schedulePreviewWork(after: selection)
+    }
+    if files.contains(where: { scanAnalysisRecords[settingsKey($0)] == nil }) {
+      scheduleScanStackAnalysis()
+    } else {
+      isAnalyzingScanStacks = false
+    }
   }
 
   /// Keeps the detail view anchored to one primary file while SwiftUI owns a
@@ -663,6 +775,9 @@ final class AppModel: ObservableObject {
       decodedImage = nil
       previewSource = nil
       previewRenderer = nil
+      continuousEditPreviewSource = nil
+      continuousEditPreviewRenderer = nil
+      continuousEditPreviewNeedsRefinement = false
       previewStatistics = .empty
       previewSourceKind = nil
       appliedPresetName = nil
@@ -696,6 +811,9 @@ final class AppModel: ObservableObject {
     decodedImage = nil
     previewSource = nil
     previewRenderer = nil
+    continuousEditPreviewSource = nil
+    continuousEditPreviewRenderer = nil
+    continuousEditPreviewNeedsRefinement = false
     previewSourceKind = nil
     let key = settingsKey(selection)
     let hasStoredSettings = settingsByPath[key] != nil
@@ -708,6 +826,16 @@ final class AppModel: ObservableObject {
     showOriginal = false
     refreshHistoryAvailability()
 
+    // A merged session is only valid while its stack is enabled. Disabling or
+    // reordering captures must reload the source rather than reuse merged pixels.
+    if previewCache[key]?.sourceKind == .alignedStack,
+      enabledScanStack(containing: selection) == nil
+    {
+      if let removed = previewCache.removeValue(forKey: key) {
+        previewCacheBytes -= removed.byteCount
+      }
+      previewCacheOrder.removeAll { $0 == key }
+    }
     if let cached = previewCache[key] {
       ImportLog.loadSelectionCacheHit(path: selection.lastPathComponent)
       isLoading = false
@@ -736,7 +864,7 @@ final class AppModel: ObservableObject {
         let conversionInterval = AppPerformanceSignposts.begin(
           .previewConversion, correlationID: loadCorrelationID,
           filename: selection.lastPathComponent)
-        let session = await Task.detached(priority: .userInitiated) { () -> CachedPreviewSession? in
+        let session = try? await self.rawDecodeScheduler.run { () -> CachedPreviewSession? in
           let display: UInt16Image
           let kind: PreviewSourceKind
           do {
@@ -766,7 +894,7 @@ final class AppModel: ObservableObject {
             analysisSource: display.resizedToFit(maxDimension: Self.analysisPreviewMaxDimension),
             previewRenderer: renderer,
             sourcePixelDimensions: Self.fullResolutionDimensions(of: selection))
-        }.value
+        }
         AppPerformanceSignposts.end(conversionInterval)
         if let thumbnailInterval { AppPerformanceSignposts.end(thumbnailInterval) }
         guard !Task.isCancelled, gen == self.loadGeneration, self.selection == selection else {
@@ -1546,6 +1674,7 @@ final class AppModel: ObservableObject {
       applied.filmNegativeParams.measuredMedians = nil
       settingsByPath[key] = applied
       editedKeys.insert(key)
+      persistSettings(for: key)
       recordEdit(
         for: key,
         actionName: actionName,
@@ -1553,7 +1682,7 @@ final class AppModel: ObservableObject {
         after: editingSnapshot(for: key)
       )
     }
-    persistSettings()
+    settingsPersistence?.requestFlush()
     refreshHistoryAvailability()
   }
 
@@ -1649,7 +1778,7 @@ final class AppModel: ObservableObject {
     }
     let prior = sameRollFilmTypeHint
     let field = flatFieldImage
-    let gate = rawFullPreviewDecodeGate
+    let gate = rawDecodeScheduler
     let decoder = contactSheetPreviewDecoder
     cancelPredecode()
     cancelScanStackUpgradePreservingPreview()
@@ -2283,6 +2412,7 @@ final class AppModel: ObservableObject {
   func endManualCropEditing() {
     guard isPreviewingUncroppedCanvas else { return }
     isPreviewingUncroppedCanvas = false
+    settingsPersistence?.requestFlush()
     resetDustState(cancelTask: true)
     scheduleRender(immediate: true)
   }
@@ -2299,6 +2429,7 @@ final class AppModel: ObservableObject {
   func endSourceGeometryEditing() {
     guard isPreviewingSourceGeometry else { return }
     isPreviewingSourceGeometry = false
+    settingsPersistence?.requestFlush()
     resetDustState(cancelTask: true)
     scheduleRender(immediate: true)
   }
@@ -2681,6 +2812,7 @@ final class AppModel: ObservableObject {
       )
       settingsByPath[key] = automatic
       automaticallyClassifiedKeys.insert(key)
+      persistSettings(for: key)
       fileParams = automatic
     }
     fileParams = Self.parametersForExport(fileParams, decodedImage: decoded)
@@ -2734,19 +2866,17 @@ final class AppModel: ObservableObject {
         return cached
       }
       let decoder = fullResolutionExportDecoder
-      let gate = rawFullPreviewDecodeGate
-      let image = try await Task.detached(priority: .userInitiated) {
-        try await gate.run {
-          if let decoder {
-            return try decoder(url)
-          }
-          return try RawImageDecoder.decode(
-            url,
-            fullResolution: true,
-            profile: .rawTherapeeCameraScan
-          ).image
+      let gate = rawDecodeScheduler
+      let image = try await gate.run(priority: .export) {
+        if let decoder {
+          return try decoder(url)
         }
-      }.value
+        return try RawImageDecoder.decode(
+          url,
+          fullResolution: true,
+          profile: .rawTherapeeCameraScan
+        ).image
+      }
       fullResolutionExportDecodeCount += 1
       retainedExportDecode.retain(
         key: key,
@@ -2901,6 +3031,7 @@ final class AppModel: ObservableObject {
       guard transaction.key != key || transaction.actionName != actionName else { return }
       endEditingGesture()
     }
+    cancelPredecode()
     editTransaction = EditTransaction(
       key: key,
       actionName: actionName,
@@ -2909,6 +3040,8 @@ final class AppModel: ObservableObject {
   }
 
   func endEditingGesture() {
+    // This also flushes keyboard/text edits when selection or editor changes.
+    settingsPersistence?.requestFlush()
     guard let transaction = editTransaction else { return }
     editTransaction = nil
     recordEdit(
@@ -2918,6 +3051,12 @@ final class AppModel: ObservableObject {
       after: editingSnapshot(for: transaction.key)
     )
     refreshHistoryAvailability()
+    if continuousEditPreviewNeedsRefinement || previewStatisticsRevision != publishedRenderRevision
+    {
+      continuousEditPreviewNeedsRefinement = false
+      scheduleRender(immediate: true)
+    }
+    if let selection, !isLoading { schedulePreviewWork(after: selection) }
   }
 
   func undo() {
@@ -3064,6 +3203,7 @@ final class AppModel: ObservableObject {
     actionName: String,
     _ update: (inout ProcessingParameters) -> Void
   ) {
+    let interactionStart = ContinuousClock.now
     let historyBefore = currentEditingSnapshot()
     resetDustState(cancelTask: true)
     if let selection {
@@ -3072,11 +3212,14 @@ final class AppModel: ObservableObject {
     }
     update(&parameters)
     saveParameters()
-    renderAfterEditing(immediate: false)
+    renderAfterEditing(immediate: false, interactionStart: interactionStart)
     recordCurrentEdit(actionName: actionName, before: historyBefore)
   }
 
-  private func renderAfterEditing(immediate: Bool = true) {
+  private func renderAfterEditing(
+    immediate: Bool = true, interactionStart: ContinuousClock.Instant? = nil
+  ) {
+    pendingInteractionStart = interactionStart
     // Edits reveal the corrected result during ordinary comparison. Perspective
     // and film-base tools still need original pixels until their overlays close.
     if showOriginal && !isPreviewingSourceGeometry {
@@ -3090,19 +3233,47 @@ final class AppModel: ObservableObject {
     guard let selection else {
       return
     }
-    settingsByPath[settingsKey(selection)] = parameters
-    persistSettings()
+    let key = settingsKey(selection)
+    settingsByPath[key] = parameters
+    persistSettings(for: key)
     EditLog.parametersSaved(path: selection.lastPathComponent, parameters: parameters)
   }
 
-  private func persistSettings() {
-    do {
-      try settingsStore?.save(.init(settingsByPath: settingsByPath, editedPaths: editedKeys))
-    } catch {
-      setStatus(
-        "Corrections changed, but could not be saved for the next launch.",
-        kind: .error)
+  private func persistSettings(for key: String) {
+    guard let parameters = settingsByPath[key] else {
+      settingsPersistence?.submit(.remove(path: key))
+      return
     }
+    settingsPersistence?.submit(
+      .set(path: key, parameters: parameters, edited: editedKeys.contains(key)))
+  }
+
+  func handleSettingsPersistenceCompletion(revision: UInt64, result: Result<Void, Error>) {
+    guard revision >= latestSettingsCompletionRevision else { return }
+    latestSettingsCompletionRevision = revision
+    let message = "Corrections changed, but could not be saved for the next launch."
+    switch result {
+    case .success:
+      latestSavedSettingsRevision = max(latestSavedSettingsRevision, revision)
+      if settingsStatus == message { settingsStatus = "" }
+      if status == message { setStatus("Corrections saved.") }
+    case .failure:
+      // A retry can succeed at the same revision. A late callback from its
+      // earlier failed attempt must not restore the error after that success.
+      guard revision > latestSavedSettingsRevision else { return }
+      settingsStatus = message
+      setStatus(message, kind: .error)
+    }
+  }
+
+  /// Used by orderly termination and relaunch tests. Include any edits received
+  /// while a write was in flight before letting the app close.
+  func flushSettings() async throws {
+    endEditingGesture()
+    guard let settingsPersistence else { return }
+    repeat {
+      try await settingsPersistence.flush()
+    } while settingsPersistence.hasUnsavedChanges
   }
 
   private func applyCachedSession(_ session: CachedPreviewSession, selection: URL) {
@@ -3128,6 +3299,9 @@ final class AppModel: ObservableObject {
     decodedImage = session.displaySource
     previewSource = session.displaySource
     previewRenderer = session.previewRenderer
+    continuousEditPreviewSource = session.continuousEditSource
+    continuousEditPreviewRenderer = session.continuousEditRenderer
+    continuousEditPreviewNeedsRefinement = false
     previewSourceKind = session.sourceKind
     sourcePixelDimensions = session.sourcePixelDimensions
     isLoading = false
@@ -3145,7 +3319,7 @@ final class AppModel: ObservableObject {
   }
 
   private func schedulePreviewWork(after selection: URL) {
-    guard !isExporting else { return }
+    guard !isExporting, editTransaction == nil else { return }
     guard files.contains(selection) else { return }
 
     let selectedKey = settingsKey(selection)
@@ -3171,6 +3345,8 @@ final class AppModel: ObservableObject {
 
     let generation = loadGeneration
     predecodeTask?.cancel()
+    previewWorkRevision += 1
+    let workRevision = previewWorkRevision
     if needsSelectedInspect || needsSelectedFullRes {
       isUpgradingRawPreview = true
     }
@@ -3178,13 +3354,14 @@ final class AppModel: ObservableObject {
     predecodeTask = Task { [weak self] in
       guard let self else { return }
       defer {
-        if generation == self.loadGeneration {
+        if generation == self.loadGeneration, workRevision == self.previewWorkRevision {
           self.isUpgradingRawPreview = false
         }
       }
       if needsSelectedInspect {
         await self.decodeAndCacheRawInspect(selection, generation: generation)
       }
+      guard !Task.isCancelled, generation == self.loadGeneration else { return }
       if needsSelectedFullRes {
         async let fullWork: Void = self.decodeAndCacheRawFull(
           selection, generation: generation)
@@ -3218,12 +3395,13 @@ final class AppModel: ObservableObject {
     if selection == url, enabledScanStack(containing: url) != nil { return }
 
     do {
-      let session = try await Task.detached(priority: .userInitiated) {
+      let session = try await rawDecodeScheduler.run {
         try Self.makeRawPreviewSession(
           for: url,
           maxDimension: Self.rawInspectPreviewMaxDimension,
           kind: .rawInspect)
-      }.value
+      }
+      guard !Task.isCancelled, generation == loadGeneration else { return }
       cacheSession(session, for: url)
       guard generation == loadGeneration, selection == url,
         enabledScanStack(containing: url) == nil
@@ -3254,23 +3432,17 @@ final class AppModel: ObservableObject {
     guard FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased()) else { return }
     if previewCache[settingsKey(url)]?.sourceKind == .rawFull { return }
     if selection == url, enabledScanStack(containing: url) != nil { return }
-    if rawFullDecodeURL == url { return }
-    rawFullDecodeURL = url
-    defer {
-      if rawFullDecodeURL == url { rawFullDecodeURL = nil }
-    }
-
-    let gate = rawFullPreviewDecodeGate
+    let gate = rawDecodeScheduler
     do {
-      let session = try await Task.detached(priority: .userInitiated) {
-        try await gate.run {
-          try Self.makeRawFullPreviewSession(for: url)
-        }
-      }.value
+      let session = try await gate.run {
+        try Self.makeRawFullPreviewSession(for: url)
+      }
       // Keep at most one full-res preview: only retain it while this file is
       // still selected. Switching away demotes the previous file to the 4000px
       // inspect preview.
-      guard selection == url, enabledScanStack(containing: url) == nil else { return }
+      guard !Task.isCancelled, generation == loadGeneration, selection == url,
+        enabledScanStack(containing: url) == nil
+      else { return }
       cacheSession(session, for: url)
       applyPreviewSession(
         session,
@@ -3306,7 +3478,8 @@ final class AppModel: ObservableObject {
     if selection == url, enabledScanStack(containing: url) != nil { return }
 
     do {
-      let session = try await Task.detached(priority: .utility) { () -> CachedPreviewSession in
+      let session = try await rawDecodeScheduler.run(priority: .lookahead) {
+        () -> CachedPreviewSession in
         if isRaw {
           return try Self.makeRawPreviewSession(
             for: url,
@@ -3314,13 +3487,15 @@ final class AppModel: ObservableObject {
             kind: desiredKind)
         }
         return try Self.makeFastPreviewSession(for: url)
-      }.value
+      }
+      guard !Task.isCancelled, generation == loadGeneration else { return }
       cacheSession(session, for: url)
       if settingsByPath[key] == nil {
         settingsByPath[key] = Self.automaticallyClassifiedParameters(
           base: ProcessingParameters(), image: session.analysisSource,
           weakPrior: sameRollFilmTypeHint)
         automaticallyClassifiedKeys.insert(key)
+        persistSettings(for: key)
       }
       guard applyIfSelected, generation == loadGeneration, selection == url,
         enabledScanStack(containing: url) == nil
@@ -3340,6 +3515,8 @@ final class AppModel: ObservableObject {
   }
 
   private func cancelPredecode() {
+    previewWorkRevision += 1
+    isUpgradingRawPreview = false
     predecodeTask?.cancel()
     predecodeTask = nil
   }
@@ -3382,6 +3559,7 @@ final class AppModel: ObservableObject {
         image: session.analysisSource,
         weakPrior: sameRollFilmTypeHint
       )
+      persistSettings(for: key)
     }
   }
 
@@ -3395,6 +3573,8 @@ final class AppModel: ObservableObject {
         displaySource: previewSource,
         analysisSource: previewSource.resizedToFit(maxDimension: Self.analysisPreviewMaxDimension),
         previewRenderer: previewRenderer,
+        continuousEditSource: continuousEditPreviewSource,
+        continuousEditRenderer: continuousEditPreviewRenderer,
         sourcePixelDimensions: sourcePixelDimensions
       ),
       for: selection
@@ -3413,11 +3593,22 @@ final class AppModel: ObservableObject {
     {
       return
     }
+    if session.sourceKind == .rawFull,
+      let previous = previewCache[key], previous.sourceKind != .rawFull
+    {
+      if let fallback = selectedPreviewFallback { previewCacheBytes -= fallback.session.byteCount }
+      selectedPreviewFallback = (key, previous)
+      previewCacheBytes += previous.byteCount
+    }
     replaceCachedSession(session, for: key)
     trimPreviewCache()
   }
 
   private func replaceCachedSession(_ session: CachedPreviewSession, for key: String) {
+    if session.sourceKind != .rawFull, let fallback = selectedPreviewFallback, fallback.key == key {
+      selectedPreviewFallback = nil
+      previewCacheBytes -= fallback.session.byteCount
+    }
     if let previous = previewCache[key] { previewCacheBytes -= previous.byteCount }
     previewCache[key] = session
     previewCacheBytes += session.byteCount
@@ -3427,15 +3618,6 @@ final class AppModel: ObservableObject {
   private func trimPreviewCache() {
     demoteUnselectedFullResPreviews()
     let selectedKey = selection.map { settingsKey($0) }
-    while boundedPreviewCacheBytes > Self.previewCacheByteLimit {
-      guard
-        let key = previewCacheOrder.first(where: {
-          $0 != selectedKey && previewCache[$0]?.sourceKind == .rawInspect
-        })
-      else { break }
-      guard let session = previewCache[key] else { break }
-      replaceCachedSession(Self.demotedSession(from: session, kind: .rawDetail), for: key)
-    }
     while previewCacheOrder.count > previewCacheLimit
       || boundedPreviewCacheBytes > Self.previewCacheByteLimit
     {
@@ -3450,7 +3632,8 @@ final class AppModel: ObservableObject {
   }
 
   private var boundedPreviewCacheBytes: Int {
-    previewCache.values.reduce(0) { partial, session in
+    previewCache.values.reduce(selectedPreviewFallback?.session.byteCount ?? 0) {
+      partial, session in
       session.sourceKind == .rawFull ? partial : partial + session.byteCount
     }
   }
@@ -3462,9 +3645,17 @@ final class AppModel: ObservableObject {
     }
     for key in fullKeys {
       guard let session = previewCache[key] else { continue }
-      let demoted = Self.demotedSession(from: session, kind: .rawInspect)
-      guard demoted.sourceKind == .rawInspect else { continue }
-      replaceCachedSession(demoted, for: key)
+      if let fallback = selectedPreviewFallback, fallback.key == key {
+        previewCacheBytes -= fallback.session.byteCount
+        selectedPreviewFallback = nil
+        replaceCachedSession(fallback.session, for: key)
+      } else {
+        // No lower tier is available (for example an injected full session).
+        // Eviction is preferable to sensor-sized work on the main actor.
+        previewCache.removeValue(forKey: key)
+        previewCacheOrder.removeAll { $0 == key }
+        previewCacheBytes -= session.byteCount
+      }
     }
   }
 
@@ -3880,17 +4071,9 @@ final class AppModel: ObservableObject {
     tier: ScanStackPreviewTier
   ) async throws -> UInt16Image {
     let decoder = scanStackPreviewDecoder
-    if tier == .full, FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased()) {
-      let gate = rawFullPreviewDecodeGate
-      return try await Task.detached(priority: .userInitiated) {
-        try await gate.run {
-          try decoder?(url, tier) ?? Self.makeStackPreviewSource(for: url, tier: .full)
-        }
-      }.value
-    }
-    return try await Task.detached(priority: .userInitiated) {
+    return try await rawDecodeScheduler.run {
       try decoder?(url, tier) ?? Self.makeStackPreviewSource(for: url, tier: tier)
-    }.value
+    }
   }
 
   private func applyAlignedStackPreview(
@@ -3995,21 +4178,110 @@ final class AppModel: ObservableObject {
     return displayParameters
   }
 
+  func setPreviewRenderDemand(_ demand: PreviewRenderDemand) {
+    guard demand != previewRenderDemand else { return }
+    previewRenderDemand = demand
+    viewportRevision += 1
+    scheduleRender(immediate: true)
+  }
+
+  private func submitPreviewStatistics(
+    _ compute: @escaping @Sendable () -> RenderReadyImageStatistics,
+    request: PreviewRenderRequest
+  ) {
+    let now = ContinuousClock.now
+    // Always refresh the final edit; continuous gestures need diagnostics at
+    // most ten times per second. One active and one latest pending sample.
+    if editTransaction != nil, let lastStatisticsSubmission,
+      lastStatisticsSubmission.duration(to: now) < .milliseconds(100)
+    {
+      return
+    }
+    lastStatisticsSubmission = now
+    pendingStatistics = PreviewStatisticsRequest(
+      revision: request.revision, sourceGeneration: request.sourceGeneration, compute: compute)
+    guard statisticsTask == nil else { return }
+    statisticsTask = Task { [weak self] in
+      while let sample = self?.pendingStatistics {
+        self?.pendingStatistics = nil
+        let statistics = await Task.detached(priority: .utility) { sample.compute() }.value
+        guard let self else { return }
+        if self.previewSourceGeneration == sample.sourceGeneration,
+          self.publishedRenderRevision == sample.revision
+        {
+          self.previewStatistics = statistics
+          self.previewStatisticsRevision = sample.revision
+        }
+      }
+      self?.statisticsTask = nil
+    }
+  }
+
   private func scheduleRender(immediate: Bool = false) {
-    guard let selection, let previewSource else {
+    let interactionStart = pendingInteractionStart ?? ContinuousClock.now
+    pendingInteractionStart = nil
+    guard let selection, let previewSource, let cpuPreviewPreparation else {
       return
     }
 
+    let displayParameters = previewDisplayParameters
+    let useContinuousEditPreview: Bool
+    let renderSource: UInt16Image
+    let renderRenderer: StillPreviewRenderer?
+    if editTransaction != nil,
+      previewRenderDemand?.detailRect == nil,
+      previewSourceKind == .rawFull,
+      let continuousEditPreviewSource,
+      let continuousEditPreviewRenderer,
+      StillPreviewRenderer.supports(
+        parameters: displayParameters, showOriginal: showOriginal)
+    {
+      useContinuousEditPreview = true
+      renderSource = continuousEditPreviewSource
+      renderRenderer = continuousEditPreviewRenderer
+    } else {
+      useContinuousEditPreview = false
+      renderSource = previewSource
+      renderRenderer = previewRenderer
+    }
+    if useContinuousEditPreview { continuousEditPreviewNeedsRefinement = true }
+    let logicalDimensions = ImageGeometry.outputDimensions(
+      source: PixelDimensions(width: previewSource.width, height: previewSource.height),
+      parameters: displayParameters)
+
+    let context = PreviewRenderContext(
+      selection: selection, sourceGeneration: previewSourceGeneration,
+      parameters: displayParameters, showOriginal: showOriginal)
+    if context != lastRenderContext {
+      renderContextGeneration += 1
+      lastRenderContext = context
+    }
+    if renderTask == nil { lastPublicationTime = interactionStart }
+    renderRevision += 1
     let previousHadPending = pendingRender != nil
-    let ff = preparedFlatField(for: previewSource)
     pendingRender = PreviewRenderRequest(
+      revision: renderRevision,
+      contextGeneration: renderContextGeneration,
+      sourceGeneration: previewSourceGeneration,
       selection: selection,
-      source: previewSource,
-      renderer: previewRenderer,
-      parameters: previewDisplayParameters,
+      source: renderSource,
+      renderer: renderRenderer,
+      parameters: displayParameters,
       showOriginal: showOriginal,
-      submitTime: Date(),
-      flatField: ff
+      logicalDimensions: logicalDimensions,
+      usesContinuousEditPreview: useContinuousEditPreview,
+      interactionStart: interactionStart,
+      submitTime: ContinuousClock.now,
+      // Capture the existing buffer only. Preparing a full-size unity field
+      // here allocated an image on the main actor for every slider event,
+      // even when the GPU renderer never consumed it.
+      cpuPreparation: cpuPreviewPreparation,
+      viewportRevision: viewportRevision,
+      demand: previewRenderDemand.flatMap {
+        $0.documentSize == CGSize(width: logicalDimensions.width, height: logicalDimensions.height)
+          ? $0 : nil
+      },
+      flatField: compatibleFlatField(for: previewSource)
     )
 
     if previousHadPending {
@@ -4021,7 +4293,6 @@ final class AppModel: ObservableObject {
     var stats = renderStats
     stats.submittedSnapshots += 1
     renderStats = stats
-    lastSubmitTime = Date()
 
     let signpostID = OSSignpostID(log: Self.signpostLog)
     os_signpost(
@@ -4082,93 +4353,125 @@ final class AppModel: ObservableObject {
     while !Task.isCancelled, let request = pendingRender {
       pendingRender = nil
       let signpostID = OSSignpostID(log: Self.signpostLog)
-      let renderStart = Date()
+      let renderStart = ContinuousClock.now
       let submitTime = request.submitTime
       let result: RenderedPreview? = await Task.detached(priority: .userInitiated) {
         () -> RenderedPreview? in
         let useGPU =
           request.renderer != nil
-          && !request.parameters.densityPipelineEnabled
-          && request.parameters.cropRect == nil
-          && request.parameters.perspectiveCrop == nil
-          && abs(request.parameters.straightenAngle) < 0.000_001
-          && request.parameters.manualCrop == nil
+          && StillPreviewRenderer.supports(
+            parameters: request.parameters, showOriginal: request.showOriginal)
         if useGPU,
           let rendered = request.renderer?.render(
             parameters: request.parameters,
-            showOriginal: request.showOriginal
+            showOriginal: request.showOriginal,
+            maximumDimension: request.demand?.overviewMaximumDimension
           )
         {
-          return RenderedPreview(
-            cgImage: rendered,
-            rendererName: "GPU",
-            statistics: StillPreviewRenderer.statistics(for: rendered) ?? .empty
-          )
+          let detail = request.demand?.normalizedDetailRect.flatMap { region in
+            request.renderer?.render(
+              parameters: request.parameters, showOriginal: request.showOriginal,
+              normalizedRegion: region)
+          }
+          if request.demand?.detailRect == nil || detail != nil {
+            return RenderedPreview(
+              cgImage: rendered,
+              rendererName: request.usesContinuousEditPreview ? "GPU edit preview" : "GPU",
+              detail: detail,
+              statistics: { StillPreviewRenderer.statistics(for: rendered) ?? .empty }
+            )
+          }
         }
         var renderParameters = request.parameters
         if request.showOriginal {
           renderParameters.filmType = .cropOnly
         }
-        let rendered = FilmProcessing.correctedPreview(
-          image: request.source,
+        // Preserve the density path's sensor-space flat-field geometry, but
+        // defer its allocation/resizing until a CPU render actually needs it.
+        let flatField: UInt16Image? =
+          renderParameters.densityPipelineEnabled
+          ? request.flatField?.resized(width: request.source.width, height: request.source.height)
+            ?? Self.unityFlatField(for: request.source)
+          : nil
+        let rendered = request.cpuPreparation.render(
           parameters: renderParameters,
-          flatField: request.flatField
+          flatField: flatField
         )
         guard let preview = rendered.makePreviewCGImage() else {
           return nil
         }
-        guard let statistics = Self.previewStatistics(for: rendered) else {
-          return nil
-        }
+        let sample = rendered.previewStatisticsSample()
         return RenderedPreview(
-          cgImage: preview,
-          rendererName: "CPU",
-          statistics: statistics
-        )
+          cgImage: preview, rendererName: "CPU", detail: nil,
+          statistics: { sample.statistics() ?? .empty })
       }.value
 
-      let renderDuration = Date().timeIntervalSince(renderStart) * 1000
+      let renderDuration = Self.milliseconds(renderStart.duration(to: .now))
+      await previewRenderCompletionHook?(request.parameters)
 
-      guard !Task.isCancelled else {
+      guard !Task.isCancelled, generation == renderLoopGeneration else {
         break
       }
-      guard pendingRender == nil else {
-        lastRenderEnd = ContinuousClock.now
-        let now = ContinuousClock.now
-        let elapsed = lastRenderEnd.duration(to: now)
-        let interval = Self.renderCoalesceInterval
-        if elapsed < interval {
-          try? await Task.sleep(for: interval - elapsed)
-        }
-        guard generation == renderLoopGeneration else { break }
-        continue
-      }
+      // A completed point edit is useful even when a newer one is queued.
+      // Document, source, comparison, and geometry changes invalidate the entire
+      // context, including a change away and back while this frame was running.
       guard selection == request.selection,
-        previewDisplayParameters == request.parameters,
+        previewSourceGeneration == request.sourceGeneration,
+        viewportRevision == request.viewportRevision,
+        renderContextGeneration == request.contextGeneration,
+        request.revision > publishedRenderRevision,
+        pendingRender != nil || previewDisplayParameters == request.parameters,
         showOriginal == request.showOriginal,
         let result
       else {
+        var stats = renderStats
+        stats.droppedSnapshots += 1
+        renderStats = stats
         continue
       }
       let preview = result.cgImage
 
-      let totalLatency = Date().timeIntervalSince(submitTime) * 1000
+      let publicationTime = ContinuousClock.now
+      let totalLatency = Self.milliseconds(submitTime.duration(to: publicationTime))
       var stats = renderStats
       stats.displayedRenders += 1
       stats.lastLatencyMs = totalLatency
       stats.peakLatencyMs = max(stats.peakLatencyMs, totalLatency)
       stats.totalSubmissionLatencyMs += totalLatency
+      stats.lastPreparationMs = Self.milliseconds(request.interactionStart.duration(to: submitTime))
+      stats.lastQueueWaitMs = Self.milliseconds(submitTime.duration(to: renderStart))
+      stats.lastRenderMs = renderDuration
+      stats.lastInteractionLatencyMs = Self.milliseconds(
+        request.interactionStart.duration(to: publicationTime))
+      if let lastPublicationTime {
+        stats.longestPublicationGapMs = max(
+          stats.longestPublicationGapMs,
+          Self.milliseconds(lastPublicationTime.duration(to: publicationTime)))
+      }
       renderStats = stats
+      lastPublicationTime = publicationTime
+      publishedRenderRevision = request.revision
+      publishedPreviewParameters = request.parameters
 
       os_signpost(
-        .event, log: Self.signpostLog, name: "Frame Displayed",
+        .event, log: Self.signpostLog, name: "Frame Published",
         signpostID: signpostID,
-        "renderMs=%.1f totalMs=%.1f submissions=%d displayed=%d dropped=%d",
+        "renderMs=%.1f totalMs=%.1f submissions=%d displayed=%d dropped=%d editProxy=%d",
         renderDuration, totalLatency,
-        stats.submittedSnapshots, stats.displayedRenders, stats.droppedSnapshots)
+        stats.submittedSnapshots, stats.displayedRenders, stats.droppedSnapshots,
+        request.usesContinuousEditPreview ? 1 : 0)
 
-      previewImage = PreviewBitmap.nsImage(from: preview)
-      previewStatistics = result.statistics
+      previewImage = PreviewBitmap.nsImage(
+        from: preview,
+        logicalSize: NSSize(
+          width: request.logicalDimensions.width,
+          height: request.logicalDimensions.height))
+      if let detail = result.detail, let rect = request.demand?.detailRect {
+        previewDetail = PreviewDetail(image: PreviewBitmap.nsImage(from: detail), rect: rect)
+      } else {
+        previewDetail = nil
+      }
+      submitPreviewStatistics(result.statistics, request: request)
       if let interval = pendingFirstPreviewInterval,
         interval.filename == request.selection.lastPathComponent
       {
@@ -4197,16 +4500,6 @@ final class AppModel: ObservableObject {
       }
 
       lastRenderEnd = ContinuousClock.now
-      guard pendingRender == nil else {
-        let now = ContinuousClock.now
-        let elapsed = lastRenderEnd.duration(to: now)
-        let interval = Self.renderCoalesceInterval
-        if elapsed < interval {
-          try? await Task.sleep(for: interval - elapsed)
-        }
-        guard generation == renderLoopGeneration else { break }
-        continue
-      }
     }
 
     guard generation == renderLoopGeneration else {
@@ -4214,6 +4507,11 @@ final class AppModel: ObservableObject {
     }
     renderTask = nil
     isRendering = false
+  }
+
+  private static func milliseconds(_ duration: Duration) -> Double {
+    Double(duration.components.seconds) * 1_000
+      + Double(duration.components.attoseconds) / 1e15
   }
 
   private func capturePresetRollback(named name: String) {
@@ -4240,6 +4538,8 @@ final class AppModel: ObservableObject {
     renderTask?.cancel()
     renderTask = nil
     pendingRender = nil
+    pendingStatistics = nil
+    previewDetail = nil
     isRendering = false
   }
 
@@ -4302,7 +4602,13 @@ final class AppModel: ObservableObject {
     let display = try decodeRawPreview(
       url, maxDimension: rawFullPreviewDecodeBound, resizeToBound: false)
     let analysis = display.resizedToFit(maxDimension: analysisPreviewMaxDimension)
-    guard let renderer = StillPreviewRenderer(image: display, analysisImage: analysis) else {
+    let continuousEditSource = display.resizedToFit(
+      maxDimension: continuousEditPreviewMaxDimension)
+    guard
+      let renderer = StillPreviewRenderer(image: display, analysisImage: analysis),
+      let continuousEditRenderer = StillPreviewRenderer(
+        image: continuousEditSource, analysisImage: analysis)
+    else {
       throw CocoaError(.coderInvalidValue)
     }
     return CachedPreviewSession(
@@ -4310,31 +4616,9 @@ final class AppModel: ObservableObject {
       displaySource: display,
       analysisSource: analysis,
       previewRenderer: renderer,
+      continuousEditSource: continuousEditSource,
+      continuousEditRenderer: continuousEditRenderer,
       sourcePixelDimensions: fullResolutionDimensions(of: url))
-  }
-
-  nonisolated private static func demotedSession(
-    from session: CachedPreviewSession,
-    kind: PreviewSourceKind
-  ) -> CachedPreviewSession {
-    let maxDimension =
-      switch kind {
-      case .rawInspect: rawInspectPreviewMaxDimension
-      case .rawDetail: rawDetailPreviewMaxDimension
-      case .rawDraft: rawDraftPreviewMaxDimension
-      default: rawDetailPreviewMaxDimension
-      }
-    let display = session.displaySource.resizedToFit(maxDimension: maxDimension)
-    let analysis = session.analysisSource.resizedToFit(maxDimension: analysisPreviewMaxDimension)
-    guard let renderer = StillPreviewRenderer(image: display, analysisImage: analysis) else {
-      return session
-    }
-    return CachedPreviewSession(
-      sourceKind: kind,
-      displaySource: display,
-      analysisSource: analysis,
-      previewRenderer: renderer,
-      sourcePixelDimensions: session.sourcePixelDimensions)
   }
 
   nonisolated private static func makeFastPreviewSession(
@@ -4486,13 +4770,56 @@ actor AuthoritativeImageDecoder {
   }
 }
 
+/// Only point adjustments may publish an intermediate completed revision.
+/// Keep geometry and interpretation changes behind a generation boundary.
+private struct PreviewRenderContext: Equatable {
+  let selection: URL
+  let sourceGeneration: Int
+  let showOriginal: Bool
+  let geometry: ProcessingParameters
+
+  init(
+    selection: URL, sourceGeneration: Int,
+    parameters: ProcessingParameters, showOriginal: Bool
+  ) {
+    self.selection = selection
+    self.sourceGeneration = sourceGeneration
+    self.showOriginal = showOriginal
+    // A canonical geometry-only value shares the engine's coordinate types
+    // and equality while excluding tone, color, and other point adjustments.
+    var geometry = ProcessingParameters(
+      borderCrop: parameters.borderCrop,
+      flip: parameters.flip,
+      rotation: parameters.rotation,
+      straightenAngle: parameters.straightenAngle,
+      filmType: parameters.filmType,
+      densityPipelineEnabled: parameters.densityPipelineEnabled,
+      cropRect: parameters.cropRect,
+      cropRectCoordinateSpace: parameters.cropRectCoordinateSpace,
+      perspectiveCrop: parameters.perspectiveCrop,
+      manualCrop: parameters.manualCrop)
+    geometry.filmNegativeParams.enabled = parameters.filmNegativeParams.enabled
+    geometry.filmNegativeParams.rendering = parameters.filmNegativeParams.rendering
+    self.geometry = geometry
+  }
+}
+
 private struct PreviewRenderRequest: Sendable {
+  let revision: Int
+  let contextGeneration: Int
+  let sourceGeneration: Int
   let selection: URL
   let source: UInt16Image
   let renderer: StillPreviewRenderer?
   let parameters: ProcessingParameters
   let showOriginal: Bool
-  let submitTime: Date
+  let logicalDimensions: PixelDimensions
+  let usesContinuousEditPreview: Bool
+  let interactionStart: ContinuousClock.Instant
+  let submitTime: ContinuousClock.Instant
+  let cpuPreparation: CPUPreviewPreparationCache
+  let viewportRevision: Int
+  let demand: PreviewRenderDemand?
   let flatField: UInt16Image?
 }
 
@@ -4562,27 +4889,57 @@ private struct PreparedStackCombine: Sendable {
   let members: [UInt16Image]
 }
 
-private actor RawFullPreviewDecodeGate {
-  func run<T: Sendable>(_ operation: @Sendable () throws -> T) rethrows -> T {
-    try operation()
-  }
-}
-
 private struct CachedPreviewSession: Sendable {
   let sourceKind: PreviewSourceKind
   let displaySource: UInt16Image
   let analysisSource: UInt16Image
   let previewRenderer: StillPreviewRenderer
+  let continuousEditSource: UInt16Image?
+  let continuousEditRenderer: StillPreviewRenderer?
   let sourcePixelDimensions: PixelDimensions?
 
+  init(
+    sourceKind: PreviewSourceKind,
+    displaySource: UInt16Image,
+    analysisSource: UInt16Image,
+    previewRenderer: StillPreviewRenderer,
+    continuousEditSource: UInt16Image? = nil,
+    continuousEditRenderer: StillPreviewRenderer? = nil,
+    sourcePixelDimensions: PixelDimensions?
+  ) {
+    self.sourceKind = sourceKind
+    self.displaySource = displaySource
+    self.analysisSource = analysisSource
+    self.previewRenderer = previewRenderer
+    self.continuousEditSource = continuousEditSource
+    self.continuousEditRenderer = continuousEditRenderer
+    self.sourcePixelDimensions = sourcePixelDimensions
+  }
+
   var byteCount: Int {
-    (displaySource.pixels.count + analysisSource.pixels.count)
+    let sharesAnalysisStorage = displaySource.pixels.withUnsafeBufferPointer { display in
+      analysisSource.pixels.withUnsafeBufferPointer { analysis in
+        display.baseAddress == analysis.baseAddress
+      }
+    }
+    let analysisCount = sharesAnalysisStorage ? 0 : analysisSource.pixels.count
+    let continuousEditCount = continuousEditSource?.pixels.count ?? 0
+    let continuousEditRendererBytes = continuousEditRenderer?.retainedRGBAByteCount ?? 0
+    return (displaySource.pixels.count + analysisCount + continuousEditCount)
       * MemoryLayout<UInt16>.stride
+      + previewRenderer.retainedRGBAByteCount + continuousEditRendererBytes
   }
 }
 
 private struct RenderedPreview: Sendable {
   let cgImage: CGImage
   let rendererName: String
-  let statistics: RenderReadyImageStatistics
+  let detail: CGImage?
+  let statistics: @Sendable () -> RenderReadyImageStatistics
+}
+
+private struct PreviewStatisticsRequest: Sendable {
+  let revision: Int
+  let sourceGeneration: Int
+  let compute: @Sendable () -> RenderReadyImageStatistics
 }

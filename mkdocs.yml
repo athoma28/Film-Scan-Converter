@@ -22,7 +22,13 @@ nav:
       - Release Runbook: development/native-release.md
       - Contributing: contributing.md
       - Preview Architecture: development/realtime-preview-plan.md
+      - Performance Research: performance/research-directions-2026-09-12.md
+      - B&W Tonality Research: performance/bw-tonality-2026-09-13.md
+      - Second Research Pass: performance/research-pass-two-2026-09-13.md
+      - Performance Implementation: performance/implementation-2026-09-13.md
+      - Full-Resolution Edit Scaling: performance/preview-scale-2026-09-14.md
       - Architecture Contracts: development/swift-port-evaluation.md
+      - RAW Upgrade Compatibility: development/raw-decode-compatibility.md
       - X-Trans Mosaic Binning: development/xtrans-preview-mosaic-binning.md
   - Benchmarks:
       - Preview Analysis: performance/preview-analysis.md
