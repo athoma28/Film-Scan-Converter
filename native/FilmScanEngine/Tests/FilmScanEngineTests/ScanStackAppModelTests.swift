@@ -151,6 +151,66 @@ struct ScanStackAppModelTests {
     #expect(exported == expectedOutput)
   }
 
+  @Test("Sidebar reorder reconciles enabled stacks and restores the selected capture")
+  func sidebarReorderReconcilesEnabledStack() async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-reorder-stack-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let first = directory.appendingPathComponent("first.png")
+    let second = directory.appendingPathComponent("second.png")
+    let other = directory.appendingPathComponent("other.png")
+    for url in [first, second] {
+      try syntheticCapture(noiseOffset: 0).write(
+        to: url, format: .png, parameters: ExportParameters(format: .png))
+    }
+    try syntheticCapture(noiseOffset: 0, seed: 91).write(
+      to: other, format: .png, parameters: ExportParameters(format: .png))
+
+    let model = AppModel()
+    model.importFiles([first, second, other])
+    try await waitUntil { !model.isLoading && !model.isAnalyzingScanStacks }
+    let stack = try #require(model.detectedScanStacks.first)
+    #expect(stack.members == [first, second])
+    model.setScanStackEnabled(true, for: stack)
+    try await waitUntil {
+      model.previewSourceKind == .alignedStack
+        && !model.isBuildingScanStack && !model.isUpgradingScanStack
+    }
+
+    model.moveSidebarFiles(fromOffsets: IndexSet(integer: 0), toOffset: 1)
+    #expect(model.isScanStackEnabled(stack))
+    // Moving the intact stack preserves the reference capture and opt-in.
+    model.moveSidebarFiles(fromOffsets: IndexSet([0, 1]), toOffset: 3)
+    #expect(model.files == [other, first, second])
+    #expect(model.isScanStackEnabled(stack))
+    #expect(model.previewSourceKind == .alignedStack)
+
+    // Swapping its captures changes the anchor. Clear the opt-in synchronously
+    // so an immediate export cannot use the old group or merged preview.
+    model.moveSelectedSidebarFile(by: 1)
+    #expect(model.files == [other, second, first])
+    #expect(model.enabledScanStackIDs.isEmpty)
+    #expect(model.detectedScanStacks.first?.anchor == second)
+    #expect(model.selection == first)
+    #expect(model.selectedFiles == [first])
+    #expect(model.previewSourceKind != .alignedStack)
+    try await waitUntil { !model.isLoading && !model.isRendering }
+    #expect(model.decodedImage == (try StandardImageDecoder.decode(first)))
+    #expect(model.scanStackEffectiveMode == nil)
+
+    let reorderedStack = try #require(model.detectedScanStacks.first)
+    model.setScanStackEnabled(true, for: reorderedStack)
+    try await waitUntil {
+      model.previewSourceKind == .alignedStack
+        && !model.isBuildingScanStack && !model.isUpgradingScanStack
+    }
+    model.setScanStackEnabled(false, for: reorderedStack)
+    try await waitUntil { !model.isLoading && !model.isRendering }
+    #expect(model.previewSourceKind != .alignedStack)
+    #expect(model.decodedImage == (try StandardImageDecoder.decode(second)))
+  }
+
   @Test("Distinct imported frames stay independent instead of forming one stack")
   func distinctImportsDoNotFormAScanStack() async throws {
     let workDirectory = FileManager.default.temporaryDirectory

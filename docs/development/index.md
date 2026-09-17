@@ -16,6 +16,26 @@ New product work belongs in the native Swift/macOS app. Use
 
 ## Architecture And Performance
 
+- [Viewport rendering and work reuse](../performance/viewport-and-work-reuse-2026-09-16.md):
+  navigation cache reuse, cancellable RAW scheduling, CPU preparation, bounded
+  linear scratch, visible-region rendering, and asynchronous statistics.
+
+- [RAW upgrade compatibility](raw-decode-compatibility.md): X-T5 source geometry,
+  color continuity, and unchanged pixel references across LibRaw upgrades.
+- [Performance implementation](../performance/implementation-2026-09-13.md):
+  background persistence, exact Natural B&W lookup, preview publication,
+  analysis reuse, GPU manual crop, and retained-memory accounting.
+- [Full-resolution edit scaling](../performance/preview-scale-2026-09-14.md):
+  real-RAW render-size measurements and the bounded continuous-edit proxy.
+- [Second research pass](../performance/research-pass-two-2026-09-13.md):
+  measured settings stalls, an exact B&W lookup prototype, HDR weighting and
+  precision counterexamples, and bounded implementation steps.
+- [Performance research directions](../performance/research-directions-2026-09-12.md):
+  September 12 source findings, interactive-edit repairs, and staged decode,
+  GPU preview, and export experiments.
+- [B&W tonality investigation](../performance/bw-tonality-2026-09-13.md):
+  confirmed flat-curve loss, HDR merge headroom and precision probes, and
+  small-region reconstruction experiments.
 - [Still preview architecture](realtime-preview-plan.md): image tiers,
   scheduling, viewport, and preview/export boundaries.
 - [X-Trans mosaic binning](xtrans-preview-mosaic-binning.md): why requested

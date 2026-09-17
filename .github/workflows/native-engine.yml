@@ -47,6 +47,8 @@ jobs:
           native/FilmScanEngine/Tests
       - name: Install native dependencies
         run: brew install libraw
+      - name: Check RAW decode compatibility boundaries
+        run: bash native/test-raw-compatibility.sh
       - name: Run native engine regression gate
         run: >-
           swift test --package-path native/FilmScanEngine

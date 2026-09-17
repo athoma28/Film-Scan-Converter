@@ -1,4 +1,5 @@
 #include "CLibRawShim.h"
+#include "RawDecodeCompatibility.h"
 
 #include <libraw/libraw.h>
 #include <malloc/malloc.h>
@@ -10,6 +11,8 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+libraw_data_t *fsc_init_rawpy_compatibility_decoder(void);
 
 int fsc_decode_rawtherapee_direct(
     const char *path,
@@ -200,7 +203,7 @@ int fsc_decode_raw_direct_with_profile(
     }
     FSC_LOG("mmap OK: %lld bytes", (long long)st.st_size);
 
-    libraw_data_t *raw = libraw_init(LIBRAW_OPTIONS_NONE);
+    libraw_data_t *raw = fsc_init_rawpy_compatibility_decoder();
     if (raw == NULL) {
         FSC_LOG("decode_raw_direct FAIL: libraw_init returned NULL");
         munmap(mapped, (size_t)st.st_size);
@@ -216,6 +219,7 @@ int fsc_decode_raw_direct_with_profile(
         return code;
     }
     FSC_LOG("libraw_open_buffer OK: %s", raw->idata.make);
+    fsc_restore_legacy_raw_geometry(raw);
 
     code = set_decode_params(raw, full_resolution, profile, error_message, error_message_capacity);
     if (code != LIBRAW_SUCCESS) {
@@ -230,6 +234,7 @@ int fsc_decode_raw_direct_with_profile(
     mapped = NULL;
     if (code == LIBRAW_SUCCESS) {
         FSC_LOG("libraw_unpack OK; dcraw processing...");
+        fsc_restore_legacy_raw_color(raw);
         code = check_libraw(libraw_dcraw_process(raw), error_message, error_message_capacity);
     }
     if (code != LIBRAW_SUCCESS) {
@@ -368,6 +373,7 @@ int fsc_raw_full_dimensions(
         libraw_open_file(raw, path), error_message, error_message_capacity
     );
     if (code == LIBRAW_SUCCESS) {
+        fsc_restore_legacy_raw_geometry(raw);
         raw->params.half_size = 0;
         code = check_libraw(
             libraw_adjust_sizes_info_only(raw), error_message, error_message_capacity

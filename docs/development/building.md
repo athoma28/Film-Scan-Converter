@@ -5,6 +5,7 @@ Tools), and Homebrew LibRaw. Commands below run from the repository root.
 
 ```sh
 brew install libraw
+bash native/test-raw-compatibility.sh
 swift format lint --strict --recursive native/FilmScanEngine/Package.swift native/FilmScanEngine/Sources native/FilmScanEngine/Tests
 swift test --package-path native/FilmScanEngine --no-parallel
 swift build --package-path native/FilmScanEngine --product FilmScanConverterMac
@@ -43,6 +44,11 @@ The [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests
 opt-in roll tests, and independent-reader checks. [Native package documentation](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/README.md)
 lists benchmark commands. [Analysis](../performance/preview-analysis.md) and
 [export](../performance/40mp-export.md) reports define comparable workloads.
+
+The [RAW upgrade compatibility note](raw-decode-compatibility.md) explains the
+narrow X-T5 adapter that preserves the frozen 0.21.4 source contract with
+LibRaw 0.22.2. Its C/C++ boundary checks run in CI; exact RAW pixel checks also
+require the local corpus. Review both when changing LibRaw.
 
 ## Documentation
 

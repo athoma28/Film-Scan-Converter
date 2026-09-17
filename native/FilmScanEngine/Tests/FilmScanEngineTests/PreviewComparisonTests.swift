@@ -71,6 +71,7 @@ struct PreviewComparisonTests {
     // Editors need access to the uncropped negative without changing the saved
     // composition or letting their temporary canvas state affect comparison.
     let savedParameters = model.parameters
+    try await model.flushSettings()
     let savedState = try store.loadState()
     let savedHistory = model.undoActionName
     model.beginSourceGeometryEditing()
@@ -105,6 +106,7 @@ struct PreviewComparisonTests {
     try await waitForPreview(model)
     #expect(!model.showOriginal)
     #expect(pixelData(try displayedImage(model)) == pixelData(corrected))
+    try await model.flushSettings()
     let persisted = try store.loadState()
     #expect(persisted == savedState)
   }
@@ -209,6 +211,7 @@ struct PreviewComparisonTests {
       FilmProcessing.correctedPreview(image: source, parameters: model.parameters)
         .makePreviewCGImage())
     #expect(pixelData(try displayedImage(model)) == pixelData(expected))
+    try await model.flushSettings()
     let persisted = try store.loadState()
     let saved = try #require(persisted.settingsByPath[input.standardizedFileURL.path])
     #expect(saved.manualCrop == model.manualCrop)
@@ -257,6 +260,7 @@ struct PreviewComparisonTests {
     model.showOriginal = wasComparing
     try await waitForPreview(model)
     let committedPreview = try displayedImage(model)
+    try await model.flushSettings()
     let initialPersistedState = try store.loadState()
 
     // Follow the view's editor lifecycle. The loupe and rebate sampler need
@@ -290,6 +294,7 @@ struct PreviewComparisonTests {
     try await expectSourceEditorCanvas(model, source: source)
     model.undo()
     try await expectSourceEditorCanvas(model, source: source)
+    try await model.flushSettings()
     let persisted = try store.loadState()
     #expect(persisted == initialPersistedState)
 

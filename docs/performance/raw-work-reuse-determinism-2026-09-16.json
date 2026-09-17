@@ -1,0 +1,624 @@
+{
+  "baseRevision": "4e962c1",
+  "workingTree": "Includes the existing September 13\u201314 changes and the September 16 work-reuse implementation.",
+  "crossWorkerBoundariesAgree": true,
+  "establishedTIFFHashPreserved": true,
+  "parallel": {
+    "boundaryNote": "Boundaries are listed in pipeline order: unpackedMosaic, demosaicedImage, processedImage, postISOImage, swiftImage, correctedImage, writerInputPixels, outputFile. The first boundary with allAgree == false is the first stage a candidate build allowed to diverge. writerInputPixels is the image handed to the writer before packing; packed bytes and the encoded file are deterministic functions of it plus format parameters. Digests hash raw buffer bytes and compare runs of the same build on the same machine. Diagnostic hashing is included in decodeSeconds; decodeUnaccountedSeconds records decode work not assigned to the production substage timers.",
+    "cleanupPolicy": "Each generated export is hashed and deleted immediately after its measured run.",
+    "configuration": "release-mode repeated full-resolution camera-scan decode with stage-boundary SHA-256 capture",
+    "deterministic": true,
+    "files": [
+      {
+        "boundaryAgreement": [
+          {
+            "allAgree": true,
+            "boundary": "unpackedMosaic",
+            "distinctDigests": 1
+          },
+          {
+            "allAgree": true,
+            "boundary": "demosaicedImage",
+            "distinctDigests": 1
+          },
+          {
+            "allAgree": true,
+            "boundary": "processedImage",
+            "distinctDigests": 1
+          },
+          {
+            "allAgree": true,
+            "boundary": "postISOImage",
+            "distinctDigests": 1
+          },
+          {
+            "allAgree": true,
+            "boundary": "swiftImage",
+            "distinctDigests": 1
+          },
+          {
+            "allAgree": true,
+            "boundary": "correctedImage",
+            "distinctDigests": 1
+          },
+          {
+            "allAgree": true,
+            "boundary": "writerInputPixels",
+            "distinctDigests": 1
+          },
+          {
+            "allAgree": true,
+            "boundary": "outputFile",
+            "distinctDigests": 1
+          }
+        ],
+        "decoder": "0.22.2-Release",
+        "deterministic": true,
+        "file": "fuji400-fresh/DSCF2833.RAF",
+        "megapixels": 40.186368,
+        "repetitions": 5,
+        "samples": [
+          {
+            "correctedImageSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "decodeSeconds": 5.879759708,
+            "decodeSubstages": {
+              "demosaicSeconds": 4.523501875,
+              "isoPolicySeconds": 0.136396583,
+              "libRawPostprocessSeconds": 0.30465958299999996,
+              "openSeconds": 0.000850834,
+              "processedImageSeconds": 0.056785292,
+              "swiftCopySwizzleSeconds": 0.05508,
+              "unpackSeconds": 0.275895541
+            },
+            "decodeUnaccountedSeconds": 0.5265899999999997,
+            "demosaicWorkerCount": 8,
+            "diagnostics": {
+              "demosaicedSHA256": "70092621482abb3a337b8956dacb86813863ef5be61aa84a44df22756f49127b",
+              "mosaicCFABytes": 36,
+              "mosaicFilters": 9,
+              "mosaicRawHeight": 5196,
+              "mosaicRawWidth": 7872,
+              "postISOImageSHA256": "7f81faea53fa4858625efe64141adbb035eb268fd2c922b4fbe8d7f1e5835ced",
+              "processedImageSHA256": "60be4a2510729f1b1be9600f8af61db05750527855ce29bf3accb427cad3f3de",
+              "swiftImageSHA256": "91cfb89a62f1fc7296d3b17840ce806b1881501e7f825d061a25f72b3a22d730",
+              "unpackedMosaicSHA256": "2afd88477279486c912bcd7c9d09d7889b92ff51f13eb8f7c9ef13bc39131897"
+            },
+            "encodingFinalizationSeconds": 1.890764333,
+            "geometrySeconds": 3.8958e-05,
+            "outputBytes": 174847758,
+            "outputRemovedAfterRun": true,
+            "outputSHA256": "7be6f460d7d47e46a41f1196c88dc4bce00a22c14583c0f64e5fdd7f6311007a",
+            "peakPhysicalFootprintBytes": 701384120,
+            "physicalFootprintBytesAfterRelease": 67618592,
+            "pixelPackingSeconds": 0.015888666,
+            "processingSeconds": 0.175258541,
+            "repetition": 1,
+            "runClass": "first-run",
+            "sourceShape": [
+              5184,
+              7752,
+              3
+            ],
+            "unpackWorkerCount": 8,
+            "writerInputPixelsSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "writerInputShape": [
+              5184,
+              7752,
+              3
+            ]
+          },
+          {
+            "correctedImageSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "decodeSeconds": 5.743388167,
+            "decodeSubstages": {
+              "demosaicSeconds": 4.410922084,
+              "isoPolicySeconds": 0.137347959,
+              "libRawPostprocessSeconds": 0.305323916,
+              "openSeconds": 0.001681084,
+              "processedImageSeconds": 0.05801225,
+              "swiftCopySwizzleSeconds": 0.045812958,
+              "unpackSeconds": 0.263561
+            },
+            "decodeUnaccountedSeconds": 0.5207269160000001,
+            "demosaicWorkerCount": 8,
+            "diagnostics": {
+              "demosaicedSHA256": "70092621482abb3a337b8956dacb86813863ef5be61aa84a44df22756f49127b",
+              "mosaicCFABytes": 36,
+              "mosaicFilters": 9,
+              "mosaicRawHeight": 5196,
+              "mosaicRawWidth": 7872,
+              "postISOImageSHA256": "7f81faea53fa4858625efe64141adbb035eb268fd2c922b4fbe8d7f1e5835ced",
+              "processedImageSHA256": "60be4a2510729f1b1be9600f8af61db05750527855ce29bf3accb427cad3f3de",
+              "swiftImageSHA256": "91cfb89a62f1fc7296d3b17840ce806b1881501e7f825d061a25f72b3a22d730",
+              "unpackedMosaicSHA256": "2afd88477279486c912bcd7c9d09d7889b92ff51f13eb8f7c9ef13bc39131897"
+            },
+            "encodingFinalizationSeconds": 1.998608459,
+            "geometrySeconds": 6.67e-07,
+            "outputBytes": 174847758,
+            "outputRemovedAfterRun": true,
+            "outputSHA256": "7be6f460d7d47e46a41f1196c88dc4bce00a22c14583c0f64e5fdd7f6311007a",
+            "peakPhysicalFootprintBytes": 701384120,
+            "physicalFootprintBytesAfterRelease": 15894424,
+            "pixelPackingSeconds": 0.025278,
+            "processingSeconds": 0.1726625,
+            "repetition": 2,
+            "runClass": "warm-filesystem-cache",
+            "sourceShape": [
+              5184,
+              7752,
+              3
+            ],
+            "unpackWorkerCount": 8,
+            "writerInputPixelsSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "writerInputShape": [
+              5184,
+              7752,
+              3
+            ]
+          },
+          {
+            "correctedImageSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "decodeSeconds": 5.68404875,
+            "decodeSubstages": {
+              "demosaicSeconds": 4.343709416,
+              "isoPolicySeconds": 0.136392583,
+              "libRawPostprocessSeconds": 0.3097449179999996,
+              "openSeconds": 0.00076875,
+              "processedImageSeconds": 0.058967791,
+              "swiftCopySwizzleSeconds": 0.045691667,
+              "unpackSeconds": 0.2685005
+            },
+            "decodeUnaccountedSeconds": 0.5202731250000001,
+            "demosaicWorkerCount": 8,
+            "diagnostics": {
+              "demosaicedSHA256": "70092621482abb3a337b8956dacb86813863ef5be61aa84a44df22756f49127b",
+              "mosaicCFABytes": 36,
+              "mosaicFilters": 9,
+              "mosaicRawHeight": 5196,
+              "mosaicRawWidth": 7872,
+              "postISOImageSHA256": "7f81faea53fa4858625efe64141adbb035eb268fd2c922b4fbe8d7f1e5835ced",
+              "processedImageSHA256": "60be4a2510729f1b1be9600f8af61db05750527855ce29bf3accb427cad3f3de",
+              "swiftImageSHA256": "91cfb89a62f1fc7296d3b17840ce806b1881501e7f825d061a25f72b3a22d730",
+              "unpackedMosaicSHA256": "2afd88477279486c912bcd7c9d09d7889b92ff51f13eb8f7c9ef13bc39131897"
+            },
+            "encodingFinalizationSeconds": 1.990052791,
+            "geometrySeconds": 6.66e-07,
+            "outputBytes": 174847758,
+            "outputRemovedAfterRun": true,
+            "outputSHA256": "7be6f460d7d47e46a41f1196c88dc4bce00a22c14583c0f64e5fdd7f6311007a",
+            "peakPhysicalFootprintBytes": 701384120,
+            "physicalFootprintBytesAfterRelease": 17467456,
+            "pixelPackingSeconds": 0.024325125,
+            "processingSeconds": 0.172529333,
+            "repetition": 3,
+            "runClass": "warm-filesystem-cache",
+            "sourceShape": [
+              5184,
+              7752,
+              3
+            ],
+            "unpackWorkerCount": 8,
+            "writerInputPixelsSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "writerInputShape": [
+              5184,
+              7752,
+              3
+            ]
+          },
+          {
+            "correctedImageSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "decodeSeconds": 5.716727584,
+            "decodeSubstages": {
+              "demosaicSeconds": 4.375447834,
+              "isoPolicySeconds": 0.138527708,
+              "libRawPostprocessSeconds": 0.3123154580000001,
+              "openSeconds": 0.001229375,
+              "processedImageSeconds": 0.057313917,
+              "swiftCopySwizzleSeconds": 0.043977583,
+              "unpackSeconds": 0.265200125
+            },
+            "decodeUnaccountedSeconds": 0.5227155839999993,
+            "demosaicWorkerCount": 8,
+            "diagnostics": {
+              "demosaicedSHA256": "70092621482abb3a337b8956dacb86813863ef5be61aa84a44df22756f49127b",
+              "mosaicCFABytes": 36,
+              "mosaicFilters": 9,
+              "mosaicRawHeight": 5196,
+              "mosaicRawWidth": 7872,
+              "postISOImageSHA256": "7f81faea53fa4858625efe64141adbb035eb268fd2c922b4fbe8d7f1e5835ced",
+              "processedImageSHA256": "60be4a2510729f1b1be9600f8af61db05750527855ce29bf3accb427cad3f3de",
+              "swiftImageSHA256": "91cfb89a62f1fc7296d3b17840ce806b1881501e7f825d061a25f72b3a22d730",
+              "unpackedMosaicSHA256": "2afd88477279486c912bcd7c9d09d7889b92ff51f13eb8f7c9ef13bc39131897"
+            },
+            "encodingFinalizationSeconds": 1.869420125,
+            "geometrySeconds": 5.83e-07,
+            "outputBytes": 174847758,
+            "outputRemovedAfterRun": true,
+            "outputSHA256": "7be6f460d7d47e46a41f1196c88dc4bce00a22c14583c0f64e5fdd7f6311007a",
+            "peakPhysicalFootprintBytes": 701384120,
+            "physicalFootprintBytesAfterRelease": 17680520,
+            "pixelPackingSeconds": 0.022864416,
+            "processingSeconds": 0.1583975,
+            "repetition": 4,
+            "runClass": "warm-filesystem-cache",
+            "sourceShape": [
+              5184,
+              7752,
+              3
+            ],
+            "unpackWorkerCount": 8,
+            "writerInputPixelsSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "writerInputShape": [
+              5184,
+              7752,
+              3
+            ]
+          },
+          {
+            "correctedImageSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "decodeSeconds": 5.705642,
+            "decodeSubstages": {
+              "demosaicSeconds": 4.370231959,
+              "isoPolicySeconds": 0.13678625,
+              "libRawPostprocessSeconds": 0.3038830410000005,
+              "openSeconds": 0.000719167,
+              "processedImageSeconds": 0.056203125,
+              "swiftCopySwizzleSeconds": 0.050469,
+              "unpackSeconds": 0.264111833
+            },
+            "decodeUnaccountedSeconds": 0.5232376250000002,
+            "demosaicWorkerCount": 8,
+            "diagnostics": {
+              "demosaicedSHA256": "70092621482abb3a337b8956dacb86813863ef5be61aa84a44df22756f49127b",
+              "mosaicCFABytes": 36,
+              "mosaicFilters": 9,
+              "mosaicRawHeight": 5196,
+              "mosaicRawWidth": 7872,
+              "postISOImageSHA256": "7f81faea53fa4858625efe64141adbb035eb268fd2c922b4fbe8d7f1e5835ced",
+              "processedImageSHA256": "60be4a2510729f1b1be9600f8af61db05750527855ce29bf3accb427cad3f3de",
+              "swiftImageSHA256": "91cfb89a62f1fc7296d3b17840ce806b1881501e7f825d061a25f72b3a22d730",
+              "unpackedMosaicSHA256": "2afd88477279486c912bcd7c9d09d7889b92ff51f13eb8f7c9ef13bc39131897"
+            },
+            "encodingFinalizationSeconds": 1.868669792,
+            "geometrySeconds": 5.84e-07,
+            "outputBytes": 174847758,
+            "outputRemovedAfterRun": true,
+            "outputSHA256": "7be6f460d7d47e46a41f1196c88dc4bce00a22c14583c0f64e5fdd7f6311007a",
+            "peakPhysicalFootprintBytes": 701384120,
+            "physicalFootprintBytesAfterRelease": 18106576,
+            "pixelPackingSeconds": 0.024902334,
+            "processingSeconds": 0.16132725,
+            "repetition": 5,
+            "runClass": "warm-filesystem-cache",
+            "sourceShape": [
+              5184,
+              7752,
+              3
+            ],
+            "unpackWorkerCount": 8,
+            "writerInputPixelsSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "writerInputShape": [
+              5184,
+              7752,
+              3
+            ]
+          }
+        ]
+      }
+    ],
+    "framePercent": 0,
+    "generatedAt": "2026-09-17T00:21:57Z",
+    "mode": "camera-scan-determinism",
+    "repetitions": 5,
+    "writerContract": "One LZW TIFF per repetition, matching the default benchmark's selected compression."
+  },
+  "serial": {
+    "boundaryNote": "Boundaries are listed in pipeline order: unpackedMosaic, demosaicedImage, processedImage, postISOImage, swiftImage, correctedImage, writerInputPixels, outputFile. The first boundary with allAgree == false is the first stage a candidate build allowed to diverge. writerInputPixels is the image handed to the writer before packing; packed bytes and the encoded file are deterministic functions of it plus format parameters. Digests hash raw buffer bytes and compare runs of the same build on the same machine. Diagnostic hashing is included in decodeSeconds; decodeUnaccountedSeconds records decode work not assigned to the production substage timers.",
+    "cleanupPolicy": "Each generated export is hashed and deleted immediately after its measured run.",
+    "configuration": "release-mode repeated full-resolution camera-scan decode with stage-boundary SHA-256 capture",
+    "deterministic": true,
+    "files": [
+      {
+        "boundaryAgreement": [
+          {
+            "allAgree": true,
+            "boundary": "unpackedMosaic",
+            "distinctDigests": 1
+          },
+          {
+            "allAgree": true,
+            "boundary": "demosaicedImage",
+            "distinctDigests": 1
+          },
+          {
+            "allAgree": true,
+            "boundary": "processedImage",
+            "distinctDigests": 1
+          },
+          {
+            "allAgree": true,
+            "boundary": "postISOImage",
+            "distinctDigests": 1
+          },
+          {
+            "allAgree": true,
+            "boundary": "swiftImage",
+            "distinctDigests": 1
+          },
+          {
+            "allAgree": true,
+            "boundary": "correctedImage",
+            "distinctDigests": 1
+          },
+          {
+            "allAgree": true,
+            "boundary": "writerInputPixels",
+            "distinctDigests": 1
+          },
+          {
+            "allAgree": true,
+            "boundary": "outputFile",
+            "distinctDigests": 1
+          }
+        ],
+        "decoder": "0.22.2-Release",
+        "deterministic": true,
+        "file": "fuji400-fresh/DSCF2833.RAF",
+        "megapixels": 40.186368,
+        "repetitions": 5,
+        "samples": [
+          {
+            "correctedImageSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "decodeSeconds": 20.404022167,
+            "decodeSubstages": {
+              "demosaicSeconds": 17.9729255,
+              "isoPolicySeconds": 0.137984125,
+              "libRawPostprocessSeconds": 0.38340608300000245,
+              "openSeconds": 0.000745375,
+              "processedImageSeconds": 0.056904,
+              "swiftCopySwizzleSeconds": 0.049968333,
+              "unpackSeconds": 1.2720695
+            },
+            "decodeUnaccountedSeconds": 0.5300192510000024,
+            "demosaicWorkerCount": 1,
+            "diagnostics": {
+              "demosaicedSHA256": "70092621482abb3a337b8956dacb86813863ef5be61aa84a44df22756f49127b",
+              "mosaicCFABytes": 36,
+              "mosaicFilters": 9,
+              "mosaicRawHeight": 5196,
+              "mosaicRawWidth": 7872,
+              "postISOImageSHA256": "7f81faea53fa4858625efe64141adbb035eb268fd2c922b4fbe8d7f1e5835ced",
+              "processedImageSHA256": "60be4a2510729f1b1be9600f8af61db05750527855ce29bf3accb427cad3f3de",
+              "swiftImageSHA256": "91cfb89a62f1fc7296d3b17840ce806b1881501e7f825d061a25f72b3a22d730",
+              "unpackedMosaicSHA256": "2afd88477279486c912bcd7c9d09d7889b92ff51f13eb8f7c9ef13bc39131897"
+            },
+            "encodingFinalizationSeconds": 1.894276583,
+            "geometrySeconds": 1.5292e-05,
+            "outputBytes": 174847758,
+            "outputRemovedAfterRun": true,
+            "outputSHA256": "7be6f460d7d47e46a41f1196c88dc4bce00a22c14583c0f64e5fdd7f6311007a",
+            "peakPhysicalFootprintBytes": 687031568,
+            "physicalFootprintBytesAfterRelease": 46368304,
+            "pixelPackingSeconds": 0.012267209,
+            "processingSeconds": 0.146951125,
+            "repetition": 1,
+            "runClass": "first-run",
+            "sourceShape": [
+              5184,
+              7752,
+              3
+            ],
+            "unpackWorkerCount": 1,
+            "writerInputPixelsSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "writerInputShape": [
+              5184,
+              7752,
+              3
+            ]
+          },
+          {
+            "correctedImageSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "decodeSeconds": 19.691722417,
+            "decodeSubstages": {
+              "demosaicSeconds": 17.279333875,
+              "isoPolicySeconds": 0.136395041,
+              "libRawPostprocessSeconds": 0.36362787500000116,
+              "openSeconds": 0.000723292,
+              "processedImageSeconds": 0.064863,
+              "swiftCopySwizzleSeconds": 0.044664375,
+              "unpackSeconds": 1.280733417
+            },
+            "decodeUnaccountedSeconds": 0.5213815420000003,
+            "demosaicWorkerCount": 1,
+            "diagnostics": {
+              "demosaicedSHA256": "70092621482abb3a337b8956dacb86813863ef5be61aa84a44df22756f49127b",
+              "mosaicCFABytes": 36,
+              "mosaicFilters": 9,
+              "mosaicRawHeight": 5196,
+              "mosaicRawWidth": 7872,
+              "postISOImageSHA256": "7f81faea53fa4858625efe64141adbb035eb268fd2c922b4fbe8d7f1e5835ced",
+              "processedImageSHA256": "60be4a2510729f1b1be9600f8af61db05750527855ce29bf3accb427cad3f3de",
+              "swiftImageSHA256": "91cfb89a62f1fc7296d3b17840ce806b1881501e7f825d061a25f72b3a22d730",
+              "unpackedMosaicSHA256": "2afd88477279486c912bcd7c9d09d7889b92ff51f13eb8f7c9ef13bc39131897"
+            },
+            "encodingFinalizationSeconds": 1.860401334,
+            "geometrySeconds": 6.25e-07,
+            "outputBytes": 174847758,
+            "outputRemovedAfterRun": true,
+            "outputSHA256": "7be6f460d7d47e46a41f1196c88dc4bce00a22c14583c0f64e5fdd7f6311007a",
+            "peakPhysicalFootprintBytes": 687031568,
+            "physicalFootprintBytesAfterRelease": 52872920,
+            "pixelPackingSeconds": 0.022736541,
+            "processingSeconds": 0.158506959,
+            "repetition": 2,
+            "runClass": "warm-filesystem-cache",
+            "sourceShape": [
+              5184,
+              7752,
+              3
+            ],
+            "unpackWorkerCount": 1,
+            "writerInputPixelsSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "writerInputShape": [
+              5184,
+              7752,
+              3
+            ]
+          },
+          {
+            "correctedImageSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "decodeSeconds": 19.55489125,
+            "decodeSubstages": {
+              "demosaicSeconds": 17.21410725,
+              "isoPolicySeconds": 0.136618792,
+              "libRawPostprocessSeconds": 0.30872424999999715,
+              "openSeconds": 0.000743709,
+              "processedImageSeconds": 0.059047709,
+              "swiftCopySwizzleSeconds": 0.050669959,
+              "unpackSeconds": 1.263735834
+            },
+            "decodeUnaccountedSeconds": 0.5212437469999998,
+            "demosaicWorkerCount": 1,
+            "diagnostics": {
+              "demosaicedSHA256": "70092621482abb3a337b8956dacb86813863ef5be61aa84a44df22756f49127b",
+              "mosaicCFABytes": 36,
+              "mosaicFilters": 9,
+              "mosaicRawHeight": 5196,
+              "mosaicRawWidth": 7872,
+              "postISOImageSHA256": "7f81faea53fa4858625efe64141adbb035eb268fd2c922b4fbe8d7f1e5835ced",
+              "processedImageSHA256": "60be4a2510729f1b1be9600f8af61db05750527855ce29bf3accb427cad3f3de",
+              "swiftImageSHA256": "91cfb89a62f1fc7296d3b17840ce806b1881501e7f825d061a25f72b3a22d730",
+              "unpackedMosaicSHA256": "2afd88477279486c912bcd7c9d09d7889b92ff51f13eb8f7c9ef13bc39131897"
+            },
+            "encodingFinalizationSeconds": 1.90541225,
+            "geometrySeconds": 1.125e-06,
+            "outputBytes": 174847758,
+            "outputRemovedAfterRun": true,
+            "outputSHA256": "7be6f460d7d47e46a41f1196c88dc4bce00a22c14583c0f64e5fdd7f6311007a",
+            "peakPhysicalFootprintBytes": 687031568,
+            "physicalFootprintBytesAfterRelease": 55347024,
+            "pixelPackingSeconds": 0.031881292,
+            "processingSeconds": 0.163943291,
+            "repetition": 3,
+            "runClass": "warm-filesystem-cache",
+            "sourceShape": [
+              5184,
+              7752,
+              3
+            ],
+            "unpackWorkerCount": 1,
+            "writerInputPixelsSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "writerInputShape": [
+              5184,
+              7752,
+              3
+            ]
+          },
+          {
+            "correctedImageSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "decodeSeconds": 19.510106417,
+            "decodeSubstages": {
+              "demosaicSeconds": 17.137851792,
+              "isoPolicySeconds": 0.137613375,
+              "libRawPostprocessSeconds": 0.3109642909999996,
+              "openSeconds": 0.001022416,
+              "processedImageSeconds": 0.056326,
+              "swiftCopySwizzleSeconds": 0.045923541,
+              "unpackSeconds": 1.298676292
+            },
+            "decodeUnaccountedSeconds": 0.5217287099999979,
+            "demosaicWorkerCount": 1,
+            "diagnostics": {
+              "demosaicedSHA256": "70092621482abb3a337b8956dacb86813863ef5be61aa84a44df22756f49127b",
+              "mosaicCFABytes": 36,
+              "mosaicFilters": 9,
+              "mosaicRawHeight": 5196,
+              "mosaicRawWidth": 7872,
+              "postISOImageSHA256": "7f81faea53fa4858625efe64141adbb035eb268fd2c922b4fbe8d7f1e5835ced",
+              "processedImageSHA256": "60be4a2510729f1b1be9600f8af61db05750527855ce29bf3accb427cad3f3de",
+              "swiftImageSHA256": "91cfb89a62f1fc7296d3b17840ce806b1881501e7f825d061a25f72b3a22d730",
+              "unpackedMosaicSHA256": "2afd88477279486c912bcd7c9d09d7889b92ff51f13eb8f7c9ef13bc39131897"
+            },
+            "encodingFinalizationSeconds": 1.8722276249999998,
+            "geometrySeconds": 2.042e-06,
+            "outputBytes": 174847758,
+            "outputRemovedAfterRun": true,
+            "outputSHA256": "7be6f460d7d47e46a41f1196c88dc4bce00a22c14583c0f64e5fdd7f6311007a",
+            "peakPhysicalFootprintBytes": 687031568,
+            "physicalFootprintBytesAfterRelease": 47794000,
+            "pixelPackingSeconds": 0.034815958,
+            "processingSeconds": 0.157712209,
+            "repetition": 4,
+            "runClass": "warm-filesystem-cache",
+            "sourceShape": [
+              5184,
+              7752,
+              3
+            ],
+            "unpackWorkerCount": 1,
+            "writerInputPixelsSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "writerInputShape": [
+              5184,
+              7752,
+              3
+            ]
+          },
+          {
+            "correctedImageSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "decodeSeconds": 19.480923875,
+            "decodeSubstages": {
+              "demosaicSeconds": 17.088833,
+              "isoPolicySeconds": 0.136564,
+              "libRawPostprocessSeconds": 0.3150021659999982,
+              "openSeconds": 0.000692125,
+              "processedImageSeconds": 0.056032833,
+              "swiftCopySwizzleSeconds": 0.066640541,
+              "unpackSeconds": 1.253993125
+            },
+            "decodeUnaccountedSeconds": 0.5631660849999953,
+            "demosaicWorkerCount": 1,
+            "diagnostics": {
+              "demosaicedSHA256": "70092621482abb3a337b8956dacb86813863ef5be61aa84a44df22756f49127b",
+              "mosaicCFABytes": 36,
+              "mosaicFilters": 9,
+              "mosaicRawHeight": 5196,
+              "mosaicRawWidth": 7872,
+              "postISOImageSHA256": "7f81faea53fa4858625efe64141adbb035eb268fd2c922b4fbe8d7f1e5835ced",
+              "processedImageSHA256": "60be4a2510729f1b1be9600f8af61db05750527855ce29bf3accb427cad3f3de",
+              "swiftImageSHA256": "91cfb89a62f1fc7296d3b17840ce806b1881501e7f825d061a25f72b3a22d730",
+              "unpackedMosaicSHA256": "2afd88477279486c912bcd7c9d09d7889b92ff51f13eb8f7c9ef13bc39131897"
+            },
+            "encodingFinalizationSeconds": 1.84885425,
+            "geometrySeconds": 3.33e-07,
+            "outputBytes": 174847758,
+            "outputRemovedAfterRun": true,
+            "outputSHA256": "7be6f460d7d47e46a41f1196c88dc4bce00a22c14583c0f64e5fdd7f6311007a",
+            "peakPhysicalFootprintBytes": 687031568,
+            "physicalFootprintBytesAfterRelease": 46827416,
+            "pixelPackingSeconds": 0.023568458,
+            "processingSeconds": 0.1517345,
+            "repetition": 5,
+            "runClass": "warm-filesystem-cache",
+            "sourceShape": [
+              5184,
+              7752,
+              3
+            ],
+            "unpackWorkerCount": 1,
+            "writerInputPixelsSHA256": "eb43e243ef8bbc161743e1ad9be4d793a45a0407084925cb4dbfc7463b34bdc4",
+            "writerInputShape": [
+              5184,
+              7752,
+              3
+            ]
+          }
+        ]
+      }
+    ],
+    "framePercent": 0,
+    "generatedAt": "2026-09-17T00:24:14Z",
+    "mode": "camera-scan-determinism",
+    "repetitions": 5,
+    "writerContract": "One LZW TIFF per repetition, matching the default benchmark's selected compression."
+  }
+}

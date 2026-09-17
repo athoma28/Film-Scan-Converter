@@ -11,8 +11,8 @@ import SwiftUI
 /// through `Image(decorative:scale:)` keeps preview, thumbnail, and loupe
 /// drawing on one image.
 enum PreviewBitmap {
-  static func nsImage(from cgImage: CGImage) -> NSImage {
-    let size = NSSize(width: cgImage.width, height: cgImage.height)
+  static func nsImage(from cgImage: CGImage, logicalSize: NSSize? = nil) -> NSImage {
+    let size = logicalSize ?? NSSize(width: cgImage.width, height: cgImage.height)
     let image = NSImage(size: size)
     image.cacheMode = .never
     image.addRepresentation(NSBitmapImageRep(cgImage: cgImage))

@@ -1,0 +1,48 @@
+{
+  "cpuPixels" : 2097152,
+  "date" : "2026-09-17T00:20:57Z",
+  "note" : "Three alternating release samples after GPU warmup. Region arm includes a 1024px overview. Every GPU raster has the same bitmap\/statistics consumer. No native input, display presentation, energy, or process-footprint claim.",
+  "os" : "Version 15.7.9 (Build 24G830)",
+  "rawDimensions" : [
+    7752,
+    5184
+  ],
+  "rawSHA256" : "c71a348038f397743360ca41a2ac099f51b81c1dd81e319b39e39a05711f2fe7",
+  "samples" : {
+    "color_banded_ms" : [
+      44.174458000000001,
+      47.707583999999997,
+      47.184624999999997
+    ],
+    "color_whole_ms" : [
+      33.069042000000003,
+      44.668166999999997,
+      46.746957999999999
+    ],
+    "geometry_analysis_cached_ms" : [
+      173.27558300000001,
+      206.029167,
+      161.40929199999999
+    ],
+    "geometry_analysis_uncached_ms" : [
+      201.56391600000001,
+      336.77974999999998,
+      201.18491700000001
+    ],
+    "gpu_fit_ms" : [
+      26.376584000000001,
+      43.957541999999997,
+      25.518999999999998
+    ],
+    "gpu_full_ms" : [
+      94.019542000000001,
+      106.375334,
+      90.871375
+    ],
+    "gpu_region_ms" : [
+      35.472791999999998,
+      34.554499999999997,
+      35.103124999999999
+    ]
+  }
+}

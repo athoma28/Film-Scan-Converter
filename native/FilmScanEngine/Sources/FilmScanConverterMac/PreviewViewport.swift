@@ -138,21 +138,25 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
   let request: PreviewZoomRequest
   let content: Content
   let onZoomChanged: (Int, Bool, CGFloat) -> Void
+  let onRenderDemandChanged: (PreviewRenderDemand) -> Void
 
   init(
     imageSize: CGSize,
     request: PreviewZoomRequest,
     onZoomChanged: @escaping (Int, Bool, CGFloat) -> Void,
+    onRenderDemandChanged: @escaping (PreviewRenderDemand) -> Void = { _ in },
     @ViewBuilder content: () -> Content
   ) {
     self.imageSize = imageSize
     self.request = request
     self.onZoomChanged = onZoomChanged
+    self.onRenderDemandChanged = onRenderDemandChanged
     self.content = content()
   }
 
   func makeCoordinator() -> Coordinator {
-    Coordinator(rootView: content, onZoomChanged: onZoomChanged)
+    Coordinator(
+      rootView: content, onZoomChanged: onZoomChanged, onRenderDemandChanged: onRenderDemandChanged)
   }
 
   func makeNSView(context: Context) -> PreviewScrollView {
@@ -161,6 +165,7 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
 
   func updateNSView(_ scrollView: PreviewScrollView, context: Context) {
     context.coordinator.onZoomChanged = onZoomChanged
+    context.coordinator.onRenderDemandChanged = onRenderDemandChanged
     let visibleRect = scrollView.documentVisibleRect
     let magnification = scrollView.magnification
     context.coordinator.hostingView.rootView = content
@@ -169,6 +174,7 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
       previousVisibleRect: visibleRect,
       previousMagnification: magnification)
     context.coordinator.apply(request)
+    context.coordinator.reportRenderDemand()
   }
 
   @MainActor
@@ -176,6 +182,8 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
     let hostingView: NSHostingView<Content>
     weak var scrollView: PreviewScrollView?
     var onZoomChanged: (Int, Bool, CGFloat) -> Void
+    var onRenderDemandChanged: (PreviewRenderDemand) -> Void
+    private var lastRenderDemand: PreviewRenderDemand?
 
     private var documentSize: CGSize = .zero
     private var lastRequestSequence = -1
@@ -185,11 +193,15 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
     private var lastReportedMagnification: CGFloat = -1
     private var isFitMode = true
 
-    init(rootView: Content, onZoomChanged: @escaping (Int, Bool, CGFloat) -> Void) {
+    init(
+      rootView: Content, onZoomChanged: @escaping (Int, Bool, CGFloat) -> Void,
+      onRenderDemandChanged: @escaping (PreviewRenderDemand) -> Void = { _ in }
+    ) {
       hostingView = NSHostingView(rootView: rootView)
       hostingView.sizingOptions = []
       hostingView.clipsToBounds = true
       self.onZoomChanged = onZoomChanged
+      self.onRenderDemandChanged = onRenderDemandChanged
     }
 
     deinit {
@@ -215,6 +227,10 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
 
       self.scrollView = scrollView
       observeMagnification(in: scrollView)
+      scrollView.contentView.postsBoundsChangedNotifications = true
+      NotificationCenter.default.addObserver(
+        self, selector: #selector(visibleBoundsChanged),
+        name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
       scrollView.onViewportLayout = { [weak self] in
         self?.viewportDidLayout()
       }
@@ -294,6 +310,7 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
     }
 
     func viewportDidLayout() {
+      defer { reportRenderDemand() }
       guard let scrollView else { return }
       let viewportSize = scrollView.contentSize
       guard viewportSize.width > 0, viewportSize.height > 0,
@@ -347,7 +364,25 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
       scrollView.setMagnification(PreviewViewportZoom.clamped(value), centeredAt: center)
     }
 
+    @objc private func visibleBoundsChanged(_ notification: Notification) {
+      reportRenderDemand()
+    }
+
+    func reportRenderDemand() {
+      guard let scrollView, documentSize.width > 1, documentSize.height > 1 else { return }
+      let demand = PreviewRenderDemand(
+        documentSize: documentSize,
+        visibleRect: scrollView.documentVisibleRect,
+        backingScale: scrollView.window?.backingScaleFactor ?? 2,
+        magnification: scrollView.magnification)
+      guard demand != lastRenderDemand else { return }
+      lastRenderDemand = demand
+      let callback = onRenderDemandChanged
+      DispatchQueue.main.async { callback(demand) }
+    }
+
     private func reportZoom() {
+      reportRenderDemand()
       guard let scrollView else { return }
       let magnification = scrollView.magnification
       let percent = PreviewViewportZoom.percent(for: magnification)
@@ -369,6 +404,11 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
 
 final class PreviewScrollView: NSScrollView {
   var onViewportLayout: (() -> Void)?
+
+  override func viewDidChangeBackingProperties() {
+    super.viewDidChangeBackingProperties()
+    onViewportLayout?()
+  }
 
   override func layout() {
     super.layout()

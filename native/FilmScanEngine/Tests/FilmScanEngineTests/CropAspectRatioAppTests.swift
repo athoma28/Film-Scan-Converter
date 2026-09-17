@@ -110,6 +110,7 @@ struct CropAspectRatioAppTests {
     model.loadSelection()
     try await waitForPreview(model)
     #expect(model.parameters.manualCropAspectRatio == .free)
+    try await model.flushSettings()
     #expect(try store.loadState().settingsByPath[input.standardizedFileURL.path] == resized)
     let restored = AppModel(settingsStore: store)
     restored.importFiles([input])

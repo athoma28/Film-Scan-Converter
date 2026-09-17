@@ -45,6 +45,7 @@ stays off. No LibRaw-owned buffer or lifetime is exposed to the application.
 ```sh
 brew install libraw
 
+bash native/test-raw-compatibility.sh
 swift test --package-path native/FilmScanEngine --no-parallel
 swift build --package-path native/FilmScanEngine \
   --product FilmScanConverterMac
@@ -184,6 +185,25 @@ physical footprint before fill, at capacity, and after model release. A corpus
 smaller than the configured depth is reported explicitly rather than treated as
 a fully populated cache.
 
+Run the real-RAW preview-scale probe after changing render resolution, gesture
+scheduling, or selected-session memory ownership:
+
+```sh
+RUN_PREVIEW_SCALE_BENCHMARK=1 \
+FSC_PREVIEW_SCALE_OUTPUT=/tmp/fsc-preview-scale.json \
+CLANG_MODULE_CACHE_PATH=/tmp/fsc-preview-scale-clang \
+SWIFTPM_MODULECACHE_OVERRIDE=/tmp/fsc-preview-scale-swift \
+swift test --disable-sandbox -c release \
+  --package-path native/FilmScanEngine --jobs 2 --no-parallel \
+  --filter PreviewScalePerformanceTests
+```
+
+It measures the same real RAF at draft, inspect, and full-sensor tiers, forces
+each Core Image result through the app's bounded statistics consumer, and
+compares the full source with the retained 2048px continuous-edit proxy. The
+[measurement note](../docs/performance/preview-scale-2026-09-14.md) defines the
+scope and quality boundary.
+
 Run the opt-in real-app sequential export and cancellation benchmark:
 
 ```sh
@@ -263,12 +283,17 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   independent three-pass full-resolution decode. The selected file may keep
   that last three-pass buffer for settings-only re-export and must drop it on
   selection change.
+- A selected full-sensor RAW retains one 2048px continuous-edit source and GPU
+  renderer. Supported active point-control gestures publish that raster at the
+  full logical document size; gesture release must queue exact current
+  parameters against the full source. CPU fallbacks, Original, and export do
+  not use the interaction proxy.
 - Keep lookahead preview-only, LRU, and bounded by both file count and bytes.
   Selecting a cached 3200px lookahead preview skips the inspect decode and
   starts the selected-file full-sensor upgrade. Sidebar thumbnails and repeated
   capture detection still use embedded JPEGs; the main RAW canvas does not.
-  Keep at most one full-resolution 1-pass preview; demote unused full-res
-  sessions to the ~4000px inspect size. **Load RAW Preview** is a skip-ahead to
+  Keep at most one full-resolution 1-pass preview; restore its earlier bounded
+  tier on selection change, counting that retained fallback against the byte budget. **Load RAW Preview** is a skip-ahead to
   that selected-file 1-pass decode, not the only way to reach it.
 - Keep the still image, dust mask, and crop/straighten/perspective editors in
   one native viewport transform. Original comparison must preserve its pan and
@@ -313,16 +338,18 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   flip. Apply the simple normalized canvas crop after that expanded rotation.
   Preview, full-resolution dimension prediction, flat field, dust overlay, and
   export must preserve this geometry order.
-- Exclude manual crop from the Metal correction-only fast path until that path
-  implements canvas cropping; committed crops must update the preview canvas
-  immediately. While the Crop tool is active, preview the full post-straighten
+- The Metal path supports manual crops with the CPU's outward whole-pixel
+  bounds after quarter turns and flip. Darkroom/power-law cases whose analysis
+  depends on cropped pixels and exact Original/crop-only packing remain CPU
+  fallbacks. While the Crop tool is active, preview the full post-straighten
   canvas so the next drag replaces the existing crop.
 - Treat the Core Image/Metal renderer as the primary interactive development
   path on supported MacBook Pro hardware. Keep CPU rendering correct for
   deterministic tests, CI/headless runs, export/reference behavior, and fallback
   paths that are not GPU-integrated yet.
-- Serialize fallback/detail decode work and full-resolution RAW export decode;
-  check cancellation before entering synchronous LibRaw/ImageIO calls.
+- Schedule draft/detail/full RAW and export decoding through the shared priority
+  queue. Propagate cancellation into safe native decoder boundaries. ImageIO
+  calls remain synchronous.
 - Keep full-resolution RAW export one-file-at-a-time. Retain the selected
   file's last three-pass decode for settings-only re-export; drop it on
   selection change. Do not prefetch file N+1 or keep a roll-sized decode cache.
@@ -346,3 +373,11 @@ Live preview works only when macOS exposes the camera or capture adapter as an
 AVFoundation video device. It is a fast preview path; final stills use the
 16-bit import and export pipeline. Vendor-specific tethering is not active
 roadmap work.
+
+### September 16 performance follow-up
+
+Navigation reuses the earlier decoded preview tier; RAW work shares a cancellable
+priority scheduler. CPU preparation reuses geometry/Darkroom analysis, and linear
+color/tone scratch uses bounded bands. Fit rendering follows viewport backing
+pixels; inspection requests a full-source region. Revision-bound statistics follow
+publication asynchronously. See [implementation and measurements](../docs/performance/viewport-and-work-reuse-2026-09-16.md).
