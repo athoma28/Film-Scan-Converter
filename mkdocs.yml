@@ -43,6 +43,7 @@ nav:
       - Maintenance Policy: legacy-python.md
       - Usage: legacy-usage.md
       - ART Integration: how-to-add-to-ART.md
+  - Data Collection and Optimization Target Discovery: development/data-collection-optimization-target-discovery.md
 
 validation:
   links:
