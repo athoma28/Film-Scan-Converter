@@ -133,16 +133,19 @@ struct PreviewComparisonTests {
       settingsStore: store)
     model.importFiles([input])
     try await waitForPreview(model)
+    try await waitForPreviewStatistics(model)
     #expect(model.previewStatistics.sampleCount > 0)
     let corrected = model.previewStatistics
 
     model.showOriginal = true
     try await waitForPreview(model)
+    try await waitForPreviewStatistics(model)
     #expect(model.previewStatistics.sampleCount > 0)
     #expect(model.previewStatistics != .empty)
 
     model.showOriginal = false
     try await waitForPreview(model)
+    try await waitForPreviewStatistics(model)
     #expect(model.previewStatistics.sampleCount == corrected.sampleCount)
     #expect(model.previewStatistics.highClippingRatios == corrected.highClippingRatios)
     #expect(model.previewStatistics.lowClippingRatios == corrected.lowClippingRatios)
@@ -386,6 +389,14 @@ struct PreviewComparisonTests {
     let deadline = ContinuousClock.now + .seconds(10)
     while model.isLoading || model.isRendering || model.previewImage == nil {
       try #require(ContinuousClock.now < deadline, "Timed out waiting for comparison preview")
+      try await Task.sleep(for: .milliseconds(10))
+    }
+  }
+
+  private func waitForPreviewStatistics(_ model: AppModel) async throws {
+    let deadline = ContinuousClock.now + .seconds(10)
+    while model.previewStatisticsRevision != model.publishedRenderRevision {
+      try #require(ContinuousClock.now < deadline, "Timed out waiting for preview diagnostics")
       try await Task.sleep(for: .milliseconds(10))
     }
   }
