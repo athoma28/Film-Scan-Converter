@@ -4,6 +4,19 @@ import FilmScanPreviewRenderer
 import Observation
 import os.signpost
 
+/// Dispatch source cancellation is thread-safe, including during model teardown.
+private final class PreviewMemoryPressureSourceHandle: @unchecked Sendable {
+  let source: DispatchSourceMemoryPressure
+
+  init(_ source: DispatchSourceMemoryPressure) {
+    self.source = source
+  }
+
+  func cancel() {
+    source.cancel()
+  }
+}
+
 @MainActor
 @Observable
 final class AppModel {
@@ -184,10 +197,10 @@ final class AppModel {
     pressure.setEventHandler { [weak self] in
       Task { @MainActor [weak self] in
         guard let self, let source = self.previewMemoryPressureSource else { return }
-        self.handlePreviewMemoryPressure(isUnderPressure: !source.data.contains(.normal))
+        self.handlePreviewMemoryPressure(isUnderPressure: !source.source.data.contains(.normal))
       }
     }
-    previewMemoryPressureSource = pressure
+    previewMemoryPressureSource = PreviewMemoryPressureSourceHandle(pressure)
     pressure.resume()
     Task.detached(priority: .medium) {
       StillPreviewRenderer.warmUp()
@@ -235,7 +248,7 @@ final class AppModel {
   private var sameRollFilmTypeHint: FilmType?
   private var previewCache = PreviewSessionCache()
   let previewMemoryByteLimit: Int
-  @ObservationIgnored private var previewMemoryPressureSource: DispatchSourceMemoryPressure?
+  @ObservationIgnored private var previewMemoryPressureSource: PreviewMemoryPressureSourceHandle?
   private var isUnderPreviewMemoryPressure = false
   private(set) var previewCorrectionCount = 0
   private(set) var previewRenderCacheHits = 0
