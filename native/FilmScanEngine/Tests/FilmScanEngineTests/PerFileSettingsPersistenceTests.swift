@@ -113,12 +113,18 @@ struct PerFileSettingsPersistenceTests {
   func debounceAndPeriodicFlush() async throws {
     let probe = SettingsWriteProbe()
     let writer = PerFileSettingsPersistence(
-      initialState: empty, debounce: 0.04, maximumDelay: 0.12, save: probe.save)
+      initialState: empty, debounce: 0.15, maximumDelay: 0.4, save: probe.save)
     writer.submit(.set(path: "scan", parameters: parameters(exposure: 1), edited: true))
     try await waitUntil { probe.states.count == 1 }
 
+    // Establish a continuous edit burst before yielding so a busy test runner
+    // cannot make the periodic save race the first follow-up event.
+    for index in 1...12 {
+      writer.submit(
+        .set(path: "scan", parameters: parameters(exposure: Double(index)), edited: true))
+    }
     let started = ContinuousClock.now
-    var index = 0
+    var index = 12
     while probe.states.count == 1 {
       index += 1
       writer.submit(
