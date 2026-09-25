@@ -496,7 +496,7 @@ struct FilmNegativeProcessingTests {
     let classification = FilmNegativeProcessing.classifyFilmScan(image: image)
 
     #expect(classification.filmType == .colourNegative)
-    #expect(classification.filmNegativePreset == .colourNegative)
+    #expect(classification.filmBase == .colorC41)
     #expect(classification.confidence >= 0.45)
   }
 
@@ -515,7 +515,7 @@ struct FilmNegativeProcessingTests {
     let classification = FilmNegativeProcessing.classifyFilmScan(image: image)
 
     #expect(classification.filmType == .blackAndWhiteNegative)
-    #expect(classification.filmNegativePreset == .blackAndWhite)
+    #expect(classification.filmBase == .blackAndWhite)
     #expect(classification.confidence >= 0.75)
   }
 
@@ -534,7 +534,7 @@ struct FilmNegativeProcessingTests {
     let classification = FilmNegativeProcessing.classifyFilmScan(image: image)
 
     #expect(classification.filmType == .slide)
-    #expect(classification.filmNegativePreset == .off)
+    #expect(classification.filmBase == .slide)
     #expect(classification.confidence >= 0.55)
   }
 
@@ -558,7 +558,7 @@ struct FilmNegativeProcessingTests {
     #expect(withoutPrior.filmType == .slide)
     #expect(withoutPrior.confidence < 0.65)
     #expect(withPrior.filmType == .colourNegative)
-    #expect(withPrior.filmNegativePreset == .colourNegative)
+    #expect(withPrior.filmBase == .colorC41)
     #expect(withPrior.confidence == withoutPrior.confidence)
   }
 

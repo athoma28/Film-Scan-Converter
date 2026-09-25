@@ -47,6 +47,23 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
     _ parameters: PhotoAdjustmentParameters,
     referenceLuminance: Double = 0.18
   ) {
+    if parameters.usesPhotographicTone {
+      let count = pixelCount
+      pixels.withUnsafeMutableBufferPointer { buffer in
+        guard let address = buffer.baseAddress else { return }
+        let output = SendableMutableBuffer(address)
+        Self.forEachPixelInParallel(pixelCount: count) { index in
+          let i = index * 3
+          let value = PhotographicTone.apply(
+            red: output.baseAddress[i + 2],
+            green: output.baseAddress[i + 1], blue: output.baseAddress[i], parameters: parameters)
+          output.baseAddress[i] = value.blue
+          output.baseAddress[i + 1] = value.green
+          output.baseAddress[i + 2] = value.red
+        }
+      }
+      return
+    }
     let hasToneAdjustment =
       parameters.exposureEV != 0
       || parameters.brightness != 0
@@ -229,12 +246,7 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
   public mutating func applyProtectedColorAdjustments(
     _ parameters: PhotoAdjustmentParameters
   ) {
-    let hasColorAdjustment =
-      parameters.temperatureShiftMired != 0
-      || parameters.tint != 0
-      || parameters.saturation != 0
-      || parameters.vibrance != 0
-    guard hasColorAdjustment else { return }
+    guard parameters.hasColorAdjustment else { return }
 
     let pixelCount = self.pixelCount
     pixels.withUnsafeMutableBufferPointer { buffer in
@@ -373,9 +385,15 @@ public enum ProtectedColorAdjustment {
     parameters: PhotoAdjustmentParameters
   ) -> (blue: Double, green: Double, red: Double) {
     let finiteBound = exp2(24.0)
-    let b = ScalarMath.finiteClamped(blue, bound: finiteBound)
-    let g = ScalarMath.finiteClamped(green, bound: finiteBound)
-    let r = ScalarMath.finiteClamped(red, bound: finiteBound)
+    let recovered = WarmHueRecovery.apply(
+      blue: ScalarMath.finiteClamped(blue, bound: finiteBound),
+      green: ScalarMath.finiteClamped(green, bound: finiteBound),
+      red: ScalarMath.finiteClamped(red, bound: finiteBound),
+      amount: parameters.warmHueRecovery ?? 0,
+      boundaryTolerance: parameters.usesPhotographicTone ? 1e-6 : 0)
+    let b = recovered.blue
+    let g = recovered.green
+    let r = recovered.red
     let luminance = blueLuminance * b + greenLuminance * g + redLuminance * r
     guard luminance > 0 else { return (b, g, r) }
 

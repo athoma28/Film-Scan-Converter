@@ -1,18 +1,22 @@
 # Film Processing And Calibration Reference
 
-The app already provides Natural, Darkroom, Classic, and measured-density
-conversion. This page documents their boundaries and the research constraints
-needed to maintain them. It is not an implementation sequence.
+The engine retains several inversion models and their historical calibration
+data. Current Develop uses Film Base plus public-control LookRecipe presets;
+its look menu no longer offers Natural/Darkroom/Classic or stock/paper choices.
+Calibrate still offers scanner/capture, film-response, and measured-roll workflow
+profiles. The color-negative Film Base defaults use density-print inversion with
+a neutral paper response. This page records engine concepts and provenance rather
+than the current inspector layout.
 [Development status](development/native-macos.md) owns current validation;
 [the roadmap](improvements/MacOS-Native-Roadmap.md) owns active work.
 
-## Implemented Processing Models
+## Engine Models And Historical Names
 
 | Model | Contract |
 |---|---|
 | Natural | Reference-derived monotone negative curves, per-frame exposure adaptation, and partial color-channel anchoring. Existing stock alternatives have recorded fit provenance and limits. |
 | Classic | Exponent-based inversion using film-negative references and display rendering. Its camera conversion and native noise/detail policy do not claim full RawTherapee parity. |
-| Darkroom | sRGB linearization, log-density dye unmix, sampled per-channel bounds, neutral-axis cast removal, and film/paper rendering. Profiles carry their own provenance. |
+| Density print (historically Darkroom) | sRGB linearization, log-density dye unmix, sampled per-channel bounds, and neutral-axis cast removal. New Film Base defaults use a neutral paper response; legacy edits may retain a stored paper profile with its own provenance. |
 | Measured density | Capture normalization, optional flat field, measured film base, capture correction, stock response, and display rendering; shared CPU preview/export path. |
 
 The input contract is explicit at each stage. Camera-scan `UInt16Image` values
@@ -23,7 +27,10 @@ demosaic-quality tiers while retaining the same adjustment semantics.
 
 ## Keep Calibration Concepts Separate
 
-- **Film base:** measured from unexposed material for a particular scan/roll.
+- **Film Base selector:** chooses the invert family in Develop, independently of
+  a look. Color C-41 and cyan-mask use density-print inversion; B&W uses its own
+  negative invert, while Slide and Original do not invert.
+- **Measured film base:** sampled from unexposed material for a scan/roll in Calibrate.
 - **Flat field:** captures illumination/sensor-coordinate variation for a setup.
   It must be aligned with the source geometry; per-capture flat-field processing
   is not integrated with stacking, so that combination is disabled.
@@ -36,7 +43,8 @@ demosaic-quality tiers while retaining the same adjustment semantics.
 - **Natural reference looks:** fits to paired RAF/JPEG/XMP edits. These supply
   starting looks, not universal emulsion measurements or automatic stock labels.
 - **Darkroom unmix and papers:** density/print model parameters with separately
-  recorded spec-sheet or tuned provenance, not Natural curve-fit outputs.
+  recorded spec-sheet or tuned provenance, not Natural curve-fit outputs. The
+  present Film Base defaults resolve to the neutral paper response.
 
 Existing profile persistence, migrations, synthetic tests, and rendering
 contracts remain supported. No reference is refreshed merely to make a new
@@ -50,6 +58,12 @@ fitting, and profile-specific evidence. [Density-matrix calibration](development
 describes weighted affine fitting and frame-level validation partitions.
 Neither tool installs an unreviewed candidate automatically.
 
+The September 18 paired color/control investigation is active, separately from
+the broader parked calibration project. Its [runbook](development/color-evaluation.md)
+records current recipe/schema migration blockers and the required preference,
+parser, full-resolution, and CPU/Metal checks. Historical fit scores do not
+validate current factory looks.
+
 The reference corpus is local and untracked. Recorded sample counts and fit
 scores describe the datasets used for those fits, not the current directory's
 inventory. Profile provenance is necessary to distinguish measured, tuned,
@@ -57,7 +71,7 @@ and experimental options.
 
 ## Parked Research
 
-Further corpus preparation, named-stock fitting, characteristic-curve
+Beyond that active study, broader corpus preparation, named-stock fitting, characteristic-curve
 digitization, residual 3D LUTs, halation compensation, and ML are dormant until
 the owner explicitly reactivates the work. Existing code is not authorization
 to collect data or fit new profiles.

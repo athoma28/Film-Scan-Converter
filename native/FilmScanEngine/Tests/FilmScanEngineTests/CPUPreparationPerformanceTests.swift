@@ -64,7 +64,7 @@ struct CPUPreparationPerformanceTests {
     var p = ProcessingParameters(filmType: .colourNegative)
     p.filmNegativeParams.enabled = true
     p.photoAdjustments = .init(
-      exposureEV: 0.4, contrast: 0.2, highlights: -0.3,
+      schemaVersion: 1, exposureEV: 0.4, contrast: 0.2, highlights: -0.3,
       shadows: 0.1, temperatureShiftMired: 10, saturation: 0.1)
     p.filmDyeMixing.blueFromRed = 0.1
     var reference = FilmNegativeProcessing.powerLawRenderReadyLinear(

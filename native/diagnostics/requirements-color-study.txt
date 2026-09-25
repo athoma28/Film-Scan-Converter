@@ -1,0 +1,5 @@
+# Python 3.11+; versions used for the September 18, 2026 reference studies.
+# Install in a virtual environment; the production renderer also needs macOS/Swift/LibRaw.
+numpy==2.2.1
+opencv-python==4.10.0.84
+Pillow==11.1.0

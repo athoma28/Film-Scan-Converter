@@ -1,5 +1,11 @@
 # Performance research implementation
 
+**September 13 implementation record.** Measurements and test totals below
+belong to that source state. Later cache ownership, decode concurrency, and
+settled-render behavior are specified in the
+[current preview architecture](../development/realtime-preview-plan.md).
+Use [development status](../development/native-macos.md) for newer verification.
+
 This implements the measured editing bottlenecks and bounded optimizations from
 the [second research pass](research-pass-two-2026-09-13.md) and
 [performance research directions](research-directions-2026-09-12.md).

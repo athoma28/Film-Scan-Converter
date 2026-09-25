@@ -1,5 +1,11 @@
 # RAW decode, editing, and export research directions
 
+**Historical research snapshot.** Statements about current code and proposed
+work below refer to September 12. Persistence, publication, CPU preparation,
+interaction proxies, and preview retention have since changed. Use
+[development status](../development/native-macos.md) for implemented behavior and
+the [roadmap](../improvements/MacOS-Native-Roadmap.md) for remaining work.
+
 September 12, 2026. Source inspection of `4e962c1` plus the working-tree repairs
 described below. This is a research plan, not a new performance benchmark.
 The owner's estimate that decode is within roughly 20–30% of Camera Raw is a

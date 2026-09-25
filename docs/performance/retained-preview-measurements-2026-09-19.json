@@ -1,0 +1,554 @@
+{
+  "after": {
+    "cachedSwitch": {
+      "p50Milliseconds": 26.17375,
+      "p95Milliseconds": 28.19475,
+      "samplesMilliseconds": [
+        28.19475,
+        21.450375,
+        26.17375
+      ]
+    },
+    "files": [
+      "aesthetic-test/DSCF3233.RAF",
+      "aesthetic-test/DSCF3723.RAF",
+      "aesthetic-test/DSCF3767.RAF",
+      "aesthetic-test/DSCF3835.RAF",
+      "aesthetic-test/DSCF5694.RAF",
+      "aesthetic-test/DSCF5726.RAF",
+      "aesthetic-test/DSCF5739.RAF",
+      "aesthetic-test/DSCF5765.RAF",
+      "aesthetic-test/DSCF5835.RAF",
+      "aesthetic-test/DSCF5845.RAF"
+    ],
+    "firstCorrectedPaint": {
+      "p50Milliseconds": 580.639166,
+      "p95Milliseconds": 628.704958,
+      "samplesMilliseconds": [
+        580.639166,
+        628.704958,
+        360.586917
+      ]
+    },
+    "generatedAt": "2026-09-20T01:54:46Z",
+    "hardware": "Mac16,7",
+    "maximumPreviewCacheBytes": 1526127616,
+    "memoryAfter": {
+      "peakPhysicalFootprintBytes": 1246711984,
+      "physicalFootprintBytes": 200413144,
+      "reusableBytes": 2786099200
+    },
+    "memoryBefore": {
+      "peakPhysicalFootprintBytes": 7668264,
+      "physicalFootprintBytes": 7668264,
+      "reusableBytes": 0
+    },
+    "note": "Real AppModel publication timings; native input and screen presentation are not measured. Each phase cancels selection work and waits for model release before the next phase. Initial cache-depth samples stop when bounded lookahead is populated; they are not full cache-capacity or settled-speculation measurements. Full-sensor sources and corrected rasters remain cached within the machine-dependent preview memory budget. Retained navigation warms two full previews and corrected rasters, then measures revisits and viewport updates with decode/correction counters. Saturated-cache switching measures speculative scheduler submissions and background drain with two retained sessions and an uncached neighbour. Three default repetitions yield descriptive nearest-rank summaries, not a tail-latency estimate. No exports are written.",
+    "previewCacheDepths": [
+      {
+        "availableFiles": 10,
+        "cachedPreviewBytes": 243903744,
+        "cachedSourceKinds": {
+          "aesthetic-test/DSCF3233.RAF": "rawInspect",
+          "aesthetic-test/DSCF3723.RAF": "rawDetail"
+        },
+        "configuredDepth": 2,
+        "fillMilliseconds": 2262.241792,
+        "memoryAfterInitialLookahead": {
+          "peakPhysicalFootprintBytes": 787171104,
+          "physicalFootprintBytes": 679053160,
+          "reusableBytes": 517259264
+        },
+        "memoryAfterRelease": {
+          "peakPhysicalFootprintBytes": 787171104,
+          "physicalFootprintBytes": 150144872,
+          "reusableBytes": 1011433472
+        },
+        "memoryBeforeFill": {
+          "peakPhysicalFootprintBytes": 7668264,
+          "physicalFootprintBytes": 7668264,
+          "reusableBytes": 0
+        },
+        "populatedSessions": 2
+      },
+      {
+        "availableFiles": 10,
+        "cachedPreviewBytes": 369259776,
+        "cachedSourceKinds": {
+          "aesthetic-test/DSCF3233.RAF": "rawInspect",
+          "aesthetic-test/DSCF3723.RAF": "rawDetail",
+          "aesthetic-test/DSCF3767.RAF": "rawDetail",
+          "aesthetic-test/DSCF3835.RAF": "rawDetail"
+        },
+        "configuredDepth": 8,
+        "fillMilliseconds": 4303.7537919999995,
+        "memoryAfterInitialLookahead": {
+          "peakPhysicalFootprintBytes": 787171104,
+          "physicalFootprintBytes": 177408352,
+          "reusableBytes": 1211105280
+        },
+        "memoryAfterRelease": {
+          "peakPhysicalFootprintBytes": 787171104,
+          "physicalFootprintBytes": 34752864,
+          "reusableBytes": 1312194560
+        },
+        "memoryBeforeFill": {
+          "peakPhysicalFootprintBytes": 787171104,
+          "physicalFootprintBytes": 150144872,
+          "reusableBytes": 1011433472
+        },
+        "populatedSessions": 4
+      },
+      {
+        "availableFiles": 10,
+        "cachedPreviewBytes": 951097856,
+        "cachedSourceKinds": {
+          "aesthetic-test/DSCF3233.RAF": "rawFull",
+          "aesthetic-test/DSCF3723.RAF": "rawDetail",
+          "aesthetic-test/DSCF3767.RAF": "rawDetail",
+          "aesthetic-test/DSCF3835.RAF": "rawDetail"
+        },
+        "configuredDepth": 32,
+        "fillMilliseconds": 4237.538041,
+        "memoryAfterInitialLookahead": {
+          "peakPhysicalFootprintBytes": 787171104,
+          "physicalFootprintBytes": 603622376,
+          "reusableBytes": 1594245120
+        },
+        "memoryAfterRelease": {
+          "peakPhysicalFootprintBytes": 787171104,
+          "physicalFootprintBytes": 119573360,
+          "reusableBytes": 1916043264
+        },
+        "memoryBeforeFill": {
+          "peakPhysicalFootprintBytes": 787171104,
+          "physicalFootprintBytes": 34752864,
+          "reusableBytes": 1312194560
+        },
+        "populatedSessions": 4
+      }
+    ],
+    "rapidSelectionDrain": {
+      "p50Milliseconds": 339.022041,
+      "p95Milliseconds": 788.156958,
+      "samplesMilliseconds": [
+        337.493958,
+        339.022041,
+        788.156958
+      ]
+    },
+    "repetitions": 3,
+    "retainedNavigation": {
+      "cacheBudgetBytes": 3221225472,
+      "cachedPreviewBytes": 1526127616,
+      "correctionsDuringNavigation": 0,
+      "files": [
+        "aesthetic-test/DSCF3233.RAF",
+        "aesthetic-test/DSCF3723.RAF"
+      ],
+      "fullResolutionDecodesDuringNavigation": 0,
+      "memoryAfterRelease": {
+        "peakPhysicalFootprintBytes": 1246679168,
+        "physicalFootprintBytes": 119394120,
+        "reusableBytes": 2705063936
+      },
+      "memorySettled": {
+        "peakPhysicalFootprintBytes": 1246679168,
+        "physicalFootprintBytes": 1165496376,
+        "reusableBytes": 1981693952
+      },
+      "renderCacheHitsDuringNavigation": 6,
+      "returnSwitch": {
+        "p50Milliseconds": 6.499459,
+        "p95Milliseconds": 6.569209,
+        "samplesMilliseconds": [
+          6.569209,
+          6.5345,
+          6.475792,
+          6.480667,
+          6.516875,
+          6.499459
+        ]
+      },
+      "viewportUpdateCount": 1000,
+      "viewportUpdatesMilliseconds": 0.026167,
+      "warmupMilliseconds": 8948.198
+    },
+    "saturatedCache": {
+      "backgroundDrain": {
+        "p50Milliseconds": 6.495542,
+        "p95Milliseconds": 12.876875,
+        "samplesMilliseconds": [
+          12.876875,
+          6.495542,
+          6.428708
+        ]
+      },
+      "cachedPreviewBytes": 1526127616,
+      "cachedSourceKinds": {
+        "aesthetic-test/DSCF3233.RAF": "rawFull",
+        "aesthetic-test/DSCF3723.RAF": "rawFull"
+      },
+      "cachedSwitch": {
+        "p50Milliseconds": 6.459125,
+        "p95Milliseconds": 6.490375,
+        "samplesMilliseconds": [
+          6.459125,
+          6.490375,
+          6.426916
+        ]
+      },
+      "files": [
+        "aesthetic-test/DSCF3233.RAF",
+        "aesthetic-test/DSCF3723.RAF",
+        "aesthetic-test/DSCF3767.RAF"
+      ],
+      "lookaheadRequestsDuringSwitch": [
+        0,
+        0,
+        0
+      ],
+      "memoryAfterBackgroundDrain": {
+        "peakPhysicalFootprintBytes": 1246711984,
+        "physicalFootprintBytes": 1246531760,
+        "reusableBytes": 2062729216
+      }
+    },
+    "uncachedSwitch": {
+      "p50Milliseconds": 369.491208,
+      "p95Milliseconds": 415.805459,
+      "samplesMilliseconds": [
+        415.805459,
+        366.53325,
+        369.491208
+      ]
+    }
+  },
+  "before": {
+    "cachedSwitch": {
+      "p50Milliseconds": 25.106416,
+      "p95Milliseconds": 32.784709,
+      "samplesMilliseconds": [
+        25.106416,
+        17.782708,
+        32.784709
+      ]
+    },
+    "files": [
+      "aesthetic-test/DSCF3233.RAF",
+      "aesthetic-test/DSCF3723.RAF",
+      "aesthetic-test/DSCF3767.RAF",
+      "aesthetic-test/DSCF3835.RAF",
+      "aesthetic-test/DSCF5694.RAF",
+      "aesthetic-test/DSCF5726.RAF",
+      "aesthetic-test/DSCF5739.RAF",
+      "aesthetic-test/DSCF5765.RAF",
+      "aesthetic-test/DSCF5835.RAF",
+      "aesthetic-test/DSCF5845.RAF"
+    ],
+    "firstCorrectedPaint": {
+      "p50Milliseconds": 586.870833,
+      "p95Milliseconds": 778.763917,
+      "samplesMilliseconds": [
+        586.870833,
+        778.763917,
+        531.397625
+      ]
+    },
+    "generatedAt": "2026-09-20T01:51:46Z",
+    "hardware": "Mac16,7",
+    "maximumPreviewCacheBytes": 1526127616,
+    "memoryAfter": {
+      "peakPhysicalFootprintBytes": 1334464496,
+      "physicalFootprintBytes": 42667728,
+      "reusableBytes": 2786820096
+    },
+    "memoryBefore": {
+      "peakPhysicalFootprintBytes": 7799312,
+      "physicalFootprintBytes": 7799312,
+      "reusableBytes": 98304
+    },
+    "note": "Real AppModel publication timings; native input and screen presentation are not measured. Each phase cancels selection work and waits for model release before the next phase. Initial cache-depth samples stop when bounded lookahead is populated; they are not full cache-capacity or settled-speculation measurements. Full-sensor sources and corrected rasters remain cached within the machine-dependent preview memory budget. Retained navigation warms two full previews and corrected rasters, then measures revisits and viewport updates with decode/correction counters. Saturated-cache switching measures speculative scheduler submissions and background drain with two retained sessions and an uncached neighbour. Three default repetitions yield descriptive nearest-rank summaries, not a tail-latency estimate. No exports are written.",
+    "previewCacheDepths": [
+      {
+        "availableFiles": 10,
+        "cachedPreviewBytes": 243903744,
+        "cachedSourceKinds": {
+          "aesthetic-test/DSCF3233.RAF": "rawInspect",
+          "aesthetic-test/DSCF3723.RAF": "rawDetail"
+        },
+        "configuredDepth": 2,
+        "fillMilliseconds": 2485.015875,
+        "memoryAfterInitialLookahead": {
+          "peakPhysicalFootprintBytes": 817481696,
+          "physicalFootprintBytes": 735873016,
+          "reusableBytes": 434339840
+        },
+        "memoryAfterRelease": {
+          "peakPhysicalFootprintBytes": 817481696,
+          "physicalFootprintBytes": 166938616,
+          "reusableBytes": 961724416
+        },
+        "memoryBeforeFill": {
+          "peakPhysicalFootprintBytes": 7799312,
+          "physicalFootprintBytes": 7799312,
+          "reusableBytes": 98304
+        },
+        "populatedSessions": 2
+      },
+      {
+        "availableFiles": 10,
+        "cachedPreviewBytes": 369259776,
+        "cachedSourceKinds": {
+          "aesthetic-test/DSCF3233.RAF": "rawInspect",
+          "aesthetic-test/DSCF3723.RAF": "rawDetail",
+          "aesthetic-test/DSCF3767.RAF": "rawDetail",
+          "aesthetic-test/DSCF3835.RAF": "rawDetail"
+        },
+        "configuredDepth": 8,
+        "fillMilliseconds": 3871.769209,
+        "memoryAfterInitialLookahead": {
+          "peakPhysicalFootprintBytes": 817481696,
+          "physicalFootprintBytes": 426035792,
+          "reusableBytes": 1186103296
+        },
+        "memoryAfterRelease": {
+          "peakPhysicalFootprintBytes": 817481696,
+          "physicalFootprintBytes": 42240568,
+          "reusableBytes": 1528315904
+        },
+        "memoryBeforeFill": {
+          "peakPhysicalFootprintBytes": 817481696,
+          "physicalFootprintBytes": 166938616,
+          "reusableBytes": 961724416
+        },
+        "populatedSessions": 4
+      },
+      {
+        "availableFiles": 10,
+        "cachedPreviewBytes": 369259776,
+        "cachedSourceKinds": {
+          "aesthetic-test/DSCF3233.RAF": "rawInspect",
+          "aesthetic-test/DSCF3723.RAF": "rawDetail",
+          "aesthetic-test/DSCF3767.RAF": "rawDetail",
+          "aesthetic-test/DSCF3835.RAF": "rawDetail"
+        },
+        "configuredDepth": 32,
+        "fillMilliseconds": 4467.0875,
+        "memoryAfterInitialLookahead": {
+          "peakPhysicalFootprintBytes": 817481696,
+          "physicalFootprintBytes": 163416752,
+          "reusableBytes": 1491763200
+        },
+        "memoryAfterRelease": {
+          "peakPhysicalFootprintBytes": 817481696,
+          "physicalFootprintBytes": 41454232,
+          "reusableBytes": 1572143104
+        },
+        "memoryBeforeFill": {
+          "peakPhysicalFootprintBytes": 817481696,
+          "physicalFootprintBytes": 42240568,
+          "reusableBytes": 1528315904
+        },
+        "populatedSessions": 4
+      }
+    ],
+    "rapidSelectionDrain": {
+      "p50Milliseconds": 377.513042,
+      "p95Milliseconds": 478.007458,
+      "samplesMilliseconds": [
+        478.007458,
+        377.513042,
+        368.34175
+      ]
+    },
+    "repetitions": 3,
+    "retainedNavigation": {
+      "cacheBudgetBytes": 3221225472,
+      "cachedPreviewBytes": 1526127616,
+      "correctionsDuringNavigation": 0,
+      "files": [
+        "aesthetic-test/DSCF3233.RAF",
+        "aesthetic-test/DSCF3723.RAF"
+      ],
+      "fullResolutionDecodesDuringNavigation": 0,
+      "memoryAfterRelease": {
+        "peakPhysicalFootprintBytes": 1173475240,
+        "physicalFootprintBytes": 126520896,
+        "reusableBytes": 2598813696
+      },
+      "memorySettled": {
+        "peakPhysicalFootprintBytes": 1173475240,
+        "physicalFootprintBytes": 1092276040,
+        "reusableBytes": 1955807232
+      },
+      "renderCacheHitsDuringNavigation": 6,
+      "returnSwitch": {
+        "p50Milliseconds": 6.558666,
+        "p95Milliseconds": 6.6715,
+        "samplesMilliseconds": [
+          6.607292,
+          6.558666,
+          5.583041,
+          6.6375,
+          6.6715,
+          6.551959
+        ]
+      },
+      "viewportUpdateCount": 1000,
+      "viewportUpdatesMilliseconds": 0.021875,
+      "warmupMilliseconds": 7380.864834
+    },
+    "saturatedCache": {
+      "backgroundDrain": {
+        "p50Milliseconds": 1062.006875,
+        "p95Milliseconds": 1261.626583,
+        "samplesMilliseconds": [
+          1062.006875,
+          1261.626583,
+          1054.335375
+        ]
+      },
+      "cachedPreviewBytes": 1526127616,
+      "cachedSourceKinds": {
+        "aesthetic-test/DSCF3233.RAF": "rawFull",
+        "aesthetic-test/DSCF3723.RAF": "rawFull"
+      },
+      "cachedSwitch": {
+        "p50Milliseconds": 6.529834,
+        "p95Milliseconds": 6.545417,
+        "samplesMilliseconds": [
+          6.545417,
+          6.477958,
+          6.529834
+        ]
+      },
+      "files": [
+        "aesthetic-test/DSCF3233.RAF",
+        "aesthetic-test/DSCF3723.RAF",
+        "aesthetic-test/DSCF3767.RAF"
+      ],
+      "lookaheadRequestsDuringSwitch": [
+        1,
+        1,
+        1
+      ],
+      "memoryAfterBackgroundDrain": {
+        "peakPhysicalFootprintBytes": 1334464496,
+        "physicalFootprintBytes": 1169149864,
+        "reusableBytes": 1983086592
+      }
+    },
+    "uncachedSwitch": {
+      "p50Milliseconds": 470.6705,
+      "p95Milliseconds": 556.226542,
+      "samplesMilliseconds": [
+        470.6705,
+        442.009834,
+        556.226542
+      ]
+    }
+  },
+  "environment": {
+    "baseRevision": "c4ad5ba6a80741b47093f0fa6d9dc2d8dfa4c5f7",
+    "configuration": "release, no-parallel, normal macOS graphics access",
+    "hardware": "Mac16,7, Apple M4 Pro, 14 CPU cores",
+    "libraw": "0.22.2",
+    "os": "macOS 15.7.9 (24G830) arm64",
+    "physicalMemoryBytes": 51539607552,
+    "swift": "6.1.2",
+    "workingTree": "Includes pre-existing Film Base/LookRecipe, preset, clipboard, preview retention and scheduler changes; see native-macos.md. Only AppModel production source changed between measured runs."
+  },
+  "limitations": [
+    "Before then after processes, not alternating trials; disk cache not forcibly cold.",
+    "Switch waits poll every 5 ms; three samples are not a population-tail estimate.",
+    "Initial-lookahead tiers vary with scheduling; configured cache depth is not populated capacity.",
+    "Both full previews must fit machine-dependent memory budget.",
+    "App-model publication, not input-to-screen presentation; no export latency benchmark.",
+    "Physical footprint includes allocator/framework variability and is not a proven memory improvement."
+  ],
+  "provenance": {
+    "appModelAfter": "ed44d5c95f6b6a42d1a25a2f20a38aa36af195362c2411fe18930e165bb5580b",
+    "appModelBefore": "61b041178194fee3661142781e2d9d3662acf4619949d9c8408cd238e6a41638",
+    "benchmarkSHA256": "a122bef6d5059eea970686a333775489f2ec0866c80999f8ba309e79edfc26f5",
+    "inputs": {
+      "aesthetic-test/DSCF3233.RAF": {
+        "bytes": 40081872,
+        "sha256": "da8d38e486c445e18040bf035d448f7f860ecabf17f9bfd759f848b8b5f51eb9"
+      },
+      "aesthetic-test/DSCF3723.RAF": {
+        "bytes": 49270656,
+        "sha256": "3ea1ed3bbd7e6118314090491068d096be44936e00f1c27e019278c28d204a77"
+      },
+      "aesthetic-test/DSCF3767.RAF": {
+        "bytes": 48201488,
+        "sha256": "fbca9015fbfde34967f5dc074f8130a80cb0356df6ac3d1dcde2ba30dfe1cc12"
+      },
+      "aesthetic-test/DSCF3835.RAF": {
+        "bytes": 49038048,
+        "sha256": "ebd98b35c2cc84a6a6b55216f4a1d9f50cbd2951aff0d3d9585741954967be9c"
+      },
+      "aesthetic-test/DSCF5694.RAF": {
+        "bytes": 47999264,
+        "sha256": "0c049dac3be375fb337c8ec72dd24c161c1b8aa2e6f8ea3e451bc6643e00b89f"
+      },
+      "aesthetic-test/DSCF5726.RAF": {
+        "bytes": 43712032,
+        "sha256": "1dea681de51ecda783ef66234bcfd461b44e63c974d9718154ecb1ea9d8d64bd"
+      },
+      "aesthetic-test/DSCF5739.RAF": {
+        "bytes": 38555520,
+        "sha256": "912140d3c46ba3026f092bc5cc4fabcff71b9b1b4134f864fa599d45fa0cdd41"
+      },
+      "aesthetic-test/DSCF5765.RAF": {
+        "bytes": 41213136,
+        "sha256": "7fbbf927834f52b676dd17e4d7b268dee3ae6daaac08a5687ae284c9ca1a39c1"
+      },
+      "aesthetic-test/DSCF5835.RAF": {
+        "bytes": 47864016,
+        "sha256": "c8f18c46e2b5819cac996f0800bab01f64d35985c22b549656dedc59e7cf572e"
+      },
+      "aesthetic-test/DSCF5845.RAF": {
+        "bytes": 46881872,
+        "sha256": "f6b64a039ddc3a3278ecfd12948cf957a1c0feee1d25d22a64b976274da3d99b"
+      }
+    },
+    "sourceTreeAfter": "974d1da5ebe098086d716fbdac735863e8e42ccd4f90aea5ab3b2d817476d682",
+    "sourceTreeBefore": "40d52d151e63f067e3823834eed0f934b86a540fe75b89c4d36c842786f80a95",
+    "sourceTreeHashAlgorithm": "SHA-256 of sorted compact JSON mapping relative source path to SHA-256; full maps in ignored dist/performance-2026-09-19"
+  },
+  "schemaVersion": 1,
+  "verification": {
+    "cpuMetalComparator": {
+      "comparisons": 2725,
+      "maximumChannelError8Bit": 2,
+      "metalAvailable": true,
+      "renderFailures": 0
+    },
+    "documentation": "strict MkDocs build",
+    "finalReleaseSuite": {
+      "issues": 0,
+      "optionalSkips": 13,
+      "passingRecords": 654,
+      "reportedTests": 667,
+      "representativeRollEnabled": true,
+      "seconds": 289.942
+    },
+    "focusedFinal": {
+      "issues": 0,
+      "reportedTests": 98,
+      "seconds": 53.762
+    },
+    "initialReleaseSuite": {
+      "failedTests": 2,
+      "issues": 4,
+      "optionalSkips": 13,
+      "passingRecords": 652,
+      "reportedTests": 667,
+      "seconds": 395.679
+    },
+    "rawCompatibilityChecksPassed": 2,
+    "swiftFormatting": "strict, six touched Swift files",
+    "whitespace": "git diff --check"
+  }
+}

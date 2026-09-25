@@ -19,8 +19,8 @@ final class RawDecodeCancellation: @unchecked Sendable {
   func checkCancellation() throws { if isCancelled { throw CancellationError() } }
 }
 
-/// One authoritative decode at a time. Selected work precedes speculative
-/// neighbours; cancellation follows the caller through the detached worker and
+/// Bounded decode workers, with at most one speculative neighbour. Selected
+/// work precedes speculation; cancellation follows the caller through the detached worker and
 /// into native strips/wavefronts. Cancelled queued operations never decode.
 public actor RawDecodeScheduler {
   public enum Priority: Int, Sendable { case lookahead, selected, export }
@@ -30,9 +30,12 @@ public actor RawDecodeScheduler {
     let perform: @Sendable () -> Void
   }
   private var pending: [Job] = []
-  private var active: Job?
+  private var active: [Job] = []
+  private let maximumConcurrentDecodes: Int
 
-  public init() {}
+  public init(maximumConcurrentDecodes: Int = 1) {
+    self.maximumConcurrentDecodes = max(1, min(2, maximumConcurrentDecodes))
+  }
 
   var queuedRequestCount: Int { pending.count }
 
@@ -55,8 +58,12 @@ public actor RawDecodeScheduler {
               }
               continuation.resume(with: result)
             }))
-        if let active, active.priority == .lookahead, priority != .lookahead {
-          active.cancellation.cancel()
+        // Export sheds all speculation. Foreground preview work only preempts
+        // when both slots are occupied, so it can overlap one useful neighbour.
+        if priority == .export
+          || (priority == .selected && active.count >= maximumConcurrentDecodes)
+        {
+          for job in active where job.priority == .lookahead { job.cancellation.cancel() }
         }
         startNextIfIdle()
       }
@@ -73,20 +80,27 @@ public actor RawDecodeScheduler {
   }
 
   private func startNextIfIdle() {
-    guard active == nil, !pending.isEmpty else { return }
-    let index = pending.indices.max {
-      pending[$0].priority.rawValue < pending[$1].priority.rawValue
-    }!
-    let job = pending.remove(at: index)
-    active = job
-    Task.detached(priority: job.priority == .lookahead ? .utility : .userInitiated) {
-      job.perform()
-      await self.finished()
+    while active.count < maximumConcurrentDecodes {
+      let eligible = pending.indices.filter { index in
+        pending[index].priority != .lookahead
+          || !active.contains { $0.priority == .lookahead || $0.priority == .export }
+      }
+      guard
+        let index = eligible.max(by: {
+          pending[$0].priority.rawValue < pending[$1].priority.rawValue
+        })
+      else { return }
+      let job = pending.remove(at: index)
+      active.append(job)
+      Task.detached(priority: job.priority == .lookahead ? .utility : .userInitiated) {
+        job.perform()
+        await self.finished(job.cancellation)
+      }
     }
   }
 
-  private func finished() {
-    active = nil
+  private func finished(_ token: RawDecodeCancellation) {
+    active.removeAll { $0.cancellation === token }
     startNextIfIdle()
   }
 }

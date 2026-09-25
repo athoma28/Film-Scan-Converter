@@ -40,12 +40,25 @@ func makeSolid(_ value: UInt16, width: Int, height: Int) -> UInt16Image {
   return UInt16Image(width: width, height: height, channels: 3, pixels: pixels)
 }
 
+/// Core Image can pad rows, especially after a quarter turn. Compare visible
+/// RGB bytes only, never padding or the unused CPU alpha byte.
 func extractRGBAPixels(_ cgImage: CGImage) -> [UInt8]? {
-  guard let data = cgImage.dataProvider?.data,
+  guard cgImage.width > 0, cgImage.height > 0,
+    cgImage.bitsPerComponent == 8, cgImage.bitsPerPixel == 32,
+    [.noneSkipLast, .premultipliedLast, .last].contains(cgImage.alphaInfo),
+    cgImage.bitmapInfo.intersection(.byteOrderMask) != .byteOrder32Little,
+    cgImage.bytesPerRow >= cgImage.width * 4,
+    let data = cgImage.dataProvider?.data,
+    CFDataGetLength(data) >= cgImage.bytesPerRow * (cgImage.height - 1) + cgImage.width * 4,
     let ptr = CFDataGetBytePtr(data)
   else { return nil }
-  let count = cgImage.width * cgImage.height * 4
-  return Array(UnsafeBufferPointer(start: ptr, count: count))
+  var pixels: [UInt8] = []
+  pixels.reserveCapacity(cgImage.width * cgImage.height * 4)
+  for y in 0..<cgImage.height {
+    let row = ptr.advanced(by: y * cgImage.bytesPerRow)
+    pixels.append(contentsOf: UnsafeBufferPointer(start: row, count: cgImage.width * 4))
+  }
+  return pixels
 }
 
 struct DiffStats {
@@ -104,7 +117,7 @@ struct ParameterCombo: Hashable, CustomStringConvertible {
     saturation: Int = 100,
     curveEnabled: Bool = false,
     wheelsEnabled: Bool = false,
-    photo: PhotoAdjustmentParameters = PhotoAdjustmentParameters()
+    photo: PhotoAdjustmentParameters = PhotoAdjustmentParameters(schemaVersion: 1)
   ) {
     self.filmType = filmType
     self.temperature = temperature
@@ -150,6 +163,7 @@ func toneControlGrid() -> [ParameterCombo] {
             ParameterCombo(
               filmType: ft,
               photo: PhotoAdjustmentParameters(
+                schemaVersion: 1,
                 exposureEV: ev, brightness: bri, contrast: con)))
         }
       }
@@ -159,19 +173,20 @@ func toneControlGrid() -> [ParameterCombo] {
       combos.append(
         ParameterCombo(
           filmType: ft,
-          photo: PhotoAdjustmentParameters(highlights: hl)))
+          photo: PhotoAdjustmentParameters(schemaVersion: 1, highlights: hl)))
     }
     for sh in shadowValues {
       combos.append(
         ParameterCombo(
           filmType: ft,
-          photo: PhotoAdjustmentParameters(shadows: sh)))
+          photo: PhotoAdjustmentParameters(schemaVersion: 1, shadows: sh)))
     }
 
     combos.append(
       ParameterCombo(
         filmType: ft,
         photo: PhotoAdjustmentParameters(
+          schemaVersion: 1,
           exposureEV: 0.5, brightness: 0.2, contrast: 0.3,
           highlights: -0.3, shadows: 0.3)))
   }
@@ -233,230 +248,192 @@ func parameterGrid() -> [ParameterCombo] {
   return baseCombos + gradingCombos
 }
 
-func cpuRender(image: UInt16Image, parameters: ProcessingParameters) -> CGImage? {
-  let corrected = FilmProcessing.correctedPreview(image: image, parameters: parameters)
-  return corrected.makePreviewCGImage()
+func legacyScenario(_ combo: ParameterCombo) -> ComparisonScenario {
+  ComparisonScenario(name: combo.description, family: "legacy", parameters: legacyParameters(combo))
 }
 
-print("Film Scan Preview Comparator")
-print("============================")
-print("Metal available: \(hasMetal)")
-print("Image size: \(imageSize)×\(imageSize)")
-print()
-
-let images: [(String, UInt16Image)] = [
-  ("gradient", makeGradient(width: imageSize, height: imageSize)),
-  ("checkerboard", makeCheckerboard(width: imageSize, height: imageSize)),
-  ("solid-dark", makeSolid(0, width: imageSize, height: imageSize)),
-  ("solid-mid", makeSolid(32768, width: imageSize, height: imageSize)),
-  ("solid-bright", makeSolid(65535, width: imageSize, height: imageSize)),
-]
-
-let baseCombos = parameterGrid()
-let toneCombos = toneControlGrid()
-let combos = baseCombos + toneCombos
-print(
-  "Parameter combinations to test: \(combos.count) (base: \(baseCombos.count), tone: \(toneCombos.count))"
-)
-print()
-
-var totalComparisons = 0
-var totalFailures = 0
-var worstMaxDiff = 0
-var worstMeanDiff = 0.0
-var worstCombo: ParameterCombo?
-var worstImageName = ""
-var filmModeStats: [FilmType: (count: Int, maxDiff: Int, maxMean: Double)] = [:]
-
-for (imageName, image) in images {
-  guard let renderer = StillPreviewRenderer(image: image) else {
-    print("WARNING: Could not create GPU renderer for \(imageName)")
-    continue
-  }
-
-  print("Testing \(imageName) (\(image.width)×\(image.height))…")
-
-  for (index, combo) in combos.enumerated() {
-    let parameters = ProcessingParameters(
-      filmType: combo.filmType,
-      gamma: combo.gamma,
-      shadows: combo.shadows,
-      highlights: combo.highlights,
-      temperature: combo.temperature,
-      tint: combo.tint,
-      saturation: combo.saturation,
-      curveEnabled: combo.curveEnabled,
-      curveControlPoints: combo.curveEnabled
-        ? [
-          CurvePoint(input: 0, output: 0),
-          CurvePoint(input: 0.3, output: 0.15),
-          CurvePoint(input: 0.7, output: 0.85),
-          CurvePoint(input: 1, output: 1),
-        ] : [],
-      highlightWheel: combo.wheelsEnabled ? ColorWheel(hue: 35, strength: 0.4) : ColorWheel(),
-      midtoneWheel: combo.wheelsEnabled ? ColorWheel(hue: 190, strength: 0.25) : ColorWheel(),
-      shadowWheel: combo.wheelsEnabled ? ColorWheel(hue: 285, strength: 0.5) : ColorWheel(),
-      photoAdjustments: combo.photo
-    )
-
-    guard let gpuCG = renderer.render(parameters: parameters, showOriginal: false),
-      let gpuPixels = extractRGBAPixels(gpuCG),
-      let cpuCG = cpuRender(image: image, parameters: parameters),
-      let cpuPixels = extractRGBAPixels(cpuCG)
-    else {
-      totalFailures += 1
-      continue
-    }
-
-    totalComparisons += 1
-    let stats = comparePixels(gpu: gpuPixels, cpu: cpuPixels)
-
-    if stats.maxR > 0 || stats.maxG > 0 || stats.maxB > 0 {
-      let maxDiff = max(stats.maxR, max(stats.maxG, stats.maxB))
-      if maxDiff > worstMaxDiff {
-        worstMaxDiff = maxDiff
-        worstMeanDiff = stats.meanDiff
-        worstCombo = combo
-        worstImageName = imageName
-      }
-
-      let existing = filmModeStats[combo.filmType] ?? (0, 0, 0)
-      filmModeStats[combo.filmType] = (
-        existing.count + 1,
-        max(existing.maxDiff, maxDiff),
-        max(existing.maxMean, stats.meanDiff)
-      )
-    }
-
-    if (index + 1) % 30 == 0 || index == combos.count - 1 {
-      print("  \(index + 1)/\(combos.count)")
-    }
-  }
-}
-
-print()
-print("=== COMPARISON RESULTS ===")
-print()
-print("Total comparisons: \(totalComparisons)")
-print("Render failures: \(totalFailures)")
-print()
-print("Worst-case difference:")
-if let worstCombo, worstMaxDiff > 0 {
-  print("  Image: \(worstImageName)")
-  print("  Parameters: \(worstCombo)")
-  print("  Max per-channel diff: \(worstMaxDiff) (of 255)")
-  print("  Mean per-pixel diff: \(String(format: "%.2f", worstMeanDiff))")
-} else {
-  print("  All comparisons pixel-identical!")
-}
-print()
-
-if filmModeStats.isEmpty {
-  print("All film modes: pixel-identical across all parameter combinations.")
-} else {
-  print("Per film-mode summary:")
-  for filmType in [FilmType.colourNegative, FilmType.blackAndWhiteNegative, FilmType.slide] {
-    if let s = filmModeStats[filmType] {
-      print(
-        "  \(filmType): \(s.count) combos with diffs, max=\(s.maxDiff), worst-mean=\(String(format: "%.2f", s.maxMean))"
-      )
-    } else {
-      print("  \(filmType): all pixel-identical")
-    }
-  }
-}
-print()
-
-let tolerance = 2
-if !hasMetal || totalComparisons == 0 {
-  print(
-    "FAIL: Rendering is unavailable or 0 comparisons completed (Metal: \(hasMetal), count: \(totalComparisons))."
-  )
-  exit(1)
-} else if totalFailures > 0 {
-  print("FAIL: \(totalFailures) render failures occurred during comparison.")
-  exit(1)
-} else if worstMaxDiff <= tolerance {
-  print("PASS: All \(totalComparisons) differences within \(tolerance)-level tolerance.")
-  print("GPU preview is visually equivalent to CPU authoritative path.")
-  exit(0)
-} else {
-  print("FAIL: Maximum channel difference \(worstMaxDiff) exceeds \(tolerance)-level tolerance.")
-  print()
-  print("DIAGNOSTIC: Worst-case pixel-by-pixel breakdown")
-  print("----------------------------------------------")
-
-  var diagImage = makeGradient(width: imageSize, height: imageSize)
-  if worstImageName == "checkerboard" {
-    diagImage = makeCheckerboard(width: imageSize, height: imageSize)
-  } else if worstImageName == "solid-dark" {
-    diagImage = makeSolid(0, width: imageSize, height: imageSize)
-  } else if worstImageName == "solid-mid" {
-    diagImage = makeSolid(32768, width: imageSize, height: imageSize)
-  } else if worstImageName == "solid-bright" {
-    diagImage = makeSolid(65535, width: imageSize, height: imageSize)
-  }
-
-  guard let renderer = StillPreviewRenderer(image: diagImage),
-    let wc = worstCombo
-  else {
-    fatalError("Could not create diagnostic renderer")
-  }
-  let params = ProcessingParameters(
-    filmType: wc.filmType,
-    gamma: wc.gamma,
-    shadows: wc.shadows,
-    highlights: wc.highlights,
-    temperature: wc.temperature,
-    tint: wc.tint,
-    saturation: wc.saturation,
-    curveEnabled: wc.curveEnabled,
-    curveControlPoints: wc.curveEnabled
+func legacyParameters(_ combo: ParameterCombo) -> ProcessingParameters {
+  return ProcessingParameters(
+    filmType: combo.filmType,
+    gamma: combo.gamma,
+    shadows: combo.shadows,
+    highlights: combo.highlights,
+    temperature: combo.temperature,
+    tint: combo.tint,
+    saturation: combo.saturation,
+    curveEnabled: combo.curveEnabled,
+    curveControlPoints: combo.curveEnabled
       ? [
         CurvePoint(input: 0, output: 0),
         CurvePoint(input: 0.3, output: 0.15),
         CurvePoint(input: 0.7, output: 0.85),
         CurvePoint(input: 1, output: 1),
       ] : [],
-    highlightWheel: wc.wheelsEnabled ? ColorWheel(hue: 35, strength: 0.4) : ColorWheel(),
-    midtoneWheel: wc.wheelsEnabled ? ColorWheel(hue: 190, strength: 0.25) : ColorWheel(),
-    shadowWheel: wc.wheelsEnabled ? ColorWheel(hue: 285, strength: 0.5) : ColorWheel(),
-    photoAdjustments: wc.photo
+    highlightWheel: combo.wheelsEnabled ? ColorWheel(hue: 35, strength: 0.4) : ColorWheel(),
+    midtoneWheel: combo.wheelsEnabled ? ColorWheel(hue: 190, strength: 0.25) : ColorWheel(),
+    shadowWheel: combo.wheelsEnabled ? ColorWheel(hue: 285, strength: 0.5) : ColorWheel(),
+    photoAdjustments: combo.photo
   )
-  guard let gc = renderer.render(parameters: params, showOriginal: false),
-    let gp = extractRGBAPixels(gc),
-    let cc = cpuRender(image: diagImage, parameters: params),
-    let cp = extractRGBAPixels(cc)
-  else {
-    print("Diagnostic render failed")
-    fatalError("Diagnostic render failed")
-  }
+}
 
-  print("Worst combo: \(wc)")
-  print()
-  print("First 10 pixels (R G B):")
-  for i in 0..<min(10, gp.count / 4) {
-    let o = i * 4
-    print(
-      "  px[\(i)] GPU=(\(gp[o]),\(gp[o+1]),\(gp[o+2])) CPU=(\(cp[o]),\(cp[o+1]),\(cp[o+2])) Δ=(\(abs(Int(gp[o])-Int(cp[o]))),\(abs(Int(gp[o+1])-Int(cp[o+1]))),\(abs(Int(gp[o+2])-Int(cp[o+2]))))"
-    )
-  }
+struct ComparisonSummary {
+  var expected = 0
+  var completed = 0
+  var cpuFallbacks = 0
+  var failures = 0
+  var outsideTolerance = 0
+  var maximumError = 0
+  var maximumMeanError = 0.0
+}
 
-  var maxDiffs = [Int]()
-  maxDiffs.reserveCapacity(gp.count / 4)
-  for i in 0..<(gp.count / 4) {
-    let o = i * 4
-    let redDiff = abs(Int(gp[o]) - Int(cp[o]))
-    let greenDiff = abs(Int(gp[o + 1]) - Int(cp[o + 1]))
-    let blueDiff = abs(Int(gp[o + 2]) - Int(cp[o + 2]))
-    maxDiffs.append(max(redDiff, max(greenDiff, blueDiff)))
+let arguments = Array(CommandLine.arguments.dropFirst())
+guard arguments.count <= 1,
+  arguments.allSatisfy({ ["--suite=all", "--suite=legacy", "--suite=current"].contains($0) })
+else {
+  print("Usage: FilmScanPreviewComparator [--suite=all|legacy|current]")
+  exit(2)
+}
+let suite = arguments.first?.split(separator: "=").last.map(String.init) ?? "all"
+let tolerance = 2
+let legacyScenarios = (parameterGrid() + toneControlGrid()).map(legacyScenario)
+let currentScenarios = currentWorkflowScenarios()
+let legacyImages: [(String, UInt16Image)] = [
+  ("gradient", makeGradient(width: imageSize, height: imageSize)),
+  ("checkerboard", makeCheckerboard(width: imageSize, height: imageSize)),
+  ("solid-dark", makeSolid(0, width: imageSize, height: imageSize)),
+  ("solid-mid", makeSolid(32768, width: imageSize, height: imageSize)),
+  ("solid-bright", makeSolid(65535, width: imageSize, height: imageSize)),
+]
+let currentImages =
+  legacyImages + [
+    ("color-volume", makeColorVolume(width: 73, height: 47)),
+    ("non-square-gradient", makeGradient(width: 79, height: 53)),
+  ]
+var batches: [(images: [(String, UInt16Image)], scenarios: [ComparisonScenario])] = []
+if suite != "current" { batches.append((legacyImages, legacyScenarios)) }
+if suite != "legacy" { batches.append((currentImages, currentScenarios)) }
+let expectedComparisons = batches.reduce(0) { $0 + $1.images.count * $1.scenarios.count }
+var summaries: [String: ComparisonSummary] = [:]
+for batch in batches {
+  for scenario in batch.scenarios {
+    summaries[scenario.family, default: ComparisonSummary()].expected += batch.images.count
   }
-  if let worstIdx = maxDiffs.enumerated().max(by: { $0.element < $1.element }) {
-    let o = worstIdx.offset * 4
-    print()
-    print(
-      "Worst pixel [\(worstIdx.offset)]: GPU=(\(gp[o]),\(gp[o+1]),\(gp[o+2])) CPU=(\(cp[o]),\(cp[o+1]),\(cp[o+2])) diff=\(worstIdx.element)"
-    )
-  }
+}
+
+print("Film Scan Preview Comparator")
+print("Metal available: \(hasMetal); suite: \(suite)")
+print("Expected comparisons: \(expectedComparisons)")
+print("Current cases use FilmBase + LookRecipe; RGB tolerance: \(tolerance)/255")
+guard hasMetal else {
+  print("FAIL: Metal is unavailable; no GPU comparisons can be validated.")
   exit(1)
 }
+
+var worstCase: (image: String, scenario: String, stats: DiffStats)?
+for batch in batches {
+  for (imageName, image) in batch.images {
+    print(
+      "Testing \(imageName) (\(image.width)×\(image.height)), \(batch.scenarios.count) scenarios…")
+    guard let renderer = StillPreviewRenderer(image: image) else {
+      for scenario in batch.scenarios { summaries[scenario.family]!.failures += 1 }
+      print("FAIL: Could not create GPU renderer for \(imageName)")
+      continue
+    }
+    for scenario in batch.scenarios {
+      autoreleasepool {
+        let parameters = scenario.parameters
+        // Flat density frames have no useful log span. They must explicitly
+        // select the app's authoritative CPU path, not claim GPU parity after
+        // dividing Float cancellation noise by the CPU's tiny epsilon span.
+        let expectsCPUFallback =
+          imageName.hasPrefix("solid-") && !scenario.showOriginal
+          && parameters.filmType == .colourNegative && parameters.filmNegativeParams.enabled
+          && parameters.filmNegativeParams.rendering == .densityPrint
+        if expectsCPUFallback {
+          guard !renderer.supports(parameters: parameters, showOriginal: scenario.showOriginal),
+            renderer.render(parameters: parameters, showOriginal: scenario.showOriginal) == nil
+          else {
+            summaries[scenario.family]!.failures += 1
+            print("FAIL: Expected explicit CPU fallback: \(imageName) \(scenario.name)")
+            return
+          }
+          summaries[scenario.family]!.cpuFallbacks += 1
+          return
+        }
+        var cpuParameters = parameters
+        if scenario.showOriginal { cpuParameters.filmType = .cropOnly }
+        guard
+          StillPreviewRenderer.supports(
+            parameters: parameters, showOriginal: scenario.showOriginal),
+          renderer.supports(parameters: parameters, showOriginal: scenario.showOriginal),
+          let gpu = renderer.render(parameters: parameters, showOriginal: scenario.showOriginal),
+          let cpu = FilmProcessing.correctedPreview(image: image, parameters: cpuParameters)
+            .makePreviewCGImage(),
+          gpu.width
+            == ImageGeometry.outputDimensions(
+              source: .init(width: image.width, height: image.height), parameters: parameters
+            ).width,
+          gpu.height
+            == ImageGeometry.outputDimensions(
+              source: .init(width: image.width, height: image.height), parameters: parameters
+            ).height,
+          gpu.width == cpu.width, gpu.height == cpu.height,
+          let gpuPixels = extractRGBAPixels(gpu), let cpuPixels = extractRGBAPixels(cpu),
+          gpuPixels.count == cpuPixels.count
+        else {
+          summaries[scenario.family]!.failures += 1
+          print("FAIL: Render/support/dimensions/pixel layout: \(imageName) \(scenario.name)")
+          return
+        }
+        let stats = comparePixels(gpu: gpuPixels, cpu: cpuPixels)
+        let maximum = max(stats.maxR, stats.maxG, stats.maxB)
+        var summary = summaries[scenario.family]!
+        summary.completed += 1
+        summary.maximumError = max(summary.maximumError, maximum)
+        summary.maximumMeanError = max(summary.maximumMeanError, stats.meanDiff)
+        if maximum > tolerance {
+          summary.outsideTolerance += 1
+          print(
+            "FAIL: \(imageName) \(scenario.name): RGB max \(stats.maxR)/\(stats.maxG)/\(stats.maxB), mean \(String(format: "%.4f", stats.meanDiff))"
+          )
+        }
+        summaries[scenario.family] = summary
+        if worstCase == nil
+          || maximum > max(worstCase!.stats.maxR, worstCase!.stats.maxG, worstCase!.stats.maxB)
+        {
+          worstCase = (imageName, scenario.name, stats)
+        }
+      }
+    }
+  }
+}
+
+print("\nComparison results by family:")
+for family in summaries.keys.sorted() {
+  let summary = summaries[family]!
+  print(
+    "  \(family): GPU=\(summary.completed), CPU fallback=\(summary.cpuFallbacks), expected=\(summary.expected), failures=\(summary.failures), outside tolerance=\(summary.outsideTolerance), max=\(summary.maximumError)/255, worst mean=\(String(format: "%.4f", summary.maximumMeanError))"
+  )
+}
+let completed = summaries.values.reduce(0) { $0 + $1.completed }
+let failures = summaries.values.reduce(0) { $0 + $1.failures }
+let cpuFallbacks = summaries.values.reduce(0) { $0 + $1.cpuFallbacks }
+let outsideTolerance = summaries.values.reduce(0) { $0 + $1.outsideTolerance }
+print("GPU comparisons: \(completed); verified CPU routes: \(cpuFallbacks)")
+print("Total cases checked: \(completed + cpuFallbacks)/\(expectedComparisons)")
+print("Render failures: \(failures)")
+if let worstCase {
+  print("Worst case: \(worstCase.image) \(worstCase.scenario)")
+  print(
+    "  RGB max: \(worstCase.stats.maxR)/\(worstCase.stats.maxG)/\(worstCase.stats.maxB); mean: \(String(format: "%.4f", worstCase.stats.meanDiff))"
+  )
+}
+guard completed + cpuFallbacks == expectedComparisons, completed > 0, failures == 0,
+  outsideTolerance == 0
+else {
+  print("FAIL: The full comparison cohort must complete within \(tolerance)/255.")
+  exit(1)
+}
+print(
+  "PASS: All \(completed) GPU comparisons within \(tolerance)/255; \(cpuFallbacks) explicit CPU routes verified. Synthetic coverage only; photographic and export acceptance remain separate."
+)

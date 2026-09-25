@@ -66,12 +66,16 @@ struct PreviewPublicationTests {
     print("EDIT_REPLAY \(String(decoding: data, as: UTF8.self))")
   }
 
-  @Test("Exposure edits keep manually cropped corrections on the GPU")
-  func manuallyCroppedExposureUsesGPU() async throws {
+  @Test(
+    "Cropped exposure edits use the renderer supported by their film base",
+    arguments: [FilmBase.slide, .colorC41])
+  func manuallyCroppedExposureUsesSupportedRenderer(base: FilmBase) async throws {
     let model = try await loadedModel()
+    model.setFilmBase(base)
     model.setManualCrop(.init(x: 0.17, y: 0.13, width: 0.63, height: 0.71))
     model.setExposureEV(0.4)
     try await waitUntil { !model.isRendering }
+    // Version 2 shares sensor-frame analysis, so both bases support a cropped GPU edit.
     #expect(model.status.contains("GPU"))
     #expect(model.publishedPreviewParameters == model.parameters)
     model.showOriginal = true
@@ -88,11 +92,11 @@ struct PreviewPublicationTests {
     let displayedBefore = model.renderStats.displayedRenders
     var previousRevision = model.publishedRenderRevision
 
-    model.setTemperature(10)
+    model.setSemanticTemperature(10)
     try await waitUntil { gate.arrivals.count == 1 }
     for index in 0..<4 {
       let nextTemperature = (index + 2) * 10
-      model.setTemperature(nextTemperature)
+      model.setSemanticTemperature(Double(nextTemperature))
       gate.release(index)
       try await waitUntil { gate.arrivals.count == index + 2 }
       #expect(model.renderStats.displayedRenders == displayedBefore + index + 1)
@@ -122,7 +126,7 @@ struct PreviewPublicationTests {
     let displayedBefore = model.renderStats.displayedRenders
     let revisionBefore = model.publishedRenderRevision
 
-    model.setTemperature(30)
+    model.setSemanticTemperature(30)
     try await waitUntil { gate.arrivals.count == 1 }
     switch change {
     case "geometry": model.rotateClockwise()
@@ -149,7 +153,7 @@ struct PreviewPublicationTests {
     let gate = CompletionGate()
     model.previewRenderCompletionHook = { await gate.hold($0) }
     defer { gate.releaseAll() }
-    model.setTemperature(45)
+    model.setSemanticTemperature(45)
     try await waitUntil { gate.arrivals.count == 1 }
     let displayedBefore = model.renderStats.displayedRenders
     model.selection = nil
@@ -159,6 +163,81 @@ struct PreviewPublicationTests {
     #expect(model.previewImage == nil)
     #expect(model.renderStats.displayedRenders == displayedBefore)
     #expect(!model.isRendering)
+  }
+
+  @Test("Rapid selection reloads keep one detached render worker and drain the latest request")
+  func selectionChangesDoNotOverlapWorkers() async throws {
+    let model = try await loadedModel()
+    let gate = CompletionGate()
+    model.previewRenderWorkerHook = { await gate.hold(ProcessingParameters()) }
+    defer {
+      model.previewRenderWorkerHook = nil
+      gate.releaseAll()
+    }
+    let published = model.renderStats.displayedRenders
+    model.setExposureEV(0.25)
+    try await waitUntil { gate.arrivals.count == 1 }
+    for index in 1...8 {
+      model.loadSelection()
+      model.setExposureEV(Double(index) / 10)
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(gate.arrivals.count == 1)
+    #expect(model.renderStats.displayedRenders == published)
+    gate.release(0)
+    try await waitUntil { gate.arrivals.count == 2 }
+    #expect(model.renderStats.displayedRenders == published)
+    gate.release(1)
+    try await waitUntil { !model.isRendering }
+    #expect(gate.arrivals.count == 2)
+    #expect(model.publishedPreviewParameters == model.parameters)
+    #expect(model.parameters.photoAdjustments.exposureEV == 0.8)
+  }
+
+  @Test(
+    "Gesture release refreshes delayed diagnostics without repeating a complete correction",
+    arguments: [false, true])
+  func gestureReleaseDoesNotRepeatCorrection(holdFinalRender: Bool) async throws {
+    let model = try await loadedModel()
+    try await waitUntil { model.previewStatisticsRevision == model.publishedRenderRevision }
+    // Let the next sample pass the gesture's 100 ms diagnostic throttle.
+    try await Task.sleep(for: .milliseconds(110))
+    let statisticsGate = CompletionGate()
+    let renderGate = CompletionGate()
+    model.previewStatisticsCompletionHook = { await statisticsGate.hold(.init()) }
+    defer {
+      model.previewStatisticsCompletionHook = nil
+      model.previewRenderCompletionHook = nil
+      statisticsGate.releaseAll()
+      renderGate.releaseAll()
+    }
+
+    model.beginEditingGesture(named: "Temperature")
+    model.setSemanticTemperature(10)
+    try await waitUntil { statisticsGate.arrivals.count == 1 && !model.isRendering }
+    #expect(model.previewStatisticsRevision != model.publishedRenderRevision)
+    if holdFinalRender {
+      model.previewRenderCompletionHook = { await renderGate.hold($0) }
+    }
+    model.setSemanticTemperature(20)
+    try await waitUntil {
+      holdFinalRender ? renderGate.arrivals.count == 1 : !model.isRendering
+    }
+    let submissions = model.renderStats.submittedSnapshots
+    let corrections = model.previewCorrectionCount
+    model.endEditingGesture()
+    #expect(model.renderStats.submittedSnapshots == submissions)
+
+    model.previewRenderCompletionHook = nil
+    model.previewStatisticsCompletionHook = nil
+    renderGate.releaseAll()
+    statisticsGate.releaseAll()
+    try await waitUntil {
+      !model.isRendering && model.previewStatisticsRevision == model.publishedRenderRevision
+    }
+    #expect(model.previewCorrectionCount == corrections)
+    #expect(model.publishedPreviewParameters == model.parameters)
+    #expect(model.publishedPreviewParameters?.temperature == 20)
   }
 
   private func loadedModel() async throws -> AppModel {

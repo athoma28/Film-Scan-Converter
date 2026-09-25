@@ -1,5 +1,10 @@
 # Second research pass: editing latency, B&W lookup, and HDR fidelity
 
+**Historical research snapshot.** Findings and proposed changes below refer to
+the recorded September 13 source. Later implementation is tracked in
+[development status](../development/native-macos.md); this report is not a second
+list of pending tasks or a benchmark of current presets.
+
 September 13, 2026. This follows the
 [performance investigation](research-directions-2026-09-12.md) and
 [B&W tonality investigation](bw-tonality-2026-09-13.md).
@@ -12,7 +17,7 @@ changed in this pass.
 
 ## Evidence and compute scope
 
-The [probe source](../../native/diagnostics/ResearchPassTwoProbe.swift) links
+The [probe source](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/diagnostics/ResearchPassTwoProbe.swift) links
 against the existing optimized engine and compiles the actual
 `PerFileSettingsStore.swift` source alongside it. It uses synthetic images no
 larger than 256 × 256, eight HDR pixels, and temporary synthetic settings files.
@@ -34,7 +39,7 @@ python3 native/diagnostics/run-tonality-probe.py --pass-two > /tmp/fsc-pass-two.
 ```
 
 The [recorded JSON](research-pass-two-probe-2026-09-13.json) contains every sample.
-See the [diagnostic README](../../native/diagnostics/README.md) for build assumptions.
+See the [diagnostic README](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/diagnostics/README.md) for build assumptions.
 
 ## 1. Persistence is a credible source of the sluggish editing
 

@@ -1,10 +1,11 @@
 # Building And Testing
 
 The native package requires macOS 14 or later, Swift 6 (Xcode or Command Line
-Tools), and Homebrew LibRaw. Commands below run from the repository root.
+Tools), and Homebrew LibRaw plus `pkg-config`. Commands below run from the
+repository root.
 
 ```sh
-brew install libraw
+brew install libraw pkg-config
 bash native/test-raw-compatibility.sh
 swift format lint --strict --recursive native/FilmScanEngine/Package.swift native/FilmScanEngine/Sources native/FilmScanEngine/Tests
 swift test --package-path native/FilmScanEngine --no-parallel
@@ -16,6 +17,13 @@ swift run --package-path native/FilmScanEngine FilmScanConverterMac
 Launch Services, bundled dependencies, signing, or the distributed ZIP. Use the
 [release runbook](native-release.md) for packaged-app validation.
 
+The native CI workflow runs the C/C++ compatibility gate, Swift regression with
+coverage, and app build on macOS 14 and 15. Its macOS 15 job also checks formatting
+and assembles/validates an unsigned beta. It does not supply private RAW inputs,
+run the standalone comparator, or enable the performance and representative-roll
+tests. The [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md)
+separates default coverage, local-corpus checks, and opt-in measurements.
+
 ## Graphics And Release Checks
 
 Run AppKit/Core Image/Metal tests with normal macOS graphics/window access.
@@ -26,7 +34,10 @@ sandbox; it does not grant an external runner access to graphics services.
 For release-mode regression with temporary module caches:
 
 ```sh
-CLANG_MODULE_CACHE_PATH=/tmp/film-scan-clang-cache SWIFTPM_MODULECACHE_OVERRIDE=/tmp/film-scan-swiftpm-cache swift test --disable-sandbox -c release   --package-path native/FilmScanEngine --no-parallel
+CLANG_MODULE_CACHE_PATH=/tmp/film-scan-clang-cache \
+SWIFTPM_MODULECACHE_OVERRIDE=/tmp/film-scan-swiftpm-cache \
+swift test --disable-sandbox -c release \
+  --package-path native/FilmScanEngine --no-parallel
 ```
 
 After building, use `--skip-build` to run the same binaries again. The standalone
@@ -36,9 +47,14 @@ CPU/Metal comparator is an additional opt-in check:
 swift run -c release --package-path native/FilmScanEngine FilmScanPreviewComparator
 ```
 
-Require Metal availability, 2,725 completed comparisons, zero render failures,
-and maximum channel error at most 2/255. See the
-[verification summary](native-macos.md#verification-summary) for recorded results.
+The default comparator runs both the historical grid and current Film Base /
+LookRecipe matrix. Pass `--suite=current` or `--suite=legacy` after the executable
+name for a focused rerun. Require Metal, checked/expected case counts to match,
+zero render failures, and maximum GPU RGB channel error at most 2/255. Flat
+density inputs verify explicit CPU routing, counted separately from GPU
+comparisons. Bitmap layout and dimension failures also fail the gate. See the
+[verification summary](native-macos.md#verification-summary) for recorded results
+and the limits of synthetic coverage.
 
 The [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md) describes local RAW corpus requirements,
 opt-in roll tests, and independent-reader checks. [Native package documentation](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/README.md)
@@ -49,6 +65,19 @@ The [RAW upgrade compatibility note](raw-decode-compatibility.md) explains the
 narrow X-T5 adapter that preserves the frozen 0.21.4 source contract with
 LibRaw 0.22.2. Its C/C++ boundary checks run in CI; exact RAW pixel checks also
 require the local corpus. Review both when changing LibRaw.
+
+For the active Camera Raw/film-color investigation, use the
+[color evaluation runbook](color-evaluation.md) for dependencies, preflight,
+fresh production renders, and preference checkpoints. Its Python runner tests
+are separate from Swift and legacy regression discovery:
+
+```sh
+.venv/bin/python -m unittest discover -s native/diagnostics \
+  -p 'test_color_study.py' -v
+```
+
+Those tests validate orchestration and input contracts; they do not refresh the
+dated color reports or establish CPU/Metal parity.
 
 ## Documentation
 

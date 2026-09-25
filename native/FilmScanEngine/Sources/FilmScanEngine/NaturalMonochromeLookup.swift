@@ -29,6 +29,7 @@ final class NaturalMonochromeLookupCache: @unchecked Sendable {
     // ignored. Classic/color/slide/density and single-channel inputs stay on
     // their ordinary paths. All spatial operations have already run.
     image.channels == 3
+      && !parameters.photoAdjustments.usesPhotographicTone
       && parameters.filmType == .blackAndWhiteNegative
       && parameters.filmNegativeParams.enabled
       && parameters.filmNegativeParams.rendering == .calibratedMonochrome

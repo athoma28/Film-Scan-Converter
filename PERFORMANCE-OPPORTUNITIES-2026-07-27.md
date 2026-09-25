@@ -13,7 +13,9 @@ Camera-scan X-Trans preserves LibRaw 0.21.4 integer three-pass output, serial
 work within each tile, and the true overlap dependence including the
 above-right 16-pixel halo. Independent `2*row+col` wavefront diagonals run across
 at most eight workers. Fuji compressed unpack uses independent strips and
-serialized seek/read access through the LibRaw datastream lock seam.
+serialized seek/read access through the LibRaw datastream lock seam. Unpack has
+its own cap of 16 workers, reduced to eight while another camera-scan decode is
+active, and is further bounded by available CPUs and strip count.
 
 `LIBRAW_FORCE_OPENMP` remains disabled: the recorded worker-count experiment
 first diverged at overlapping-tile X-Trans demosaic, while unpack stayed exact.
@@ -44,5 +46,7 @@ continues to decode each job; do not attribute app-cache speedups to its timings
   fixture and decomposed evidence before changing RCD.
 
 Do not reopen overlapping OpenMP tiles, replace the interpolator, prefetch the
-next full-resolution RAW, or promote unmeasured library rewrites from old timing
-estimates. Those changes require new evidence and an explicit scope.
+next three-pass export-quality RAW, or promote unmeasured library rewrites from
+old timing estimates. Those changes require new evidence and an explicit scope.
+The app's bounded one-pass full-sensor preview lookahead is a separate,
+implemented path.

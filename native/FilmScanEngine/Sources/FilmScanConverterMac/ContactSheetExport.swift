@@ -117,12 +117,15 @@ enum ContactSheetExport {
       images.count == 1
       ? first : try MultiScanStacker.combine(images: images, mode: item.stackMode).image
     images.removeAll()
-    let parameters =
-      item.parameters
-      ?? AppModel.automaticallyClassifiedParameters(
-        base: ProcessingParameters(),
+    let parameters: ProcessingParameters
+    if let stored = item.parameters, stored.pendingFilmBaseInitialization == nil {
+      parameters = stored
+    } else {
+      parameters = AppModel.automaticallyClassifiedParameters(
+        base: item.parameters ?? ProcessingParameters(photoAdjustments: .init()),
         image: source.resizedToFit(maxDimension: AppModel.analysisPreviewMaxDimension),
         weakPrior: weakPrior)
+    }
     let calibrated = AppModel.parametersForExport(parameters, decodedImage: source)
     var field: UInt16Image?
     if let flatField, flatField.channels == source.channels {

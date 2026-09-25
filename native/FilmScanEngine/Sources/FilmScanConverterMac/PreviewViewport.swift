@@ -139,24 +139,31 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
   let content: Content
   let onZoomChanged: (Int, Bool, CGFloat) -> Void
   let onRenderDemandChanged: (PreviewRenderDemand) -> Void
+  let interactionTrace: PreviewInteractionTrace?
+  let renderRevision: Int
 
   init(
     imageSize: CGSize,
     request: PreviewZoomRequest,
     onZoomChanged: @escaping (Int, Bool, CGFloat) -> Void,
     onRenderDemandChanged: @escaping (PreviewRenderDemand) -> Void = { _ in },
+    interactionTrace: PreviewInteractionTrace? = nil,
+    renderRevision: Int = 0,
     @ViewBuilder content: () -> Content
   ) {
     self.imageSize = imageSize
     self.request = request
     self.onZoomChanged = onZoomChanged
     self.onRenderDemandChanged = onRenderDemandChanged
+    self.interactionTrace = interactionTrace
+    self.renderRevision = renderRevision
     self.content = content()
   }
 
   func makeCoordinator() -> Coordinator {
     Coordinator(
-      rootView: content, onZoomChanged: onZoomChanged, onRenderDemandChanged: onRenderDemandChanged)
+      rootView: content, onZoomChanged: onZoomChanged, onRenderDemandChanged: onRenderDemandChanged,
+      interactionTrace: interactionTrace)
   }
 
   func makeNSView(context: Context) -> PreviewScrollView {
@@ -164,11 +171,22 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
   }
 
   func updateNSView(_ scrollView: PreviewScrollView, context: Context) {
+    interactionTrace?.record(.viewportUpdateBegan, revision: renderRevision)
+    defer { interactionTrace?.record(.viewportUpdateEnded, revision: renderRevision) }
     context.coordinator.onZoomChanged = onZoomChanged
     context.coordinator.onRenderDemandChanged = onRenderDemandChanged
     let visibleRect = scrollView.documentVisibleRect
     let magnification = scrollView.magnification
+    if let diagnosticView = context.coordinator.hostingView
+      as? DiagnosticPreviewHostingView<Content>
+    {
+      diagnosticView.interactionTrace = interactionTrace
+      diagnosticView.traceRevision = renderRevision
+    }
     context.coordinator.hostingView.rootView = content
+    if context.coordinator.hostingView is DiagnosticPreviewHostingView<Content> {
+      interactionTrace?.record(.viewportUpdated, revision: renderRevision)
+    }
     context.coordinator.updateDocumentSize(
       imageSize,
       previousVisibleRect: visibleRect,
@@ -195,9 +213,16 @@ struct PreviewViewport<Content: View>: NSViewRepresentable {
 
     init(
       rootView: Content, onZoomChanged: @escaping (Int, Bool, CGFloat) -> Void,
-      onRenderDemandChanged: @escaping (PreviewRenderDemand) -> Void = { _ in }
+      onRenderDemandChanged: @escaping (PreviewRenderDemand) -> Void = { _ in },
+      interactionTrace: PreviewInteractionTrace? = nil
     ) {
-      hostingView = NSHostingView(rootView: rootView)
+      if let interactionTrace {
+        let diagnosticView = DiagnosticPreviewHostingView(rootView: rootView)
+        diagnosticView.interactionTrace = interactionTrace
+        hostingView = diagnosticView
+      } else {
+        hostingView = NSHostingView(rootView: rootView)
+      }
       hostingView.sizingOptions = []
       hostingView.clipsToBounds = true
       self.onZoomChanged = onZoomChanged

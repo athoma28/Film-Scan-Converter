@@ -34,7 +34,6 @@ struct StillPreviewPerformanceTests {
     // An unknown ID resolves to the same bundled fallback; raw identifiers
     // should not force another analysis of identical effective values.
     parameters.filmNegativeParams.densityProfileID = "unrecognized-profile"
-    parameters.filmNegativeParams.densityPaperID = "unrecognized-paper"
     #expect(analyze(parameters) == initial)
     #expect(computations == 1)
   }
@@ -104,9 +103,6 @@ struct StillPreviewPerformanceTests {
     parameters.filmNegativeParams.densityUnmixRGB = [
       1.1, -0.1, 0, 0, 1.1, -0.1, -0.1, 0, 1.1,
     ]
-    try expectFreshPixels(renderer, image: image, parameters: parameters)
-    parameters.filmNegativeParams.densityPaperID =
-      DensityPaperProfileCatalog.kodakEnduraPremier.id.rawValue
     try expectFreshPixels(renderer, image: image, parameters: parameters)
 
     // A new renderer must analyze its own source even with identical settings.

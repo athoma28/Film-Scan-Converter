@@ -1,8 +1,8 @@
 # How To Use
 
-This guide describes the native application shipped in downloadable
-[0.2.0 Beta 2](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.2)
-and the current development source. See [Installation](installation.md) for
+This guide describes the current native application, including
+[0.2.0 Beta 3](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.3).
+See [Installation](installation.md) for
 download and source-build paths. Python instructions are in
 [Legacy Usage](legacy-usage.md).
 
@@ -13,7 +13,7 @@ window. Choose a scan in the Scans sidebar. Command-click or Shift-click selects
 multiple files; Previous/Next Scan moves through sidebar order and fits the new
 selection.
 
-In development source after Beta 2, the **Move selected scan up/down** toolbar
+The **Move selected scan up/down** toolbar
 buttons move the primary scan one row while preserving selection. Reordering is
 session-local and unavailable during export. Changing capture order within a
 stack disables that stack and restores the selected original; enable the new
@@ -21,18 +21,29 @@ proposal explicitly if desired. Navigation and newly queued exports follow the
 resulting sidebar order.
 
 Camera RAW first displays a colour-accurate draft, then sharpens to an inspect
-preview and full-sensor detail. You can edit while it loads. **Load RAW Preview**
-skips ahead to full detail. A loading bar marks the first draft; a warning
+preview and full-sensor detail. You can edit while it loads. When available,
+**Load RAW Preview** requests full-sensor detail directly and cancels an
+in-progress inspect decode. A loading bar marks the first draft; a warning
 identifies an embedded camera JPEG if RAW colour is unavailable.
 
-After full-sensor detail arrives, dragging a supported adjustment temporarily
-uses a sharp 2048px GPU raster while keeping the same full-size canvas, pan, and
-zoom. Releasing the control automatically replaces it with the exact
-full-resolution result. Original comparison and processing modes that require
-the CPU continue to use their full-source path.
+Completed full-resolution previews stay in memory as you switch between scans.
+The app also prepares nearby images in the background: sharp previews first,
+then full detail for up to two neighbours. The preview cache uses up to about
+2 GB on a 16 GB Mac or 3 GB on a 24 GB Mac, and releases background images if
+macOS reports memory pressure. Returning to a cached scan with unchanged
+corrections reuses its finished display image too.
+
+After full-sensor detail arrives, a supported adjustment gesture at whole-image
+zoom can temporarily use a sharp 2048px source while keeping the same canvas
+size. This can apply to GPU and CPU preview processing. At closer zoom, GPU
+previews render the visible region from the full source, while CPU fallbacks
+process the full source. Releasing the control replaces
+the temporary preview with the exact full-source result. Original comparison
+does not use the gesture proxy.
 
 Pan with a trackpad or mouse wheel, pinch to zoom, or use Fit and the zoom
-buttons. **100% Preview Pixels** means one current-preview pixel per view point;
+buttons. Once the corrected preview is ready, panning and zooming reuse its
+pixels without rebuilding the correction. **100% Preview Pixels** means one current-preview pixel per view point;
 it corresponds to sensor pixels after the full-resolution upgrade. **Original**
 compares the uncorrected image with matching geometry, pan, and magnification.
 Perspective and film-base editors temporarily reveal the oriented source.
@@ -42,38 +53,79 @@ export framing, rather than the current preview size.
 
 ## Develop
 
-In **Film & Inversion**, review **Scan Type** and **Conversion Mode**. New scans
-are classified automatically; saved choices are restored.
+**Film Base** chooses Color C-41, color cyan-mask, B&W negative, Slide, or
+Original. New scans are classified automatically and receive the first
+recommended factory look: Clean Invert for color or Slide, B&W Print for B&W.
+You can override either choice. Changing film base switches the invert defaults
+only. It does not apply a new look, and looks never change film base.
 
-| Choice | Use |
+**Presets** has a compact menu of recommended, other factory, and saved looks,
+keeping the adjustment sliders close at hand. Choose a name to assign its public
+slider, curve, and wheel values. The sliders jump to
+those values. If you then move any of those controls, the header shows
+**Custom**. Command-Z undoes the apply. **Save current as preset** stores the
+same snapshot under a name you choose. An existing name shows **Replace** before
+saving; a failed save keeps the name available to retry. Use **Manage Saved
+Presets** to remove a saved look.
+
+The first save or deletion that upgrades an older preset library also keeps a
+`CorrectionPresets-v1-<id>.json` backup beside the library. It retains the original
+settings, including legacy inversion and calibration fields.
+
+**Reset Adjustments** clears the Develop tone, color, curves, and wheels while
+keeping your film base, calibration, crop, and orientation. Command-Z restores
+the adjustments. Original film base uses framing and export only; choose a
+negative or Slide base to enable Develop controls.
+The Corrections menu also offers **Reset Image and Framing** when you want to
+clear the film-base choice and geometry along with the adjustments.
+
+| Factory look | Starting direction |
 |---|---|
-| Original scan type | Positive images that need geometry/export without inversion or tone/color corrections. |
-| Natural | Reference-derived negative curves with a Balanced default and optional stock starting looks. |
-| Darkroom | Color-negative log-density inversion with film-stock and paper choices. Cyan/purple-mask scans automatically select Harman Phoenix II with Crystal Archive paper. |
-| Classic | Exponent-based color or monochrome negative inversion. |
-| Bypass | Compare without the selected negative conversion. |
+| Clean Invert | Straight invert with modest cast cleanup. |
+| Soft People | Gentler contrast, quieter color, a little warmth. |
+| Punchy Print | Stronger midtones and a modest S-curve. |
+| Warm | Golden warmth and richer color. |
+| Cool | Cooler color and softer bright lights. |
+| Foliage | Pull copper greens toward olive. Lower foliage recovery if wood or skin shifts. |
+| Night Lift | Open a dark frame and keep lamp warmth. |
+| B&W Print | Monochrome with print contrast. |
+| B&W Soft | Open, gentle monochrome. |
 
-Natural's stock alternatives are starting looks, not automatic stock detection.
-Fuji 200 Expired and CineStill 800T remain experimental. Profile provenance and
-validation limits are documented in [reference calibration](development/reference-negative-calibration.md).
+These are creative starting points, not measured stock or paper simulations.
+Color negatives invert with a generic C-41 or cyan-mask density-print path and
+a neutral print response. There is no separate conversion mode, film stock, or
+paper picker.
 
-Use **Tone & Light** for exposure, brightness, contrast, highlights, shadows,
-and curves. Its clipping readout samples the displayed image. **Color & Balance**
-provides temperature, tint, saturation, vibrance, and color wheels for color
-film types. B&W uses an overall Tone curve; color-channel curves are restricted
-to color film types. Positive **Negative Exposure** values in Natural darken
-the resulting positive by adjusting the negative before inversion.
+**Tone & Light** and **Color & Balance** stay visible. Slider zero is the global
+neutral, so applying a look is visible on the controls. Color negatives also
+show foliage recovery, cast cleanup, and color separation. Double-click a
+slider to restore zero. B&W uses an overall Tone curve; color-channel curves
+are for color film types.
+
+Highlights and Shadows adjust broad bright and dark regions. Whites and Blacks
+focus closer to the ends of the tonal range while retaining the black and white
+points. In **Color Grading Wheels**, the three small sliders below the wheels
+serve a different purpose: **Shadow Floor** raises the black output point for
+soft blacks, **Midtone Level** shifts the center, and **Highlight Ceiling**
+lowers the white output point for softer highlights. Their zero positions leave
+the image unchanged. A first edit to one of these controls or to
+Highlights/Shadows/Whites/Blacks updates an older photographic-tone edit to the
+new response; Undo restores the prior version and appearance. Version 1 edits
+still require **Update Tone Controls** first. Built-in looks retain their saved
+starting appearance until you edit one of those controls.
+
+Copy/paste transfers the current slider snapshot without changing the
+destination's geometry, film base, or calibration. Old correction documents are
+migrated to public adjustments; their inversion/calibration settings are not
+transferred. The ellipsis menu contains **Apply Look
+to Selected** and **Apply Settings to All Open Files**.
 
 Edits save automatically in the background for the source path. Finishing a
 gesture requests a save, and normal application quit waits for pending saves.
-Command-Z and Command-Shift-Z
-undo/redo per file; each continuous slider, curve, wheel, or perspective gesture
-forms one step. Relaunch restores saved settings and starts fresh undo history.
+Command-Z and Command-Shift-Z undo/redo per file; each continuous slider,
+curve, wheel, or perspective gesture forms one step. Relaunch restores saved
+settings and starts fresh undo history.
 
-Use **Looks & Presets** to apply a look, save a preset, or **Restore Before** the
-last applied preset. Copy/paste buttons transfer corrections. The adjacent
-ellipsis menu contains **Apply Look to Selected** and **Apply Settings to All
-Open Files**; both preserve each destination's geometry and measured film base.
 
 ## Geometry
 
@@ -155,8 +207,9 @@ in output-referred linear sRGB; TIFF has broader viewer compatibility.
 During export, **Add Selected** appends independent jobs using the currently
 shown format, destination, compression, and framing settings. Duplicate jobs
 are allowed and receive collision-safe names. The sidebar marks active and
-pending exports. **Cancel** stops at safe processing boundaries; a synchronous
-RAW decode or writer call must finish before it can return.
+pending exports. **Cancel** stops at safe processing boundaries. RAW decoding
+observes cancellation at native checkpoints; synchronous ImageIO/writer calls
+must return before the queue can finish cancelling.
 
 RAW exports decode one file at a time at final quality. The selected file keeps
 its last three-pass decode for settings-only re-export and releases it on

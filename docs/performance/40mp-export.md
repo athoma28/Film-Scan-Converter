@@ -23,8 +23,11 @@ Interactive loading and export have separate image contracts. Standard images
 use an ImageIO thumbnail at most 1000px. Camera RAW browsing ignores the
 embedded JPEG and stages a colour-accurate ~640px draft, a ~4000px inspect
 preview, a selected-file 1-pass full-sensor preview, and 3200px neighbour
-lookahead, with a 256px analysis proxy. The preview cache may keep one
-selected-file 1-pass full-res buffer and must demote it on selection change.
+lookahead, with a 256px analysis proxy. Current source retains completed 1-pass
+full-sensor previews and corrected rasters across selection changes within its
+RAM/count budget; up to two neighbours can warm to full detail. See the
+[preview architecture](../development/realtime-preview-plan.md) for current
+cache and scheduler contracts. Earlier measurements below predate that policy.
 Camera-scan RAW export retains the final-quality three-pass X-Trans path
 measured below. The selected file's last three-pass decode is kept for
 settings-only re-export and dropped on selection change.
@@ -32,9 +35,10 @@ settings-only re-export and dropped on selection change.
 App cancellation is cooperative at safe stage boundaries: starting an export
 cancels speculative lookahead decoding, cancellation prevents completed decode
 or correction work from advancing to the next stage, and unstarted batch items
-receive explicit cancelled results. Synchronous LibRaw and writer calls still
-finish their active call, so the batch run must measure observed cancellation
-latency rather than claiming immediate interruption.
+receive explicit cancelled results. RAW decoding observes cancellation at safe
+native checkpoints; synchronous ImageIO/writer calls must return before stopping.
+The batch run must measure observed cancellation latency rather than claiming
+immediate interruption.
 
 ## Disk-Space Contract
 

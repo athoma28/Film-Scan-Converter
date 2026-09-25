@@ -150,6 +150,57 @@ enum PreviewOverlayGeometry {
     }
   }
 
+  /// Apply pointer displacement to the corner, retaining the initial grab
+  /// offset. A click within the padded handle must never move the frame.
+  static func movingPerspectiveCorner(
+    _ corner: Int, in crop: PerspectiveCrop, screenTranslation: CGSize,
+    imageRect: CGRect, magnification: CGFloat, rotation: Int,
+    flipHorizontally: Bool, parallelAssist: Bool
+  ) -> PerspectiveCrop {
+    guard imageRect.width > 0, imageRect.height > 0,
+      screenTranslation != .zero, (0..<4).contains(corner)
+    else { return crop }
+    let scale = max(magnification, 0.02)
+    let original = displayedPoint(
+      crop.points[corner], rotation: rotation, flipHorizontally: flipHorizontally)
+    let displayed = PerspectiveCrop.Point(
+      x: original.x + screenTranslation.width / (scale * imageRect.width),
+      y: original.y + screenTranslation.height / (scale * imageRect.height))
+    let source = sourcePoint(
+      fromDisplayed: displayed, rotation: rotation, flipHorizontally: flipHorizontally)
+    guard parallelAssist else { return crop.replacing(corner, with: source) }
+    let rotated = normalizedQuarterTurns(rotation) % 2 != 0
+    // Project in actual screen units, so the 18-point attraction radius is
+    // circular at every source aspect ratio, orientation, and zoom.
+    return crop.replacing(
+      corner, with: source, parallelismAssistThreshold: assistScreenLength,
+      coordinateSize: (
+        width: (rotated ? imageRect.height : imageRect.width) * scale,
+        height: (rotated ? imageRect.width : imageRect.height) * scale
+      ))
+  }
+
+  static func nudgingPerspectiveCorner(
+    _ corner: Int, in crop: PerspectiveCrop, displayedPixels: CGSize,
+    sourceDimensions: PixelDimensions, rotation: Int, flipHorizontally: Bool
+  ) -> PerspectiveCrop {
+    guard sourceDimensions.width > 1, sourceDimensions.height > 1,
+      (0..<4).contains(corner)
+    else { return crop }
+    let rotated = normalizedQuarterTurns(rotation) % 2 != 0
+    let width = rotated ? sourceDimensions.height : sourceDimensions.width
+    let height = rotated ? sourceDimensions.width : sourceDimensions.height
+    let original = displayedPoint(
+      crop.points[corner], rotation: rotation, flipHorizontally: flipHorizontally)
+    let displayed = PerspectiveCrop.Point(
+      x: original.x + displayedPixels.width / Double(width - 1),
+      y: original.y + displayedPixels.height / Double(height - 1))
+    return crop.replacing(
+      corner,
+      with: sourcePoint(
+        fromDisplayed: displayed, rotation: rotation, flipHorizontally: flipHorizontally))
+  }
+
   /// Converts a screen-pixel length into document pixels so handles, strokes,
   /// and snap distances stay the same size on screen as the preview zooms.
   static func documentLength(

@@ -5,8 +5,9 @@ summarizes the resulting contracts rather than listing fixed bugs as open work.
 Current evidence and limitations live in
 [development status](docs/development/native-macos.md).
 
-- Overall B&W tone curves apply consistently in Natural, Classic, and basic
-  inversion on CPU/GPU. Saved color-channel adjustments cannot tint monochrome.
+- Overall B&W tone curves apply consistently on CPU/GPU, including retained
+  legacy Natural and Classic engine paths. Saved color-channel adjustments
+  cannot tint monochrome. Those legacy paths are no longer Develop choices.
 - Full-resolution preview/export stack original captures with independent
   statistics, alignment, and exposure weights. Temporary row-band storage is
   cleaned on success, failure, and cancellation.

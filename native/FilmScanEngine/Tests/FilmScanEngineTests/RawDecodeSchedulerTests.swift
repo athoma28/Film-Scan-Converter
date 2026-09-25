@@ -18,6 +18,141 @@ struct RawDecodeSchedulerTests {
       defer { lock.unlock() }
       return values
     }
+
+    func waitForRelease(_ value: Int) throws {
+      let token = try #require(RawDecodeCancellation.current)
+      let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+      while !snapshot.contains(value) {
+        try token.checkCancellation()
+        try #require(ContinuousClock.now < deadline, "Decode gate was not released")
+        Thread.sleep(forTimeInterval: 0.001)
+      }
+      try token.checkCancellation()
+    }
+  }
+
+  @Test("Two workers overlap foreground and one neighbour without starting unbounded speculation")
+  func boundedConcurrentDecodes() async throws {
+    let scheduler = RawDecodeScheduler(maximumConcurrentDecodes: 2)
+    let state = State()
+    let foreground = Task {
+      try await scheduler.run(priority: .selected) {
+        state.append(0)
+        try state.waitForRelease(9)
+      }
+    }
+    defer { foreground.cancel() }
+    try await waitUntil { state.snapshot.contains(0) }
+    let neighbour = Task {
+      try await scheduler.run(priority: .lookahead) {
+        state.append(1)
+        try state.waitForRelease(9)
+      }
+    }
+    defer { neighbour.cancel() }
+    try await waitUntil { state.snapshot.contains(1) }
+    let pending = Task {
+      try await scheduler.run(priority: .lookahead) { state.append(2) }
+    }
+    defer { pending.cancel() }
+    try await waitUntil { await scheduler.queuedRequestCount == 1 }
+    #expect(!state.snapshot.contains(2))
+    // Export frees the speculative slot and runs before queued lookahead.
+    let value = try await scheduler.run(priority: .export) {
+      state.append(3)
+      return 42
+    }
+    #expect(value == 42)
+    do {
+      try await neighbour.value
+      Issue.record("Export should preempt the speculative worker")
+    } catch is CancellationError {}
+    state.append(9)
+    try await foreground.value
+    try await pending.value
+    let order = state.snapshot
+    let exportIndex = try #require(order.firstIndex(of: 3))
+    let lookaheadIndex = try #require(order.firstIndex(of: 2))
+    #expect(exportIndex < lookaheadIndex)
+  }
+
+  @Test("Selected work preserves a running neighbour when the second worker is free")
+  func selectedUsesFreeWorkerWithoutCancellingLookahead() async throws {
+    let scheduler = RawDecodeScheduler(maximumConcurrentDecodes: 2)
+    let state = State()
+    let neighbour = Task {
+      try await scheduler.run(priority: .lookahead) {
+        state.append(1)
+        try state.waitForRelease(9)
+        return 11
+      }
+    }
+    defer { neighbour.cancel() }
+    try await waitUntil { state.snapshot.contains(1) }
+
+    let selected = Task {
+      try await scheduler.run(priority: .selected) {
+        state.append(2)
+        return 42
+      }
+    }
+    defer { selected.cancel() }
+    // The selected request must start while the neighbour is still gated.
+    try await waitUntil { state.snapshot.contains(2) }
+    #expect(try await selected.value == 42)
+    state.append(9)
+    #expect(try await neighbour.value == 11)
+    #expect(state.snapshot == [1, 2, 9])
+  }
+
+  @Test("Selected work preempts only the neighbour when both workers are occupied")
+  func selectedPreemptsLookaheadWithBothWorkersBusy() async throws {
+    let scheduler = RawDecodeScheduler(maximumConcurrentDecodes: 2)
+    let state = State()
+    let foreground = Task {
+      try await scheduler.run(priority: .selected) {
+        state.append(0)
+        try state.waitForRelease(9)
+        state.append(4)
+        return 10
+      }
+    }
+    defer { foreground.cancel() }
+    try await waitUntil { state.snapshot.contains(0) }
+
+    let neighbour = Task {
+      try await scheduler.run(priority: .lookahead) {
+        state.append(1)
+        do {
+          try state.waitForRelease(9)
+        } catch is CancellationError {
+          state.append(2)
+          throw CancellationError()
+        }
+      }
+    }
+    defer { neighbour.cancel() }
+    try await waitUntil { state.snapshot.contains(1) }
+
+    let selected = Task {
+      try await scheduler.run(priority: .selected) {
+        state.append(3)
+        return 42
+      }
+    }
+    defer { selected.cancel() }
+    try await waitUntil { state.snapshot.contains(3) }
+    #expect(try await selected.value == 42)
+    do {
+      try await neighbour.value
+      Issue.record("Selected work should preempt the speculative worker")
+    } catch is CancellationError {}
+    #expect(state.snapshot == [0, 1, 2, 3])
+
+    // The original foreground worker remains alive and completes normally.
+    state.append(9)
+    #expect(try await foreground.value == 10)
+    #expect(state.snapshot == [0, 1, 2, 3, 9, 4])
   }
 
   @Test("Cancelling a caller reaches its native cancellation flag")
@@ -27,15 +162,10 @@ struct RawDecodeSchedulerTests {
     let task = Task {
       try await scheduler.run {
         state.append(1)
-        let token = try #require(RawDecodeCancellation.current)
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while ContinuousClock.now < deadline {
-          try token.checkCancellation()
-          Thread.sleep(forTimeInterval: 0.001)
-        }
-        Issue.record("Cancellation did not reach the worker")
+        try state.waitForRelease(9)
       }
     }
+    defer { task.cancel() }
     try await waitUntil { state.snapshot == [1] }
     task.cancel()
     do {
@@ -53,15 +183,10 @@ struct RawDecodeSchedulerTests {
     let speculation = Task {
       try await scheduler.run(priority: .lookahead) {
         state.append(1)
-        let token = try #require(RawDecodeCancellation.current)
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while ContinuousClock.now < deadline {
-          try token.checkCancellation()
-          Thread.sleep(forTimeInterval: 0.001)
-        }
-        Issue.record("Speculative work was not interrupted")
+        try state.waitForRelease(9)
       }
     }
+    defer { speculation.cancel() }
     try await waitUntil { state.snapshot == [1] }
     let result = try await scheduler.run(priority: .selected) {
       state.append(2)
@@ -82,12 +207,7 @@ struct RawDecodeSchedulerTests {
     let active = Task {
       try await scheduler.run(priority: .export) {
         state.append(0)
-        let token = try #require(RawDecodeCancellation.current)
-        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-        while ContinuousClock.now < deadline {
-          try token.checkCancellation()
-          Thread.sleep(forTimeInterval: 0.001)
-        }
+        try state.waitForRelease(9)
       }
     }
     defer { active.cancel() }
@@ -95,11 +215,12 @@ struct RawDecodeSchedulerTests {
     let selected = Task { try await scheduler.run(priority: .selected) { state.append(1) } }
     let cancelled = Task { try await scheduler.run(priority: .lookahead) { state.append(2) } }
     let export = Task { try await scheduler.run(priority: .export) { state.append(3) } }
-    let deadline = ContinuousClock.now.advanced(by: .seconds(2))
-    while await scheduler.queuedRequestCount != 3 {
-      try #require(ContinuousClock.now < deadline)
-      try await Task.sleep(for: .milliseconds(1))
+    defer {
+      selected.cancel()
+      cancelled.cancel()
+      export.cancel()
     }
+    try await waitUntil { await scheduler.queuedRequestCount == 3 }
     cancelled.cancel()
     do {
       try await cancelled.value
@@ -130,6 +251,7 @@ struct RawDecodeSchedulerTests {
           url, fullResolution: true, profile: .rawTherapeeCameraScan)
       }
     }
+    defer { task.cancel() }
     try await waitUntil { state.snapshot == [1] }
     try await Task.sleep(for: .milliseconds(150))
     task.cancel()
@@ -163,10 +285,10 @@ struct RawDecodeSchedulerTests {
     #expect(scheduled == direct)
   }
 
-  private func waitUntil(_ ready: () -> Bool) async throws {
+  private func waitUntil(_ ready: () async -> Bool) async throws {
     let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-    while !ready() {
-      if ContinuousClock.now >= deadline { throw CancellationError() }
+    while await !ready() {
+      try #require(ContinuousClock.now < deadline, "Timed out waiting for scheduler state")
       try await Task.sleep(for: .milliseconds(1))
     }
   }

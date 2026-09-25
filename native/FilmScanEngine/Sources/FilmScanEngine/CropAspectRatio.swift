@@ -29,6 +29,22 @@ public enum CropAspectRatio: String, Codable, CaseIterable, Sendable {
     }
   }
 
+  /// The same proportions after a quarter turn.
+  public var transposed: Self {
+    switch self {
+    case .free: .free
+    case .square: .square
+    case .landscape3x2: .portrait2x3
+    case .portrait2x3: .landscape3x2
+    case .landscape4x3: .portrait3x4
+    case .portrait3x4: .landscape4x3
+    case .landscape5x4: .portrait4x5
+    case .portrait4x5: .landscape5x4
+    case .landscape16x9: .portrait9x16
+    case .portrait9x16: .landscape16x9
+    }
+  }
+
   /// Normalized x and y span different pixel counts on a non-square canvas.
   public func normalizedRatio(in canvas: PixelDimensions) -> Double? {
     guard let value, canvas.width > 0, canvas.height > 0 else { return nil }

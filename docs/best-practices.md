@@ -1,21 +1,32 @@
 # Scanning Best Practices
 
-Having consistent, high quality scans will go a long way to maximize the effectiveness of this application. For best results, ensure the following during scanning:
+Consistent camera scans make the native app's classification, Auto Frame,
+film-base measurement, and roll-wide edits easier to review. For each roll:
 
 1. Use a film holder to hold the film flat and undistorted during scanning.
-2. Use a reasonably accurate mask around the photo. Some film holders have notches or cutouts around the film frame; masking tape can be used to cover up the notches and square off the edges.  
-_Note: It is possible to scan without a mask, however the app may have trouble distinguishing the edge of the photo from the film base, especially if the photo is underexposed._
-3. Use a blower brush or equivalent to remove dust from the film before scanning.
-4. Fill the image frame as much as possible with the desired photo.  
-_Use Geometry to review Auto Frame or correct alignment with Straighten Edge,
-Perspective, and Manual Crop. Detection is a starting point and can fail._
+2. Keep the holder's mask and frame edges simple when possible. Notches and
+   cutouts can confuse **Auto Frame**, especially on underexposed images.
+   Review its result in **Geometry** and use Straighten Edge, Perspective, or
+   Manual Crop where needed.
+3. Remove visible dust before capture. The native **Dust Mask** shows candidates
+   but does not remove them from exports.
+4. Fill the camera frame with the photograph while leaving enough visible film
+   edge if you intend to use **Auto Detect Edge** for film-base measurement.
 5. Use a high CRI light source, or a high-quality LED display such as a high-end LCD or OLED display, as a backlight. Minimize stray light from external light sources.
 6. Expose "to the right" of the histogram, maximizing the exposure, while ensuring that no part of the image is clipped.
 7. Use a consistent exposure and orientation across the entire roll of film.
-8. Capture one extra blank frame with just the film base visible, using the same exposure as the rest of the roll, with all other sources of bright lights masked out.
+8. Keep a blank film-base reference capture at the same exposure if it helps
+   you judge the roll. The current native **Sample Area** tool measures a clear
+   film area in the *selected scan*; it does not import the separate blank frame
+   as a film-base measurement. **Flat Field** loads a separate calibration image
+   and requires a matching aspect ratio.
 
-An ideal film scan is shown below:  
-![image](./images/7aa530f8-f0b6-4345-bfed-0cb2fa739b9c.png)
+See [How to Use](how-to-use.md#calibrate) for the current Calibrate workflow.
 
-Example film base scan:
-![image](./images/667d2393-8ebf-469e-9b2d-888913c7b043.png)
+An example film scan:
+
+![Camera scan of a film frame](./images/7aa530f8-f0b6-4345-bfed-0cb2fa739b9c.png)
+
+An example film-base reference capture:
+
+![Blank film-base reference](./images/667d2393-8ebf-469e-9b2d-888913c7b043.png)

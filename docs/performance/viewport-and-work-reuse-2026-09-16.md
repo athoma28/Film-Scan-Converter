@@ -2,6 +2,15 @@
 
 September 16, 2026. Follow-up to the September 14 interaction-preview work.
 
+**Historical implementation and measurements.** Later source retains full-sensor
+previews and corrected rasters within a RAM-scaled cache, permits bounded
+foreground/speculative decode concurrency, and keeps background progress during
+edits. Settled images pan/zoom without new correction work. Those policies
+supersede the 256 MiB fallback cache, gesture pauses, and settled viewport-region
+behavior described below. Use the [current preview architecture](../development/realtime-preview-plan.md)
+for contracts and the [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md) for current commands.
+The recorded timings and test results have not been rerun for the later policy.
+
 ## Changes
 
 - Navigation reuses the inspect/detail session decoded before the selected full

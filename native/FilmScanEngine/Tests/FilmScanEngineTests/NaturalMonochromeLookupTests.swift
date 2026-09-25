@@ -89,6 +89,9 @@ struct NaturalMonochromeLookupTests {
       incompatible.filmNegativeParams.rendering = rendering
       #expect(!NaturalMonochromeLookupCache.isEligible(image: small, parameters: incompatible))
     }
+    var modern = parameters
+    modern.photoAdjustments.schemaVersion = 2
+    #expect(!NaturalMonochromeLookupCache.isEligible(image: large, parameters: modern))
     var disabled = parameters
     disabled.filmNegativeParams.enabled = false
     #expect(!NaturalMonochromeLookupCache.isEligible(image: small, parameters: disabled))
@@ -111,7 +114,6 @@ struct NaturalMonochromeLookupTests {
     parameters.filmNegativeParams.redRatio = 3.4
     parameters.filmNegativeParams.greenExp = 2.8
     parameters.filmNegativeParams.blueRatio = 0.4
-    parameters.photoAdjustments.schemaVersion = 99
     parameters.photoAdjustments.temperatureShiftMired = 60
     parameters.photoAdjustments.tint = -0.8
     parameters.photoAdjustments.saturation = 1
@@ -167,7 +169,7 @@ struct NaturalMonochromeLookupTests {
     #expect(cache.compiledTable(parameters: parameters) == withoutCurve)
     #expect(cache.statistics.toneBuilds == 9)
 
-    parameters.photoAdjustments = .init()
+    parameters.photoAdjustments = .init(schemaVersion: 1)
     _ = cache.compiledTable(parameters: parameters)
     #expect(cache.statistics.toneBuilds == 10)
     parameters.gamma = 30
@@ -250,14 +252,18 @@ struct NaturalMonochromeLookupTests {
     switch scenario {
     case 1:
       parameters.photoAdjustments = .init(
+        schemaVersion: 1,
         exposureEV: 0.5, brightness: 0.1, contrast: 0.3, highlights: -0.3, shadows: 0.2)
     case 2:
       parameters.photoAdjustments = .init(
+        schemaVersion: 1,
         exposureEV: -1.2, brightness: -0.05, contrast: -0.7, highlights: 0.8, shadows: -0.9)
     case 3:
-      parameters.photoAdjustments = .init(exposureEV: 4, brightness: 1, contrast: 1)
+      parameters.photoAdjustments = .init(
+        schemaVersion: 1, exposureEV: 4, brightness: 1, contrast: 1)
     case 4:
-      parameters.photoAdjustments = .init(exposureEV: -4, brightness: -1, contrast: -1)
+      parameters.photoAdjustments = .init(
+        schemaVersion: 1, exposureEV: -4, brightness: -1, contrast: -1)
     case 5:
       parameters.gamma = 20
       parameters.shadows = -15

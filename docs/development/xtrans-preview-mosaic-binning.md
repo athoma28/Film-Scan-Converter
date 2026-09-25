@@ -105,7 +105,7 @@ scale:
 | Draft | 640 | ~594px, ~0.3s | First paint, colour-accurate |
 | Neighbour lookahead | 3200 | ~2580px, ~2.4s | Next unseen files while you stay on the current one |
 | Inspect | 4000 | ~3876px, ~4s | Selected-file zoom/pan within ~5s. Same image as a 5000 bound |
-| Full preview | 100000 (no shrink, 1-pass) | 7752×5184, ~12s after inspect | Lazy; not export |
+| Full preview | 100000 (no shrink, 1-pass) | 7752×5184, ~12s in the recorded run | Selected-file upgrade; bounded neighbour warming also uses this tier |
 | Export | `full_resolution`, 3-pass | 7752×5184 | Selected file's last decode retained for settings-only re-export; dropped on selection change |
 
 Inspect is 4000 rather than 3200 because 3200 is only 2580px and 2.4s;
@@ -116,9 +116,12 @@ the selected-file inspect pass.
 A selected file already cached at the 3200px lookahead bound skips the inspect
 decode and upgrades directly to the full preview.
 
-Switching away demotes a full preview back to inspect size by resizing the
-already-decoded buffer (no second RAW decode). If the cache is tight,
-inspect sessions can drop further to 3200.
+Current source retains completed full-sensor previews and corrected display
+rasters across selection changes within its RAM/count budget. It evicts
+unselected sessions when necessary instead of resizing full previews on the UI
+thread. Up to two neighbours can warm to full detail when space permits. The
+[preview architecture](realtime-preview-plan.md) owns current cache and scheduler
+policy; the timings above remain measurements of the original workload.
 
 ## Worked example
 

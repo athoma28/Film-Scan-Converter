@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 1,
+  "note": "Sensor-oriented 900px archived decoded scans. Rectangles are conservative visual samples, not exhaustive semantic segmentation. No Camera Raw targets or registration are used. Coordinates are x0,y0,x1,y1 with exclusive upper edges; inspect fresh region overlays before interpreting metrics.",
+  "frames": [
+    {
+      "id": "fuji400-fresh/DSCF2833", "filmBase": "colorC41",
+      "description": "Daylight street: person, pale road, shaded storefront and saturated red umbrellas",
+      "regions": [
+        {"id": "content", "label": "Photographic content", "rect": [160,125,720,488]},
+        {"id": "road", "label": "Pale road sample", "rect": [319,145,430,299]},
+        {"id": "storefront", "label": "Shaded storefront sample", "rect": [560,125,705,185]},
+        {"id": "red_umbrella", "label": "Red umbrella sample", "rect": [630,359,659,425]}
+      ]
+    },
+    {
+      "id": "fuji400-fresh/DSCF2892", "filmBase": "colorC41",
+      "description": "Garden with sunlit and shaded foliage, people and pale fabric",
+      "regions": [
+        {"id": "content", "label": "Photographic content", "rect": [162,115,717,479]},
+        {"id": "foliage_sun", "label": "Sunlit foliage sample", "rect": [464,126,647,200]},
+        {"id": "foliage_shade", "label": "Shaded foliage sample", "rect": [504,327,693,441]},
+        {"id": "fabric", "label": "Pale shirt sample", "rect": [192,170,234,205]}
+      ]
+    },
+    {
+      "id": "proimage/DSCF5800", "filmBase": "colorC41",
+      "description": "Camera portrait: separate face, leg and arm skin samples, dark camera, bright water",
+      "regions": [
+        {"id": "content", "label": "Photographic content", "rect": [50,64,804,560]},
+        {"id": "skin_face", "label": "Small cheek sample", "rect": [529,296,549,316]},
+        {"id": "skin_leg", "label": "Leg skin interior", "rect": [193,202,233,294]},
+        {"id": "skin_arm", "label": "Upper-arm skin interior", "rect": [482,414,525,454]},
+        {"id": "camera", "label": "Dark camera sample", "rect": [464,226,506,266]},
+        {"id": "water", "label": "Bright water sample", "rect": [98,66,323,124]}
+      ]
+    },
+    {
+      "id": "proimage/DSCF5809", "filmBase": "colorC41",
+      "description": "Shaded seated portrait with dappled bright background, patterned blanket and dark chair",
+      "regions": [
+        {"id": "content", "label": "Photographic content", "rect": [42,67,801,565]},
+        {"id": "skin_face", "label": "Small cheek interior", "rect": [454,279,463,288]},
+        {"id": "skin_leg", "label": "Leg skin interior", "rect": [230,299,265,353]},
+        {"id": "blanket", "label": "Patterned blanket sample", "rect": [418,386,505,451]},
+        {"id": "bright_background", "label": "Dappled background sample", "rect": [79,75,266,195]},
+        {"id": "dark_background", "label": "Dark background structure sample", "rect": [642,352,722,380]}
+      ]
+    },
+    {
+      "id": "harmanphoenixii/DSCF3079", "filmBase": "colorCyanMask",
+      "description": "Train interior with deep shadow, interior wall, bright window and illuminated doorway",
+      "regions": [
+        {"id": "content", "label": "Photographic content", "rect": [95,90,775,526]},
+        {"id": "wall", "label": "Interior wall sample", "rect": [296,171,397,218]},
+        {"id": "shadow", "label": "Deep interior sample", "rect": [334,108,480,135]},
+        {"id": "window", "label": "Bright window sample", "rect": [222,275,280,316]},
+        {"id": "doorway", "label": "Bright doorway detail", "rect": [296,281,374,308]}
+      ]
+    },
+    {
+      "id": "harmanphoenixii/DSCF3091", "filmBase": "colorCyanMask",
+      "description": "People against strongly blue shaded foliage and a bright sunlit path",
+      "regions": [
+        {"id": "content", "label": "Photographic content", "rect": [83,85,775,539]},
+        {"id": "skin_leg", "label": "Leg skin interior", "rect": [215,244,258,253]},
+        {"id": "path", "label": "Sunlit path sample", "rect": [91,125,162,213]},
+        {"id": "foliage", "label": "Blue shaded foliage sample", "rect": [529,373,711,467]},
+        {"id": "fabric", "label": "Pale shirt sample", "rect": [401,234,425,261]}
+      ]
+    }
+  ]
+}

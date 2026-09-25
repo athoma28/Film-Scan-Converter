@@ -1,8 +1,11 @@
 # Reference Negative Calibration
 
-**Status:** Existing offline tooling and recorded profile evidence. Further
-corpus preparation and named-stock fitting are parked until the project owner
-reactivates them; see the [roadmap](../improvements/MacOS-Native-Roadmap.md#parked-stock-and-capture-look-calibration).
+**Status:** Existing offline tooling and recorded profile evidence. The owner
+reactivated paired color/control investigation on September 18; see the
+[40-pair control study](camera-raw-color-study-2026-09-18.md). That study provides
+per-frame recipes and tests transfer; it does not promote new stock/default fits.
+The earlier stock-calibration scope remains recorded in the
+[roadmap](../improvements/MacOS-Native-Roadmap.md#parked-stock-and-capture-look-calibration).
 The sample counts and fit scores below are historical measurements, not a live
 inventory of the untracked corpus.
 
@@ -53,12 +56,19 @@ The tool:
 
 ## Recorded Profile Provenance
 
+The UI names and default-selection decisions in this section describe the
+calibration-era app. Current Develop has Film Base and slider-snapshot presets;
+these scores are not fresh validation of those recipes. The engine retains the
+reference curves, while current color-negative inversion uses a neutral paper
+response. See [current behavior](native-macos.md) and the
+[evaluation runbook](color-evaluation.md) before reusing a historical fit.
+
 The July 27, 2026 fitting corpus contained 32 triplets: 26 color and six monochrome.
 The expanded generic-color candidate reached `0.120` stock-balanced
 leave-one-stock-out MAE. It was not promoted: its roughly 4.4% macro-average
 improvement missed the 5% threshold, and it regressed the current rendering on
-both Fuji 400 Fresh and Fuji 200 Expired. The current generic profile therefore
-remains the safer default.
+both Fuji 400 Fresh and Fuji 200 Expired. The generic profile was therefore
+retained at that checkpoint.
 
 A stock directory is not enough evidence to replace the generic default or
 drive automatic stock selection. Require at least three varied frames and a
@@ -66,9 +76,9 @@ material held-out improvement (currently 5% relative) for that.
 
 - The Harman Phoenix II fit used 12 varied references. Its Camera Raw LUT fit
   reaches `0.090` leave-one-frame-out MAE versus `0.159` for the current generic
-  rendering, a roughly 43% reduction. That LUT is available in current source as the Harman
-  Phoenix II stock choice under **Natural** (`harmanPhoenixIIAlternate`).
-  Cyan/purple camera scans auto-select **Darkroom** with Harman Phoenix II,
+  rendering, a roughly 43% reduction. That LUT remains engine data as
+  `harmanPhoenixIIAlternate`; it was a Harman Phoenix II stock choice under
+  **Natural**. At the time, cyan/purple camera scans auto-selected **Darkroom** with Harman Phoenix II,
   a log-density invert (independent channel stretch,
   Fujicolor Crystal Archive paper, 20% rebate inset) tuned toward a same-scene
   phone JPEG of a dusk plaza photographed at a different time of day. The
@@ -87,6 +97,7 @@ material held-out improvement (currently 5% relative) for that.
 - The Shanghai GP3 fit used six references, including a portrait scan whose
   alignment requires `tiff:Orientation`. Its stock-specific curve reaches
   `0.126` in-sample and `0.143` leave-one-frame-out MAE versus `0.137` for the
-  generic B&W curve, and `0.146` for Legacy. The GP3 curve is available as an explicit
-  **Shanghai GP3** stock choice under Natural (`shanghaiGP3Alternate`) with a
-  half-strength exposure anchor; the generic B&W curve remains the default.
+  generic B&W curve, and `0.146` for Legacy. The GP3 curve remains engine data
+  (`shanghaiGP3Alternate`) with a half-strength exposure anchor. It was an explicit
+  **Shanghai GP3** stock choice under Natural; the generic B&W curve was retained
+  as the default at that checkpoint.

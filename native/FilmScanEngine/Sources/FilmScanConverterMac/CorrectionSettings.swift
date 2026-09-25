@@ -2,51 +2,63 @@ import AppKit
 import FilmScanEngine
 import Foundation
 
-/// Correction intent that can move between scans without carrying frame-specific geometry.
+/// A slider/curve/wheel snapshot that can move between scans without changing
+/// film base, invert IDs, or geometry.
 struct CorrectionSettings: Codable, Equatable {
   enum SettingsError: Error, Equatable {
     case unsupportedSchemaVersion(Int)
   }
 
-  private static let currentSchemaVersion = 1
+  private static let currentSchemaVersion = 2
 
   let schemaVersion: Int
-  let parameters: ProcessingParameters
+  let recipe: LookRecipe
 
   init(capturing parameters: ProcessingParameters) {
     schemaVersion = Self.currentSchemaVersion
-    self.parameters = parameters
+    recipe = LookRecipe.capturing(
+      parameters,
+      id: "snapshot",
+      title: "Snapshot",
+      recommendedFilmBases: FilmBase.allCases
+    )
+  }
+
+  init(recipe: LookRecipe) {
+    schemaVersion = Self.currentSchemaVersion
+    self.recipe = recipe
   }
 
   func applying(to destination: ProcessingParameters) -> ProcessingParameters {
-    var result = parameters
-    result.borderCrop = destination.borderCrop
-    result.rotation = destination.rotation
-    result.flip = destination.flip
-    result.straightenAngle = destination.straightenAngle
-    result.cropRect = destination.cropRect
-    result.cropRectCoordinateSpace = destination.cropRectCoordinateSpace
-    result.perspectiveCrop = destination.perspectiveCrop
-    result.manualCrop = destination.manualCrop
-    result.manualCropAspectRatio = destination.manualCropAspectRatio
-    result.densityPipelineEnabled = destination.densityPipelineEnabled
-    result.densityBaseDensity = destination.densityBaseDensity
-    return result
+    recipe.applying(to: destination)
   }
 
   private enum CodingKeys: String, CodingKey {
     case schemaVersion
+    case recipe
     case parameters
   }
 
   init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     let version = try container.decode(Int.self, forKey: .schemaVersion)
-    guard version == Self.currentSchemaVersion else {
+    switch version {
+    case 1:
+      // Keep the public adjustments from older presets, while leaving the
+      // destination's film base and frame-specific calibration in place.
+      let parameters = try container.decode(ProcessingParameters.self, forKey: .parameters)
+      self.init(capturing: parameters)
+    case Self.currentSchemaVersion:
+      self.init(recipe: try container.decode(LookRecipe.self, forKey: .recipe))
+    default:
       throw SettingsError.unsupportedSchemaVersion(version)
     }
-    schemaVersion = version
-    parameters = try container.decode(ProcessingParameters.self, forKey: .parameters)
+  }
+
+  func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(schemaVersion, forKey: .schemaVersion)
+    try container.encode(recipe, forKey: .recipe)
   }
 }
 
@@ -65,7 +77,7 @@ struct NamedCorrectionPreset: Codable, Equatable, Identifiable {
 /// Atomic, versioned persistence for user-named correction presets.
 final class NamedCorrectionPresetStore {
   struct Document: Codable, Equatable {
-    var schemaVersion: Int = 1
+    var schemaVersion: Int = 2
     var presets: [NamedCorrectionPreset]
   }
 
@@ -94,12 +106,18 @@ final class NamedCorrectionPresetStore {
   }
 
   func load() throws -> [NamedCorrectionPreset] {
-    guard FileManager.default.fileExists(atPath: fileURL.path) else { return [] }
-    let document = try decoder.decode(Document.self, from: Data(contentsOf: fileURL))
-    guard document.schemaVersion == 1 else {
+    sorted(try readDocument()?.document.presets ?? [])
+  }
+
+  private func readDocument() throws -> (document: Document, data: Data)? {
+    guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
+    let data = try Data(contentsOf: fileURL)
+    let document = try decoder.decode(Document.self, from: data)
+    guard document.schemaVersion == 1 || document.schemaVersion == 2 else {
+      // Treat an unknown format as an error so save/delete cannot overwrite it.
       throw StoreError.unsupportedSchemaVersion(document.schemaVersion)
     }
-    return sorted(document.presets)
+    return (document, data)
   }
 
   @discardableResult
@@ -108,41 +126,64 @@ final class NamedCorrectionPresetStore {
   {
     let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !name.isEmpty else { throw StoreError.emptyName }
-    var presets = try load()
+    let stored = try readDocument()
+    var presets = stored?.document.presets ?? []
     if let index = presets.firstIndex(where: {
-      $0.name.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+      Self.namesMatch($0.name, name)
     }) {
       presets[index].name = name
       presets[index].settings = settings
     } else {
       presets.append(NamedCorrectionPreset(name: name, settings: settings))
     }
-    try save(presets)
-    return sorted(presets)
+    return try save(
+      presets, legacyData: stored?.document.schemaVersion == 1 ? stored?.data : nil)
   }
 
   @discardableResult
   func deletePreset(id: UUID) throws -> [NamedCorrectionPreset] {
-    var presets = try load()
+    let stored = try readDocument()
+    var presets = stored?.document.presets ?? []
+    guard presets.contains(where: { $0.id == id }) else { return sorted(presets) }
     presets.removeAll { $0.id == id }
-    try save(presets)
-    return sorted(presets)
+    return try save(
+      presets, legacyData: stored?.document.schemaVersion == 1 ? stored?.data : nil)
   }
 
-  private func save(_ presets: [NamedCorrectionPreset]) throws {
+  private func save(_ presets: [NamedCorrectionPreset], legacyData: Data?) throws
+    -> [NamedCorrectionPreset]
+  {
+    let sortedPresets = sorted(presets)
+    let data = try encoder.encode(Document(presets: sortedPresets))
     try FileManager.default.createDirectory(
       at: fileURL.deletingLastPathComponent(),
       withIntermediateDirectories: true
     )
-    try encoder.encode(Document(presets: sorted(presets))).write(to: fileURL, options: .atomic)
+    if let legacyData {
+      // The new recipe format deliberately omits legacy inversion/calibration
+      // fields. Preserve the exact old document before the first v2 mutation.
+      let backup = fileURL.deletingLastPathComponent()
+        .appendingPathComponent("CorrectionPresets-v1-\(UUID().uuidString).json")
+      try legacyData.write(to: backup, options: .atomic)
+    }
+    try data.write(to: fileURL, options: .atomic)
+    return sortedPresets
   }
 
   private func sorted(_ presets: [NamedCorrectionPreset]) -> [NamedCorrectionPreset] {
     presets.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
   }
+
+  static func namesMatch(_ lhs: String, _ rhs: String) -> Bool {
+    lhs.compare(
+      rhs.trimmingCharacters(in: .whitespacesAndNewlines),
+      options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+  }
 }
 
 protocol CorrectionSettingsPasteboard: AnyObject {
+  /// Nil opts out of caching for providers without a revision counter.
+  var correctionSettingsChangeCount: Int? { get }
   @discardableResult func clearContents() -> Int
   @discardableResult func setData(_ data: Data?, forType dataType: NSPasteboard.PasteboardType)
     -> Bool
@@ -152,9 +193,19 @@ protocol CorrectionSettingsPasteboard: AnyObject {
   func string(forType dataType: NSPasteboard.PasteboardType) -> String?
 }
 
-extension NSPasteboard: CorrectionSettingsPasteboard {}
+extension CorrectionSettingsPasteboard {
+  var correctionSettingsChangeCount: Int? { nil }
+}
+
+extension NSPasteboard: CorrectionSettingsPasteboard {
+  var correctionSettingsChangeCount: Int? { changeCount }
+}
 
 final class CorrectionSettingsClipboard {
+  enum ClipboardError: Error, Equatable {
+    case writeFailed
+  }
+
   private static let pasteboardType = NSPasteboard.PasteboardType(
     "com.filmscanconverter.correction-settings"
   )
@@ -162,6 +213,7 @@ final class CorrectionSettingsClipboard {
   private let pasteboard: any CorrectionSettingsPasteboard
   private let encoder = JSONEncoder()
   private let decoder = JSONDecoder()
+  private var cachedRead: (revision: Int, result: Result<CorrectionSettings?, Error>)?
 
   init(pasteboard: any CorrectionSettingsPasteboard = NSPasteboard.general) {
     self.pasteboard = pasteboard
@@ -169,12 +221,28 @@ final class CorrectionSettingsClipboard {
 
   func write(_ settings: CorrectionSettings) throws {
     let data = try encoder.encode(settings)
+    cachedRead = nil
     pasteboard.clearContents()
-    pasteboard.setData(data, forType: Self.pasteboardType)
-    pasteboard.setString(String(decoding: data, as: UTF8.self), forType: .string)
+    let storedData = pasteboard.setData(data, forType: Self.pasteboardType)
+    let storedText = pasteboard.setString(String(decoding: data, as: UTF8.self), forType: .string)
+    guard storedData || storedText else { throw ClipboardError.writeFailed }
   }
 
   func read() throws -> CorrectionSettings? {
+    let revision = pasteboard.correctionSettingsChangeCount
+    if let revision, let cachedRead, cachedRead.revision == revision {
+      return try cachedRead.result.get()
+    }
+    let result = Result { try readUncached() }
+    // A clipboard owner may change while data is being fetched. Only memoize
+    // a result belonging to the same revision observed before the read.
+    if let revision, pasteboard.correctionSettingsChangeCount == revision {
+      cachedRead = (revision, result)
+    }
+    return try result.get()
+  }
+
+  private func readUncached() throws -> CorrectionSettings? {
     if let data = pasteboard.data(forType: Self.pasteboardType) {
       return try decoder.decode(CorrectionSettings.self, from: data)
     }

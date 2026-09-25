@@ -9,7 +9,10 @@ import tempfile
 
 root = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--pass-two", action="store_true", help="Run bounded follow-up experiments.")
+group = parser.add_mutually_exclusive_group()
+group.add_argument("--pass-two", action="store_true", help="Run bounded follow-up experiments.")
+group.add_argument("--paired-recipes", type=Path,
+                    help="Validate paired-study clipboard recipes and probe current color controls.")
 options = parser.parse_args()
 sources = [Path(__file__).with_name("BWTonalityProbe.swift")]
 if options.pass_two:
@@ -17,11 +20,17 @@ if options.pass_two:
         Path(__file__).with_name("ResearchPassTwoProbe.swift"),
         root / "native/FilmScanEngine/Sources/FilmScanConverterMac/PerFileSettingsStore.swift",
     ]
+if options.paired_recipes:
+    sources = [
+        Path(__file__).with_name("PairedControlProbe.swift"),
+        root / "native/FilmScanEngine/Sources/FilmScanConverterMac/CorrectionSettings.swift",
+    ]
 build = root / "native/FilmScanEngine/.build/release"
 link_file = next(
     (
         build / product / "Objects.LinkFileList"
         for product in [
+            "FilmScanLookbook.product",
             "FilmScanConverterMac.product",
             "FilmScanRawBenchmark.product",
             "FilmScanEnginePackageTests.product",
@@ -62,4 +71,5 @@ with tempfile.TemporaryDirectory(prefix="fsc-tonality-") as temporary:
         ],
         check=True,
     )
-    subprocess.run([str(executable)], check=True)
+    subprocess.run([str(executable)] + ([str(options.paired_recipes)] if options.paired_recipes else []),
+                   check=True)

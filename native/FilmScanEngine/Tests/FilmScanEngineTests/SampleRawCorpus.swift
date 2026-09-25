@@ -1,3 +1,4 @@
+import CryptoKit
 import FilmScanEngine
 import Foundation
 
@@ -18,7 +19,45 @@ struct SampleRawAlignedReference {
   let targetOriginY: Int
 }
 
+struct SampleRawReferenceError: Error, CustomStringConvertible {
+  let frame: String
+  let reason: String
+
+  var description: String { "Reference \(frame): \(reason)" }
+}
+
+/// Reviewed JPEG rotations that are missing from the matching XMP. These are
+/// input facts, not corrections selected by minimizing a rendered color error.
+struct SampleRawReferenceOrientation: Decodable, Sendable {
+  let targetFilename: String
+  let targetSHA256: String
+  let xmpSHA256: String
+  let targetAlignmentQuarterTurns: Int
+
+  func validatedQuarterTurns(targetURL: URL, xmpData: Data, frame: String) throws -> Int {
+    guard targetURL.lastPathComponent == targetFilename,
+      (0..<4).contains(targetAlignmentQuarterTurns),
+      Self.digest(try Data(contentsOf: targetURL)) == targetSHA256,
+      Self.digest(xmpData) == xmpSHA256
+    else {
+      throw SampleRawReferenceError(
+        frame: frame, reason: "Reference inputs changed; review the recorded JPEG orientation.")
+    }
+    return targetAlignmentQuarterTurns
+  }
+
+  static func digest(_ data: Data) -> String {
+    SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+  }
+}
+
 enum SampleRawCorpus {
+  private static let reviewedOrientations = Result {
+    try JSONDecoder().decode(
+      [String: SampleRawReferenceOrientation].self,
+      from: Data(
+        contentsOf: FixtureLoader.fixtureURL("", file: "paired_reference_orientations.json")))
+  }
   static let repositoryRoot = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent()
     .deletingLastPathComponent()
@@ -101,12 +140,11 @@ enum SampleRawCorpus {
   static func loadAlignedReference(
     _ triplet: SampleRawTriplet
   ) throws -> SampleRawAlignedReference {
-    let raw = try RawImageDecoder.decode(
-      triplet.rawURL,
-      profile: .rawTherapeeCameraScan
-    ).image
-    let fullRaw = try RawImageDecoder.fullResolutionDimensions(triplet.rawURL)
-    let xmp = try String(contentsOf: triplet.xmpURL, encoding: .utf8)
+    let frame = "\(triplet.stockID)/\(triplet.stem)"
+    let xmpData = try Data(contentsOf: triplet.xmpURL)
+    guard let xmp = String(data: xmpData, encoding: .utf8) else {
+      throw SampleRawReferenceError(frame: frame, reason: "XMP is not valid UTF-8.")
+    }
     func attribute(_ qualifiedName: String) -> String? {
       let marker = "\(qualifiedName)=\""
       guard let start = xmp.range(of: marker)?.upperBound,
@@ -115,13 +153,26 @@ enum SampleRawCorpus {
       return String(xmp[start..<end])
     }
     let targetAlignmentQuarterTurns: Int
-    switch Int(attribute("tiff:Orientation") ?? "1") ?? 1 {
-    case 1: targetAlignmentQuarterTurns = 0
-    case 3: targetAlignmentQuarterTurns = 2
-    case 6: targetAlignmentQuarterTurns = -1
-    case 8: targetAlignmentQuarterTurns = 1
-    default: throw CocoaError(.coderInvalidValue)
+    if let reviewed = try reviewedOrientations.get()[frame] {
+      targetAlignmentQuarterTurns = try reviewed.validatedQuarterTurns(
+        targetURL: triplet.targetURL, xmpData: xmpData, frame: frame)
+    } else {
+      let orientation = attribute("tiff:Orientation") ?? "1"
+      switch Int(orientation) {
+      case 1: targetAlignmentQuarterTurns = 0
+      case 3: targetAlignmentQuarterTurns = 2
+      case 6: targetAlignmentQuarterTurns = -1
+      case 8: targetAlignmentQuarterTurns = 1
+      default:
+        throw SampleRawReferenceError(
+          frame: frame, reason: "Unsupported XMP orientation \(orientation).")
+      }
     }
+    let raw = try RawImageDecoder.decode(
+      triplet.rawURL,
+      profile: .rawTherapeeCameraScan
+    ).image
+    let fullRaw = try RawImageDecoder.fullResolutionDimensions(triplet.rawURL)
     let fullTarget = try StandardImageDecoder.fullResolutionDimensions(triplet.targetURL)
     let scaleX = Double(raw.width) / Double(fullRaw.width)
     let scaleY = Double(raw.height) / Double(fullRaw.height)
@@ -172,7 +223,11 @@ enum SampleRawCorpus {
       originX + target.width <= raw.width,
       originY + target.height <= raw.height
     else {
-      throw CocoaError(.coderInvalidValue)
+      throw SampleRawReferenceError(
+        frame: frame,
+        reason:
+          "Target \(target.width)×\(target.height) at (\(originX), \(originY)) exceeds RAW \(raw.width)×\(raw.height); review crop and orientation."
+      )
     }
     return SampleRawAlignedReference(
       triplet: triplet,

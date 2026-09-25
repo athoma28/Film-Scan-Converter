@@ -935,6 +935,38 @@ public enum FilmNegativeProcessing {
     return applyCalibratedMonochromeInversion(image: image, params: params)
   }
 
+  /// Version-2 curve evaluation: retain float precision, give historical flat
+  /// knots a small strict slope, and extend the tail rather than clamp scan input.
+  public static func photographicCalibratedValue(
+    _ value: Double, channel: Int, params: FilmNegativeParams
+  ) -> Double {
+    let monochrome = params.rendering == .calibratedMonochrome
+    let curve =
+      monochrome
+      ? calibratedMonochromeDefinition(for: params.calibratedMonochromeProfile).curve
+      : calibratedColorDefinition(for: params.calibratedColorProfile).curves[channel]
+    let gains = calibratedColorInputGains(
+      measuredMedians: params.measuredMedians,
+      profile: params.calibratedColorProfile)
+    let gain =
+      monochrome
+      ? calibratedMonochromeInputGain(
+        measuredMedians: params.measuredMedians,
+        profile: params.calibratedMonochromeProfile)
+      : [gains.blue, gains.green, gains.red][channel]
+    let exposed = max(value * gain * exp2(params.monochromeExposureEV), 0)
+    func knot(_ i: Int) -> Double { 0.997 * curve[i] + 0.003 * (1 - Double(i) / 10) }
+    if exposed > 1 {
+      let end = knot(10)
+      let rate = max(10 * (knot(9) - end) / max(end, 1e-9), 0.01)
+      return end * exp(-rate * (exposed - 1))
+    }
+    let position = exposed * 10
+    let lower = min(Int(position), 9)
+    let t = position - Double(lower)
+    return knot(lower) * (1 - t) + knot(lower + 1) * t
+  }
+
   private static func calibratedCurveValue(
     _ value: Double,
     curve: [Double],
@@ -1497,7 +1529,7 @@ public enum FilmNegativeProcessing {
     guard image.channels == 3 else {
       return FilmClassification(
         filmType: .cropOnly,
-        filmNegativePreset: .off,
+        filmBase: .original,
         confidence: 0
       )
     }
@@ -1518,13 +1550,13 @@ public enum FilmNegativeProcessing {
       let confidence = min(max(1.0 - chroma.mean / 0.045, 0), 1)
       classification = FilmClassification(
         filmType: .blackAndWhiteNegative,
-        filmNegativePreset: .blackAndWhite,
+        filmBase: .blackAndWhite,
         confidence: max(confidence, 0.75)
       )
     } else if orangeMaskScore >= 0.45 {
       classification = FilmClassification(
         filmType: .colourNegative,
-        filmNegativePreset: .colourNegative,
+        filmBase: .colorC41,
         confidence: orangeMaskScore
       )
     } else if let cyanMask = cyanOrPurpleMaskScore(
@@ -1535,13 +1567,13 @@ public enum FilmNegativeProcessing {
     ), cyanMask >= 0.45 {
       classification = FilmClassification(
         filmType: .colourNegative,
-        filmNegativePreset: .densityPrintHarmanPhoenixII,
+        filmBase: .colorCyanMask,
         confidence: cyanMask
       )
     } else {
       classification = FilmClassification(
         filmType: .slide,
-        filmNegativePreset: .off,
+        filmBase: .slide,
         confidence: max(0.55, 1.0 - orangeMaskScore)
       )
     }
@@ -1556,19 +1588,19 @@ public enum FilmNegativeProcessing {
     case .blackAndWhiteNegative:
       return FilmClassification(
         filmType: .blackAndWhiteNegative,
-        filmNegativePreset: .blackAndWhite,
+        filmBase: .blackAndWhite,
         confidence: classification.confidence
       )
     case .colourNegative:
       return FilmClassification(
         filmType: .colourNegative,
-        filmNegativePreset: .colourNegative,
+        filmBase: .colorC41,
         confidence: classification.confidence
       )
     case .slide:
       return FilmClassification(
         filmType: .slide,
-        filmNegativePreset: .off,
+        filmBase: .slide,
         confidence: classification.confidence
       )
     case .cropOnly:

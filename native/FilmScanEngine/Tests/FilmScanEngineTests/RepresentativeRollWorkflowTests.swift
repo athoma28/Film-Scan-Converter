@@ -29,7 +29,10 @@ struct RepresentativeRollWorkflowTests {
     try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
 
-    var exception = ProcessingParameters()
+    // Look transfer preserves each destination's film base; this saved frame
+    // must already identify the C-41 negative before receiving the anchor look.
+    var exception = FilmBase.colorC41.applyingInvert(to: ProcessingParameters())
+    exception.filmBaseChosenByUser = true
     exception.rotation = 1
     exception.flip = true
     exception.manualCrop = .init(x: 0.08, y: 0.12, width: 0.82, height: 0.76)
@@ -37,9 +40,13 @@ struct RepresentativeRollWorkflowTests {
     let store = PerFileSettingsStore(baseDirectory: directory)
     try store.save(
       .init(settingsByPath: [files[2].standardizedFileURL.path: exception], editedPaths: []))
+    let suiteName = "fsc-real-roll-preferences-\(UUID().uuidString)"
+    let preferences = try #require(UserDefaults(suiteName: suiteName))
+    defer { preferences.removePersistentDomain(forName: suiteName) }
     let model = AppModel(
       profileStore: ProfileStore(baseDirectory: directory.appendingPathComponent("profiles")),
-      settingsStore: store)
+      settingsStore: store,
+      preferences: preferences)
     defer {
       model.selection = nil
       model.loadSelection()
@@ -65,6 +72,12 @@ struct RepresentativeRollWorkflowTests {
     try await waitUntil("exception full-resolution preview") {
       model.previewSourceKind == .rawFull && !model.isRendering && !model.isLoading
     }
+    #expect(FilmBase.resolved(from: model.parameters) == .colorC41)
+    #expect(model.parameters.filmType == exception.filmType)
+    #expect(model.parameters.filmBaseChosenByUser)
+    #expect(
+      model.parameters.filmNegativeParams.densityProfileID
+        == exception.filmNegativeParams.densityProfileID)
     #expect(model.parameters.photoAdjustments.exposureEV == 0.5)
     #expect(model.parameters.rotation == exception.rotation)
     #expect(model.parameters.flip == exception.flip)
@@ -145,7 +158,8 @@ struct RepresentativeRollWorkflowTests {
     try await model.flushSettings()
     let relaunched = AppModel(
       profileStore: ProfileStore(baseDirectory: directory.appendingPathComponent("profiles")),
-      settingsStore: store)
+      settingsStore: store,
+      preferences: preferences)
     relaunched.importFiles([files[2]])
     try await waitUntil("restored persisted exception") {
       !relaunched.isLoading && !relaunched.isRendering
@@ -163,7 +177,7 @@ struct RepresentativeRollWorkflowTests {
     for output in outputs { try FileManager.default.removeItem(at: output) }
     #expect(try FileManager.default.contentsOfDirectory(atPath: destination.path).isEmpty)
     print(
-      "Representative roll passed: \(relativePaths.joined(separator: ", ")); 3 TIFFs reopened/removed; 2 authoritative decodes; 1 retained-decode hit; source hashes unchanged."
+      "Representative roll workflow completed: \(relativePaths.joined(separator: ", ")); 3 TIFFs reopened/removed; 2 authoritative decodes; 1 retained-decode hit; source hashes unchanged."
     )
   }
 
