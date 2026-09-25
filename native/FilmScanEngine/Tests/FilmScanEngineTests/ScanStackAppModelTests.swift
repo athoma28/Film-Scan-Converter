@@ -196,7 +196,8 @@ struct ScanStackAppModelTests {
     #expect(model.selectedFiles == [first])
     #expect(model.previewSourceKind != .alignedStack)
     try await waitUntil { !model.isLoading && !model.isRendering }
-    #expect(model.decodedImage == (try StandardImageDecoder.decode(first)))
+    let expectedFirst = try StandardImageDecoder.decode(first)
+    #expect(model.decodedImage == expectedFirst)
     #expect(model.scanStackEffectiveMode == nil)
 
     let reorderedStack = try #require(model.detectedScanStacks.first)
@@ -208,7 +209,8 @@ struct ScanStackAppModelTests {
     model.setScanStackEnabled(false, for: reorderedStack)
     try await waitUntil { !model.isLoading && !model.isRendering }
     #expect(model.previewSourceKind != .alignedStack)
-    #expect(model.decodedImage == (try StandardImageDecoder.decode(second)))
+    let expectedSecond = try StandardImageDecoder.decode(second)
+    #expect(model.decodedImage == expectedSecond)
   }
 
   @Test("Distinct imported frames stay independent instead of forming one stack")
