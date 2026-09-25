@@ -57,7 +57,7 @@ struct DensityPrintProcessingTests {
     #expect(DensityPrintProcessing.analyzeBorderPercent == 20)
   }
 
-  @Test("Phoenix II physical profile is a digital-scene tuned unmix on Crystal Archive paper")
+  @Test("Phoenix II physical profile is a digital-scene tuned cyan-mask unmix")
   func phoenixPhysicalProfileIsDigitallyTuned() {
     let profile = NegativeDensityProfileCatalog.harmanPhoenixII
     #expect(profile.provenance == .tuned)
@@ -66,8 +66,11 @@ struct DensityPrintProcessingTests {
     #expect(profile.printGrade == 118)
     #expect(profile.castRemovalStrength == 0.55)
     #expect(
-      FilmNegativeParams.densityPrintHarmanPhoenixII.densityPaperID
-        == DensityPaperProfileCatalog.fujiCrystalArchive.id.rawValue)
+      FilmNegativeParams.densityPrintHarmanPhoenixII.densityProfileID
+        == NegativeDensityProfileCatalog.harmanPhoenixII.id.rawValue)
+    #expect(
+      DensityPrintProcessing.resolvedPaper(from: .densityPrintHarmanPhoenixII)
+        == DensityPaperProfileCatalog.neutral)
   }
 
   @Test("H&D print density is monotone and encodes black/white via BPC")
@@ -114,7 +117,7 @@ struct DensityPrintProcessingTests {
     )
     let classification = FilmNegativeProcessing.classifyFilmScan(image: image)
     #expect(classification.filmType == .colourNegative)
-    #expect(classification.filmNegativePreset == .densityPrintHarmanPhoenixII)
+    #expect(classification.filmBase == .colorCyanMask)
     #expect(classification.confidence >= 0.45)
   }
 
@@ -127,7 +130,6 @@ struct DensityPrintProcessingTests {
     #expect(decoded.densityProfileID == original.densityProfileID)
     #expect(decoded.densityUnmixRGB == original.densityUnmixRGB)
     #expect(decoded.densityUnmixStrength == original.densityUnmixStrength)
-    #expect(decoded.densityPaperID == DensityPaperProfileCatalog.fujiCrystalArchive.id.rawValue)
     #expect(decoded.enabled)
   }
 
@@ -171,13 +173,15 @@ struct DensityPrintProcessingTests {
     #expect(abs(curv - 2) < 1e-9)
   }
 
-  @Test("Missing density paper id migrates to Neutral")
-  func missingDensityPaperIDMigratesToNeutral() throws {
+  @Test("Legacy density paper keys are ignored")
+  func legacyDensityPaperKeysAreIgnored() throws {
     let json = """
-      {"enabled":true,"redRatio":1.36,"greenExp":1.5,"blueRatio":0.86,"rendering":"densityPrint","densityProfileID":"generic_c41","densityUnmixRGB":[],"densityUnmixStrength":-1}
+      {"enabled":true,"redRatio":1.36,"greenExp":1.5,"blueRatio":0.86,"rendering":"densityPrint","densityProfileID":"generic_c41","densityUnmixRGB":[],"densityUnmixStrength":-1,"densityPaperID":"kodak_endura"}
       """.data(using: .utf8)!
     let decoded = try JSONDecoder().decode(FilmNegativeParams.self, from: json)
-    #expect(decoded.densityPaperID == "neutral")
+    #expect(decoded.rendering == .densityPrint)
+    #expect(
+      DensityPrintProcessing.resolvedPaper(from: decoded) == DensityPaperProfileCatalog.neutral)
   }
 
   @Test("User density-print JSON profiles load from a directory")
@@ -227,16 +231,6 @@ struct DensityPrintProcessingTests {
           filmType: .colourNegative,
           filmNegativeParams: .densityPrintHarmanPhoenixII,
           photoAdjustments: PhotoAdjustmentParameters(exposureEV: 0.5)
-        )
-      ),
-      (
-        "endura-paper",
-        ProcessingParameters(
-          filmType: .colourNegative,
-          filmNegativeParams: FilmNegativeParams.densityPrint(
-            NegativeDensityProfileCatalog.genericC41,
-            paper: DensityPaperProfileCatalog.kodakEnduraPremier
-          )
         )
       ),
     ]
@@ -352,11 +346,11 @@ struct DensityPrintProcessingTests {
       let medians = FilmNegativeProcessing.computeMedians(image: image)
       #expect(
         classification.filmType == .colourNegative,
-        "\(triplet.stem) type=\(classification.filmType) preset=\(classification.filmNegativePreset) medians B=\(medians.blue) G=\(medians.green) R=\(medians.red)"
+        "\(triplet.stem) type=\(classification.filmType) base=\(classification.filmBase) medians B=\(medians.blue) G=\(medians.green) R=\(medians.red)"
       )
       #expect(
-        classification.filmNegativePreset == .densityPrintHarmanPhoenixII,
-        "\(triplet.stem) preset=\(classification.filmNegativePreset) medians B=\(medians.blue) G=\(medians.green) R=\(medians.red)"
+        classification.filmBase == .colorCyanMask,
+        "\(triplet.stem) base=\(classification.filmBase) medians B=\(medians.blue) G=\(medians.green) R=\(medians.red)"
       )
     }
   }

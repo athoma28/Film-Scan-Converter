@@ -69,6 +69,18 @@ final class PerFileSettingsStore: Sendable {
     )
   }
 
+  /// A session that could not load its history must not replace unreadable bytes.
+  /// Retry loading before each save, and preserve recovered files that this
+  /// session never loaded. Keep merging for the entire session: its persistence
+  /// writer still owns only the state accumulated since the failed initial read.
+  func saveMergingWithExisting(_ state: State) throws {
+    var recovered = try loadState()
+    recovered.settingsByPath.merge(state.settingsByPath) { _, current in current }
+    recovered.editedPaths.subtract(state.settingsByPath.keys)
+    recovered.editedPaths.formUnion(state.editedPaths)
+    try save(recovered)
+  }
+
   func save(_ state: State) throws {
     try FileManager.default.createDirectory(
       at: fileURL.deletingLastPathComponent(),

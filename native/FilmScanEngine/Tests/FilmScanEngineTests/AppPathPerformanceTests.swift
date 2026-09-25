@@ -38,8 +38,36 @@ struct AppPathPerformanceTests {
     let cachedPreviewBytes: Int
     let fillMilliseconds: Double
     let memoryBeforeFill: MemorySample
-    let memoryAtCapacity: MemorySample
+    let cachedSourceKinds: [String: String]
+    let memoryAfterInitialLookahead: MemorySample
     let memoryAfterRelease: MemorySample
+  }
+
+  private struct RetainedNavigationSample: Codable {
+    let files: [String]
+    let warmupMilliseconds: Double
+    let returnSwitch: LatencySummary
+    let returnSwitchThroughStatistics: LatencySummary
+    let viewportUpdateCount: Int
+    let viewportUpdatesMilliseconds: Double
+    let fullResolutionDecodesDuringNavigation: Int
+    let correctionsDuringNavigation: Int
+    let computationsDuringNavigation: Int
+    let renderCacheHitsDuringNavigation: Int
+    let cachedPreviewBytes: Int
+    let cacheBudgetBytes: Int
+    let memorySettled: MemorySample
+    var memoryAfterRelease: MemorySample
+  }
+
+  private struct SaturatedCacheSample: Codable {
+    let files: [String]
+    let cachedSwitch: LatencySummary
+    let backgroundDrain: LatencySummary
+    let lookaheadRequestsDuringSwitch: [Int]
+    let cachedSourceKinds: [String: String]
+    let cachedPreviewBytes: Int
+    let memoryAfterBackgroundDrain: MemorySample
   }
 
   private struct Report: Codable {
@@ -55,6 +83,8 @@ struct AppPathPerformanceTests {
     let memoryAfter: MemorySample
     let maximumPreviewCacheBytes: Int
     let previewCacheDepths: [PreviewCacheDepthSample]
+    let retainedNavigation: RetainedNavigationSample
+    let saturatedCache: SaturatedCacheSample
     let note: String
   }
 
@@ -104,71 +134,81 @@ struct AppPathPerformanceTests {
     for repetition in 0..<repetitions {
       let ordered = rotated(corpus, by: repetition)
 
-      let firstPaintModel = makeModel(cacheLimit: 2)
-      let firstPaintStart = ContinuousClock.now
-      firstPaintModel.importFiles([ordered[0]])
-      try await waitForDisplayedPreview(
-        in: firstPaintModel, file: ordered[0], afterDisplayedCount: 0)
-      firstPaintSamples.append(milliseconds(since: firstPaintStart))
-      maximumPreviewCacheBytes = max(
-        maximumPreviewCacheBytes, firstPaintModel.previewCachePhysicalBytes)
-
-      let cachedModel = makeModel(cacheLimit: 2)
-      cachedModel.importFiles(Array(ordered.prefix(3)))
-      try await waitForDisplayedPreview(
-        in: cachedModel, file: ordered[0], afterDisplayedCount: 0)
-      try await waitUntil("lookahead cache", timeout: .seconds(30)) {
-        cachedModel.previewCacheSessionCount >= 2
+      let firstPaint = try await withModel(cacheLimit: 2) { model in
+        let start = ContinuousClock.now
+        model.importFiles([ordered[0]])
+        try await waitForDisplayedPreview(in: model, file: ordered[0], afterDisplayedCount: 0)
+        return (milliseconds(since: start), model.previewCachePhysicalBytes)
       }
-      let cachedDisplayedCount = cachedModel.renderStats.displayedRenders
-      let cachedStart = ContinuousClock.now
-      cachedModel.selection = ordered[1]
-      cachedModel.loadSelection()
-      try await waitForDisplayedPreview(
-        in: cachedModel, file: ordered[1], afterDisplayedCount: cachedDisplayedCount)
-      cachedSamples.append(milliseconds(since: cachedStart))
-      maximumPreviewCacheBytes = max(
-        maximumPreviewCacheBytes, cachedModel.previewCachePhysicalBytes)
+      firstPaintSamples.append(firstPaint.0)
+      maximumPreviewCacheBytes = max(maximumPreviewCacheBytes, firstPaint.1)
 
-      let uncachedModel = makeModel(cacheLimit: 2)
-      uncachedModel.importFiles(Array(ordered.prefix(4)))
-      try await waitForDisplayedPreview(
-        in: uncachedModel, file: ordered[0], afterDisplayedCount: 0)
-      try await waitUntil("bounded lookahead cache", timeout: .seconds(30)) {
-        uncachedModel.previewCacheSessionCount >= 2
+      let cached = try await withModel(cacheLimit: 2) { model in
+        model.importFiles(Array(ordered.prefix(3)))
+        try await waitForDisplayedPreview(in: model, file: ordered[0], afterDisplayedCount: 0)
+        try await waitUntil("lookahead cache", timeout: .seconds(45)) {
+          model.hasCachedPreview(for: ordered[1])
+        }
+        let displayed = model.renderStats.displayedRenders
+        let start = ContinuousClock.now
+        model.selection = ordered[1]
+        model.loadSelection()
+        try await waitForDisplayedPreview(
+          in: model, file: ordered[1], afterDisplayedCount: displayed)
+        return (milliseconds(since: start), model.previewCachePhysicalBytes)
       }
-      let uncachedDisplayedCount = uncachedModel.renderStats.displayedRenders
-      let uncachedStart = ContinuousClock.now
-      uncachedModel.selection = ordered[3]
-      uncachedModel.loadSelection()
-      try await waitForDisplayedPreview(
-        in: uncachedModel, file: ordered[3], afterDisplayedCount: uncachedDisplayedCount)
-      uncachedSamples.append(milliseconds(since: uncachedStart))
-      maximumPreviewCacheBytes = max(
-        maximumPreviewCacheBytes, uncachedModel.previewCachePhysicalBytes)
+      cachedSamples.append(cached.0)
+      maximumPreviewCacheBytes = max(maximumPreviewCacheBytes, cached.1)
 
-      let rapidModel = makeModel(cacheLimit: 2)
-      rapidModel.importFiles(ordered)
-      try await waitForDisplayedPreview(
-        in: rapidModel, file: ordered[0], afterDisplayedCount: 0)
-      let rapidDisplayedCount = rapidModel.renderStats.displayedRenders
-      let rapidStart = ContinuousClock.now
-      for file in ordered.dropFirst() {
-        rapidModel.selection = file
-        rapidModel.loadSelection()
+      let uncached = try await withModel(cacheLimit: 2) { model in
+        model.importFiles(Array(ordered.prefix(4)))
+        try await waitForDisplayedPreview(in: model, file: ordered[0], afterDisplayedCount: 0)
+        try await waitUntil("bounded lookahead cache", timeout: .seconds(45)) {
+          model.hasCachedPreview(for: ordered[1])
+        }
+        try #require(!model.hasCachedPreview(for: ordered[3]))
+        let displayed = model.renderStats.displayedRenders
+        let start = ContinuousClock.now
+        model.selection = ordered[3]
+        model.loadSelection()
+        try await waitForDisplayedPreview(
+          in: model, file: ordered[3], afterDisplayedCount: displayed)
+        return (milliseconds(since: start), model.previewCachePhysicalBytes)
       }
-      let finalFile = try #require(ordered.last)
-      try await waitForDisplayedPreview(
-        in: rapidModel, file: finalFile, afterDisplayedCount: rapidDisplayedCount)
-      drainSamples.append(milliseconds(since: rapidStart))
-      maximumPreviewCacheBytes = max(maximumPreviewCacheBytes, rapidModel.previewCachePhysicalBytes)
+      uncachedSamples.append(uncached.0)
+      maximumPreviewCacheBytes = max(maximumPreviewCacheBytes, uncached.1)
+
+      let rapid = try await withModel(cacheLimit: 2) { model in
+        model.importFiles(ordered)
+        try await waitForDisplayedPreview(in: model, file: ordered[0], afterDisplayedCount: 0)
+        let displayed = model.renderStats.displayedRenders
+        let start = ContinuousClock.now
+        for file in ordered.dropFirst() {
+          model.selection = file
+          model.loadSelection()
+        }
+        let finalFile = try #require(ordered.last)
+        try await waitForDisplayedPreview(
+          in: model, file: finalFile, afterDisplayedCount: displayed)
+        return (milliseconds(since: start), model.previewCachePhysicalBytes)
+      }
+      drainSamples.append(rapid.0)
+      maximumPreviewCacheBytes = max(maximumPreviewCacheBytes, rapid.1)
     }
+    let retainedNavigation = try await measureRetainedNavigation(
+      corpus: Array(corpus.prefix(2)), repetitions: repetitions)
+    maximumPreviewCacheBytes = max(
+      maximumPreviewCacheBytes, retainedNavigation.cachedPreviewBytes)
+
+    let saturatedCache = try await measureSaturatedCache(
+      corpus: Array(corpus.prefix(3)), repetitions: repetitions)
+    maximumPreviewCacheBytes = max(maximumPreviewCacheBytes, saturatedCache.cachedPreviewBytes)
 
     let report = Report(
       generatedAt: ISO8601DateFormatter().string(from: Date()),
       hardware: hardwareDescription(),
       repetitions: repetitions,
-      files: corpus.map(\.lastPathComponent),
+      files: corpus.map(relativeCorpusPath),
       firstCorrectedPaint: summarize(firstPaintSamples),
       cachedSwitch: summarize(cachedSamples),
       uncachedSwitch: summarize(uncachedSamples),
@@ -177,8 +217,10 @@ struct AppPathPerformanceTests {
       memoryAfter: memorySample(),
       maximumPreviewCacheBytes: maximumPreviewCacheBytes,
       previewCacheDepths: previewCacheDepths,
+      retainedNavigation: retainedNavigation,
+      saturatedCache: saturatedCache,
       note:
-        "Browsing uses colour-accurate 640px RAW drafts, a ~4000px inspect preview in about 4s, 3200px neighbour lookahead, and a 1-pass full-resolution preview for the selected file. Unused full-res buffers demote to inspect size. Bounded preview sessions stay under the 256 MiB cache cap. Export retains the selected file's last three-pass decode for settings-only re-export. No benchmark exports are written."
+        "Real AppModel publication timings; native input and screen presentation are not measured. Each phase cancels selection work and waits for model release before the next phase. Initial cache-depth samples stop when bounded lookahead is populated; they are not full cache-capacity or settled-speculation measurements. Full-sensor sources and corrected rasters remain cached within the machine-dependent preview memory budget. Retained navigation warms two full previews, corrected rasters, and their diagnostics, then measures publication and current-statistics revisit timings plus viewport updates with decode/correction/statistics-computation counters. Saturated-cache switching measures speculative scheduler submissions and background drain with two retained sessions and an uncached neighbour. Three default repetitions yield descriptive nearest-rank summaries, not a tail-latency estimate. No exports are written."
     )
 
     let encoder = JSONEncoder()
@@ -196,46 +238,236 @@ struct AppPathPerformanceTests {
     var samples = [PreviewCacheDepthSample]()
     for depth in [2, 8, 32] {
       let beforeFill = memorySample()
-      var model: AppModel? = makeModel(cacheLimit: depth)
-      let fillStart = ContinuousClock.now
-      model?.importFiles(corpus)
-      let firstFile = try #require(corpus.first)
-      try await waitForDisplayedPreview(
-        in: try #require(model), file: firstFile, afterDisplayedCount: 0)
-      let expectedPopulation = expectedCachePopulation(
-        limit: depth, fileCount: corpus.count)
-      try await waitUntil("preview cache depth \(depth)", timeout: .seconds(45)) {
-        model?.previewCacheSessionCount == expectedPopulation
+      let sample = try await withModel(cacheLimit: depth) { model in
+        let fillStart = ContinuousClock.now
+        model.importFiles(corpus)
+        let firstFile = try #require(corpus.first)
+        try await waitForDisplayedPreview(in: model, file: firstFile, afterDisplayedCount: 0)
+        let expectedPopulation = expectedCachePopulation(limit: depth, fileCount: corpus.count)
+        try await waitUntil("preview cache depth \(depth)", timeout: .seconds(45)) {
+          model.previewCacheSessionCount == expectedPopulation
+        }
+        return (
+          model.previewCacheSessionCount, model.previewCachePhysicalBytes,
+          milliseconds(since: fillStart), cachedKinds(model: model, corpus: corpus), memorySample()
+        )
       }
-
-      let populatedSessions = model?.previewCacheSessionCount ?? 0
-      let cachedPreviewBytes = model?.previewCachePhysicalBytes ?? 0
-      let fillMilliseconds = milliseconds(since: fillStart)
-      let atCapacity = memorySample()
-      model = nil
-      await Task.yield()
-      try await Task.sleep(for: .milliseconds(50))
-
       samples.append(
         PreviewCacheDepthSample(
           configuredDepth: depth,
           availableFiles: corpus.count,
-          populatedSessions: populatedSessions,
-          cachedPreviewBytes: cachedPreviewBytes,
-          fillMilliseconds: fillMilliseconds,
+          populatedSessions: sample.0,
+          cachedPreviewBytes: sample.1,
+          fillMilliseconds: sample.2,
           memoryBeforeFill: beforeFill,
-          memoryAtCapacity: atCapacity,
+          cachedSourceKinds: sample.3,
+          memoryAfterInitialLookahead: sample.4,
           memoryAfterRelease: memorySample()
         ))
     }
     return samples
   }
 
-  private func makeModel(cacheLimit: Int) -> AppModel {
+  private func relativeCorpusPath(_ file: URL) -> String {
+    let prefix = appPathBenchmarkRepositoryRoot.appending(path: "sample-raw").path + "/"
+    return file.path.hasPrefix(prefix)
+      ? String(file.path.dropFirst(prefix.count)) : file.lastPathComponent
+  }
+
+  private func cachedKinds(model: AppModel, corpus: [URL]) -> [String: String] {
+    Dictionary(
+      uniqueKeysWithValues: corpus.compactMap { file in
+        model.cachedPreviewKind(for: file).map { (relativeCorpusPath(file), $0.rawValue) }
+      })
+  }
+
+  private func measureRetainedNavigation(
+    corpus: [URL], repetitions: Int
+  ) async throws -> RetainedNavigationSample {
+    var sample = try await withModel(cacheLimit: 2) { model in
+      let first = corpus[0]
+      let second = corpus[1]
+      let warmupStart = ContinuousClock.now
+      model.importFiles(corpus)
+      try await waitUntil("two retained full previews", timeout: .seconds(120)) {
+        model.previewSourceKind == .rawFull && !model.isRendering
+          && !model.previewBackgroundWorkIsActive
+          && corpus.allSatisfy { model.cachedPreviewKind(for: $0) == .rawFull }
+      }
+      // Publish both full rasters and finish their statistics before timing
+      // revisits, so first correction, analysis, or tier upgrade is excluded.
+      for file in [second, first] {
+        let displayed = model.renderStats.displayedRenders
+        model.selection = file
+        model.loadSelection()
+        try await waitForDisplayedPreview(in: model, file: file, afterDisplayedCount: displayed)
+        try await waitUntil("retained warmup statistics") {
+          model.previewStatisticsRevision == model.publishedRenderRevision
+        }
+      }
+      try await waitUntil("settled retained statistics") {
+        model.previewStatisticsRevision == model.publishedRenderRevision
+          && !model.isAnalyzingScanStacks && !model.isRendering
+          && !model.previewBackgroundWorkIsActive
+      }
+      let warmupMilliseconds = milliseconds(since: warmupStart)
+      let decodeCount = model.fullResolutionPreviewDecodeCount
+      let correctionCount = model.previewCorrectionCount
+      let computationCount = model.previewStatisticsComputationCount
+      let cacheHits = model.previewRenderCacheHits
+      var switches: [Double] = []
+      var switchesThroughStatistics: [Double] = []
+      for _ in 0..<repetitions {
+        for file in [second, first] {
+          let displayed = model.renderStats.displayedRenders
+          let start = ContinuousClock.now
+          model.selection = file
+          model.loadSelection()
+          try await waitForDisplayedPreview(in: model, file: file, afterDisplayedCount: displayed)
+          switches.append(milliseconds(since: start))
+          try await waitUntil("retained switch statistics") {
+            model.previewStatisticsRevision == model.publishedRenderRevision
+          }
+          switchesThroughStatistics.append(milliseconds(since: start))
+        }
+      }
+      let dimensions = try #require(model.previewImage?.size)
+      let published = model.publishedRenderRevision
+      let viewportUpdates = 1_000
+      let viewportStart = ContinuousClock.now
+      for index in 0..<viewportUpdates {
+        model.setPreviewRenderDemand(
+          PreviewRenderDemand(
+            documentSize: dimensions,
+            visibleRect: CGRect(x: index * 2, y: index, width: 1_000, height: 800),
+            backingScale: 2, magnification: 1))
+      }
+      let viewportMilliseconds = milliseconds(since: viewportStart)
+      #expect(model.publishedRenderRevision == published)
+      #expect(model.fullResolutionPreviewDecodeCount == decodeCount)
+      #expect(model.previewCorrectionCount == correctionCount)
+      #expect(model.previewRenderCacheHits - cacheHits == repetitions * 2)
+      try await waitUntil("settled navigation statistics") {
+        model.previewStatisticsRevision == model.publishedRenderRevision && !model.isRendering
+          && !model.previewBackgroundWorkIsActive
+      }
+      #expect(model.previewStatisticsComputationCount == computationCount)
+      return RetainedNavigationSample(
+        files: corpus.map(relativeCorpusPath),
+        warmupMilliseconds: warmupMilliseconds,
+        returnSwitch: summarize(switches),
+        returnSwitchThroughStatistics: summarize(switchesThroughStatistics),
+        viewportUpdateCount: viewportUpdates,
+        viewportUpdatesMilliseconds: viewportMilliseconds,
+        fullResolutionDecodesDuringNavigation: model.fullResolutionPreviewDecodeCount - decodeCount,
+        correctionsDuringNavigation: model.previewCorrectionCount - correctionCount,
+        computationsDuringNavigation: model.previewStatisticsComputationCount - computationCount,
+        renderCacheHitsDuringNavigation: model.previewRenderCacheHits - cacheHits,
+        cachedPreviewBytes: model.previewCachePhysicalBytes,
+        cacheBudgetBytes: model.previewMemoryByteLimit,
+        memorySettled: memorySample(),
+        memoryAfterRelease: memorySample())
+    }
+    sample.memoryAfterRelease = memorySample()
+    return sample
+  }
+
+  private func measureSaturatedCache(
+    corpus: [URL], repetitions: Int
+  ) async throws -> SaturatedCacheSample {
+    try await withModel(cacheLimit: 2) { model in
+      model.importFiles(corpus)
+      try await waitUntil("saturated retained cache", timeout: .seconds(120)) {
+        model.previewSourceKind == .rawFull && !model.isRendering
+          && !model.previewBackgroundWorkIsActive
+          && corpus.prefix(2).allSatisfy { model.cachedPreviewKind(for: $0) == .rawFull }
+      }
+      try #require(model.previewCacheSessionCount == 2)
+      try #require(!model.hasCachedPreview(for: corpus[2]))
+      // Warm both corrected rasters and drain the associated speculation before
+      // the timed revisits. The third source must remain absent from this cache.
+      for file in [corpus[1], corpus[0]] {
+        let displayed = model.renderStats.displayedRenders
+        model.selection = file
+        model.loadSelection()
+        try await waitForDisplayedPreview(in: model, file: file, afterDisplayedCount: displayed)
+        try await waitUntil("saturated-cache warmup drain", timeout: .seconds(90)) {
+          !model.previewBackgroundWorkIsActive
+        }
+      }
+      var switchSamples: [Double] = []
+      var drainSamples: [Double] = []
+      var requestSamples: [Int] = []
+      for _ in 0..<repetitions {
+        try #require(!model.hasCachedPreview(for: corpus[2]))
+        let requests = model.lookaheadPreviewRequestCount
+        let displayed = model.renderStats.displayedRenders
+        let start = ContinuousClock.now
+        model.selection = corpus[1]
+        model.loadSelection()
+        try await waitForDisplayedPreview(
+          in: model, file: corpus[1], afterDisplayedCount: displayed)
+        switchSamples.append(milliseconds(since: start))
+        try await waitUntil("saturated-cache background drain", timeout: .seconds(90)) {
+          !model.previewBackgroundWorkIsActive && !model.isRendering
+            && model.previewStatisticsRevision == model.publishedRenderRevision
+        }
+        drainSamples.append(milliseconds(since: start))
+        requestSamples.append(model.lookaheadPreviewRequestCount - requests)
+        let beforeReturn = model.renderStats.displayedRenders
+        model.selection = corpus[0]
+        model.loadSelection()
+        try await waitForDisplayedPreview(
+          in: model, file: corpus[0], afterDisplayedCount: beforeReturn)
+        try await waitUntil("saturated-cache return drain", timeout: .seconds(90)) {
+          !model.previewBackgroundWorkIsActive && !model.isRendering
+            && model.previewStatisticsRevision == model.publishedRenderRevision
+        }
+      }
+      return SaturatedCacheSample(
+        files: corpus.map(relativeCorpusPath),
+        cachedSwitch: summarize(switchSamples),
+        backgroundDrain: summarize(drainSamples),
+        lookaheadRequestsDuringSwitch: requestSamples,
+        cachedSourceKinds: cachedKinds(model: model, corpus: corpus),
+        cachedPreviewBytes: model.previewCachePhysicalBytes,
+        memoryAfterBackgroundDrain: memorySample())
+    }
+  }
+
+  private func withModel<T>(
+    cacheLimit: Int,
+    operation: @MainActor (AppModel) async throws -> T
+  ) async throws -> T {
     let suiteName = "fsc-app-path-benchmark-\(UUID().uuidString)"
     let preferences = UserDefaults(suiteName: suiteName)!
+    defer { preferences.removePersistentDomain(forName: suiteName) }
     preferences.set(cacheLimit, forKey: "previewCacheLimit")
-    return AppModel(preferences: preferences)
+    var model: AppModel? = AppModel(preferences: preferences)
+    weak var releasedModel = model
+    do {
+      let result = try await operation(try #require(model))
+      model?.selection = nil
+      model?.loadSelection()
+      try await waitUntil("background stack analysis", timeout: .seconds(90)) {
+        model?.isAnalyzingScanStacks == false
+      }
+      model = nil
+      try await waitUntil("benchmark model release", timeout: .seconds(90)) {
+        releasedModel == nil
+      }
+      return result
+    } catch {
+      model?.selection = nil
+      model?.loadSelection()
+      model = nil
+      // Preserve the original failure, but still give in-flight native decodes
+      // time to finish before another test can contend with this phase.
+      try? await waitUntil("failed benchmark model release", timeout: .seconds(90)) {
+        releasedModel == nil
+      }
+      throw error
+    }
   }
 
   private func expectedCachePopulation(limit: Int, fileCount: Int) -> Int {

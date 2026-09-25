@@ -22,12 +22,19 @@ public struct PerspectiveCrop: Codable, Equatable, Sendable {
   public var topRight: Point
   public var bottomRight: Point
   public var bottomLeft: Point
+  /// Known frame proportions before rotation/flip. Nil retains the historical
+  /// estimate from opposing edge lengths; old saved crops decode unchanged.
+  public var outputAspectRatio: CropAspectRatio?
 
-  public init(topLeft: Point, topRight: Point, bottomRight: Point, bottomLeft: Point) {
+  public init(
+    topLeft: Point, topRight: Point, bottomRight: Point, bottomLeft: Point,
+    outputAspectRatio: CropAspectRatio? = nil
+  ) {
     self.topLeft = topLeft
     self.topRight = topRight
     self.bottomRight = bottomRight
     self.bottomLeft = bottomLeft
+    self.outputAspectRatio = outputAspectRatio
   }
 
   public static let fullFrame = PerspectiveCrop(
@@ -53,7 +60,7 @@ public struct PerspectiveCrop: Codable, Equatable, Sendable {
       topLeft: inset(topLeft),
       topRight: inset(topRight),
       bottomRight: inset(bottomRight),
-      bottomLeft: inset(bottomLeft))
+      bottomLeft: inset(bottomLeft), outputAspectRatio: outputAspectRatio)
   }
 
   /// Pixel size of the rectified canvas, matching the warp destination.
@@ -63,7 +70,7 @@ public struct PerspectiveCrop: Codable, Equatable, Sendable {
     func distance(_ a: Point, _ b: Point) -> Double {
       hypot((a.x - b.x) * scaleX, (a.y - b.y) * scaleY)
     }
-    return (
+    let estimated = (
       width: max(
         1,
         Int(((distance(topLeft, topRight) + distance(bottomLeft, bottomRight)) / 2).rounded()) + 1),
@@ -71,6 +78,40 @@ public struct PerspectiveCrop: Codable, Equatable, Sendable {
         1,
         Int(((distance(topLeft, bottomLeft) + distance(topRight, bottomRight)) / 2).rounded()) + 1)
     )
+    guard let ratio = outputAspectRatio?.value, imageWidth > 1, imageHeight > 1 else {
+      return estimated
+    }
+    // A foreshortened quadrilateral cannot establish the original frame's
+    // proportions on its own. Keep the estimated pixel area while rectifying
+    // to the user's known ratio, with at most half a pixel of rounding per axis.
+    let area = Double(estimated.width) * Double(estimated.height)
+    return (
+      width: max(2, Int(sqrt(area * ratio).rounded())),
+      height: max(2, Int(sqrt(area / ratio).rounded()))
+    )
+  }
+
+  /// Equal divisions of the rectified image projected back into the scan.
+  /// Linear interpolation along the four edges is incorrect for a trapezoid.
+  public func gridLines(divisions: Int = 4) -> [(start: Point, end: Point)] {
+    guard isValid, (2...64).contains(divisions),
+      let matrix = PerspectiveTransform.computeHomography(
+        srcPoints: Self.fullFrame.points.map { (Float($0.x), Float($0.y)) },
+        dstPoints: points.map { (Float($0.x), Float($0.y)) })
+    else { return [] }
+    func project(_ x: Double, _ y: Double) -> Point {
+      let denominator = Double(matrix[6]) * x + Double(matrix[7]) * y + Double(matrix[8])
+      return Point(
+        x: (Double(matrix[0]) * x + Double(matrix[1]) * y + Double(matrix[2])) / denominator,
+        y: (Double(matrix[3]) * x + Double(matrix[4]) * y + Double(matrix[5])) / denominator)
+    }
+    return (1..<divisions).flatMap { index in
+      let fraction = Double(index) / Double(divisions)
+      return [
+        (project(fraction, 0), project(fraction, 1)),
+        (project(0, fraction), project(1, fraction)),
+      ]
+    }
   }
 
   public var isValid: Bool {
@@ -109,36 +150,46 @@ public struct PerspectiveCrop: Codable, Equatable, Sendable {
   public func replacing(
     _ corner: Int,
     with point: Point,
-    parallelismAssistThreshold threshold: Double
+    parallelismAssistThreshold threshold: Double,
+    coordinateSize: (width: Double, height: Double) = (1, 1)
   ) -> PerspectiveCrop {
-    guard (0..<4).contains(corner), threshold.isFinite, threshold > 0 else {
+    guard (0..<4).contains(corner), threshold.isFinite, threshold > 0,
+      coordinateSize.width.isFinite, coordinateSize.height.isFinite,
+      coordinateSize.width > 0, coordinateSize.height > 0
+    else {
       return replacing(corner, with: point)
     }
     let clamped = Point(x: min(max(point.x, 0), 1), y: min(max(point.y, 0), 1))
-    let current = points
+    func scaled(_ point: Point) -> Point {
+      Point(x: point.x * coordinateSize.width, y: point.y * coordinateSize.height)
+    }
+    let target = scaled(clamped)
+    let current = points.map(scaled)
     let previous = (corner + 3) % 4
     let next = (corner + 1) % 4
     let opposite = (corner + 2) % 4
     let candidates = [
       projection(
-        of: clamped,
+        of: target,
         ontoLineThrough: current[previous],
         parallelTo: vector(from: current[next], to: current[opposite])),
       projection(
-        of: clamped,
+        of: target,
         ontoLineThrough: current[next],
         parallelTo: vector(from: current[previous], to: current[opposite])),
-    ].compactMap { $0 }
+    ].compactMap { $0 }.filter {
+      $0.x >= 0 && $0.y >= 0 && $0.x <= coordinateSize.width && $0.y <= coordinateSize.height
+    }
     guard
       let closest = candidates.min(by: {
-        squaredDistance($0, clamped) < squaredDistance($1, clamped)
-      }), squaredDistance(closest, clamped) <= threshold * threshold
+        squaredDistance($0, target) < squaredDistance($1, target)
+      }), squaredDistance(closest, target) <= threshold * threshold
     else {
       return replacing(corner, with: clamped)
     }
     let snapped = moving(
       corner,
-      to: Point(x: min(max(closest.x, 0), 1), y: min(max(closest.y, 0), 1)))
+      to: Point(x: closest.x / coordinateSize.width, y: closest.y / coordinateSize.height))
     return snapped.isValid ? snapped : replacing(corner, with: clamped)
   }
 

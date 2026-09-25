@@ -1,6 +1,9 @@
 # Calibration Experiment Requirements
 
-Calibration research is parked under the [roadmap](improvements/MacOS-Native-Roadmap.md#parked-stock-and-capture-look-calibration).
+Broad stock/capture calibration research is parked under the [roadmap](improvements/MacOS-Native-Roadmap.md#parked-stock-and-capture-look-calibration).
+The active September 18 paired color/control study follows its own
+[evaluation runbook](development/color-evaluation.md); it does not reactivate
+the broader fitting or ML project.
 The [processing reference](film-processing-research.md) describes implemented
 models and separates Natural curves, Darkroom unmix, manual crossover, and
 measured-density capture correction.

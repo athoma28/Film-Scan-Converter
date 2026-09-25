@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ContentView: View {
-  @ObservedObject var model: AppModel
+  @Bindable var model: AppModel
   @ObservedObject var camera: CameraController
   @State private var dropTargeted = false
   @State private var showLivePreview = false
@@ -15,6 +15,7 @@ struct ContentView: View {
   @State private var usesPerspectiveParallelAssist = true
   @State private var presetName = ""
   @State private var isSavingPreset = false
+  @FocusState private var isPresetNameFocused: Bool
   @State private var profileName = ""
   @State private var previewZoomRequest = PreviewZoomRequest()
   @State private var previewZoomPercent = 100
@@ -70,135 +71,117 @@ struct ContentView: View {
     }
   }
 
-  private enum NegativeConversionMode: String, CaseIterable, Identifiable {
-    case natural
-    case darkroom
-    case classic
-    case bypass
-
-    var id: Self { self }
-
-    var title: String {
-      switch self {
-      case .natural: "Natural"
-      case .darkroom: "Darkroom"
-      case .classic: "Classic"
-      case .bypass: "Bypass"
-      }
-    }
-
-    static func available(for filmType: FilmType) -> [Self] {
-      switch filmType {
-      case .colourNegative: [.natural, .darkroom, .classic, .bypass]
-      case .blackAndWhiteNegative: [.natural, .classic, .bypass]
-      case .slide, .cropOnly: []
-      }
-    }
-  }
-
   var body: some View {
     NavigationSplitView {
-      List(selection: $model.selectedFiles) {
-        ForEach(model.files, id: \.self) { url in
-          ScanSidebarRow(
-            url: url,
-            thumbnail: model.thumbnail(for: url),
-            isThumbnailLoading: model.isThumbnailLoading(for: url),
-            isCurrentLoadingOrRendering: model.selection == url
-              && (model.isLoading || model.isRendering),
-            isActiveExport: model.isActiveExport(for: url),
-            isPendingExport: model.isPendingExport(for: url),
-            hasCachedPreview: model.hasCachedPreview(for: url),
-            hasEdits: model.hasEdits(for: url),
-            stackBadge: scanStackBadge(for: url)
-          )
-          .tag(url)
-          .task(id: model.thumbnail(for: url) == nil) {
-            model.requestThumbnail(for: url)
+      ViewUpdateScope {
+        List(selection: $model.selectedFiles) {
+          ForEach(model.files, id: \.self) { url in
+            ScanSidebarRow(
+              url: url,
+              thumbnail: model.thumbnail(for: url),
+              isThumbnailLoading: model.isThumbnailLoading(for: url),
+              isCurrentLoadingOrRendering: model.selection == url
+                && (model.isLoading || model.isRendering),
+              isActiveExport: model.isActiveExport(for: url),
+              isPendingExport: model.isPendingExport(for: url),
+              hasCachedPreview: model.hasCachedPreview(for: url),
+              hasEdits: model.hasEdits(for: url),
+              stackBadge: scanStackBadge(for: url)
+            )
+            .tag(url)
+            .task(id: model.thumbnail(for: url) == nil) {
+              model.requestThumbnail(for: url)
+            }
+
+            // Keep this inside the scrollable list. A sibling below List makes
+            // NavigationSplitView adopt the inspector's full fitting height.
+            if model.selection == url, let stack = model.selectedDetectedScanStack {
+              scanStackProposal(stack)
+                .listRowInsets(EdgeInsets(top: 2, leading: 6, bottom: 4, trailing: 6))
+                .listRowSeparator(.hidden)
+            }
           }
 
-          // Keep this inside the scrollable list. A sibling below List makes
-          // NavigationSplitView adopt the inspector's full fitting height.
-          if model.selection == url, let stack = model.selectedDetectedScanStack {
-            scanStackProposal(stack)
-              .listRowInsets(EdgeInsets(top: 2, leading: 6, bottom: 4, trailing: 6))
-              .listRowSeparator(.hidden)
+          if model.selectedDetectedScanStack == nil,
+            model.isAnalyzingScanStacks,
+            model.files.count > 1
+          {
+            HStack(spacing: 8) {
+              ProgressView()
+                .controlSize(.small)
+                .accessibilityHidden(true)
+              Text("Checking for repeated captures...")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
+            .background(Color(nsColor: .controlBackgroundColor))
           }
         }
-
-        if model.selectedDetectedScanStack == nil,
-          model.isAnalyzingScanStacks,
-          model.files.count > 1
-        {
-          HStack(spacing: 8) {
-            ProgressView()
-              .controlSize(.small)
-              .accessibilityHidden(true)
-            Text("Checking for repeated captures...")
-              .font(.caption)
-              .foregroundStyle(.secondary)
-          }
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(12)
-          .listRowInsets(EdgeInsets())
-          .listRowSeparator(.hidden)
-          .background(Color(nsColor: .controlBackgroundColor))
+        .listStyle(.sidebar)
+        .navigationTitle("Scans")
+        .navigationSplitViewColumnWidth(min: 220, ideal: 270, max: 340)
+        .onChange(of: model.selectedFiles) {
+          guard model.sidebarSelectionDidChange() else { return }
+          endActiveOverlay()
+          requestPreviewZoom(.fit)
+          model.loadSelection()
         }
-      }
-      .listStyle(.sidebar)
-      .navigationTitle("Scans")
-      .navigationSplitViewColumnWidth(min: 220, ideal: 270, max: 340)
-      .onChange(of: model.selectedFiles) {
-        guard model.sidebarSelectionDidChange() else { return }
-        endActiveOverlay()
-        requestPreviewZoom(.fit)
-        model.loadSelection()
-      }
-      .onChange(of: model.selection) {
-        endActiveOverlay()
-        requestPreviewZoom(.fit)
+        .onChange(of: model.selection) {
+          endActiveOverlay()
+          requestPreviewZoom(.fit)
+        }
       }
     } detail: {
       VStack(spacing: 0) {
-        toolbar
+        ViewUpdateScope { toolbar }
         Divider()
         HStack(spacing: 0) {
-          preview
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-          if !showLivePreview, model.previewImage != nil {
-            Divider()
-            inspector
-              .frame(width: 390)
-              .frame(maxHeight: .infinity)
+          ViewUpdateScope {
+            preview
+              .frame(maxWidth: .infinity, maxHeight: .infinity)
+          }
+          ViewUpdateScope {
+            if !showLivePreview, model.hasPreviewImage {
+              Divider()
+              inspector
+                .frame(width: 390)
+                .frame(maxHeight: .infinity)
+            }
           }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         Divider()
-        HStack(spacing: 8) {
-          if isAligningStack {
-            ProgressView()
-              .controlSize(.small)
-              .accessibilityHidden(true)
+        ViewUpdateScope {
+          HStack(spacing: 8) {
+            if isAligningStack {
+              ProgressView()
+                .controlSize(.small)
+                .accessibilityHidden(true)
+            }
+            Text(statusBarMessage)
+              .foregroundStyle(
+                (showLivePreview ? camera.statusKind : model.statusKind) == .error
+                  ? Color.red : Color.secondary
+              )
+              .lineLimit(1)
+            if isAligningStack {
+              ProgressView()
+                .progressViewStyle(.linear)
+                .frame(maxWidth: 168)
+                .accessibilityHidden(true)
+            }
           }
-          Text(statusBarMessage)
-            .foregroundStyle(
-              (showLivePreview ? camera.statusKind : model.statusKind) == .error
-                ? Color.red : Color.secondary
-            )
-            .lineLimit(1)
-          if isAligningStack {
-            ProgressView()
-              .progressViewStyle(.linear)
-              .frame(maxWidth: 168)
-              .accessibilityHidden(true)
-          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.horizontal, 12)
+          .padding(.vertical, 8)
+          .font(.caption)
+          .accessibilityElement(children: .combine)
+          .accessibilityLabel(statusBarMessage)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .font(.caption)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(statusBarMessage)
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background(dropTargeted ? Color.accentColor.opacity(0.12) : Color.clear)
@@ -212,7 +195,7 @@ struct ContentView: View {
     .navigationSplitViewStyle(.balanced)
     .focusedSceneValue(
       \.previewZoomCommands,
-      showLivePreview || model.previewImage == nil
+      showLivePreview || !model.hasPreviewImage
         ? nil
         : PreviewZoomCommands(
           fit: { requestPreviewZoom(.fit) },
@@ -445,12 +428,12 @@ struct ContentView: View {
       }
       Spacer()
 
-      if !showLivePreview, model.previewImage != nil {
+      if !showLivePreview, model.hasPreviewImage {
         if model.canLoadRawDetailPreview {
           Button(action: model.loadRawDetailPreview) {
             Label("Load RAW Preview", systemImage: "sparkles.rectangle.stack")
           }
-          .help("Decode the full-resolution 1-pass RAW preview now")
+          .help("Continue loading the inspect and full-resolution RAW previews")
         }
 
         Toggle(isOn: $model.showOriginal) {
@@ -553,64 +536,6 @@ struct ContentView: View {
   private var developQuickActionsBar: some View {
     VStack(spacing: 6) {
       HStack(spacing: 6) {
-        Menu {
-          Section("Curated Looks") {
-            Button("Kodachrome-like Auto") {
-              model.applyKodachromeLikeLook()
-            }
-            Menu("Prototype Looks") {
-              ForEach(AdaptiveDisplayLook.prototypes) { look in
-                Button(look.name) {
-                  model.applyAdaptiveDisplayLook(look)
-                }
-              }
-            }
-          }
-          if !model.namedCorrectionPresets.isEmpty {
-            Section("User Presets") {
-              ForEach(model.namedCorrectionPresets) { preset in
-                Button(preset.name) {
-                  model.applyCorrectionPreset(preset)
-                }
-              }
-            }
-          }
-          Divider()
-          Button("Save as New Preset…") {
-            presetName = ""
-            isSavingPreset = true
-          }
-          if let applied = model.appliedPresetName {
-            Button("Restore Before \(applied)") {
-              model.removeAppliedPreset()
-            }
-          }
-          if !model.namedCorrectionPresets.isEmpty {
-            Menu("Delete Preset") {
-              ForEach(model.namedCorrectionPresets) { preset in
-                Button(role: .destructive) {
-                  model.deleteCorrectionPreset(preset)
-                } label: {
-                  Text(preset.name)
-                }
-              }
-            }
-          }
-        } label: {
-          HStack(spacing: 4) {
-            Image(systemName: "wand.and.stars")
-            Text(model.appliedPresetName ?? "Looks & Presets")
-              .lineLimit(1)
-            Image(systemName: "chevron.down")
-              .font(.caption2)
-          }
-          .font(.caption)
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-
-        Spacer()
-
         Button(action: model.copyCorrectionSettings) {
           Image(systemName: "doc.on.doc")
             .frame(width: 16)
@@ -624,6 +549,8 @@ struct ContentView: View {
         .disabled(!model.canPasteCorrectionSettings)
         .help("Paste corrections (⌘⌥V)")
 
+        Spacer()
+
         Menu {
           Button(
             "Apply Look to Selected (\(model.selectedFileCount))",
@@ -633,8 +560,8 @@ struct ContentView: View {
           Button(
             "Apply Settings to All Open Files", action: model.applyCurrentSettingsToAllOpenFiles)
           Divider()
-          Button("Reset All Adjustments", role: .destructive, action: model.resetCorrections)
-            .disabled(model.previewImage == nil)
+          Button("Reset Adjustments", action: model.resetDevelopAdjustments)
+            .disabled(!model.hasPreviewImage)
         } label: {
           Image(systemName: "ellipsis.circle")
             .frame(width: 16)
@@ -646,27 +573,6 @@ struct ContentView: View {
       .controlSize(.small)
       .buttonStyle(.bordered)
       .padding(.horizontal, 2)
-
-      if isSavingPreset {
-        HStack(spacing: 6) {
-          TextField("Preset name", text: $presetName)
-            .textFieldStyle(.roundedBorder)
-            .controlSize(.small)
-            .onSubmit {
-              saveNamedPreset()
-            }
-          Button("Save") {
-            saveNamedPreset()
-          }
-          .controlSize(.small)
-          .disabled(presetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-          Button("Cancel") {
-            isSavingPreset = false
-          }
-          .controlSize(.small)
-        }
-        .padding(.vertical, 2)
-      }
 
       if !model.settingsStatus.isEmpty {
         Text(model.settingsStatus)
@@ -680,240 +586,158 @@ struct ContentView: View {
   private func saveNamedPreset() {
     let name = presetName.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !name.isEmpty else { return }
-    model.saveCorrectionPreset(named: name)
+    guard model.saveCorrectionPreset(named: name) else { return }
     presetName = ""
     isSavingPreset = false
   }
 
-  private var filmConversionSection: some View {
-    let isNeg = supportsFilmNegative(filmType: model.parameters.filmType)
-    let isModified = isNeg && model.parameters.filmNegativeParams.enabled
-
-    return InspectorSection(
-      "Film & Inversion",
-      systemImage: "film.stack",
-      isModified: isModified
-    ) {
+  private var filmBaseSection: some View {
+    let base = FilmBase.resolved(from: model.parameters)
+    return InspectorSection("Film Base", systemImage: "film", isModified: base != .original) {
       VStack(alignment: .leading, spacing: 8) {
-        Text("Scan Type")
-          .font(.caption.weight(.medium))
         Picker(
-          "Scan Type",
+          "Film Base",
           selection: Binding(
-            get: { model.parameters.filmType },
-            set: { model.setFilmType($0) }
+            get: { base },
+            set: { model.setFilmBase($0) }
           )
         ) {
-          ForEach(FilmType.allCases, id: \.self) { type in
-            Text(type.compactDisplayName).tag(type)
+          ForEach(FilmBase.allCases) { option in
+            Text(option.title).tag(option)
           }
         }
-        .pickerStyle(.segmented)
+        .pickerStyle(.menu)
         .labelsHidden()
-        .help(filmTypeDescription(model.parameters.filmType))
+        .help(base.summary)
+        Text(
+          model.parameters.filmBaseChosenByUser ? "You chose this film base." : "Guessed from scan."
+        )
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        Text(base.summary)
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+    }
+  }
 
-        if isNeg {
-          Divider()
-            .padding(.vertical, 2)
+  private var presetBeingReplaced: NamedCorrectionPreset? {
+    model.namedCorrectionPresets.first {
+      NamedCorrectionPresetStore.namesMatch($0.name, presetName)
+    }
+  }
 
-          Text("Conversion Mode")
-            .font(.caption.weight(.medium))
+  private var presetsSection: some View {
+    let base = FilmBase.resolved(from: model.parameters)
+    let appliedName = model.appliedPresetName
+    let recommended = LookRecipe.recommended(for: base)
+    let others = LookRecipe.factory.filter { !$0.recommendedFilmBases.contains(base) }
+    return InspectorSection(
+      "Presets", systemImage: "square.stack", isModified: appliedName != nil
+    ) {
+      VStack(alignment: .leading, spacing: 8) {
+        if base.supportsLooks {
+          Menu {
+            if !recommended.isEmpty {
+              Section("Recommended") {
+                ForEach(recommended) { recipe in
+                  presetButton(recipe)
+                }
+              }
+            }
+            if !others.isEmpty {
+              Section("Other Factory Looks") {
+                ForEach(others) { recipe in
+                  presetButton(recipe)
+                }
+              }
+            }
+            if !model.namedCorrectionPresets.isEmpty {
+              Section("Saved Presets") {
+                ForEach(model.namedCorrectionPresets) { preset in
+                  Button {
+                    model.applyCorrectionPreset(preset)
+                  } label: {
+                    presetLabel(
+                      preset.name, matches: preset.settings.recipe.matches(model.parameters))
+                  }
+                }
+              }
+            }
+          } label: {
+            Text(appliedName ?? "Custom — Choose a Preset")
+              .frame(maxWidth: .infinity, alignment: .leading)
+          }
+          .menuStyle(.borderedButton)
+          .accessibilityLabel("Choose a preset")
+          .accessibilityValue(appliedName ?? "Custom")
+          .help("Apply a look, then refine it with the tone and color controls below.")
 
-          Picker(
-            "Conversion Mode",
-            selection: Binding(
-              get: { negativeConversionMode(for: model.parameters) },
-              set: { setNegativeConversionMode($0) }
-            )
-          ) {
-            ForEach(NegativeConversionMode.available(for: model.parameters.filmType)) { mode in
-              Text(mode.title).tag(mode)
+          if isSavingPreset {
+            VStack(alignment: .leading, spacing: 6) {
+              TextField("Preset name", text: $presetName)
+                .textFieldStyle(.roundedBorder)
+                .focused($isPresetNameFocused)
+                .onSubmit { saveNamedPreset() }
+                .onAppear { isPresetNameFocused = true }
+                .onExitCommand { isSavingPreset = false }
+              if let replacement = presetBeingReplaced {
+                Text("This will replace “\(replacement.name)”.")
+                  .font(.caption2)
+                  .foregroundStyle(.secondary)
+              }
+              HStack(spacing: 6) {
+                Button(presetBeingReplaced == nil ? "Save" : "Replace") { saveNamedPreset() }
+                  .disabled(presetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                Button("Cancel") { isSavingPreset = false }
+              }
+            }
+          } else {
+            Button("Save current as preset…") {
+              presetName = ""
+              isSavingPreset = true
             }
           }
-          .pickerStyle(.segmented)
-          .labelsHidden()
-
-          conversionDetailControls
+        } else {
+          Text("Choose a negative or Slide film base to use tone, color, and presets.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        if !model.namedCorrectionPresets.isEmpty {
+          Menu("Manage Saved Presets") {
+            ForEach(model.namedCorrectionPresets) { preset in
+              Menu(preset.name) {
+                Button("Delete Preset", role: .destructive) {
+                  model.deleteCorrectionPreset(preset)
+                }
+              }
+            }
+          }
+          .menuStyle(.borderlessButton)
+          .fixedSize()
         }
       }
+      .controlSize(.small)
     }
   }
 
   @ViewBuilder
-  private var conversionDetailControls: some View {
-    switch negativeConversionMode(for: model.parameters) {
-    case .natural:
-      naturalConversionControls
-    case .darkroom:
-      darkroomConversionControls
-    case .classic:
-      classicConversionControls
-    case .bypass:
-      Text("The negative stays uninverted while preserving negative metadata.")
-        .font(.caption2)
-        .foregroundStyle(.secondary)
+  private func presetLabel(_ title: String, matches: Bool) -> some View {
+    if matches {
+      Label(title, systemImage: "checkmark")
+    } else {
+      Text(title)
     }
   }
 
-  private var naturalConversionControls: some View {
-    let fn = model.parameters.filmNegativeParams
-    let selectedPreset = filmNegativePreset(for: model.parameters)
-    return VStack(alignment: .leading, spacing: 8) {
-      HStack {
-        Text("Film Stock")
-          .font(.caption.weight(.medium))
-        Spacer()
-        Picker(
-          "Film Stock",
-          selection: Binding(
-            get: { selectedPreset },
-            set: { model.setFilmNegativePreset($0) }
-          )
-        ) {
-          ForEach(naturalPresets(for: model.parameters.filmType), id: \.self) { preset in
-            Text(naturalPresetTitle(preset)).tag(preset)
-          }
-        }
-        .labelsHidden()
-        .fixedSize()
-      }
-      .help(naturalPresetSubtitle(selectedPreset))
-
-      AdjustmentSlider(
-        "Negative Exposure",
-        value: Binding(
-          get: { fn.monochromeExposureEV },
-          set: { model.setCalibratedNegativeExposure($0) }
-        ),
-        range: -4...4, neutral: 0, valueFormat: "%+.2f", unitSuffix: "EV",
-        responseExponent: 1.5
-      )
+  private func presetButton(_ recipe: LookRecipe) -> some View {
+    Button {
+      model.applyLookRecipe(recipe)
+    } label: {
+      presetLabel(recipe.title, matches: recipe.matches(model.parameters))
     }
-  }
-
-  private var darkroomConversionControls: some View {
-    let fn = model.parameters.filmNegativeParams
-    let profile = NegativeDensityProfileCatalog.profile(id: fn.densityProfileID)
-    let defaultStrength = profile.unmixStrength * 100
-    return VStack(alignment: .leading, spacing: 8) {
-      HStack {
-        Text("Negative Stock")
-          .font(.caption.weight(.medium))
-        Spacer()
-        Picker(
-          "Negative Stock",
-          selection: Binding(
-            get: { fn.densityProfileID },
-            set: { model.setDensityProfileID($0) }
-          )
-        ) {
-          Section("Curated Popular") {
-            Text("Generic C-41").tag(NegativeDensityProfileCatalog.genericC41.id.rawValue)
-            Text("Kodak Portra 400").tag(NegativeDensityProfileCatalog.kodakPortra400.id.rawValue)
-            Text("Kodak Gold 200").tag(NegativeDensityProfileCatalog.kodakGold200.id.rawValue)
-            Text("Kodak Ektar 100").tag(NegativeDensityProfileCatalog.kodakEktar100.id.rawValue)
-            Text("Fujicolor Pro 400H").tag(
-              NegativeDensityProfileCatalog.fujicolorPro400H.id.rawValue)
-            Text("Kodak VISION3 500T (Cine)").tag(
-              NegativeDensityProfileCatalog.kodakVision3500T.id.rawValue)
-          }
-          Section("Other Kodak") {
-            Text("Kodak Portra 160").tag(NegativeDensityProfileCatalog.kodakPortra160.id.rawValue)
-            Text("Kodak Portra 800").tag(NegativeDensityProfileCatalog.kodakPortra800.id.rawValue)
-            Text("Kodak Ultra Max 400").tag(
-              NegativeDensityProfileCatalog.kodakUltramax400.id.rawValue)
-            Text("Kodak VISION3 250D").tag(
-              NegativeDensityProfileCatalog.kodakVision3250D.id.rawValue)
-          }
-          Section("Other Fujifilm") {
-            Text("Fujicolor 200").tag(NegativeDensityProfileCatalog.fujicolor200.id.rawValue)
-            Text("Fujicolor 400").tag(NegativeDensityProfileCatalog.fujicolor400.id.rawValue)
-            Text("Fujicolor Superia X-TRA 400").tag(
-              NegativeDensityProfileCatalog.fujicolorSuperiaXtra400.id.rawValue)
-            Text("Fujicolor Natura 1600").tag(
-              NegativeDensityProfileCatalog.fujicolorNatura1600.id.rawValue)
-          }
-          Section("Specialty") {
-            Text("Harman Phoenix II").tag(NegativeDensityProfileCatalog.harmanPhoenixII.id.rawValue)
-            Text("Kodak Aerocolor IV 2460").tag(
-              NegativeDensityProfileCatalog.kodakAerocolorIV.id.rawValue)
-          }
-        }
-        .labelsHidden()
-        .fixedSize()
-      }
-
-      VStack(alignment: .leading, spacing: 4) {
-        Text("Print Paper")
-          .font(.caption.weight(.medium))
-        Picker(
-          "Print Paper",
-          selection: Binding(
-            get: { fn.densityPaperID },
-            set: { model.setDensityPaperID($0) }
-          )
-        ) {
-          Text("Neutral").tag(DensityPaperProfileCatalog.neutral.id.rawValue)
-          Text("Kodak Endura").tag(DensityPaperProfileCatalog.kodakEnduraPremier.id.rawValue)
-          Text("Fuji Crystal").tag(DensityPaperProfileCatalog.fujiCrystalArchive.id.rawValue)
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .help(paperDescription(DensityPaperProfileCatalog.profile(id: fn.densityPaperID)))
-      }
-
-      AdjustmentSlider(
-        "Color Separation",
-        value: Binding(
-          get: {
-            (fn.densityUnmixStrength >= 0 ? fn.densityUnmixStrength : profile.unmixStrength) * 100
-          },
-          set: { model.setDensityUnmixStrength($0 / 100) }
-        ),
-        range: 0...100, neutral: defaultStrength, valueFormat: "%.0f", unitSuffix: "%"
-      )
-    }
-  }
-
-  private var classicConversionControls: some View {
-    let fn = model.parameters.filmNegativeParams
-    let neutral =
-      model.parameters.filmType == .blackAndWhiteNegative
-      ? FilmNegativeParams.legacyBlackAndWhite : FilmNegativeParams.legacyColourNegative
-    return DisclosureGroup("Technical Channel Exponents") {
-      VStack(alignment: .leading, spacing: 8) {
-        AdjustmentSlider(
-          "Red Ratio",
-          value: Binding(
-            get: { fn.redRatio },
-            set: { model.setFilmNegativeRedRatio($0) }
-          ),
-          range: 0.8...1.8, neutral: neutral.redRatio,
-          valueFormat: "%.3f", responseExponent: 1.5
-        )
-        AdjustmentSlider(
-          "Green Exponent",
-          value: Binding(
-            get: { fn.greenExp },
-            set: { model.setFilmNegativeGreenExp($0) }
-          ),
-          range: 1.0...2.0, neutral: 1.5, valueFormat: "%.3f",
-          responseExponent: 1.5
-        )
-        AdjustmentSlider(
-          "Blue Ratio",
-          value: Binding(
-            get: { fn.blueRatio },
-            set: { model.setFilmNegativeBlueRatio($0) }
-          ),
-          range: 0.6...1.4, neutral: neutral.blueRatio,
-          valueFormat: "%.3f", responseExponent: 1.5
-        )
-      }
-      .padding(.top, 4)
-    }
-    .font(.caption)
-    .help("Original converter channel exponents")
+    .help(recipe.summary)
   }
 
   private var advancedColorScienceControls: some View {
@@ -985,21 +809,20 @@ struct ContentView: View {
   }
 
   private var developInspector: some View {
-    VStack(spacing: 10) {
+    LazyVStack(spacing: 10) {
       developQuickActionsBar
-
-      filmConversionSection
-
+      filmBaseSection
+      presetsSection
       lightSection
-
+        .disabled(!FilmBase.resolved(from: model.parameters).supportsLooks)
       colorSection
-
-      Button(role: .destructive, action: model.resetCorrections) {
-        Label("Reset All Adjustments", systemImage: "arrow.counterclockwise")
+        .disabled(!FilmBase.resolved(from: model.parameters).supportsLooks)
+      Button(action: model.resetDevelopAdjustments) {
+        Label("Reset Adjustments", systemImage: "arrow.counterclockwise")
           .frame(maxWidth: .infinity)
       }
       .buttonStyle(.bordered)
-      .disabled(model.previewImage == nil)
+      .disabled(!model.hasPreviewImage)
       .padding(.top, 4)
     }
   }
@@ -1012,6 +835,13 @@ struct ContentView: View {
         || model.parameters.curveEnabled
     ) {
       VStack(alignment: .leading, spacing: 8) {
+        if !model.parameters.photoAdjustments.usesPhotographicTone {
+          Text(
+            "This saved edit uses the original tone controls. Updating changes its appearance and can be undone."
+          )
+          .font(.caption).foregroundStyle(.secondary)
+          Button("Update Tone Controls") { model.upgradeToneControls() }
+        }
         AdjustmentSlider(
           "Exposure",
           value: Binding(
@@ -1053,6 +883,20 @@ struct ContentView: View {
           range: -1...1, neutral: 0, valueFormat: "%.3f", responseExponent: 1.6
         )
 
+        if model.parameters.photoAdjustments.usesPhotographicTone {
+          AdjustmentSlider(
+            "Whites",
+            value: Binding(
+              get: { model.parameters.photoAdjustments.whites },
+              set: { model.setWhites($0) }),
+            range: -1...1, neutral: 0, valueFormat: "%.3f", responseExponent: 1.6)
+          AdjustmentSlider(
+            "Blacks",
+            value: Binding(
+              get: { model.parameters.photoAdjustments.blacks },
+              set: { model.setBlacks($0) }),
+            range: -1...1, neutral: 0, valueFormat: "%.3f", responseExponent: 1.6)
+        }
         Divider()
           .padding(.vertical, 2)
 
@@ -1103,7 +947,10 @@ struct ContentView: View {
       !model.parameters.highlightWheel.isNeutral
       || !model.parameters.midtoneWheel.isNeutral
       || !model.parameters.shadowWheel.isNeutral
-    let isModified = model.parameters.photoAdjustments.hasColorAdjustment || hasWheels
+    let grading = model.parameters.photoAdjustments
+    let hasPointAdjustment =
+      grading.shadowFloor != 0 || grading.midtoneLevel != 0 || grading.highlightCeiling != 0
+    let isModified = grading.hasColorAdjustment || hasWheels || hasPointAdjustment
 
     return InspectorSection(
       "Color & Balance",
@@ -1147,6 +994,46 @@ struct ContentView: View {
           range: PhotoAdjustmentParameters.vibranceRange,
           neutral: 0, valueFormat: "%.3f", responseExponent: 1.6
         )
+        if model.parameters.filmType.supportsColorCorrections {
+          AdjustmentSlider(
+            "Foliage Recovery",
+            value: Binding(
+              get: { (model.parameters.photoAdjustments.warmHueRecovery ?? 0) * 100 },
+              set: { model.setWarmHueRecovery($0 / 100) }
+            ),
+            range: 0...100, neutral: 0, valueFormat: "%.0f", unitSuffix: "%"
+          )
+          .help("Move copper foliage toward olive green. Lower it if wood or skin shifts too far.")
+        }
+        if FilmBase.resolved(from: model.parameters).usesDensityPrint {
+          AdjustmentSlider(
+            "Cast Cleanup",
+            value: Binding(
+              get: {
+                let fn = model.parameters.filmNegativeParams
+                let profile = DensityPrintProcessing.resolvedProfile(from: fn)
+                return (fn.densityCastRemovalStrength ?? profile.castRemovalStrength) * 100
+              },
+              set: { model.setDensityCastRemovalStrength($0 / 100) }
+            ),
+            range: 0...100, neutral: 50, valueFormat: "%.0f", unitSuffix: "%"
+          )
+          .help("Reduce unwanted casts where neutral tones can be identified.")
+          AdjustmentSlider(
+            "Color Separation",
+            value: Binding(
+              get: {
+                let fn = model.parameters.filmNegativeParams
+                let profile = NegativeDensityProfileCatalog.profile(id: fn.densityProfileID)
+                return
+                  (fn.densityUnmixStrength >= 0 ? fn.densityUnmixStrength : profile.unmixStrength)
+                  * 100
+              },
+              set: { model.setDensityUnmixStrength($0 / 100) }
+            ),
+            range: 0...100, neutral: 45, valueFormat: "%.0f", unitSuffix: "%"
+          )
+        }
 
         Divider()
           .padding(.vertical, 2)
@@ -1154,31 +1041,73 @@ struct ContentView: View {
         DisclosureGroup("Color Grading Wheels") {
           VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 12) {
-              ColorWheelControl(
-                title: "Shadows",
-                hue: model.parameters.shadowWheel.hue,
-                strength: model.parameters.shadowWheel.strength,
-                setHue: model.setShadowWheelHue,
-                setStrength: model.setShadowWheelStrength
-              )
-              ColorWheelControl(
-                title: "Midtones",
-                hue: model.parameters.midtoneWheel.hue,
-                strength: model.parameters.midtoneWheel.strength,
-                setHue: model.setMidtoneWheelHue,
-                setStrength: model.setMidtoneWheelStrength
-              )
-              ColorWheelControl(
-                title: "Highlights",
-                hue: model.parameters.highlightWheel.hue,
-                strength: model.parameters.highlightWheel.strength,
-                setHue: model.setHighlightWheelHue,
-                setStrength: model.setHighlightWheelStrength
-              )
+              VStack(spacing: 8) {
+                ColorWheelControl(
+                  title: "Shadows",
+                  hue: model.parameters.shadowWheel.hue,
+                  strength: model.parameters.shadowWheel.strength,
+                  setValue: model.setShadowWheel
+                )
+                .frame(height: 120)
+                GradingPointSlider(
+                  "Shadow Floor",
+                  value: Binding(
+                    get: { model.parameters.photoAdjustments.shadowFloor },
+                    set: { model.setShadowFloor($0) }),
+                  help:
+                    "Raise the black point for softer shadows. Unlike Blacks, this lifts the darkest output values."
+                )
+                .disabled(!grading.usesPhotographicTone)
+              }
+              .frame(maxWidth: .infinity)
+              VStack(spacing: 8) {
+                ColorWheelControl(
+                  title: "Midtones",
+                  hue: model.parameters.midtoneWheel.hue,
+                  strength: model.parameters.midtoneWheel.strength,
+                  setValue: model.setMidtoneWheel
+                )
+                .frame(height: 120)
+                GradingPointSlider(
+                  "Midtone Level",
+                  value: Binding(
+                    get: { model.parameters.photoAdjustments.midtoneLevel },
+                    set: { model.setMidtoneLevel($0) }),
+                  help:
+                    "Shift the middle tonal level while keeping the black and white endpoints anchored."
+                )
+                .disabled(!grading.usesPhotographicTone)
+              }
+              .frame(maxWidth: .infinity)
+              VStack(spacing: 8) {
+                ColorWheelControl(
+                  title: "Highlights",
+                  hue: model.parameters.highlightWheel.hue,
+                  strength: model.parameters.highlightWheel.strength,
+                  setValue: model.setHighlightWheel
+                )
+                .frame(height: 120)
+                GradingPointSlider(
+                  "Highlight Ceiling",
+                  value: Binding(
+                    get: { model.parameters.photoAdjustments.highlightCeiling },
+                    set: { model.setHighlightCeiling($0) }),
+                  help:
+                    "Lower the white point to soften the brightest output values. This differs from Whites."
+                )
+                .disabled(!grading.usesPhotographicTone)
+              }
+              .frame(maxWidth: .infinity)
             }
-            .frame(height: 120)
 
-            Text("Drag from center to tint. Double-click a wheel to reset.")
+            if !grading.usesPhotographicTone {
+              Text(
+                "Update Tone Controls above to use Floor, Level, and Ceiling on this saved edit."
+              )
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+            }
+            Text("Drag from center to tint. Double-click a wheel or point slider to reset.")
               .font(.caption2)
               .foregroundStyle(.secondary)
           }
@@ -1297,14 +1226,30 @@ struct ContentView: View {
 
           if isPerspectiveEditing {
             VStack(alignment: .leading, spacing: 6) {
-              Text("Drag corner reticles to film edges. Option for unconstrained corner.")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+              Picker(
+                "Frame Ratio",
+                selection: Binding(
+                  get: { model.perspectiveOutputAspectRatio },
+                  set: { model.setPerspectiveOutputAspectRatio($0) }
+                )
+              ) {
+                ForEach(CropAspectRatio.allCases, id: \.self) { ratio in
+                  Text(ratio == .free ? "Automatic" : ratio.rawValue).tag(ratio)
+                }
+              }
+              .controlSize(.small)
+              .help(
+                "Choose the film frame’s known proportions to correct foreshortening. Automatic estimates from its edges."
+              )
+              Text(
+                "Drag corners to film edges. Arrow keys move the selected corner one pixel; Shift moves ten. Option disables assist."
+              )
+              .font(.caption2)
+              .foregroundStyle(.secondary)
               Toggle("Parallel-edge assist", isOn: $usesPerspectiveParallelAssist)
                 .controlSize(.small)
               Button("Reset Corners") {
-                model.clearPerspectiveCrop()
-                model.beginPerspectiveCrop()
+                model.resetPerspectiveCorners()
               }
               .controlSize(.small)
             }
@@ -1848,7 +1793,9 @@ struct ContentView: View {
               previewMagnification = magnification
               previewIsFit = isFit
             },
-            onRenderDemandChanged: model.setPreviewRenderDemand
+            onRenderDemandChanged: model.setPreviewRenderDemand,
+            interactionTrace: model.previewInteractionTrace,
+            renderRevision: model.publishedRenderRevision
           ) {
             previewDocument(image: image)
           }
@@ -1903,52 +1850,69 @@ struct ContentView: View {
           .allowsHitTesting(false)
       }
 
-      RebateRegionSelectionOverlay(
-        isActive: isPickingRebateRegion,
-        imageSize: image.size,
-        magnification: magnification,
-        dragStart: $rebateDragStart,
-        dragEnd: $rebateDragEnd
-      ) { x, y, width, height in
-        model.measureRebateRegion(
-          normalizedX: x,
-          normalizedY: y,
-          normalizedWidth: width,
-          normalizedHeight: height
-        )
-        endRebateSelection()
+      if isPickingRebateRegion {
+        RebateRegionSelectionOverlay(
+          isActive: true,
+          imageSize: image.size,
+          magnification: magnification,
+          dragStart: $rebateDragStart,
+          dragEnd: $rebateDragEnd
+        ) { x, y, width, height in
+          model.measureRebateRegion(
+            normalizedX: x,
+            normalizedY: y,
+            normalizedWidth: width,
+            normalizedHeight: height
+          )
+          endRebateSelection()
+        }
       }
 
-      PerspectiveCropOverlay(
-        isActive: isPerspectiveEditing,
-        crop: model.perspectiveCrop,
-        image: image,
-        imageSize: image.size,
-        rotation: model.parameters.rotation,
-        flipHorizontally: model.parameters.flip,
-        usesParallelAssist: usesPerspectiveParallelAssist,
-        magnification: magnification,
-        onCropChanged: model.setPerspectiveCrop
-      )
+      if isPerspectiveEditing {
+        PerspectiveCropOverlay(
+          isActive: true,
+          crop: model.perspectiveCrop,
+          image: image,
+          imageSize: image.size,
+          sourceDimensions: model.sourcePixelDimensions,
+          borderPercent: model.parameters.borderCrop,
+          rotation: model.parameters.rotation,
+          flipHorizontally: model.parameters.flip,
+          usesParallelAssist: usesPerspectiveParallelAssist,
+          magnification: magnification,
+          onCropChanged: model.setPerspectiveCrop
+        )
+      }
 
-      StraightenLineOverlay(
-        isActive: isStraightening,
-        imageSize: image.size,
-        magnification: magnification,
-        onGuideCompleted: { deviation in
-          endStraightening()
-          model.straighten(usingGuideDeviation: deviation)
-        }
-      )
+      if isStraightening {
+        StraightenLineOverlay(
+          isActive: true,
+          imageSize: image.size,
+          magnification: magnification,
+          onGuideCompleted: { deviation in
+            endStraightening()
+            model.straighten(usingGuideDeviation: deviation)
+          }
+        )
+      }
 
-      ManualCropOverlay(
-        isActive: isCropping,
-        crop: model.manualCrop,
-        imageSize: image.size,
-        magnification: magnification,
-        aspectRatio: model.normalizedManualCropAspectRatio,
-        onCropChanged: model.setManualCrop
-      )
+      if isCropping {
+        ManualCropOverlay(
+          isActive: true,
+          crop: model.manualCrop,
+          imageSize: image.size,
+          magnification: magnification,
+          aspectRatio: model.normalizedManualCropAspectRatio,
+          onCropChanged: model.setManualCrop
+        )
+      }
+
+      if model.previewInteractionTrace != nil {
+        // Keep the diagnostic marker in the same hosted content update as the
+        // raster. The diagnostic centers the image at both Fit and 100%.
+        PreviewRevisionMarker(revision: model.publishedRenderRevision)
+          .scaleEffect(1 / max(magnification, 0.02))
+      }
     }
     .frame(width: image.size.width, height: image.size.height)
   }
@@ -2075,162 +2039,6 @@ struct ContentView: View {
     case "16:9": AspectRatio(width: 16, height: 9)
     default: nil
     }
-  }
-
-  private func filmTypeDescription(_ filmType: FilmType) -> String {
-    switch filmType {
-    case .colourNegative:
-      "A color negative that needs inversion and orange-mask correction."
-    case .blackAndWhiteNegative:
-      "A monochrome negative that needs inversion."
-    case .slide:
-      "A positive transparency; no negative conversion is applied."
-    case .cropOnly:
-      "An already-positive image; only framing and export are applied."
-    }
-  }
-
-  private func negativeConversionMode(for params: ProcessingParameters) -> NegativeConversionMode {
-    let fn = params.filmNegativeParams
-    guard fn.enabled else { return .bypass }
-    switch fn.rendering {
-    case .calibratedColor, .calibratedMonochrome: return .natural
-    case .densityPrint: return .darkroom
-    case .powerLaw: return .classic
-    }
-  }
-
-  private func setNegativeConversionMode(_ mode: NegativeConversionMode) {
-    guard mode != negativeConversionMode(for: model.parameters) else { return }
-    switch mode {
-    case .natural:
-      model.setFilmNegativePreset(
-        model.parameters.filmType == .blackAndWhiteNegative ? .blackAndWhite : .colourNegative)
-    case .darkroom:
-      let preset: FilmNegativePreset
-      switch model.parameters.filmNegativeParams.calibratedColorProfile {
-      case .harmanPhoenixII:
-        preset = .densityPrintHarmanPhoenixII
-      case .fuji400Fresh:
-        preset = .densityPrintFuji400
-      case .generic, .fuji200Expired, .cinestill800T:
-        preset = .densityPrintGenericC41
-      }
-      model.setFilmNegativePreset(preset)
-    case .classic:
-      model.setFilmNegativePreset(
-        model.parameters.filmType == .blackAndWhiteNegative
-          ? .legacyBlackAndWhite : .legacyColourNegative)
-    case .bypass:
-      model.setFilmNegativePreset(.off)
-    }
-  }
-
-  private func naturalPresets(for filmType: FilmType) -> [FilmNegativePreset] {
-    switch filmType {
-    case .colourNegative:
-      [
-        .colourNegative,
-        .fuji400FreshAlternate,
-        .fuji200ExpiredAlternate,
-        .cinestill800TAlternate,
-        .harmanPhoenixIIAlternate,
-      ]
-    case .blackAndWhiteNegative:
-      [.blackAndWhite, .shanghaiGP3Alternate]
-    case .slide, .cropOnly:
-      []
-    }
-  }
-
-  private func naturalPresetTitle(_ preset: FilmNegativePreset) -> String {
-    switch preset {
-    case .colourNegative: "Standard C-41"
-    case .blackAndWhite: "Standard B&W"
-    case .fuji400FreshAlternate: "Fujicolor 400"
-    case .fuji200ExpiredAlternate: "Fujicolor 200 (Aged)"
-    case .cinestill800TAlternate: "CineStill 800T"
-    case .harmanPhoenixIIAlternate: "Harman Phoenix II"
-    case .shanghaiGP3Alternate: "Shanghai GP3"
-    default: preset.displayName
-    }
-  }
-
-  private func naturalPresetSubtitle(_ preset: FilmNegativePreset) -> String {
-    switch preset {
-    case .colourNegative:
-      "Neutral, flexible color for most negatives"
-    case .blackAndWhite:
-      "Neutral monochrome starting point"
-    case .fuji400FreshAlternate:
-      "Fresh-base reference from eight scans"
-    case .fuji200ExpiredAlternate:
-      "Warmer response for an aged film base"
-    case .cinestill800TAlternate:
-      "Tungsten-balanced reference response"
-    case .harmanPhoenixIIAlternate:
-      "Stock-specific curve for Phoenix color"
-    case .shanghaiGP3Alternate:
-      "Stock-specific monochrome response"
-    default:
-      ""
-    }
-  }
-
-  private func paperDescription(_ paper: DensityPaperProfile) -> String {
-    switch paper.id.rawValue {
-    case DensityPaperProfileCatalog.kodakEnduraPremier.id.rawValue:
-      "Kodak Endura: warm skin tones, deeper blacks, rich contrast"
-    case DensityPaperProfileCatalog.fujiCrystalArchive.id.rawValue:
-      "Fuji Crystal Archive: brilliant whites and crisp, vivid color"
-    default:
-      "Neutral: clean linear response without paper coloration"
-    }
-  }
-
-  private func filmNegativePreset(for params: ProcessingParameters) -> FilmNegativePreset {
-    guard params.filmNegativeParams.enabled else { return .off }
-    let fn = params.filmNegativeParams
-    if fn.rendering == .calibratedColor {
-      switch fn.calibratedColorProfile {
-      case .generic: return .colourNegative
-      case .fuji400Fresh: return .fuji400FreshAlternate
-      case .fuji200Expired: return .fuji200ExpiredAlternate
-      case .cinestill800T: return .cinestill800TAlternate
-      case .harmanPhoenixII: return .harmanPhoenixIIAlternate
-      }
-    }
-    if fn.rendering == .densityPrint {
-      switch fn.densityProfileID {
-      case NegativeDensityProfileCatalog.harmanPhoenixII.id.rawValue:
-        return .densityPrintHarmanPhoenixII
-      case NegativeDensityProfileCatalog.fujicolor400.id.rawValue:
-        return .densityPrintFuji400
-      default:
-        return .densityPrintGenericC41
-      }
-    }
-    if fn.rendering == FilmNegativeParams.legacyColourNegative.rendering
-      && fn.redRatio == FilmNegativeParams.legacyColourNegative.redRatio
-      && fn.greenExp == FilmNegativeParams.legacyColourNegative.greenExp
-      && fn.blueRatio == FilmNegativeParams.legacyColourNegative.blueRatio
-    {
-      return .legacyColourNegative
-    }
-    if fn.rendering == FilmNegativeParams.blackAndWhite.rendering {
-      switch fn.calibratedMonochromeProfile {
-      case .generic: return .blackAndWhite
-      case .shanghaiGP3: return .shanghaiGP3Alternate
-      }
-    }
-    if fn.rendering == FilmNegativeParams.legacyBlackAndWhite.rendering
-      && fn.redRatio == FilmNegativeParams.legacyBlackAndWhite.redRatio
-      && fn.greenExp == FilmNegativeParams.legacyBlackAndWhite.greenExp
-      && fn.blueRatio == FilmNegativeParams.legacyBlackAndWhite.blueRatio
-    {
-      return .legacyBlackAndWhite
-    }
-    return .off
   }
 
   private func supportsFilmNegative(filmType: FilmType) -> Bool {
@@ -2426,6 +2234,69 @@ private struct InspectorSection<Content: View>: View {
       RoundedRectangle(cornerRadius: 8, style: .continuous)
         .stroke(Color.primary.opacity(0.08), lineWidth: 1)
     )
+  }
+}
+
+private struct GradingPointSlider: View {
+  let title: String
+  @Binding var value: Double
+  let help: String
+  @Environment(\.editingGestureAction) private var editingGestureAction
+
+  init(_ title: String, value: Binding<Double>, help: String) {
+    self.title = title
+    self._value = value
+    self.help = help
+  }
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 3) {
+      HStack(spacing: 2) {
+        Text(title)
+          .font(.caption2.weight(.medium))
+          .lineLimit(1)
+          .minimumScaleFactor(0.75)
+        Spacer(minLength: 0)
+        Button {
+          value = 0
+        } label: {
+          Image(systemName: "arrow.counterclockwise")
+            .font(.system(size: 9, weight: .medium))
+            .frame(width: 14, height: 14)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(abs(value) < 0.0005 ? .tertiary : .secondary)
+        .disabled(abs(value) < 0.0005)
+        .help("Reset \(title)")
+      }
+      Slider(
+        value: Binding(
+          get: {
+            AdjustmentSliderResponse.position(
+              for: value, range: PhotoAdjustmentParameters.gradingPointRange,
+              neutral: 0, exponent: 1.6)
+          },
+          set: {
+            value = AdjustmentSliderResponse.value(
+              for: $0, range: PhotoAdjustmentParameters.gradingPointRange,
+              neutral: 0, exponent: 1.6)
+          }),
+        in: PhotoAdjustmentParameters.gradingPointRange,
+        onEditingChanged: { editingGestureAction(title, $0) }
+      )
+      .controlSize(.mini)
+      .onTapGesture(count: 2) { value = 0 }
+      .accessibilityLabel(title)
+      .accessibilityValue(String(format: "%+.2f", value))
+      Text(String(format: "%+.2f", value))
+        .font(.caption2)
+        .monospacedDigit()
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .trailing)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .help(help)
   }
 }
 

@@ -95,12 +95,17 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
   /// Bundled or user density-print profile id. Ignored unless `rendering` is
   /// `densityPrint`.
   public var densityProfileID: String
+  /// Decode-only compatibility intent, honored solely by version-1 tone renders.
+  /// New film bases and recipes use the neutral inversion response.
+  public var legacyDensityPaperID: String?
   /// Optional baked 3×3 RGB unmix (9 row-major entries). Empty uses the catalog.
   public var densityUnmixRGB: [Double]
   /// Dye-unmix blend in `[0, 1]`. Negative means "use the catalog default".
   public var densityUnmixStrength: Double
-  /// Bundled RA4 / Neutral paper id. Ignored unless `rendering` is `densityPrint`.
-  public var densityPaperID: String
+  /// Nil keeps the stock's original cast-removal strength.
+  public var densityCastRemovalStrength: Double?
+  /// New presets require neutral evidence; old saved conversions retain their fallback.
+  public var densityNeutralProtection: Bool
 
   public var measuredMedians: BGRChannelValues?
 
@@ -114,9 +119,10 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     case calibratedMonochromeProfile
     case monochromeExposureEV
     case densityProfileID
+    case legacyDensityPaperID = "densityPaperID"
     case densityUnmixRGB
     case densityUnmixStrength
-    case densityPaperID
+    case densityCastRemovalStrength, densityNeutralProtection
   }
 
   public init(
@@ -131,7 +137,8 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     densityProfileID: String = "generic_c41",
     densityUnmixRGB: [Double] = [],
     densityUnmixStrength: Double = -1,
-    densityPaperID: String = DensityPaperProfileCatalog.neutral.id.rawValue,
+    densityCastRemovalStrength: Double? = nil,
+    densityNeutralProtection: Bool = false,
     measuredMedians: BGRChannelValues? = nil
   ) {
     precondition(monochromeExposureEV.isFinite, "Monochrome exposure must be finite")
@@ -144,9 +151,11 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     self.calibratedMonochromeProfile = calibratedMonochromeProfile
     self.monochromeExposureEV = monochromeExposureEV
     self.densityProfileID = densityProfileID
+    self.legacyDensityPaperID = nil
     self.densityUnmixRGB = densityUnmixRGB
     self.densityUnmixStrength = densityUnmixStrength
-    self.densityPaperID = densityPaperID
+    self.densityCastRemovalStrength = densityCastRemovalStrength
+    self.densityNeutralProtection = densityNeutralProtection
     self.measuredMedians = measuredMedians
   }
 
@@ -177,14 +186,17 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     densityProfileID =
       try container.decodeIfPresent(String.self, forKey: .densityProfileID)
       ?? NegativeDensityProfileCatalog.genericC41.id.rawValue
+    legacyDensityPaperID = try container.decodeIfPresent(String.self, forKey: .legacyDensityPaperID)
     densityUnmixRGB =
       try container.decodeIfPresent([Double].self, forKey: .densityUnmixRGB) ?? []
     densityUnmixStrength =
       try container.decodeIfPresent(Double.self, forKey: .densityUnmixStrength) ?? -1
-    densityPaperID =
-      try container.decodeIfPresent(String.self, forKey: .densityPaperID)
-      ?? DensityPaperProfileCatalog.neutral.id.rawValue
     measuredMedians = nil
+    densityCastRemovalStrength = try container.decodeIfPresent(
+      Double.self, forKey: .densityCastRemovalStrength)
+    densityNeutralProtection =
+      try container.decodeIfPresent(
+        Bool.self, forKey: .densityNeutralProtection) ?? false
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -198,22 +210,22 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     try container.encode(calibratedMonochromeProfile, forKey: .calibratedMonochromeProfile)
     try container.encode(monochromeExposureEV, forKey: .monochromeExposureEV)
     try container.encode(densityProfileID, forKey: .densityProfileID)
+    try container.encodeIfPresent(legacyDensityPaperID, forKey: .legacyDensityPaperID)
     try container.encode(densityUnmixRGB, forKey: .densityUnmixRGB)
     try container.encode(densityUnmixStrength, forKey: .densityUnmixStrength)
-    try container.encode(densityPaperID, forKey: .densityPaperID)
+    try container.encodeIfPresent(densityCastRemovalStrength, forKey: .densityCastRemovalStrength)
+    try container.encode(densityNeutralProtection, forKey: .densityNeutralProtection)
   }
 
   public static func densityPrint(
-    _ profile: NegativeDensityProfile,
-    paper: DensityPaperProfile = DensityPaperProfileCatalog.neutral
+    _ profile: NegativeDensityProfile
   ) -> FilmNegativeParams {
     FilmNegativeParams(
       enabled: true,
       rendering: .densityPrint,
       densityProfileID: profile.id.rawValue,
       densityUnmixRGB: profile.unmixRGBFlat,
-      densityUnmixStrength: profile.unmixStrength,
-      densityPaperID: paper.id.rawValue
+      densityUnmixStrength: profile.unmixStrength
     )
   }
 
@@ -251,8 +263,7 @@ public struct FilmNegativeParams: Codable, Equatable, Sendable {
     NegativeDensityProfileCatalog.genericC41
   )
   public static let densityPrintHarmanPhoenixII = FilmNegativeParams.densityPrint(
-    NegativeDensityProfileCatalog.harmanPhoenixII,
-    paper: DensityPaperProfileCatalog.fujiCrystalArchive
+    NegativeDensityProfileCatalog.harmanPhoenixII
   )
   public static let densityPrintFuji400 = FilmNegativeParams.densityPrint(
     NegativeDensityProfileCatalog.fujicolor400
@@ -310,18 +321,24 @@ public enum FilmNegativePreset: Int, CaseIterable, Hashable, Sendable {
 
 public struct FilmClassification: Equatable, Sendable {
   public var filmType: FilmType
-  public var filmNegativePreset: FilmNegativePreset
+  public var filmBase: FilmBase
   public var confidence: Double
 
   public init(
     filmType: FilmType,
-    filmNegativePreset: FilmNegativePreset,
+    filmBase: FilmBase,
     confidence: Double
   ) {
     self.filmType = filmType
-    self.filmNegativePreset = filmNegativePreset
+    self.filmBase = filmBase
     self.confidence = confidence
   }
+}
+
+/// Persisted only while a scan has not yet supplied classification pixels.
+public enum PendingFilmBaseInitialization: String, Codable, Sendable {
+  case automatic
+  case preservingLook
 }
 
 public struct ProcessingParameters: Codable, Equatable, Sendable {
@@ -348,6 +365,9 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
   public var midtoneWheel: ColorWheel
   public var shadowWheel: ColorWheel
   public var filmNegativeParams: FilmNegativeParams
+  /// True when the user overrode automatic film-base classification.
+  public var filmBaseChosenByUser: Bool
+  public var pendingFilmBaseInitialization: PendingFilmBaseInitialization?
   public var filmDyeMixing: FilmDyeMixingParameters
   public var photoAdjustments: PhotoAdjustmentParameters
   public var densityPipelineEnabled: Bool
@@ -387,6 +407,8 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     midtoneWheel: ColorWheel = ColorWheel(),
     shadowWheel: ColorWheel = ColorWheel(),
     filmNegativeParams: FilmNegativeParams = FilmNegativeParams(),
+    filmBaseChosenByUser: Bool = false,
+    pendingFilmBaseInitialization: PendingFilmBaseInitialization? = nil,
     filmDyeMixing: FilmDyeMixingParameters = .neutral,
     photoAdjustments: PhotoAdjustmentParameters? = nil,
     densityPipelineEnabled: Bool = false,
@@ -425,6 +447,8 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     self.midtoneWheel = midtoneWheel
     self.shadowWheel = shadowWheel
     self.filmNegativeParams = filmNegativeParams
+    self.filmBaseChosenByUser = filmBaseChosenByUser
+    self.pendingFilmBaseInitialization = pendingFilmBaseInitialization
     self.filmDyeMixing = filmDyeMixing.clamped()
     self.photoAdjustments =
       photoAdjustments
@@ -459,7 +483,8 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     case greenCurveEnabled, greenCurveControlPoints
     case blueCurveEnabled, blueCurveControlPoints
     case highlightWheel, midtoneWheel, shadowWheel
-    case filmNegativeParams, filmDyeMixing
+    case filmNegativeParams, filmBaseChosenByUser, filmDyeMixing
+    case pendingFilmBaseInitialization
     case photoAdjustments
     case densityPipelineEnabled, densityBaseDensity
     case densityCorrection, densityC41Profile, densityDisplayParams
@@ -502,6 +527,10 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     filmNegativeParams =
       try container.decodeIfPresent(FilmNegativeParams.self, forKey: .filmNegativeParams)
       ?? FilmNegativeParams()
+    filmBaseChosenByUser =
+      try container.decodeIfPresent(Bool.self, forKey: .filmBaseChosenByUser) ?? false
+    pendingFilmBaseInitialization = try container.decodeIfPresent(
+      PendingFilmBaseInitialization.self, forKey: .pendingFilmBaseInitialization)
     filmDyeMixing =
       try container.decodeIfPresent(
         FilmDyeMixingParameters.self,

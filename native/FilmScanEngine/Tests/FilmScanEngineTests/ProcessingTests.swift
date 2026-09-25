@@ -1350,6 +1350,7 @@ struct ProcessingTests {
     var filmNegative = FilmNegativeParams.legacyColourNegative
     filmNegative.measuredMedians = BGRChannelValues(blue: 20_000, green: 26_000, red: 32_000)
     let adjustments = PhotoAdjustmentParameters(
+      schemaVersion: 1,
       temperatureShiftMired: 35,
       tint: -0.2,
       saturation: 0.45,
@@ -1401,7 +1402,7 @@ struct ProcessingTests {
   func densityProcessingUsesProtectedColorSeam() {
     let image = UInt16Image(width: 1, height: 1, channels: 3, pixels: [12_000, 20_000, 36_000])
     let baseDensity = BGRChannelValues(blue: 0, green: 0, red: 0)
-    let adjustments = PhotoAdjustmentParameters(saturation: 0.5, vibrance: 0.75)
+    let adjustments = PhotoAdjustmentParameters(schemaVersion: 1, saturation: 0.5, vibrance: 0.75)
     let parameters = ProcessingParameters(
       filmType: .colourNegative,
       photoAdjustments: adjustments,

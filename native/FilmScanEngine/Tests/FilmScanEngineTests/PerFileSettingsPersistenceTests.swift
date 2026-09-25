@@ -209,6 +209,91 @@ struct PerFileSettingsPersistenceTests {
         == 1.25)
   }
 
+  @Test(
+    "Unreadable settings survive edits and recovered history is merged before saving",
+    arguments: ["not json", #"{"schemaVersion":99,"settingsByPath":{},"editedPaths":[]}"#])
+  func preservesUnreadableSettingsAndRecovers(document: String) async throws {
+    let directory = temporaryDirectory()
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = PerFileSettingsStore(baseDirectory: directory)
+    let original = Data(document.utf8)
+    try original.write(to: store.fileURL)
+    let input = directory.appendingPathComponent("current.tif")
+    let oldInput = directory.appendingPathComponent("previous.tif")
+    let model = AppModel(settingsStore: store)
+    model.selection = input
+    model.setExposureEV(1.25)
+
+    do {
+      try await model.flushSettings()
+      Issue.record("Saving must fail while the existing settings cannot be read")
+    } catch {}
+    #expect(try Data(contentsOf: store.fileURL) == original)
+    #expect(model.parameters.photoAdjustments.exposureEV == 1.25)
+    try await waitUntil { model.settingsStatus.contains("could not be saved") }
+
+    // Restoring a valid library must preserve its other files while the current
+    // session's latest edits take precedence for the file being edited.
+    try store.save(
+      .init(
+        settingsByPath: [
+          oldInput.path: parameters(exposure: -2), input.path: parameters(exposure: -1),
+        ], editedPaths: [oldInput.path]))
+    try await model.flushSettings()
+    let recovered = try store.loadState()
+    #expect(recovered.settingsByPath.count == 2)
+    #expect(recovered.settingsByPath[oldInput.path]?.photoAdjustments.exposureEV == -2)
+    #expect(recovered.settingsByPath[input.path]?.photoAdjustments.exposureEV == 1.25)
+    #expect(recovered.editedPaths == [oldInput.path, input.path])
+
+    model.setExposureEV(1.5)
+    try await model.flushSettings()
+    #expect(try store.loadState().settingsByPath[oldInput.path]?.photoAdjustments.exposureEV == -2)
+    #expect(try store.loadState().settingsByPath[input.path]?.photoAdjustments.exposureEV == 1.5)
+  }
+
+  @Test("Removing an unreadable settings file permits retry without losing session edits")
+  func retriesAfterUnreadableSettingsAreRemoved() async throws {
+    let directory = temporaryDirectory()
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = PerFileSettingsStore(baseDirectory: directory)
+    try Data("not json".utf8).write(to: store.fileURL)
+    let model = AppModel(settingsStore: store)
+    let input = directory.appendingPathComponent("current.tif")
+    model.selection = input
+    model.setExposureEV(1.25)
+    do {
+      try await model.flushSettings()
+      Issue.record("The unreadable library unexpectedly saved")
+    } catch {}
+    try FileManager.default.removeItem(at: store.fileURL)
+    try await model.flushSettings()
+    #expect(try store.loadState().settingsByPath[input.path]?.photoAdjustments.exposureEV == 1.25)
+  }
+
+  @Test("Recovery merges clear stale edited markers for session values restored by undo")
+  func recoveryPreservesUneditedSessionValues() async throws {
+    let directory = temporaryDirectory()
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = PerFileSettingsStore(baseDirectory: directory)
+    try Data("not json".utf8).write(to: store.fileURL)
+    let model = AppModel(settingsStore: store)
+    let input = directory.appendingPathComponent("current.tif")
+    model.selection = input
+    model.setExposureEV(1.25)
+    model.undo()
+    #expect(!model.hasEdits(for: input))
+    try store.save(
+      .init(settingsByPath: [input.path: parameters(exposure: -1)], editedPaths: [input.path]))
+    try await model.flushSettings()
+    let recovered = try store.loadState()
+    #expect(recovered.settingsByPath[input.path]?.photoAdjustments.exposureEV == 0)
+    #expect(recovered.editedPaths.isEmpty)
+  }
+
   @Test("Persistence completions ignore stale results and preserve unrelated status on recovery")
   func completionStatusOrdering() {
     let model = AppModel()

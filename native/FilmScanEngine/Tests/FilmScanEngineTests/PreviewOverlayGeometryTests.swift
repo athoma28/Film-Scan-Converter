@@ -6,6 +6,57 @@ import Testing
 
 @Suite("Preview overlay geometry")
 struct PreviewOverlayGeometryTests {
+  @Test("Perspective drags preserve the grab offset at Fit and high zoom in every orientation")
+  func perspectiveDragDisplacement() {
+    let crop = PerspectiveCrop(
+      topLeft: .init(x: 0.15, y: 0.12), topRight: .init(x: 0.85, y: 0.1),
+      bottomRight: .init(x: 0.9, y: 0.9), bottomLeft: .init(x: 0.1, y: 0.85))
+    for zoom in [0.1, 1.0, 4.0] {
+      for rotation in 0..<4 {
+        for flip in [false, true] {
+          let rect = CGRect(x: 30, y: 70, width: 1_200, height: 800)
+          let unchanged = PreviewOverlayGeometry.movingPerspectiveCorner(
+            0, in: crop, screenTranslation: .zero, imageRect: rect, magnification: zoom,
+            rotation: rotation, flipHorizontally: flip, parallelAssist: true)
+          #expect(unchanged == crop)
+          let moved = PreviewOverlayGeometry.movingPerspectiveCorner(
+            0, in: crop, screenTranslation: CGSize(width: 12 * zoom, height: 8 * zoom),
+            imageRect: rect, magnification: zoom, rotation: rotation,
+            flipHorizontally: flip, parallelAssist: false)
+          let original = PreviewOverlayGeometry.displayedPoint(
+            crop.topLeft, rotation: rotation, flipHorizontally: flip)
+          let displayed = PreviewOverlayGeometry.displayedPoint(
+            moved.topLeft, rotation: rotation, flipHorizontally: flip)
+          #expect(abs(displayed.x - original.x - 0.01) < 1e-12)
+          #expect(abs(displayed.y - original.y - 0.01) < 1e-12)
+          #expect(moved.topRight == crop.topRight)
+        }
+      }
+    }
+  }
+
+  @Test("Perspective keyboard nudges move exactly one source pixel after rotation and flip")
+  func perspectivePixelNudge() {
+    let crop = PerspectiveCrop.fullFrame.inset(borderPercent: 20)
+    let dimensions = PixelDimensions(width: 7_752, height: 5_184)
+    for rotation in 0..<4 {
+      for flip in [false, true] {
+        let moved = PreviewOverlayGeometry.nudgingPerspectiveCorner(
+          0, in: crop, displayedPixels: CGSize(width: 1, height: 0),
+          sourceDimensions: dimensions, rotation: rotation, flipHorizontally: flip)
+        let dx = (moved.topLeft.x - crop.topLeft.x) * Double(dimensions.width - 1)
+        let dy = (moved.topLeft.y - crop.topLeft.y) * Double(dimensions.height - 1)
+        #expect(abs(hypot(dx, dy) - 1) < 1e-9)
+        let a = PreviewOverlayGeometry.displayedPoint(
+          crop.topLeft, rotation: rotation, flipHorizontally: flip)
+        let b = PreviewOverlayGeometry.displayedPoint(
+          moved.topLeft, rotation: rotation, flipHorizontally: flip)
+        #expect(b.x > a.x)
+        #expect(abs(b.y - a.y) < 1e-12)
+      }
+    }
+  }
+
   @Test("Aspect fit centers the image using the limiting dimension")
   func aspectFitRect() {
     #expect(

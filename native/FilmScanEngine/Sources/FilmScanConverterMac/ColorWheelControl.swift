@@ -4,8 +4,7 @@ struct ColorWheelControl: View {
   let title: String
   let hue: Double
   let strength: Double
-  let setHue: (Double) -> Void
-  let setStrength: (Double) -> Void
+  let setValue: (Double, Double) -> Void
   @Environment(\.editingGestureAction) private var editingGestureAction
 
   var body: some View {
@@ -61,7 +60,7 @@ struct ColorWheelControl: View {
             }
         )
         .onTapGesture(count: 2) {
-          setStrength(0)
+          setValue(hue, 0)
         }
       }
       .aspectRatio(1, contentMode: .fit)
@@ -93,7 +92,6 @@ struct ColorWheelControl: View {
     if degrees < 0 {
       degrees += 360
     }
-    setHue(degrees)
-    setStrength(Double(distance / radius))
+    setValue(degrees, Double(distance / radius))
   }
 }

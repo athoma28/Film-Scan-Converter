@@ -1,0 +1,662 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Preserve the FSC appearances the user likes while improving controllability; Camera Raw is not the sole aesthetic authority.",
+  "frames": [
+    {
+      "stock": "fuji400-fresh",
+      "frame": "DSCF3115",
+      "feedback": "User explicitly prefers Automatic to Camera Raw.",
+      "candidates": [
+        {
+          "variant": "automatic",
+          "imageSHA256": "f442eeb38efd38d4458776a5de5b7fe25d63245dd2d80f105692940a6017d89f",
+          "parameters": {
+            "blueCurveControlPoints": [],
+            "blueCurveEnabled": false,
+            "borderCrop": 0,
+            "cropRectCoordinateSpace": "imageAxes",
+            "curveControlPoints": [],
+            "curveEnabled": false,
+            "darkThreshold": 25,
+            "densityC41Profile": {
+              "densityOffset": {
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "densitySlope": {
+                "blue": 1,
+                "green": 1,
+                "red": 1
+              }
+            },
+            "densityCorrection": {
+              "blueOutput": {
+                "blue": 1,
+                "green": 0,
+                "red": 0
+              },
+              "greenOutput": {
+                "blue": 0,
+                "green": 1,
+                "red": 0
+              },
+              "offset": {
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "redOutput": {
+                "blue": 0,
+                "green": 0,
+                "red": 1
+              }
+            },
+            "densityDisplayParams": {
+              "exposureEV": 0,
+              "maximumSceneGain": 16,
+              "toneMap": "linear",
+              "whiteBalance": {
+                "blue": 1,
+                "green": 1,
+                "red": 1
+              }
+            },
+            "densityPipelineEnabled": false,
+            "filmDyeMixing": {
+              "blueFromGreen": 0,
+              "blueFromRed": 0,
+              "greenFromBlue": 0,
+              "greenFromRed": 0,
+              "redFromBlue": 0,
+              "redFromGreen": 0
+            },
+            "filmNegativeParams": {
+              "blueRatio": 0.86,
+              "calibratedColorProfile": "generic",
+              "calibratedMonochromeProfile": "generic",
+              "densityNeutralProtection": false,
+              "densityPaperID": "fuji_crystal",
+              "densityProfileID": "harman_phoenix_ii",
+              "densityUnmixRGB": [
+                1,
+                -0.047,
+                -0.01,
+                -0.075,
+                1,
+                -0.045,
+                -0.029,
+                -0.135,
+                1
+              ],
+              "densityUnmixStrength": 0.5,
+              "enabled": true,
+              "greenExp": 1.5,
+              "monochromeExposureEV": 0,
+              "redRatio": 1.36,
+              "rendering": "densityPrint"
+            },
+            "filmType": 1,
+            "flip": false,
+            "gamma": 0,
+            "greenCurveControlPoints": [],
+            "greenCurveEnabled": false,
+            "highlightWheel": {
+              "hue": 0,
+              "strength": 0
+            },
+            "highlights": 0,
+            "lightThreshold": 100,
+            "manualCropAspectRatio": "Free",
+            "midtoneWheel": {
+              "hue": 0,
+              "strength": 0
+            },
+            "photoAdjustments": {
+              "brightness": 0,
+              "contrast": 0,
+              "exposureEV": 0,
+              "highlights": 0,
+              "saturation": 0,
+              "schemaVersion": 1,
+              "shadows": 0,
+              "temperatureShiftMired": 0,
+              "tint": 0,
+              "vibrance": 0
+            },
+            "redCurveControlPoints": [],
+            "redCurveEnabled": false,
+            "rotation": 0,
+            "saturation": 100,
+            "shadowWheel": {
+              "hue": 0,
+              "strength": 0
+            },
+            "shadows": 0,
+            "straightenAngle": 0,
+            "temperature": 0,
+            "tint": 0
+          }
+        }
+      ]
+    },
+    {
+      "stock": "harmanphoenixii",
+      "frame": "DSCF3079",
+      "feedback": "User likes the Phoenix II rendering; exact Natural versus Darkroom variant not explicitly distinguished.",
+      "candidates": [
+        {
+          "variant": "automatic",
+          "imageSHA256": "f3b862135ef883a4c42c366788414c833fe6e9b62f26aae43500e6e633323224",
+          "parameters": {
+            "blueCurveControlPoints": [],
+            "blueCurveEnabled": false,
+            "borderCrop": 0,
+            "cropRectCoordinateSpace": "imageAxes",
+            "curveControlPoints": [],
+            "curveEnabled": false,
+            "darkThreshold": 25,
+            "densityC41Profile": {
+              "densityOffset": {
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "densitySlope": {
+                "blue": 1,
+                "green": 1,
+                "red": 1
+              }
+            },
+            "densityCorrection": {
+              "blueOutput": {
+                "blue": 1,
+                "green": 0,
+                "red": 0
+              },
+              "greenOutput": {
+                "blue": 0,
+                "green": 1,
+                "red": 0
+              },
+              "offset": {
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "redOutput": {
+                "blue": 0,
+                "green": 0,
+                "red": 1
+              }
+            },
+            "densityDisplayParams": {
+              "exposureEV": 0,
+              "maximumSceneGain": 16,
+              "toneMap": "linear",
+              "whiteBalance": {
+                "blue": 1,
+                "green": 1,
+                "red": 1
+              }
+            },
+            "densityPipelineEnabled": false,
+            "filmDyeMixing": {
+              "blueFromGreen": 0,
+              "blueFromRed": 0,
+              "greenFromBlue": 0,
+              "greenFromRed": 0,
+              "redFromBlue": 0,
+              "redFromGreen": 0
+            },
+            "filmNegativeParams": {
+              "blueRatio": 0.86,
+              "calibratedColorProfile": "generic",
+              "calibratedMonochromeProfile": "generic",
+              "densityNeutralProtection": false,
+              "densityPaperID": "fuji_crystal",
+              "densityProfileID": "harman_phoenix_ii",
+              "densityUnmixRGB": [
+                1,
+                -0.047,
+                -0.01,
+                -0.075,
+                1,
+                -0.045,
+                -0.029,
+                -0.135,
+                1
+              ],
+              "densityUnmixStrength": 0.5,
+              "enabled": true,
+              "greenExp": 1.5,
+              "monochromeExposureEV": 0,
+              "redRatio": 1.36,
+              "rendering": "densityPrint"
+            },
+            "filmType": 1,
+            "flip": false,
+            "gamma": 0,
+            "greenCurveControlPoints": [],
+            "greenCurveEnabled": false,
+            "highlightWheel": {
+              "hue": 0,
+              "strength": 0
+            },
+            "highlights": 0,
+            "lightThreshold": 100,
+            "manualCropAspectRatio": "Free",
+            "midtoneWheel": {
+              "hue": 0,
+              "strength": 0
+            },
+            "photoAdjustments": {
+              "brightness": 0,
+              "contrast": 0,
+              "exposureEV": 0,
+              "highlights": 0,
+              "saturation": 0,
+              "schemaVersion": 1,
+              "shadows": 0,
+              "temperatureShiftMired": 0,
+              "tint": 0,
+              "vibrance": 0
+            },
+            "redCurveControlPoints": [],
+            "redCurveEnabled": false,
+            "rotation": 0,
+            "saturation": 100,
+            "shadowWheel": {
+              "hue": 0,
+              "strength": 0
+            },
+            "shadows": 0,
+            "straightenAngle": 0,
+            "temperature": 0,
+            "tint": 0
+          }
+        },
+        {
+          "variant": "stock",
+          "imageSHA256": "9ed8bf661ac7b9a7eb59f341defb2e0c71d25f3c7e8ff0306783d767a5859a8e",
+          "parameters": {
+            "blueCurveControlPoints": [],
+            "blueCurveEnabled": false,
+            "borderCrop": 0,
+            "cropRectCoordinateSpace": "imageAxes",
+            "curveControlPoints": [],
+            "curveEnabled": false,
+            "darkThreshold": 25,
+            "densityC41Profile": {
+              "densityOffset": {
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "densitySlope": {
+                "blue": 1,
+                "green": 1,
+                "red": 1
+              }
+            },
+            "densityCorrection": {
+              "blueOutput": {
+                "blue": 1,
+                "green": 0,
+                "red": 0
+              },
+              "greenOutput": {
+                "blue": 0,
+                "green": 1,
+                "red": 0
+              },
+              "offset": {
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "redOutput": {
+                "blue": 0,
+                "green": 0,
+                "red": 1
+              }
+            },
+            "densityDisplayParams": {
+              "exposureEV": 0,
+              "maximumSceneGain": 16,
+              "toneMap": "linear",
+              "whiteBalance": {
+                "blue": 1,
+                "green": 1,
+                "red": 1
+              }
+            },
+            "densityPipelineEnabled": false,
+            "filmDyeMixing": {
+              "blueFromGreen": 0,
+              "blueFromRed": 0,
+              "greenFromBlue": 0,
+              "greenFromRed": 0,
+              "redFromBlue": 0,
+              "redFromGreen": 0
+            },
+            "filmNegativeParams": {
+              "blueRatio": 0.86,
+              "calibratedColorProfile": "harmanPhoenixII",
+              "calibratedMonochromeProfile": "generic",
+              "densityNeutralProtection": false,
+              "densityPaperID": "neutral",
+              "densityProfileID": "generic_c41",
+              "densityUnmixRGB": [],
+              "densityUnmixStrength": -1,
+              "enabled": true,
+              "greenExp": 1.5,
+              "monochromeExposureEV": 0,
+              "redRatio": 1.36,
+              "rendering": "calibratedColor"
+            },
+            "filmType": 1,
+            "flip": false,
+            "gamma": 0,
+            "greenCurveControlPoints": [],
+            "greenCurveEnabled": false,
+            "highlightWheel": {
+              "hue": 0,
+              "strength": 0
+            },
+            "highlights": 0,
+            "lightThreshold": 100,
+            "manualCropAspectRatio": "Free",
+            "midtoneWheel": {
+              "hue": 0,
+              "strength": 0
+            },
+            "photoAdjustments": {
+              "brightness": 0,
+              "contrast": 0,
+              "exposureEV": 0,
+              "highlights": 0,
+              "saturation": 0,
+              "schemaVersion": 1,
+              "shadows": 0,
+              "temperatureShiftMired": 0,
+              "tint": 0,
+              "vibrance": 0
+            },
+            "redCurveControlPoints": [],
+            "redCurveEnabled": false,
+            "rotation": 0,
+            "saturation": 100,
+            "shadowWheel": {
+              "hue": 0,
+              "strength": 0
+            },
+            "shadows": 0,
+            "straightenAngle": 0,
+            "temperature": 0,
+            "tint": 0
+          }
+        }
+      ]
+    },
+    {
+      "stock": "harmanphoenixii",
+      "frame": "DSCF3086",
+      "feedback": "User likes the Phoenix II rendering; exact Natural versus Darkroom variant not explicitly distinguished.",
+      "candidates": [
+        {
+          "variant": "automatic",
+          "imageSHA256": "b779051c3c05dc06d2dd7aac996d68e81eb53a671e0dc527d3dc734e396a19a0",
+          "parameters": {
+            "blueCurveControlPoints": [],
+            "blueCurveEnabled": false,
+            "borderCrop": 0,
+            "cropRectCoordinateSpace": "imageAxes",
+            "curveControlPoints": [],
+            "curveEnabled": false,
+            "darkThreshold": 25,
+            "densityC41Profile": {
+              "densityOffset": {
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "densitySlope": {
+                "blue": 1,
+                "green": 1,
+                "red": 1
+              }
+            },
+            "densityCorrection": {
+              "blueOutput": {
+                "blue": 1,
+                "green": 0,
+                "red": 0
+              },
+              "greenOutput": {
+                "blue": 0,
+                "green": 1,
+                "red": 0
+              },
+              "offset": {
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "redOutput": {
+                "blue": 0,
+                "green": 0,
+                "red": 1
+              }
+            },
+            "densityDisplayParams": {
+              "exposureEV": 0,
+              "maximumSceneGain": 16,
+              "toneMap": "linear",
+              "whiteBalance": {
+                "blue": 1,
+                "green": 1,
+                "red": 1
+              }
+            },
+            "densityPipelineEnabled": false,
+            "filmDyeMixing": {
+              "blueFromGreen": 0,
+              "blueFromRed": 0,
+              "greenFromBlue": 0,
+              "greenFromRed": 0,
+              "redFromBlue": 0,
+              "redFromGreen": 0
+            },
+            "filmNegativeParams": {
+              "blueRatio": 0.86,
+              "calibratedColorProfile": "generic",
+              "calibratedMonochromeProfile": "generic",
+              "densityNeutralProtection": false,
+              "densityPaperID": "fuji_crystal",
+              "densityProfileID": "harman_phoenix_ii",
+              "densityUnmixRGB": [
+                1,
+                -0.047,
+                -0.01,
+                -0.075,
+                1,
+                -0.045,
+                -0.029,
+                -0.135,
+                1
+              ],
+              "densityUnmixStrength": 0.5,
+              "enabled": true,
+              "greenExp": 1.5,
+              "monochromeExposureEV": 0,
+              "redRatio": 1.36,
+              "rendering": "densityPrint"
+            },
+            "filmType": 1,
+            "flip": false,
+            "gamma": 0,
+            "greenCurveControlPoints": [],
+            "greenCurveEnabled": false,
+            "highlightWheel": {
+              "hue": 0,
+              "strength": 0
+            },
+            "highlights": 0,
+            "lightThreshold": 100,
+            "manualCropAspectRatio": "Free",
+            "midtoneWheel": {
+              "hue": 0,
+              "strength": 0
+            },
+            "photoAdjustments": {
+              "brightness": 0,
+              "contrast": 0,
+              "exposureEV": 0,
+              "highlights": 0,
+              "saturation": 0,
+              "schemaVersion": 1,
+              "shadows": 0,
+              "temperatureShiftMired": 0,
+              "tint": 0,
+              "vibrance": 0
+            },
+            "redCurveControlPoints": [],
+            "redCurveEnabled": false,
+            "rotation": 0,
+            "saturation": 100,
+            "shadowWheel": {
+              "hue": 0,
+              "strength": 0
+            },
+            "shadows": 0,
+            "straightenAngle": 0,
+            "temperature": 0,
+            "tint": 0
+          }
+        },
+        {
+          "variant": "stock",
+          "imageSHA256": "3eb99f531a006c457bdd98446856259522c8d6594f2a94a002679c73279100fc",
+          "parameters": {
+            "blueCurveControlPoints": [],
+            "blueCurveEnabled": false,
+            "borderCrop": 0,
+            "cropRectCoordinateSpace": "imageAxes",
+            "curveControlPoints": [],
+            "curveEnabled": false,
+            "darkThreshold": 25,
+            "densityC41Profile": {
+              "densityOffset": {
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "densitySlope": {
+                "blue": 1,
+                "green": 1,
+                "red": 1
+              }
+            },
+            "densityCorrection": {
+              "blueOutput": {
+                "blue": 1,
+                "green": 0,
+                "red": 0
+              },
+              "greenOutput": {
+                "blue": 0,
+                "green": 1,
+                "red": 0
+              },
+              "offset": {
+                "blue": 0,
+                "green": 0,
+                "red": 0
+              },
+              "redOutput": {
+                "blue": 0,
+                "green": 0,
+                "red": 1
+              }
+            },
+            "densityDisplayParams": {
+              "exposureEV": 0,
+              "maximumSceneGain": 16,
+              "toneMap": "linear",
+              "whiteBalance": {
+                "blue": 1,
+                "green": 1,
+                "red": 1
+              }
+            },
+            "densityPipelineEnabled": false,
+            "filmDyeMixing": {
+              "blueFromGreen": 0,
+              "blueFromRed": 0,
+              "greenFromBlue": 0,
+              "greenFromRed": 0,
+              "redFromBlue": 0,
+              "redFromGreen": 0
+            },
+            "filmNegativeParams": {
+              "blueRatio": 0.86,
+              "calibratedColorProfile": "harmanPhoenixII",
+              "calibratedMonochromeProfile": "generic",
+              "densityNeutralProtection": false,
+              "densityPaperID": "neutral",
+              "densityProfileID": "generic_c41",
+              "densityUnmixRGB": [],
+              "densityUnmixStrength": -1,
+              "enabled": true,
+              "greenExp": 1.5,
+              "monochromeExposureEV": 0,
+              "redRatio": 1.36,
+              "rendering": "calibratedColor"
+            },
+            "filmType": 1,
+            "flip": false,
+            "gamma": 0,
+            "greenCurveControlPoints": [],
+            "greenCurveEnabled": false,
+            "highlightWheel": {
+              "hue": 0,
+              "strength": 0
+            },
+            "highlights": 0,
+            "lightThreshold": 100,
+            "manualCropAspectRatio": "Free",
+            "midtoneWheel": {
+              "hue": 0,
+              "strength": 0
+            },
+            "photoAdjustments": {
+              "brightness": 0,
+              "contrast": 0,
+              "exposureEV": 0,
+              "highlights": 0,
+              "saturation": 0,
+              "schemaVersion": 1,
+              "shadows": 0,
+              "temperatureShiftMired": 0,
+              "tint": 0,
+              "vibrance": 0
+            },
+            "redCurveControlPoints": [],
+            "redCurveEnabled": false,
+            "rotation": 0,
+            "saturation": 100,
+            "shadowWheel": {
+              "hue": 0,
+              "strength": 0
+            },
+            "shadows": 0,
+            "straightenAngle": 0,
+            "temperature": 0,
+            "tint": 0
+          }
+        }
+      ]
+    }
+  ]
+}

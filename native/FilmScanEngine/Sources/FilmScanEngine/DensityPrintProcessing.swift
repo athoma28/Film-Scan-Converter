@@ -128,15 +128,31 @@ public enum DensityPrintProcessing {
   static let parallelPixelThreshold = 100_000
 
   public static func resolvedProfile(from params: FilmNegativeParams) -> NegativeDensityProfile {
-    NegativeDensityProfileCatalog.profile(id: params.densityProfileID)
+    var profile = NegativeDensityProfileCatalog.profile(id: params.densityProfileID)
       .withUnmix(
         flatRGB: params.densityUnmixRGB,
         strength: params.densityUnmixStrength >= 0 ? params.densityUnmixStrength : nil
       )
+    if let strength = params.densityCastRemovalStrength, strength.isFinite {
+      profile.castRemovalStrength = min(max(strength, 0), 1)
+    }
+    if params.densityNeutralProtection {
+      profile.castRemovalRequiresNeutralEvidence = true
+    }
+    return profile
   }
 
-  public static func resolvedPaper(from params: FilmNegativeParams) -> DensityPaperProfile {
-    DensityPaperProfileCatalog.profile(id: params.densityPaperID)
+  public static func resolvedPaper(from _: FilmNegativeParams) -> DensityPaperProfile {
+    DensityPaperProfileCatalog.neutral
+  }
+
+  public static func resolvedPaper(for parameters: ProcessingParameters) -> DensityPaperProfile {
+    if !parameters.photoAdjustments.usesPhotographicTone,
+      let legacy = parameters.filmNegativeParams.legacyDensityPaperID
+    {
+      return DensityPaperProfileCatalog.profile(id: legacy)
+    }
+    return resolvedPaper(from: parameters.filmNegativeParams)
   }
 
   public static func analyze(
@@ -157,7 +173,8 @@ public enum DensityPrintProcessing {
       borderPercent: borderPercent
     )
     let channelStatistics = LogChannelStatistics(samples)
-    let bounds = logBounds(from: samples, statistics: channelStatistics)
+    let contentBounds = logBounds(from: samples, statistics: channelStatistics)
+    let bounds = profile.logNeutralBalance?.applying(to: contentBounds) ?? contentBounds
     let lumRange = luminanceRange(bounds)
     let textural = texturalRange(samples)
     let gradeRange = effectiveGradeRange(
@@ -202,7 +219,8 @@ public enum DensityPrintProcessing {
         strength: profile.castRemovalStrength,
         anchor: anchor,
         channelGamma: gamma,
-        referenceLinear: vStar
+        referenceLinear: vStar,
+        requiresNeutralEvidence: profile.castRemovalRequiresNeutralEvidence == true
       )
       slopes = applied.slopes
       pivots = applied.pivots
@@ -296,6 +314,28 @@ public enum DensityPrintProcessing {
     red: UInt16,
     analysis: DensityPrintAnalysis
   ) -> (blue: UInt16, green: UInt16, red: UInt16) {
+    let density = pixelDensities(blue: blue, green: green, red: red, analysis: analysis)
+    return (
+      encodeReflectance(density.blue, paperDMax: analysis.paperDMax),
+      encodeReflectance(density.green, paperDMax: analysis.paperDMax),
+      encodeReflectance(density.red, paperDMax: analysis.paperDMax)
+    )
+  }
+
+  /// Unquantized, unclamped linear sRGB paper reflectance for the photographic
+  /// pipeline. The bounded UInt16 API above remains the exact legacy contract.
+  public static func renderLinearPixel(
+    blue: UInt16, green: UInt16, red: UInt16, analysis: DensityPrintAnalysis
+  ) -> (blue: Double, green: Double, red: Double) {
+    let density = pixelDensities(blue: blue, green: green, red: red, analysis: analysis)
+    let black = pow(10, -analysis.paperDMax)
+    func reflectance(_ d: Double) -> Double { (pow(10, -d) - black) / (1 - black) }
+    return (reflectance(density.blue), reflectance(density.green), reflectance(density.red))
+  }
+
+  private static func pixelDensities(
+    blue: UInt16, green: UInt16, red: UInt16, analysis: DensityPrintAnalysis
+  ) -> (blue: Double, green: Double, red: Double) {
     let linearB = max(FilmNegativeProcessing.sRGBToLinear(Double(blue) / 65_535.0), epsilon)
     let linearG = max(FilmNegativeProcessing.sRGBToLinear(Double(green) / 65_535.0), epsilon)
     let linearR = max(FilmNegativeProcessing.sRGBToLinear(Double(red) / 65_535.0), epsilon)
@@ -371,11 +411,7 @@ public enum DensityPrintProcessing {
     let mixedR =
       analysis.paperDMin.red + analysis.dyeMixRed.blue * excessB
       + analysis.dyeMixRed.green * excessG + analysis.dyeMixRed.red * excessR
-    return (
-      encodeReflectance(mixedB, paperDMax: analysis.paperDMax),
-      encodeReflectance(mixedG, paperDMax: analysis.paperDMax),
-      encodeReflectance(mixedR, paperDMax: analysis.paperDMax)
-    )
+    return (mixedB, mixedG, mixedR)
   }
 
   public static func printDensity(_ x: Double, slope: Double, pivot: Double) -> Double {
@@ -611,13 +647,14 @@ public enum DensityPrintProcessing {
     strength: Double,
     anchor: Double,
     channelGamma: BGRChannelValues,
-    referenceLinear: Double
+    referenceLinear: Double,
+    requiresNeutralEvidence: Bool = false
   ) -> (slopes: BGRChannelValues, pivots: BGRChannelValues, curvatures: BGRChannelValues) {
     let appliedStrength: Double
     if let axis = neutralAxis {
       appliedStrength = axis.confidence * strength
     } else {
-      appliedStrength = strength
+      appliedStrength = requiresNeutralEvidence ? 0 : strength
     }
     if appliedStrength > 0, let axis = neutralAxis {
       return quadraticCastRemoval(

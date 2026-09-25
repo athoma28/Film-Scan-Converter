@@ -3,7 +3,7 @@ import Testing
 
 @testable import FilmScanEngine
 
-@Suite("Linear tone adjustments on the unclamped linear seam")
+@Suite("Version 1 linear tone compatibility")
 struct LinearToneAdjustmentTests {
   private func makeImage(pixels: [Double]) -> RenderReadyLinearImage {
     precondition(pixels.count.isMultiple(of: 3))
@@ -15,7 +15,7 @@ struct LinearToneAdjustmentTests {
   func neutralIdentity() {
     let pixels: [Double] = [0, 0.18, 1, -0.1, 1.5, 8, 0.0003, 0.0003, 0.0003]
     let image = makeImage(pixels: pixels)
-    let neutral = PhotoAdjustmentParameters()
+    let neutral = PhotoAdjustmentParameters(schemaVersion: 1)
 
     let result = image.applyingLinearToneAdjustments(neutral)
 
@@ -29,7 +29,7 @@ struct LinearToneAdjustmentTests {
   func positiveExposure() {
     let pixels: [Double] = [0.1, 0.2, 0.3]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(exposureEV: 1)
+    let params = PhotoAdjustmentParameters(schemaVersion: 1, exposureEV: 1)
 
     let result = image.applyingLinearToneAdjustments(params)
 
@@ -43,7 +43,7 @@ struct LinearToneAdjustmentTests {
   func negativeExposure() {
     let pixels: [Double] = [0.4, 0.5, 0.6]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(exposureEV: -1)
+    let params = PhotoAdjustmentParameters(schemaVersion: 1, exposureEV: -1)
 
     let result = image.applyingLinearToneAdjustments(params)
 
@@ -57,7 +57,8 @@ struct LinearToneAdjustmentTests {
   func zeroExposure() {
     let pixels: [Double] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(exposureEV: 0, brightness: 0, contrast: 0)
+    let params = PhotoAdjustmentParameters(
+      schemaVersion: 1, exposureEV: 0, brightness: 0, contrast: 0)
 
     let result = image.applyingLinearToneAdjustments(params)
 
@@ -70,7 +71,7 @@ struct LinearToneAdjustmentTests {
   func positiveBrightness() {
     let pixels: [Double] = [0, 0.18, 0.5, 0.09, 0.18, 1.0]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(brightness: 0.5)
+    let params = PhotoAdjustmentParameters(schemaVersion: 1, brightness: 0.5)
 
     let result = image.applyingLinearToneAdjustments(params)
 
@@ -84,7 +85,7 @@ struct LinearToneAdjustmentTests {
   func negativeBrightness() {
     let pixels: [Double] = [0.5, 0.5, 0.5]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(brightness: -1)
+    let params = PhotoAdjustmentParameters(schemaVersion: 1, brightness: -1)
 
     let result = image.applyingLinearToneAdjustments(params)
 
@@ -98,7 +99,7 @@ struct LinearToneAdjustmentTests {
   func brightnessUsesToneReference() {
     let pixels = [0.04, 0.04, 0.04]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(brightness: 0.5)
+    let params = PhotoAdjustmentParameters(schemaVersion: 1, brightness: 0.5)
 
     let result = image.applyingLinearToneAdjustments(
       params,
@@ -117,7 +118,7 @@ struct LinearToneAdjustmentTests {
     let bright: Double = 0.36
     let pixels: [Double] = [dark, dark, dark, mid, mid, mid, bright, bright, bright]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(contrast: 1)
+    let params = PhotoAdjustmentParameters(schemaVersion: 1, contrast: 1)
 
     let result = image.applyingLinearToneAdjustments(params)
 
@@ -137,7 +138,7 @@ struct LinearToneAdjustmentTests {
     let bright: Double = 0.36
     let pixels: [Double] = [dark, dark, dark, mid, mid, mid, bright, bright, bright]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(contrast: -1)
+    let params = PhotoAdjustmentParameters(schemaVersion: 1, contrast: -1)
 
     let result = image.applyingLinearToneAdjustments(params)
 
@@ -154,7 +155,7 @@ struct LinearToneAdjustmentTests {
   func zeroContrast() {
     let pixels: [Double] = [0.09, 0.18, 0.36, 0.18, 0.18, 0.18]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(contrast: 0)
+    let params = PhotoAdjustmentParameters(schemaVersion: 1, contrast: 0)
 
     let result = image.applyingLinearToneAdjustments(params)
 
@@ -169,7 +170,7 @@ struct LinearToneAdjustmentTests {
     let brightPixel = 2.0
     let pixels: [Double] = [darkPixel, darkPixel, darkPixel, brightPixel, brightPixel, brightPixel]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(highlights: 1)
+    let params = PhotoAdjustmentParameters(schemaVersion: 1, highlights: 1)
 
     let result = image.applyingLinearToneAdjustments(params)
 
@@ -190,7 +191,7 @@ struct LinearToneAdjustmentTests {
     let brightPixel = 2.0
     let pixels: [Double] = [darkPixel, darkPixel, darkPixel, brightPixel, brightPixel, brightPixel]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(highlights: -1)
+    let params = PhotoAdjustmentParameters(schemaVersion: 1, highlights: -1)
 
     let result = image.applyingLinearToneAdjustments(params)
 
@@ -209,7 +210,7 @@ struct LinearToneAdjustmentTests {
   func highlightsUseToneReference() {
     let pixels = [0.2, 0.2, 0.2]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(highlights: 0.5)
+    let params = PhotoAdjustmentParameters(schemaVersion: 1, highlights: 0.5)
 
     let defaultResult = image.applyingLinearToneAdjustments(params)
     let negativeResult = image.applyingLinearToneAdjustments(
@@ -227,7 +228,7 @@ struct LinearToneAdjustmentTests {
     let brightPixel = 1.0
     let pixels: [Double] = [darkPixel, darkPixel, darkPixel, brightPixel, brightPixel, brightPixel]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(shadows: 1)
+    let params = PhotoAdjustmentParameters(schemaVersion: 1, shadows: 1)
 
     let result = image.applyingLinearToneAdjustments(params)
 
@@ -248,7 +249,7 @@ struct LinearToneAdjustmentTests {
     let brightPixel = 1.0
     let pixels: [Double] = [darkPixel, darkPixel, darkPixel, brightPixel, brightPixel, brightPixel]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(shadows: -1)
+    let params = PhotoAdjustmentParameters(schemaVersion: 1, shadows: -1)
 
     let result = image.applyingLinearToneAdjustments(params)
 
@@ -268,6 +269,7 @@ struct LinearToneAdjustmentTests {
     let pixels: [Double] = [0.1, 0.3, 0.7, 0.05, 0.5, 1.5]
     let image = makeImage(pixels: pixels)
     let params = PhotoAdjustmentParameters(
+      schemaVersion: 1,
       exposureEV: 0.5,
       contrast: 0.3,
       highlights: -0.4,
@@ -295,7 +297,7 @@ struct LinearToneAdjustmentTests {
   func brightnessPreservesChromaticDifferences() {
     let pixels: [Double] = [0.1, 0.3, 0.7, 0.05, 0.5, 1.5]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(brightness: 0.5)
+    let params = PhotoAdjustmentParameters(schemaVersion: 1, brightness: 0.5)
 
     let result = image.applyingLinearToneAdjustments(params)
 
@@ -312,7 +314,8 @@ struct LinearToneAdjustmentTests {
   func gainFloorPreventsTotalBlackout() {
     let pixels: [Double] = [0.5, 0.5, 0.5]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(brightness: -1, highlights: 1, shadows: -1)
+    let params = PhotoAdjustmentParameters(
+      schemaVersion: 1, brightness: -1, highlights: 1, shadows: -1)
 
     let result = image.applyingLinearToneAdjustments(params)
 
@@ -326,7 +329,7 @@ struct LinearToneAdjustmentTests {
   func dimensionsPreserved() {
     let image = RenderReadyLinearImage(
       width: 20, height: 5, pixels: [Double](repeating: 0.18, count: 300))
-    let params = PhotoAdjustmentParameters(exposureEV: 1, contrast: 0.5)
+    let params = PhotoAdjustmentParameters(schemaVersion: 1, exposureEV: 1, contrast: 0.5)
 
     let result = image.applyingLinearToneAdjustments(params)
 
@@ -339,7 +342,7 @@ struct LinearToneAdjustmentTests {
   func negativePixelsInContrast() {
     let pixels: [Double] = [-0.1, -0.1, -0.1, 0.18, 0.18, 0.18]
     let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(contrast: 1)
+    let params = PhotoAdjustmentParameters(schemaVersion: 1, contrast: 1)
 
     let result = image.applyingLinearToneAdjustments(params)
 
@@ -353,6 +356,7 @@ struct LinearToneAdjustmentTests {
     let pixels: [Double] = [0, 0.18, 1, 5, 0.1, 0.2, 0.000001, 0.000001, 0.000001]
     let image = makeImage(pixels: pixels)
     let params = PhotoAdjustmentParameters(
+      schemaVersion: 1,
       exposureEV: 4,
       brightness: 1,
       contrast: 1,

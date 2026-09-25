@@ -42,6 +42,14 @@ extern "C" void fsc_raw_cancellation_free(fsc_raw_cancellation *token) { delete 
 
 namespace {
 
+// A second camera-scan decode competes with the first decode's interpolation
+// and postprocessing too. Keep the wider unpack budget for an idle pipeline.
+std::atomic<int> activeCameraScanDecodes{0};
+struct CameraScanDecodeActivity {
+    CameraScanDecodeActivity() { activeCameraScanDecodes.fetch_add(1); }
+    ~CameraScanDecodeActivity() { activeCameraScanDecodes.fetch_sub(1); }
+};
+
 // Incremental SHA-256 over stage-boundary buffers. Metadata is hashed as raw
 // POD bytes: digests compare runs of the same build on the same machine, so
 // endianness stability across platforms is not required.
@@ -87,8 +95,7 @@ T limited(T value, T lower, T upper) {
     return std::max(lower, std::min(value, upper));
 }
 
-int configuredWorkerCount(const char *environmentName) {
-    constexpr int maximumWorkers = 8;
+int configuredWorkerCount(const char *environmentName, int maximumWorkers = 8) {
     int workers = limited(static_cast<int>(std::thread::hardware_concurrency()), 1, maximumWorkers);
     const char *overrideValue = std::getenv(environmentName);
     if (!overrideValue || !*overrideValue) { return workers; }
@@ -256,8 +263,12 @@ private:
         unsigned *sizes,
         uchar *q_bases
     ) override {
-        const int configured = rawPyCompatibility ? 1 : configuredWorkerCount("FSC_UNPACK_WORKERS");
-        const int workerCount = limited(configured, 1, std::max(1, count));
+        // Compressed strips are independent. On larger CPUs, the eight-worker
+        // demosaic cap would force an extra unpack wave for an 11-strip RAF.
+        // Bound unpack separately by available CPUs, 16 workers and strip count.
+        const int configured = rawPyCompatibility ? 1 : configuredWorkerCount("FSC_UNPACK_WORKERS", 16);
+        const int concurrencyLimit = activeCameraScanDecodes.load() > 1 ? 8 : 16;
+        const int workerCount = limited(configured, 1, std::max(1, std::min(count, concurrencyLimit)));
         unpackWorkerCount = workerCount;
         usedParallelFujiUnpack = workerCount > 1;
         if (!usedParallelFujiUnpack) {
@@ -891,6 +902,7 @@ extern "C" int fsc_decode_raw_cancellable(
     if (stage_hashes) {
         std::memset(stage_hashes, 0, sizeof(*stage_hashes));
     }
+    CameraScanDecodeActivity activity;
     std::unique_ptr<FSCRawDecoder> raw(
         new FSCRawDecoder(full_resolution != 0));
     raw->stageHashes = stage_hashes;

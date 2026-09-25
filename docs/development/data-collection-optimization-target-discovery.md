@@ -5,6 +5,16 @@ what to collect before choosing the next optimization. It does not authorize
 changing processing defaults, regenerating reference fixtures, or treating
 historical reports as a fresh baseline.
 
+Completed passes: [Stage 0 inventory](../performance/optimization-target-discovery-2026-09-22.md)
+and [Stage 2 C-41 refinement collection](../performance/c41-refinement-discovery-2026-09-22.md).
+The latter separates production rendering from bitmap consumption and identifies
+the dominant measured stage without changing production behavior.
+
+Implemented follow-ups: [C-41 shared output](../performance/c41-shared-output-2026-09-22.md)
+and [RAW draft unpack](../performance/raw-preview-unpack-2026-09-22.md). Their
+before/after cohorts, rejected trials, correctness guards and limits are recorded
+separately from the discovery measurements.
+
 ## Purpose and current finding
 
 The regular native regression suite establishes correctness, pixel consistency,
@@ -12,15 +22,15 @@ work scheduling, and selected cache and memory invariants. CI also reports code
 coverage. Most timing, physical-memory, real-RAW, and extended image-quality
 measurements live in opt-in benchmarks or separate diagnostics; CI does not run
 those gates by default. The repository already has useful counters and
-signposts, so the first collection pass should harvest existing evidence before
-adding instrumentation.
+signposts; begin any new collection by reviewing the completed inventory and
+existing evidence before adding instrumentation.
 
 As of this runbook's preparation, the checkout contained active local source,
 test, and documentation changes. Existing dated reports remain evidence for
 their recorded source, machine, settings, and inputs only. No fresh measurements
 were produced for this runbook.
 
-The outcome of a future collection pass is a short ranked list of optimization
+The outcome of any new collection pass is a short ranked list of optimization
 targets, each tied to a repeatable workload, measured benefit, resource cost,
 and quality guard. Do not optimize a metric in isolation when it can harm a
 photographic preference or another workflow.
@@ -152,6 +162,11 @@ photographic quality.
 
 Choose only the path related to the candidate:
 
+- C-41 final refinement: `run-tone-control-audit.py --timing-only --output
+  dist/c41-refinement-next` runs the selected DSCF2833 one-pass preview and proxy
+  with split render/consumer timing plus separate memory/hash passes. It requires
+  Metal, emits no disk images, and does not require archived study inputs. See
+  the [test guide](../../tests/README.md#focused-tone-control-audit).
 - Preview tier, crop, or edit-proxy questions: use PreviewScalePerformanceTests
   on its documented RAF, or the app-path preview benchmark if at least four
   suitable RAFs are present.

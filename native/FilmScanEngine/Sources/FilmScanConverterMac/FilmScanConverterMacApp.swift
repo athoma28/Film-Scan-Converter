@@ -30,13 +30,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct FilmScanConverterMacApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-  @StateObject private var model: AppModel
+  @State private var model: AppModel
   @StateObject private var camera = CameraController()
 
   init() {
     FilmScanLog.configureLogDirectory()
-    _model = StateObject(
-      wrappedValue: AppModel(
+    _model = State(
+      initialValue: AppModel(
         settingsStore: PerFileSettingsStore(applicationName: "FilmScanConverter"),
         presetStore: NamedCorrectionPresetStore(applicationName: "FilmScanConverter")
       )
@@ -156,7 +156,12 @@ struct FilmScanConverterMacApp: App {
 
         Divider()
 
-        Button("Reset Corrections") {
+        Button("Reset Adjustments") {
+          model.resetDevelopAdjustments()
+        }
+        .disabled(model.selection == nil)
+
+        Button("Reset Image and Framing") {
           model.resetCorrections()
         }
         .disabled(model.selection == nil)

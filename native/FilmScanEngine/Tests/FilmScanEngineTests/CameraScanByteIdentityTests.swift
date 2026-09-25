@@ -214,6 +214,49 @@ struct CameraScanByteIdentityTests {
   }
 
   @Test(
+    "Preview unpack beyond eight workers preserves the serial mosaic and pixels",
+    .enabled(
+      if: cameraScanRawAvailable,
+      "referenced sample-raw corpus unavailable; preview unpack identity test skipped")
+  )
+  func widerPreviewUnpackMatchesSerialOracle() throws {
+    let rawURL = try #require(SampleRawCorpus.uniqueURL(named: expectedCameraScanFile))
+    xtransWorkerOverrideLock.lock()
+    let previous = getenv("FSC_UNPACK_WORKERS").map { String(cString: $0) }
+    defer {
+      if let previous {
+        setenv("FSC_UNPACK_WORKERS", previous, 1)
+      } else {
+        unsetenv("FSC_UNPACK_WORKERS")
+      }
+      xtransWorkerOverrideLock.unlock()
+    }
+    setenv("FSC_UNPACK_WORKERS", "1", 1)
+    let serial = try RawImageDecoder.decode(
+      rawURL, profile: .rawTherapeeCameraScan, collectDiagnostics: true,
+      maxDimension: 640)
+    let expected = try #require(serial.diagnostics)
+    for workers in [8, 16] {
+      setenv("FSC_UNPACK_WORKERS", String(workers), 1)
+      let parallel = try RawImageDecoder.decode(
+        rawURL, profile: .rawTherapeeCameraScan, collectDiagnostics: true,
+        maxDimension: 640)
+      let actual = try #require(parallel.diagnostics)
+      // This fixture has 11 compressed strips, so a 16-worker request must
+      // exercise additional concurrent strips beyond the old eight-worker cap.
+      #expect(parallel.unpackWorkerCount == (workers == 8 ? 8 : 11))
+      #expect(parallel.processing.contains(.previewBound))
+      #expect(parallel.processing.contains(.parallelFujiUnpack))
+      #expect(parallel.image == serial.image)
+      #expect(actual.unpackedMosaicSHA256 == expected.unpackedMosaicSHA256)
+      #expect(actual.demosaicedSHA256 == expected.demosaicedSHA256)
+      #expect(actual.processedImageSHA256 == expected.processedImageSHA256)
+      #expect(actual.postISOImageSHA256 == expected.postISOImageSHA256)
+      #expect(actual.swiftImageSHA256 == expected.swiftImageSHA256)
+    }
+  }
+
+  @Test(
     "Parallel Fuji unpack matches the serial one-worker mosaic",
     .enabled(
       if: cameraScanRawAvailable,

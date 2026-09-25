@@ -19,18 +19,21 @@ public final class StillPreviewRenderer: @unchecked Sendable {
   private static let outputColorSpace = CGColorSpace(
     name: CGColorSpace.sRGB
   )!
+  // Metal device/resource creation and CIContext rendering support concurrent
+  // callers. Every render below owns a separate destination buffer.
+  nonisolated(unsafe) private static let sharedDevice: MTLDevice? = {
+    let devices = MTLCopyAllDevices()
+    return devices.first(where: { !$0.isLowPower })
+      ?? devices.first ?? MTLCreateSystemDefaultDevice()
+  }()
   nonisolated(unsafe) private static let sharedContext: CIContext = {
     let options: [CIContextOption: Any] = [
       .cacheIntermediates: false,
+      .workingFormat: CIFormat.RGBAf,
       .workingColorSpace: NSNull(),
       .outputColorSpace: NSNull(),
     ]
-    let devices = MTLCopyAllDevices()
-    let device =
-      devices.first(where: { !$0.isLowPower })
-      ?? devices.first
-      ?? MTLCreateSystemDefaultDevice()
-    if let device {
+    if let device = sharedDevice {
       return CIContext(mtlDevice: device, options: options)
     }
     return CIContext(options: [.useSoftwareRenderer: false] as [CIContextOption: Any])
@@ -65,8 +68,8 @@ public final class StillPreviewRenderer: @unchecked Sendable {
   private let correctionKernel: CIKernel
 
   /// The per-pixel graph supports quarter turns, flipping, and manual crops.
-  /// Darkroom's CPU path analyzes the cropped image, so a cropped Darkroom
-  /// correction must use that path until its analysis contract is shared.
+  /// Version 1 density edits retain cropped analysis and their CPU route.
+  /// Version 2 shares immutable sensor-frame analysis across CPU/GPU/proxies.
   /// Cropped Original/crop-only views retain exact CPU UInt16-to-UInt8 packing.
   public static func supports(parameters: ProcessingParameters, showOriginal: Bool) -> Bool {
     guard !parameters.densityPipelineEnabled,
@@ -92,7 +95,31 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       && parameters.filmType == .colourNegative
       && parameters.filmNegativeParams.enabled
       && parameters.filmNegativeParams.rendering == .densityPrint
-    return !croppedDensityPrint
+    return !croppedDensityPrint || parameters.photoAdjustments.usesPhotographicTone
+  }
+
+  /// Adds source-dependent precision checks to the geometry-only static gate.
+  /// Density normalization divides a Float log/floor difference by the measured
+  /// range. Below 0.001 log units, cancellation can amplify a sub-micro-unit
+  /// error by more than 1,000 before print contrast and grading. Such flat scans
+  /// use the existing Double CPU path; cached analysis makes this check reusable.
+  /// The first check can perform bounded image analysis. Call it on a rendering
+  /// worker, not from UI event handling on the main actor.
+  public func supports(parameters: ProcessingParameters, showOriginal: Bool) -> Bool {
+    guard Self.supports(parameters: parameters, showOriginal: showOriginal) else { return false }
+    let negative = parameters.filmNegativeParams
+    guard !showOriginal,
+      parameters.filmType == .colourNegative,
+      negative.enabled,
+      negative.rendering == .densityPrint
+    else { return true }
+    let analysis = densityPrintAnalysis(parameters: parameters)
+    let spans = [
+      analysis.ceils.blue - analysis.floors.blue,
+      analysis.ceils.green - analysis.floors.green,
+      analysis.ceils.red - analysis.floors.red,
+    ]
+    return spans.allSatisfy { $0.isFinite && abs($0) >= 0.001 }
   }
 
   /// Correction precedes resampling. Regions use normalized, top-left image
@@ -119,9 +146,74 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         output = output.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
       }
     }
+    if maximumDimension == nil, normalizedRegion == nil,
+      output.extent.width * output.extent.height >= 4_194_304,
+      let materialized = Self.sharedBitmap(output)
+    {
+      // Avoid Core Image's tiled GPU-to-bitmap readback for complete large
+      // rasters. Small previews and bounded viewport requests keep their path.
+      return materialized
+    }
     return Self.sharedContext.createCGImage(
       output, from: output.extent, format: .RGBA8, colorSpace: Self.outputColorSpace,
       deferred: false)
+  }
+
+  /// Synchronously renders a complete opaque raster into its final storage on
+  /// unified-memory devices. The caller excludes scaling and viewport resampling.
+  /// No precision/processing change and no retained intermediate image.
+  /// Internal so small geometry/lifetime fixtures can exercise the same writer.
+  static func sharedBitmap(_ image: CIImage) -> CGImage? {
+    guard let device = sharedDevice, device.hasUnifiedMemory else { return nil }
+    let bounds = image.extent
+    // Keep the single-texture path bounded; other extents use Core Image's
+    // existing tiling, scaling and allocation-failure handling.
+    guard !bounds.isEmpty, !bounds.isInfinite, !bounds.isNull,
+      bounds == bounds.integral, bounds.width <= 16_384, bounds.height <= 16_384
+    else { return nil }
+    let width = Int(bounds.width)
+    let height = Int(bounds.height)
+    let alignment = device.minimumLinearTextureAlignment(for: .rgba8Unorm)
+    guard alignment > 0 else { return nil }
+    let rowBytes = ((width * 4 + alignment - 1) / alignment) * alignment
+    guard rowBytes * height <= device.maxBufferLength,
+      let buffer = device.makeBuffer(length: rowBytes * height, options: .storageModeShared)
+    else { return nil }
+    let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+      pixelFormat: .rgba8Unorm, width: width, height: height, mipmapped: false)
+    descriptor.storageMode = .shared
+    descriptor.usage = [.shaderRead, .shaderWrite]
+    guard let texture = buffer.makeTexture(descriptor: descriptor, offset: 0, bytesPerRow: rowBytes)
+    else { return nil }
+    let destination = CIRenderDestination(mtlTexture: texture, commandBuffer: nil)
+    destination.colorSpace = outputColorSpace
+    destination.isFlipped = true
+    destination.alphaMode = .premultiplied
+    do {
+      let task = try sharedContext.startTask(
+        toRender: image, from: bounds, to: destination, at: .zero)
+      // Publishing earlier would expose GPU writes to AppKit/statistics readers.
+      _ = try task.waitUntilCompleted()
+    } catch { return nil }
+    // The provider owns the buffer until the last image/bitmap representation
+    // releases it. It is never reused by a later render, including concurrent
+    // requests. bytesPerRow also carries the padded payload into app accounting.
+    let owner = Unmanaged.passRetained(buffer as AnyObject)
+    guard
+      let provider = CGDataProvider(
+        dataInfo: owner.toOpaque(), data: buffer.contents(), size: buffer.length,
+        releaseData: { info, _, _ in
+          if let info { Unmanaged<AnyObject>.fromOpaque(info).release() }
+        })
+    else {
+      owner.release()
+      return nil
+    }
+    return CGImage(
+      width: width, height: height, bitsPerComponent: 8, bitsPerPixel: 32,
+      bytesPerRow: rowBytes, space: outputColorSpace,
+      bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue),
+      provider: provider, decode: nil, shouldInterpolate: true, intent: .defaultIntent)
   }
 
   static func regionBounds(_ region: CGRect, in extent: CGRect) -> CGRect {
@@ -141,7 +233,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
   }
 
   private func correctedGraph(parameters: ProcessingParameters, showOriginal: Bool) -> CIImage? {
-    guard Self.supports(parameters: parameters, showOriginal: showOriginal) else { return nil }
+    guard supports(parameters: parameters, showOriginal: showOriginal) else { return nil }
     let oriented = croppedSource(parameters: parameters)
     let output: CIImage
 
@@ -150,7 +242,11 @@ public final class StillPreviewRenderer: @unchecked Sendable {
     } else {
       let lutImage = curveLUTImage(parameters: parameters)
 
-      let fnp = parameters.filmNegativeParams
+      var fnp = parameters.filmNegativeParams
+      if parameters.photoAdjustments.usesPhotographicTone, fnp.enabled, fnp.measuredMedians == nil {
+        fnp.measuredMedians = FilmNegativeProcessing.computeMedians(
+          image: analysisImage.resizedToFit(maxDimension: 256))
+      }
       let dyeMixing = parameters.filmDyeMixing.clamped()
       let usesCalibratedMonochrome =
         parameters.filmType == .blackAndWhiteNegative
@@ -254,7 +350,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
 
       let densityAnalysis =
         usesDensityPrint && fnEnabled
-        ? densityPrintAnalysis(parameters: fnp)
+        ? densityPrintAnalysis(parameters: parameters)
         : nil
       let dp = densityAnalysis
       func densityFloat(_ value: Double) -> Float { Float(value) }
@@ -280,6 +376,12 @@ public final class StillPreviewRenderer: @unchecked Sendable {
             Float(parameters.photoAdjustments.contrast),
             Float(parameters.photoAdjustments.highlights),
             Float(parameters.photoAdjustments.shadows),
+            Float(parameters.photoAdjustments.schemaVersion),
+            Float(parameters.photoAdjustments.whites),
+            Float(parameters.photoAdjustments.blacks),
+            Float(parameters.photoAdjustments.shadowFloor),
+            Float(parameters.photoAdjustments.midtoneLevel),
+            Float(parameters.photoAdjustments.highlightCeiling),
             Float(
               fnEnabled && fnp.rendering == .powerLaw
                 ? FilmNegativeProcessing.calibrationTargetFraction
@@ -289,6 +391,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
             Float(parameters.photoAdjustments.tint),
             Float(parameters.photoAdjustments.saturation),
             Float(parameters.photoAdjustments.vibrance),
+            Float(parameters.photoAdjustments.warmHueRecovery ?? 0),
             Float(dyeMixing.redFromGreen),
             Float(dyeMixing.redFromBlue),
             Float(dyeMixing.greenFromRed),
@@ -425,11 +528,17 @@ public final class StillPreviewRenderer: @unchecked Sendable {
     return image
   }
 
-  private func densityPrintAnalysis(parameters: FilmNegativeParams) -> DensityPrintAnalysis {
-    let profile = DensityPrintProcessing.resolvedProfile(from: parameters)
-    let paper = DensityPrintProcessing.resolvedPaper(from: parameters)
-    return densityAnalysisCache.analysis(profile: profile, paper: paper) {
-      DensityPrintProcessing.analyze(image: analysisImage, profile: profile, paper: paper)
+  private func densityPrintAnalysis(parameters: ProcessingParameters) -> DensityPrintAnalysis {
+    let profile = DensityPrintProcessing.resolvedProfile(from: parameters.filmNegativeParams)
+    let paper = DensityPrintProcessing.resolvedPaper(for: parameters)
+    return densityAnalysisCache.analysis(
+      profile: profile, paper: paper,
+      version: parameters.photoAdjustments.schemaVersion
+    ) {
+      DensityPrintProcessing.analyze(
+        image: parameters.photoAdjustments.usesPhotographicTone
+          ? analysisImage.resizedToFit(maxDimension: 256) : analysisImage, profile: profile,
+        paper: paper)
     }
   }
 
@@ -491,7 +600,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
 
     let width = 256
     let height = 256
-    var pixels = [UInt8](repeating: 0, count: width * height * 4)
+    var pixels = [UInt16](repeating: 0, count: width * height * 4)
 
     for y in 0..<height {
       for x in 0..<width {
@@ -513,20 +622,22 @@ public final class StillPreviewRenderer: @unchecked Sendable {
           bOut = UInt16(flatIndex)
         }
 
-        pixels[offset] = UInt8(rOut >> 8)
-        pixels[offset + 1] = UInt8(gOut >> 8)
-        pixels[offset + 2] = UInt8(bOut >> 8)
-        pixels[offset + 3] = 255
+        pixels[offset] = rOut
+        pixels[offset + 1] = gOut
+        pixels[offset + 2] = bOut
+        pixels[offset + 3] = 65_535
       }
     }
 
     // This is numeric lookup data, not an sRGB picture. Going through a
     // color-managed CGImage can silently reshape the curve before sampling.
+    let modern = parameters.photoAdjustments.usesPhotographicTone
+    let data = modern ? pixels.withUnsafeBytes { Data($0) } : Data(pixels.map { UInt8($0 >> 8) })
     return CIImage(
-      bitmapData: Data(pixels),
-      bytesPerRow: width * 4,
+      bitmapData: data,
+      bytesPerRow: width * 4 * (modern ? 2 : 1),
       size: CGSize(width: width, height: height),
-      format: .RGBA8,
+      format: modern ? .RGBA16 : .RGBA8,
       colorSpace: nil
     )
   }
@@ -799,13 +910,50 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         && max(value.r, max(value.g, value.b)) <= ceiling;
     }
 
+    vec3 recoverWarmHue(vec3 rgb, float amount, float tolerance) {
+      if (amount <= 0.0) return rgb;
+      vec3 linear = vec3(
+        1.6604910 * rgb.r - 0.5876411 * rgb.g - 0.0728499 * rgb.b,
+        -0.1245505 * rgb.r + 1.1328999 * rgb.g - 0.0083494 * rgb.b,
+        -0.0181508 * rgb.r - 0.1005789 * rgb.g + 1.1187297 * rgb.b);
+      if (min(linear.r, min(linear.g, linear.b)) < -tolerance
+        || max(linear.r, max(linear.g, linear.b)) > 1.0 + tolerance) return rgb;
+      vec3 display = displayFromLinear(rgb);
+      float mx = max(display.r, max(display.g, display.b));
+      float mn = min(display.r, min(display.g, display.b));
+      float delta = mx - mn;
+      if (delta <= 1e-8 || mx <= 1e-8) return rgb;
+      float hue;
+      if (mx == display.r) hue = 60.0 * (display.g - display.b) / delta;
+      else if (mx == display.g) hue = 60.0 * (2.0 + (display.b - display.r) / delta);
+      else hue = 60.0 * (4.0 + (display.r - display.g) / delta);
+      float saturation = delta / mx;
+      float weight = clamp(amount, 0.0, 1.0) * smoothstep(18.0, 34.0, hue)
+        * (1.0 - smoothstep(70.0, 160.0, hue)) * smoothstep(0.28, 0.58, saturation)
+        * (1.0 - smoothstep(0.7, 1.0, max(linear.r, max(linear.g, linear.b))));
+      if (weight <= 0.0) return rgb;
+      float shiftedHue = (hue + 60.0 * weight) / 60.0;
+      float chroma = mx * saturation * (1.0 - 0.25 * weight);
+      float x = chroma * (1.0 - abs(mod(shiftedHue, 2.0) - 1.0));
+      vec3 shifted;
+      if (shiftedHue < 1.0) shifted = vec3(chroma, x, 0.0);
+      else if (shiftedHue < 2.0) shifted = vec3(x, chroma, 0.0);
+      else shifted = vec3(0.0, chroma, x);
+      vec3 recovered = displayLinearValue(shifted + vec3(mx - chroma));
+      const vec3 weights = vec3(0.2626983, 0.6780, 0.0593017);
+      return recovered * (dot(rgb, weights) / max(dot(recovered, weights), 1e-9));
+    }
+
     vec3 protectedColor(
       vec3 rgb,
       float temperatureMired,
       float tint,
       float saturation,
-      float vibrance
+      float vibrance,
+      float warmHueRecovery,
+      float recoveryTolerance
     ) {
+      rgb = recoverWarmHue(rgb, warmHueRecovery, recoveryTolerance);
       const vec3 luminanceWeights = vec3(0.2626983, 0.6780, 0.0593017);
       float luminance = dot(rgb, luminanceWeights);
       if (luminance <= 0.0) return rgb;
@@ -890,6 +1038,174 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       return full * strength * 0.3;
     }
 
+    float photoEncode(float x) {
+      return x <= 0.0031308 ? 12.92 * x : 1.055 * pow(x, 1.0 / 2.4) - 0.055;
+    }
+    float photoDecode(float x) {
+      return x <= 0.04045 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4);
+    }
+    vec3 photoTo2020(vec3 x) {
+      return vec3(dot(x, vec3(0.6274039, 0.3292830, 0.0433131)),
+        dot(x, vec3(0.0690973, 0.9195404, 0.0113623)),
+        dot(x, vec3(0.0163914, 0.0880133, 0.8955953)));
+    }
+    vec3 photoDisplay(vec3 x) {
+      vec3 linear = vec3(dot(x, vec3(1.6604910, -0.5876411, -0.0728499)),
+        dot(x, vec3(-0.1245505, 1.1328999, -0.0083494)),
+        dot(x, vec3(-0.0181508, -0.1005789, 1.1187297)));
+      return vec3(photoEncode(linear.r), photoEncode(linear.g), photoEncode(linear.b));
+    }
+    float photoBend(float x, float amount) {
+      float w = x * (1.0 - x);
+      return x + amount * w * w;
+    }
+    float photoShoulder(float x) {
+      if (x <= 0.98) return x;
+      float d = x - 0.98;
+      return 0.98 + 0.02 * d / (d + 0.02);
+    }
+    float photoFocusedBend(float t, float amount, bool highlights) {
+      float gain = pow(2.0, 2.0 * amount * (highlights ? t : 1.0 - t));
+      return t * gain / (1.0 - t + t * gain);
+    }
+    float photoTailBend(float t, float amount, bool highlights) {
+      float gain = pow(2.0, 3.0 * amount * (highlights ? t : 1.0 - t));
+      return t * gain / (1.0 - t + t * gain);
+    }
+    float photoVersionFourRanges(float x, float highlights, float shadows,
+      float whites, float blacks) {
+      if (shadows != 0.0 && x < 0.72) {
+        x = 0.72 * photoBend(x / 0.72, 4.0 * clamp(shadows, -1.0, 1.0));
+      }
+      if (highlights != 0.0 && x > 0.28 && x < 1.0) {
+        x = 0.28 + 0.72 * photoBend((x - 0.28) / 0.72,
+          4.0 * clamp(highlights, -1.0, 1.0));
+      }
+      if (blacks != 0.0 && x < 0.28) {
+        x = 0.28 * photoFocusedBend(x / 0.28, clamp(blacks, -1.0, 1.0), false);
+      }
+      if (whites != 0.0 && x > 0.5 && x < 1.0) {
+        x = 0.5 + 0.5 * photoTailBend((x - 0.5) / 0.5,
+          clamp(whites, -1.0, 1.0), true);
+      }
+      return x;
+    }
+    float photoVersionFourLevels(float x, float shadowFloor, float midtoneLevel,
+      float highlightCeiling) {
+      if (midtoneLevel != 0.0 && x > 0.18 && x < 0.82) {
+        x = 0.18 + 0.64 * photoBend((x - 0.18) / 0.64,
+          4.0 * clamp(midtoneLevel, -1.0, 1.0));
+      }
+      float floorAmount = clamp(shadowFloor, -1.0, 1.0);
+      float ceilingAmount = clamp(highlightCeiling, -1.0, 1.0);
+      float black = floorAmount >= 0.0 ? 0.12 * floorAmount : 0.08 * floorAmount;
+      float white = ceilingAmount >= 0.0
+        ? 1.0 + 0.10 * ceilingAmount : 1.0 + 0.16 * ceilingAmount;
+      return black + (white - black) * x;
+    }
+    vec3 photoTone(vec3 rgb, float exposure, float brightness, float contrast,
+      float highlights, float shadows, float whites, float blacks,
+      float shadowFloor, float midtoneLevel, float highlightCeiling, float version) {
+      float y = dot(rgb, vec3(0.2626983, 0.678, 0.0593017));
+      float gain = pow(2.0, clamp(exposure, -4.0, 4.0));
+      float positive = max(y, 0.0);
+      float exposed = positive * gain / (1.0 + positive * max(gain - 1.0, 0.0));
+      float x = photoEncode(exposed);
+      if (x < 1.0) x = photoBend(x, 4.0 * clamp(brightness, -1.0, 1.0));
+      if (contrast != 0.0 && x > 0.0 && x < 1.0) {
+        float pivot = photoEncode(0.18);
+        float power = pow(2.0, clamp(contrast, -1.0, 1.0) * 0.8);
+        if (x < pivot) x = pivot * pow(x / pivot, power);
+        else x = 1.0 - (1.0 - pivot) * pow((1.0 - x) / (1.0 - pivot), power);
+      }
+      bool hasVersionFourControl = highlights != 0.0 || shadows != 0.0
+        || whites != 0.0 || blacks != 0.0 || shadowFloor != 0.0
+        || midtoneLevel != 0.0 || highlightCeiling != 0.0;
+      if (version >= 4.0 && hasVersionFourControl) {
+        x = photoVersionFourRanges(x, highlights, shadows, whites, blacks);
+        x = photoEncode(photoShoulder(photoDecode(x)));
+        x = photoVersionFourLevels(x, shadowFloor, midtoneLevel, highlightCeiling);
+      } else {
+        if (x < 0.65) {
+          float amount = clamp(shadows, -1.0, 1.0);
+          x = 0.65 * (version >= 3.0 && amount != 0.0
+            ? photoFocusedBend(x / 0.65, amount, false)
+            : photoBend(x / 0.65, 4.0 * amount));
+        }
+        if (x > 0.4 && x < 1.0) {
+          float amount = clamp(highlights, -1.0, 1.0);
+          x = 0.4 + 0.6 * (version >= 3.0 && amount != 0.0
+            ? photoFocusedBend((x - 0.4) / 0.6, amount, true)
+            : photoBend((x - 0.4) / 0.6, 4.0 * amount));
+        }
+        x = photoEncode(photoShoulder(photoDecode(x)));
+        float black = clamp(blacks, -1.0, 1.0) * 0.12;
+        x = (x + black) / (1.0 + black);
+        x *= pow(2.0, clamp(whites, -1.0, 1.0) * 0.5);
+      }
+      float target = photoDecode(x);
+      return y > 1e-12 ? rgb * (target / y) : vec3(target);
+    }
+    vec3 photoGamut(vec3 rgb) {
+      float y = dot(rgb, vec3(0.2126, 0.7152, 0.0722));
+      if (y <= 0.0 || y >= 1.0) return vec3(y);
+      vec3 d = rgb - vec3(y);
+      vec3 distance = max(d / (1.0 - y), -d / y);
+      float extent = max(distance.r, max(distance.g, distance.b));
+      if (extent <= 0.8) return rgb;
+      float extra = extent - 0.8;
+      return vec3(y) + d * ((0.8 + 0.2 * extra / (extra + 0.2)) / extent);
+    }
+    float photoMonoKnot(float profile, float knot) {
+      return 0.997 * calibratedMonochromeKnot(profile, knot) + 0.003 * (1.0 - knot / 10.0);
+    }
+    float photoMonochrome(float value, float gain, float ev, float profile) {
+      float x = max(value * gain * pow(2.0, ev), 0.0);
+      if (x > 1.0) {
+        float end = photoMonoKnot(profile, 10.0);
+        float rate = max(10.0 * (photoMonoKnot(profile, 9.0) - end) / max(end, 1e-9), 0.01);
+        return end * exp(-rate * (x - 1.0));
+      }
+      float position = x * 10.0;
+      float lower = min(floor(position), 9.0);
+      return mix(photoMonoKnot(profile, lower), photoMonoKnot(profile, lower + 1.0), position - lower);
+    }
+    vec3 photoColorKnot(float profile, float knot) {
+      return 0.997 * calibratedColorKnot(profile, knot) + vec3(0.003 * (1.0 - knot / 10.0));
+    }
+    float photoColor(float value, float gain, float ev, float profile, float channel) {
+      float x = max(value * gain * pow(2.0, ev), 0.0);
+      vec3 result;
+      if (x > 1.0) {
+        vec3 end = photoColorKnot(profile, 10.0);
+        vec3 rate = max(10.0 * (photoColorKnot(profile, 9.0) - end) / max(end, vec3(1e-9)), vec3(0.01));
+        result = end * exp(-rate * (x - 1.0));
+      } else {
+        float position = x * 10.0;
+        float lower = min(floor(position), 9.0);
+        result = mix(photoColorKnot(profile, lower), photoColorKnot(profile, lower + 1.0), position - lower);
+      }
+      return channel == 0.0 ? result.r : (channel == 1.0 ? result.g : result.b);
+    }
+    vec3 photoCurve(sampler table, vec3 rgb) {
+      vec3 position = rgb * 65535.0;
+      vec3 lower = clamp(floor(position), 0.0, 65534.0);
+      vec3 upper = lower + vec3(1.0);
+      if (rgb.r < 0.0) { lower.r = 0.0; upper.r = 256.0; }
+      if (rgb.g < 0.0) { lower.g = 0.0; upper.g = 256.0; }
+      if (rgb.b < 0.0) { lower.b = 0.0; upper.b = 256.0; }
+      if (rgb.r > 1.0) { lower.r = 65279.0; upper.r = 65535.0; }
+      if (rgb.g > 1.0) { lower.g = 65279.0; upper.g = 65535.0; }
+      if (rgb.b > 1.0) { lower.b = 65279.0; upper.b = 65535.0; }
+      vec3 a = vec3(sample(table, vec2(mod(lower.r, 256.0) + 0.5, floor(lower.r / 256.0) + 0.5)).r,
+        sample(table, vec2(mod(lower.g, 256.0) + 0.5, floor(lower.g / 256.0) + 0.5)).g,
+        sample(table, vec2(mod(lower.b, 256.0) + 0.5, floor(lower.b / 256.0) + 0.5)).b);
+      vec3 b = vec3(sample(table, vec2(mod(upper.r, 256.0) + 0.5, floor(upper.r / 256.0) + 0.5)).r,
+        sample(table, vec2(mod(upper.g, 256.0) + 0.5, floor(upper.g / 256.0) + 0.5)).g,
+        sample(table, vec2(mod(upper.b, 256.0) + 0.5, floor(upper.b / 256.0) + 0.5)).b);
+      return a + (b - a) * ((position - lower) / (upper - lower));
+    }
+
     const float linearToneMinGain = 0.0005;
 
     vec3 linearToneAdjustments(
@@ -899,8 +1215,16 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       float contrast,
       float highlights,
       float shadows,
-      float referenceLuminance
+      float referenceLuminance,
+      float version,
+      float whites,
+      float blacks,
+      float shadowFloor,
+      float midtoneLevel,
+      float highlightCeiling
     ) {
+      if (version >= 2.0) return photoTone(rgb, exposureEV, brightness, contrast,
+        highlights, shadows, whites, blacks, shadowFloor, midtoneLevel, highlightCeiling, version);
       float linearTonePivot = clamp(referenceLuminance, 1e-6, 16.0);
       float exposureGain = pow(2.0, exposureEV);
       float brightnessOffset = brightness * linearTonePivot;
@@ -1001,10 +1325,11 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       return dMaxBound - densitySoftplus(aSH * (dMaxBound - v1)) / aSH;
     }
 
-    float densityEncodeReflectance(float density, float dMax) {
+    float densityEncodeReflectance(float density, float dMax, float version) {
       float transmittance = pow(10.0, -density);
       float black = pow(10.0, -dMax);
       transmittance = (transmittance - black) / (1.0 - black);
+      if (version >= 2.0) return transmittance;
       return filmNegativeLinearToSrgb(clamp(transmittance, 0.0, 1.0));
     }
 
@@ -1029,7 +1354,8 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       float shSharp,
       float toeH,
       float shH,
-      float vStar
+      float vStar,
+      float version
     ) {
       float linR = max(filmNegativeSrgbToLinear(rgb.r), 1e-6);
       float linG = max(filmNegativeSrgbToLinear(rgb.g), 1e-6);
@@ -1055,9 +1381,9 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       densG = dMin.y + dot(dyeG, excess);
       densR = dMin.z + dot(dyeR, excess);
       return vec3(
-        densityEncodeReflectance(densR, dMax),
-        densityEncodeReflectance(densG, dMax),
-        densityEncodeReflectance(densB, dMax)
+        densityEncodeReflectance(densR, dMax, version),
+        densityEncodeReflectance(densG, dMax, version),
+        densityEncodeReflectance(densB, dMax, version)
       );
     }
 
@@ -1076,11 +1402,18 @@ public final class StillPreviewRenderer: @unchecked Sendable {
       float photoContrast,
       float photoHighlights,
       float photoShadows,
+      float photoVersion,
+      float photoWhites,
+      float photoBlacks,
+      float photoShadowFloor,
+      float photoMidtoneLevel,
+      float photoHighlightCeiling,
       float photoToneReference,
       float photoTemperatureMired,
       float photoTint,
       float photoSaturation,
       float photoVibrance,
+      float photoWarmHueRecovery,
       float dyeRedFromGreen,
       float dyeRedFromBlue,
       float dyeGreenFromRed,
@@ -1155,14 +1488,15 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         <= 1024.0 / 65535.0;
       bool isBW = (filmType == 0.0);
       bool isNegative = isBW || filmType == 1.0;
-      bool useProtectedColor = filmNegativeEnabled == 1.0 && !isBW
+      bool modernTone = photoVersion >= 2.0;
+      bool useProtectedColor = (modernTone || filmNegativeEnabled == 1.0) && !isBW
         && (photoTemperatureMired != 0.0 || photoTint != 0.0
-          || photoSaturation != 0.0 || photoVibrance != 0.0);
+          || photoSaturation != 0.0 || photoVibrance != 0.0 || photoWarmHueRecovery != 0.0);
       bool useDyeMixing = filmType == 1.0
         && (dyeRedFromGreen != 0.0 || dyeRedFromBlue != 0.0
           || dyeGreenFromRed != 0.0 || dyeGreenFromBlue != 0.0
           || dyeBlueFromRed != 0.0 || dyeBlueFromGreen != 0.0);
-      bool useLinearTone = abs(photoExposureEV) > 0.0
+      bool useLinearTone = modernTone || abs(photoExposureEV) > 0.0
         || abs(photoBrightness) > 0.0 || abs(photoContrast) > 0.0
         || abs(photoHighlights) > 0.0 || abs(photoShadows) > 0.0;
 
@@ -1173,20 +1507,26 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         && filmNegativeRendering == 3.0;
       if (filmNegativeEnabled == 1.0 && useCalibratedMonochrome) {
         float gray = dot(rgb, vec3(0.299, 0.587, 0.114));
-        rgb = vec3(
-          calibratedMonochromeCurve(
-            gray, fnGMult, monochromeExposureEV, calibratedMonochromeProfile));
+        rgb = vec3(modernTone
+          ? photoMonochrome(gray, fnGMult, monochromeExposureEV, calibratedMonochromeProfile)
+          : calibratedMonochromeCurve(gray, fnGMult, monochromeExposureEV, calibratedMonochromeProfile));
         if (useLinearTone) {
           vec3 linear = displayLinearValue(rgb);
           linear = linearToneAdjustments(
             linear, photoExposureEV, photoBrightness, photoContrast,
-            photoHighlights, photoShadows, photoToneReference);
-          rgb = displayFromLinear(linear);
+            photoHighlights, photoShadows, photoToneReference, photoVersion, photoWhites,
+            photoBlacks, photoShadowFloor, photoMidtoneLevel, photoHighlightCeiling);
+          rgb = modernTone ? photoDisplay(linear) : displayFromLinear(linear);
         }
       } else if (filmNegativeEnabled == 1.0 && useCalibratedColor) {
-        rgb = calibratedColorCurve(
-          rgb, vec3(fnRMult, fnGMult, fnBMult), monochromeExposureEV,
-          calibratedColorProfile);
+        if (modernTone) {
+          rgb = vec3(photoColor(rgb.r, fnRMult, monochromeExposureEV, calibratedColorProfile, 0.0),
+            photoColor(rgb.g, fnGMult, monochromeExposureEV, calibratedColorProfile, 1.0),
+            photoColor(rgb.b, fnBMult, monochromeExposureEV, calibratedColorProfile, 2.0));
+        } else {
+          rgb = calibratedColorCurve(rgb, vec3(fnRMult, fnGMult, fnBMult),
+            monochromeExposureEV, calibratedColorProfile);
+        }
         if (useDyeMixing || useLinearTone || useProtectedColor) {
           vec3 linear = displayLinearValue(rgb);
           if (useDyeMixing) {
@@ -1199,13 +1539,14 @@ public final class StillPreviewRenderer: @unchecked Sendable {
           if (useLinearTone) {
             linear = linearToneAdjustments(
               linear, photoExposureEV, photoBrightness, photoContrast,
-              photoHighlights, photoShadows, photoToneReference);
+              photoHighlights, photoShadows, photoToneReference, photoVersion, photoWhites,
+              photoBlacks, photoShadowFloor, photoMidtoneLevel, photoHighlightCeiling);
           }
           if (useProtectedColor) {
             linear = protectedColor(
-              linear, photoTemperatureMired, photoTint, photoSaturation, photoVibrance);
+              linear, photoTemperatureMired, photoTint, photoSaturation, photoVibrance, photoWarmHueRecovery, modernTone ? 1e-6 : 0.0);
           }
-          rgb = displayFromLinear(linear);
+          rgb = modernTone ? photoDisplay(linear) : displayFromLinear(linear);
         }
       } else if (filmNegativeEnabled == 1.0 && useDensityPrint) {
         rgb = densityPrintInvert(
@@ -1229,10 +1570,11 @@ public final class StillPreviewRenderer: @unchecked Sendable {
           dpShSharp,
           dpToeH,
           dpShH,
-          dpVStar
+          dpVStar,
+          photoVersion
         );
         if (useDyeMixing || useLinearTone || useProtectedColor) {
-          vec3 linear = displayLinearValue(rgb);
+          vec3 linear = modernTone ? photoTo2020(rgb) : displayLinearValue(rgb);
           if (useDyeMixing) {
             linear = filmDyeMixing(
               linear,
@@ -1243,17 +1585,19 @@ public final class StillPreviewRenderer: @unchecked Sendable {
           if (useLinearTone) {
             linear = linearToneAdjustments(
               linear, photoExposureEV, photoBrightness, photoContrast,
-              photoHighlights, photoShadows, photoToneReference);
+              photoHighlights, photoShadows, photoToneReference, photoVersion, photoWhites,
+              photoBlacks, photoShadowFloor, photoMidtoneLevel, photoHighlightCeiling);
           }
           if (useProtectedColor) {
             linear = protectedColor(
-              linear, photoTemperatureMired, photoTint, photoSaturation, photoVibrance);
+              linear, photoTemperatureMired, photoTint, photoSaturation, photoVibrance, photoWarmHueRecovery, modernTone ? 1e-6 : 0.0);
           }
-          rgb = displayFromLinear(linear);
+          rgb = modernTone ? photoDisplay(linear) : displayFromLinear(linear);
         }
       } else if (filmNegativeEnabled == 1.0) {
         vec3 filmLinear = filmNegativeLinearValue(
           rgb, vec3(fnRExp, fnGExp, fnBExp), vec3(fnRMult, fnGMult, fnBMult));
+        if (modernTone) filmLinear *= 4.32;
         if (useDyeMixing) {
           filmLinear = filmDyeMixing(
             filmLinear,
@@ -1264,13 +1608,14 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         if (useLinearTone) {
           filmLinear = linearToneAdjustments(
             filmLinear, photoExposureEV, photoBrightness, photoContrast,
-            photoHighlights, photoShadows, photoToneReference);
+            photoHighlights, photoShadows, photoToneReference, photoVersion, photoWhites,
+            photoBlacks, photoShadowFloor, photoMidtoneLevel, photoHighlightCeiling);
         }
         if (useProtectedColor) {
           filmLinear = protectedColor(
-            filmLinear, photoTemperatureMired, photoTint, photoSaturation, photoVibrance);
+            filmLinear, photoTemperatureMired, photoTint, photoSaturation, photoVibrance, photoWarmHueRecovery, modernTone ? 1e-6 : 0.0);
         }
-        rgb = filmNegativeDisplayFromLinear(filmLinear);
+        rgb = modernTone ? photoDisplay(filmLinear) : filmNegativeDisplayFromLinear(filmLinear);
         if (isBW) {
           float gray = dot(rgb, vec3(0.299, 0.587, 0.114));
           rgb = vec3(gray);
@@ -1282,7 +1627,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         } else if (filmType == 1.0) {
           rgb = 1.0 - rgb;
         }
-        if (useDyeMixing || useLinearTone) {
+        if (useDyeMixing || useLinearTone || (modernTone && useProtectedColor)) {
           vec3 linear = displayLinearValue(rgb);
           if (useDyeMixing) {
             linear = filmDyeMixing(
@@ -1294,13 +1639,18 @@ public final class StillPreviewRenderer: @unchecked Sendable {
           if (useLinearTone) {
             linear = linearToneAdjustments(
               linear, photoExposureEV, photoBrightness, photoContrast,
-              photoHighlights, photoShadows, photoToneReference);
+              photoHighlights, photoShadows, photoToneReference, photoVersion, photoWhites,
+              photoBlacks, photoShadowFloor, photoMidtoneLevel, photoHighlightCeiling);
           }
-          rgb = displayFromLinear(linear);
+          if (modernTone && useProtectedColor) {
+            linear = protectedColor(linear, photoTemperatureMired, photoTint,
+              photoSaturation, photoVibrance, photoWarmHueRecovery, modernTone ? 1e-6 : 0.0);
+          }
+          rgb = modernTone ? photoDisplay(linear) : displayFromLinear(linear);
         }
       }
 
-      if (!isBW && !useProtectedColor) {
+      if (!modernTone && !isBW && !useProtectedColor) {
         rgb *= vec3(
           1.0 + temperature / 200.0 + tint / 400.0,
           1.0 - tint / 200.0,
@@ -1326,7 +1676,9 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         }
       }
 
-      {
+      if (modernTone) {
+        rgb = photoCurve(lutImage, rgb);
+      } else {
         float idxR = clamp(rgb.r * 65535.0, 0.0, 65535.0);
         float idxG = clamp(rgb.g * 65535.0, 0.0, 65535.0);
         float idxB = clamp(rgb.b * 65535.0, 0.0, 65535.0);
@@ -1350,11 +1702,12 @@ public final class StillPreviewRenderer: @unchecked Sendable {
         }
       }
 
-      if (!isBW && !useProtectedColor && saturation != 100.0) {
+      if (!modernTone && !isBW && !useProtectedColor && saturation != 100.0) {
         vec3 hsv = rgbToHsv(clamp(rgb, 0.0, 1.0));
         hsv.y = clamp(hsv.y * saturation / 100.0, 0.0, 1.0);
         rgb = hsvToRgb(hsv);
       }
+      if (modernTone) rgb = photoGamut(rgb);
       if (isNegative && sensorBlack) {
         rgb = vec3(1.0);
       }
@@ -1364,6 +1717,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
 }
 
 private struct CurveLUTKey: Hashable {
+  let photographicTone: Bool
   let curveEnabled: Bool
   let curveControlPoints: [CurvePoint]
   let redCurveEnabled: Bool
@@ -1374,6 +1728,7 @@ private struct CurveLUTKey: Hashable {
   let blueCurveControlPoints: [CurvePoint]
 
   init(parameters: ProcessingParameters) {
+    photographicTone = parameters.photoAdjustments.usesPhotographicTone
     curveEnabled = parameters.curveEnabled
     curveControlPoints = parameters.curveControlPoints
     redCurveEnabled = parameters.filmType.supportsColorCorrections && parameters.redCurveEnabled

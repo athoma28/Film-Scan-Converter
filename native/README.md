@@ -29,11 +29,25 @@ elsewhere:
 - `FilmScanProfileCalibrator`: offline weighted density-matrix fitter with a
   frame-level held-out validation gate;
 - `FilmScanReferenceCalibrator`: offline paired RAF/JPEG/XMP curve fitter used
-  by the measured Natural looks;
+  for the historical Natural reference curves;
 - `FilmScanLookbook`: developer utility for generating preview/comparison
   images from the local RAW corpus.
 
-The package requires macOS 14 or later and Homebrew LibRaw. `CLibRawShim`
+Compare factory LookRecipe snapshots with a C-41 invert-only column using
+the local sample scans:
+
+```sh
+swift run --package-path native/FilmScanEngine FilmScanLookbook \
+  /tmp/film-scan-color-lookbook
+```
+
+The generated `index.html` links rendered JPEGs. These recipes are creative
+starting points, not measured stock calibrations. `LookRecipeTests` and
+`LookRecipeAppTests` cover recreatability from public sliders, film-base
+isolation, apply without image analysis, persistence, and undo.
+
+The package requires macOS 14 or later, Swift 6, and Homebrew LibRaw plus
+`pkg-config`. `CLibRawShim`
 provides the narrow C/C++ boundary used by Swift. Camera-scan X-Trans keeps
 LibRaw 0.21.4's integer arithmetic and overlapping-tile dependence, then runs
 independent `2*row+col` wavefront diagonals. Fuji compressed unpack runs
@@ -43,7 +57,7 @@ stays off. No LibRaw-owned buffer or lifetime is exposed to the application.
 ## Build And Test
 
 ```sh
-brew install libraw
+brew install libraw pkg-config
 
 bash native/test-raw-compatibility.sh
 swift test --package-path native/FilmScanEngine --no-parallel
@@ -100,6 +114,13 @@ stapling, Gatekeeper, and clean-machine validation.
 
 ## Benchmarks And Diagnostics
 
+For Camera Raw reference comparisons, film-preset trials, and segmented skin RGB
+measurements, start with the [color evaluation runbook](../docs/development/color-evaluation.md).
+`diagnostics/color-study.py` provides preflight, ordered execution, and guarded
+resume using production `FilmScanLookbook` renders. Its historical study stages
+still need migration to current recipe names and correction documents; consult
+the runbook's compatibility status before treating a run as reproducible.
+
 The [preview-analysis benchmark](../docs/performance/preview-analysis.md)
 isolates CPU clipping/tone diagnostics and Darkroom neutral-axis analysis,
 including release timing, physical footprint, exact pre-change references, and
@@ -146,8 +167,13 @@ to diverge. Each repetition prints all eight full digests plus peak and
 post-release physical footprint before final report assembly, preserving
 diagnostic evidence if report finalization fails. The mode defaults to five
 repetitions and rejects fewer; `--formats` is not accepted in this mode.
-`FSC_UNPACK_WORKERS` and `FSC_XTRANS_WORKERS` cap camera-scan unpack and
-X-Trans workers at 1–8; `1` selects the serial oracle.
+`FSC_UNPACK_WORKERS` accepts 1–16 camera-scan unpack workers;
+`FSC_XTRANS_WORKERS` accepts 1–8 demosaic workers. `1` selects the respective
+serial oracle. Without overrides, each uses the available CPU count up to its
+cap; unpack also stops at the number of independent compressed strips. The
+unpack cap drops to eight when another camera-scan decode is already active,
+including when a larger diagnostic override is requested. The RawPy-compatibility
+unpack path remains serial.
 
 Run the full-resolution correction-scenario matrix:
 
@@ -178,12 +204,23 @@ swift test --disable-sandbox -c release \
   --filter AppPathPerformanceTests
 ```
 
-This uses the local RAF corpus, emits a compact JSON latency/memory report, and
-writes no exports. The report also samples preview-cache depths 2, 8, and 32,
-including realized session count, logical cache bytes, fill latency, and
-physical footprint before fill, at capacity, and after model release. A corpus
-smaller than the configured depth is reported explicitly rather than treated as
-a fully populated cache.
+This uses the local RAF corpus, emits a JSON latency/memory report, and writes
+no exports. Each phase cancels selection work, waits for model release, and
+removes its isolated preferences before the next phase. Configured cache depths
+2, 8, and 32 report initial lookahead population, source tiers, logical bytes,
+fill latency, and physical footprint before fill, after lookahead, and after
+release; these are not full-capacity or settled-speculation samples. Separate
+cases warm two full-sensor corrected previews and their statistics, measure
+retained revisits and 1,000 viewport updates with decode/correction/statistics/
+cache-hit counters, and measure
+repeated switching with a saturated two-session cache and an uncached neighbour.
+That last case records publication latency, time through background drain, and
+speculative scheduler submissions. Timings measure app-model publication, not
+native input or screen presentation; three default repetitions do not estimate
+tail latency. Switch waits poll every 5 ms, limiting timing resolution. The
+retained cases require two full source/renderer/display sessions to fit the
+machine's default preview budget (typically at least 16 GiB RAM for two 40 MP
+scans); insufficient budget can cause the full-preview wait to time out.
 
 Run the real-RAW preview-scale probe after changing render resolution, gesture
 scheduling, or selected-session memory ownership:
@@ -223,7 +260,7 @@ Mach physical footprint, post-model-release memory, status/progress state, and
 artifact cleanup. Completed outputs are removed as the benchmark observes each
 job; only the requested JSON report remains.
 
-Run the RAW and preview tools:
+Build the corpus-wide RAW benchmark and run the synthetic preview tools:
 
 ```sh
 swift build -c release --package-path native/FilmScanEngine \
@@ -278,23 +315,34 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
 - Use explicit image contracts: standard-image browsing starts with a 1000px
   display source; camera RAW browsing starts with a colour-accurate ~640px
   demosaiced draft, upgrades the selected file to a ~4000px inspect preview
-  then a 1-pass full-sensor preview, and keeps unseen neighbour files at
-  3200px; a 256px analysis source drives classification. Export owns an
+  then a 1-pass full-sensor preview. Neighbour files first get a 3200px
+  preview; up to two then get full-sensor previews when memory permits.
+  A 256px analysis source drives classification. Export owns an
   independent three-pass full-resolution decode. The selected file may keep
   that last three-pass buffer for settings-only re-export and must drop it on
   selection change.
 - A selected full-sensor RAW retains one 2048px continuous-edit source and GPU
   renderer. Supported active point-control gestures publish that raster at the
   full logical document size; gesture release must queue exact current
-  parameters against the full source. CPU fallbacks, Original, and export do
-  not use the interaction proxy.
+  parameters against the full source. CPU fallbacks use bounded, cached proxy
+  preparation too; 100% detail and export retain their full source.
+  Zoomed GPU gestures reuse this proxy for the background overview while the
+  visible detail comes from the full source. Only the completed full-source
+  refinement can enter the retained corrected-raster cache.
 - Keep lookahead preview-only, LRU, and bounded by both file count and bytes.
   Selecting a cached 3200px lookahead preview skips the inspect decode and
   starts the selected-file full-sensor upgrade. Sidebar thumbnails and repeated
   capture detection still use embedded JPEGs; the main RAW canvas does not.
-  Keep at most one full-resolution 1-pass preview; restore its earlier bounded
-  tier on selection change, counting that retained fallback against the byte budget. **Load RAW Preview** is a skip-ahead to
-  that selected-file 1-pass decode, not the only way to reach it.
+  Retain completed full-resolution 1-pass previews and their last corrected
+  rasters across selection changes. The cache budget is one eighth of RAM,
+  capped at 3 GiB (2 GiB on 16 GiB machines), including source, renderer backing,
+  and display rasters. Reserve display space before admitting speculative work;
+  speculation must not evict existing entries. Evict least-recently-used,
+  unselected entries at either the byte or file-count limit. A selected image
+  alone may exceed the budget; memory pressure drops all unselected entries
+  and suspends speculation until pressure clears. **Load RAW Preview** requests
+  full-sensor detail directly and cancels any in-flight inspect decode through
+  the shared gate. Automatic browsing retains the normal inspect/full progression.
 - Keep the still image, dust mask, and crop/straighten/perspective editors in
   one native viewport transform. Original comparison must preserve its pan and
   magnification, and selection changes must return to a predictable Fit state.
@@ -302,9 +350,32 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   pixels after the full-res upgrade, not the three-pass export source. Do not
   label inspect versus full-res on the canvas; keep the embedded-JPEG warning
   when RAW colour is unavailable.
-- Keep adaptive-look analysis bounded independently of imported image size;
-  Kodachrome-like Auto currently analyzes at most a 1024-pixel long edge and
-  stores a concrete five-point curve for deterministic preview/export parity.
+- `FilmBase` owns invert defaults. `LookRecipe` assigns public sliders, curves,
+  and wheels without image analysis or changes to film base, invert IDs, measured
+  calibration, or geometry. Factory looks are creative snapshots. The former
+  adaptive/Kodachrome-like look path has been removed. Test current recipes with
+  `LookRecipeTests`, `LookRecipeAppTests`, and `PresetWorkflowTests`.
+  A look copied onto an uninitialized destination persists as a pending look;
+  first decode resolves its film base before applying the copied controls.
+  Intentionally saved Original frames keep Original. Preview, export, contact
+  sheets, Undo/Redo, and relaunch must preserve that distinction.
+- New neutral edits use photographic tone version 4. Highlights/Shadows affect
+  broad regions, Whites/Blacks focus on the respective ends without moving black
+  or white, and the grading Shadow Floor/Midtone Level/Highlight Ceiling controls
+  independently change output levels. Built-in looks remain pinned to version 2
+  to preserve their starting appearance; saved versions 1–3 retain their rendering
+  until edited or explicitly upgraded. Editing a version 2/3 Highlights, Shadows,
+  Whites, Blacks, or grading level promotes it to version 4 in the same undo step.
+  Version 1 retains its explicit, undoable upgrade and decoded paper response.
+  The [original tone contract](../docs/development/photographic-tone-controls-2026-09-22.md)
+  and [ordinary-response study](../docs/development/slider-response-study-2026-09-24.md)
+  record earlier behavior and validation. Version 2 density analysis uses the
+  immutable 256px sensor frame so manual crops stay GPU eligible and do not
+  remeter color. Older builds reject saved version-4 edits.
+- Correction clipboard and named-preset writes use schema version 2. Version 1
+  documents migrate to public-control recipes; legacy inversion/calibration is
+  not transferred. The first mutation of a version 1 preset library backs up its
+  original bytes. Unknown versions must fail without overwriting the library.
 - Treat `FilmDyeMixingParameters` as a neutral-preserving, linear-light film
   response operator, not a display white-balance replacement. Apply it after
   inversion and before semantic tone/protected color, curves, and grading in
@@ -318,12 +389,23 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
 - Keep edit history session-local and isolated by standardized source path.
   Coalesce each slider, curve, color-wheel, and perspective drag into one
   history entry; persist the restored current state but start with empty
-  transient history after relaunch. Named-preset and Kodachrome-like removal
-  must remain reversible without resetting crop or orientation.
+  transient history after relaunch. Look application and Reset Adjustments must
+  remain reversible without resetting film base, calibration, crop, or orientation.
+- A failed per-file settings read must not let subsequent edits overwrite the
+  unreadable or unsupported document. Saving retries only after that document
+  can be read or has been removed. Recovered files outside the current session
+  must survive every later save; session values and edited markers take precedence
+  for files edited during recovery.
 - Treat manual film-frame geometry as a persisted, validated clockwise
   four-corner quadrilateral. Its reticle/loupe editor may softly snap either
   incident edge parallel to its opposite edge, but must preserve an explicit
-  free-drag path. The normalized canvas crop depends on the perspective result.
+  free-drag path. Optional known frame proportions determine the rectified output
+  ratio while retaining estimated pixel area; absent ratios preserve old sizing.
+  Ratios precede rotation/straightening and remain local during look transfer.
+  Grid lines project equal output divisions into source space. Dragging preserves
+  the initial grab offset, snap distances use screen units, and keyboard nudges
+  use source pixels independently of display zoom. The normalized canvas crop
+  depends on the perspective result.
   Clearing manual crop preserves perspective; changing or clearing perspective
   invalidates the dependent manual crop. Preview, dust-overlay alignment,
   density flat field, and export must use the same CPU perspective warp; this corrects one
@@ -343,6 +425,10 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   depends on cropped pixels and exact Original/crop-only packing remain CPU
   fallbacks. While the Crop tool is active, preview the full post-straighten
   canvas so the next drag replaces the existing crop.
+- Density-print previews whose analyzed channel log span is below 0.001 use
+  the authoritative CPU fallback. This avoids amplification of Float cancellation
+  on flat or nearly flat scans. The renderer checks source-dependent support on
+  the rendering worker; Original comparison bypasses density analysis.
 - Treat the Core Image/Metal renderer as the primary interactive development
   path on supported MacBook Pro hardware. Keep CPU rendering correct for
   deterministic tests, CI/headless runs, export/reference behavior, and fallback
@@ -374,10 +460,22 @@ AVFoundation video device. It is a fast preview path; final stills use the
 16-bit import and export pipeline. Vendor-specific tethering is not active
 roadmap work.
 
-### September 16 performance follow-up
+### Current preview retention and work reuse
 
-Navigation reuses the earlier decoded preview tier; RAW work shares a cancellable
-priority scheduler. CPU preparation reuses geometry/Darkroom analysis, and linear
-color/tone scratch uses bounded bands. Fit rendering follows viewport backing
-pixels; inspection requests a full-source region. Revision-bound statistics follow
-publication asynchronously. See [implementation and measurements](../docs/performance/viewport-and-work-reuse-2026-09-16.md).
+Navigation retains several full-sensor decodes plus their completed corrected
+rasters, bounded by RAM and LRU limits. Settled previews use a complete raster:
+panning and zooming only change the native viewport, without correction work or
+histogram publication. Completed statistics belong to their immutable corrected
+raster and are reused on cached revisits. A gesture whose pixels are already
+complete refreshes delayed statistics without another correction; proxy and
+viewport edits still require exact full-source refinement. Active edits can use
+an overview plus a visible region, then settle to an exact complete image.
+Source, settings, Original, and flat-field changes invalidate display reuse.
+
+On machines with at least 16 GiB RAM, the cancellable priority scheduler permits
+one foreground and one speculative decode concurrently, with at most two workers
+and at most one speculative worker. Export preempts speculation. Adjustment
+gestures preserve background progress. CPU preparation still reuses geometry and
+Darkroom analysis; revision-bound statistics follow publication asynchronously.
+See the [earlier measurements](../docs/performance/viewport-and-work-reuse-2026-09-16.md)
+for the preceding viewport-region implementation.

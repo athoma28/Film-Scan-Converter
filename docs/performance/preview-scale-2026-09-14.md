@@ -1,5 +1,14 @@
 # Full-resolution edit preview scaling
 
+**Dated implementation and measurement record.** The 2048px interaction proxy
+remains part of the app, but these timings and memory observations predate
+full-preview retention across navigation and CPU fallback use of the same
+bounded source. Current supported GPU zoomed inspection uses a full-source
+visible region; CPU fallback processes the full source. Use the
+[preview architecture](../development/realtime-preview-plan.md) for current
+ownership and scheduling and the [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md) to rerun
+the opt-in workload after changes.
+
 September 14, 2026. This follows the editing measurements and promotion gates in
 the [performance research plan](research-directions-2026-09-12.md). It measures
 the retained real-RAW renderer at the app's draft, inspect, and full-sensor tiers,

@@ -9,7 +9,7 @@ FSC_DIR={path to Film Scan Converter root dir}
 f=""
 
 for file in "$@"; do
-	if [[ f -eq "" ]]; then
+	if [[ -z "$f" ]]; then
 		f=${file}
 	else
 		f="${f}, ${file}"

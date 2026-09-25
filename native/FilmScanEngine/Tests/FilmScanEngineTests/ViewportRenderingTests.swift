@@ -70,7 +70,7 @@ struct ViewportRenderingTests {
     }
   }
 
-  @Test("App publishes a bounded overview and native region without changing its document size")
+  @Test("Settled previews pan without correction work; active edits refine to a complete raster")
   @MainActor
   func appViewportAndStatistics() async throws {
     let input = try #require(
@@ -86,11 +86,18 @@ struct ViewportRenderingTests {
       visibleRect: CGRect(
         x: size.width * 0.25, y: size.height * 0.2,
         width: size.width * 0.3, height: size.height * 0.3), backingScale: 2, magnification: 1)
+    let revision = model.publishedRenderRevision
+    let correctionCount = model.previewCorrectionCount
     model.setPreviewRenderDemand(demand)
+    #expect(!model.isRendering)
+    #expect(model.previewCorrectionCount == correctionCount)
+    #expect(model.publishedRenderRevision == revision)
+    #expect(model.previewDetail == nil)
+    model.beginEditingGesture(named: "Exposure")
+    model.setExposureEV(0.05)
     try await waitUntil { !model.isRendering && model.previewDetail != nil }
     #expect(model.previewImage?.size == size)
     #expect(model.previewDetail?.rect == demand.detailRect)
-    model.beginEditingGesture(named: "Exposure")
     for value in [0.1, 0.2, 0.4] { model.setExposureEV(value) }
     model.endEditingGesture()
     try await waitUntil {
@@ -98,6 +105,9 @@ struct ViewportRenderingTests {
     }
     #expect(model.previewStatistics.sampleCount > 0)
     #expect(model.publishedPreviewParameters == model.parameters)
+    #expect(model.previewDetail == nil)
+    let full = try #require(model.previewImage.flatMap(PreviewBitmap.cgImage))
+    #expect(full.width == Int(size.width) && full.height == Int(size.height))
   }
 
   private func rgba(_ image: CGImage) throws -> [UInt8] {

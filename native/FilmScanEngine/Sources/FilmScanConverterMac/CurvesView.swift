@@ -20,7 +20,7 @@ enum CurveChannel: String, CaseIterable, Identifiable {
 }
 
 struct IntegratedCurvesView: View {
-  @ObservedObject var model: AppModel
+  let model: AppModel
   @Environment(\.editingGestureAction) private var editingGestureAction
   @State private var selectedChannel: CurveChannel = .rgb
   @State private var selectedPointIndex: Int? = nil

@@ -5,6 +5,110 @@ import Testing
 
 @Suite("Perspective warp")
 struct PerspectiveWarpTests {
+  @Test("A known ratio cannot create a two-dimensional warp from a one-pixel axis")
+  func degenerateSourceRatio() {
+    for size in [
+      PixelDimensions(width: 1, height: 1), .init(width: 1, height: 11),
+      .init(width: 11, height: 1),
+    ] {
+      var crop = PerspectiveCrop.fullFrame
+      crop.outputAspectRatio = .landscape3x2
+      let image = UInt16Image(
+        width: size.width, height: size.height, channels: 1,
+        pixels: [UInt16](repeating: 12_000, count: size.width * size.height))
+      let parameters = ProcessingParameters(filmType: .cropOnly, perspectiveCrop: crop)
+      let output = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+      #expect(output == image)
+      #expect(ImageGeometry.outputDimensions(source: size, parameters: parameters) == size)
+    }
+  }
+
+  @Test("Perspective grid divisions agree with the homography on a foreshortened frame")
+  func projectiveGrid() throws {
+    let crop = PerspectiveCrop(
+      topLeft: .init(x: 0.2, y: 0.1), topRight: .init(x: 0.8, y: 0.1),
+      bottomRight: .init(x: 0.95, y: 0.9), bottomLeft: .init(x: 0.05, y: 0.9))
+    let grid = crop.gridLines()
+    #expect(grid.count == 6)
+    // The halfway row lies at y=.42 in this photograph, not the bilinear y=.5.
+    #expect(abs(grid[3].start.y - 0.42) < 1e-6)
+    #expect(abs(grid[3].end.y - 0.42) < 1e-6)
+    let matrix = try #require(
+      PerspectiveTransform.computeHomography(
+        srcPoints: crop.points.map { (Float($0.x), Float($0.y)) },
+        dstPoints: PerspectiveCrop.fullFrame.points.map { (Float($0.x), Float($0.y)) }))
+    for (index, line) in grid.enumerated() {
+      let fraction = Double(index / 2 + 1) / 4
+      for point in [line.start, line.end] {
+        let divisor = Double(matrix[6]) * point.x + Double(matrix[7]) * point.y + Double(matrix[8])
+        let axis = index % 2 == 0 ? 0 : 3
+        let position =
+          (Double(matrix[axis]) * point.x + Double(matrix[axis + 1]) * point.y
+            + Double(matrix[axis + 2])) / divisor
+        #expect(abs(position - fraction) < 1e-6)
+      }
+    }
+  }
+
+  @Test("Known frame ratio restores proportions and survives borders, persistence, and orientation")
+  func knownFrameRatio() throws {
+    var crop = PerspectiveCrop(
+      topLeft: .init(x: 0.26, y: 0.1), topRight: .init(x: 0.78, y: 0.19),
+      bottomRight: .init(x: 0.9, y: 0.93), bottomLeft: .init(x: 0.1, y: 0.81))
+    let image = UInt16Image(
+      width: 800, height: 600, channels: 1,
+      pixels: [UInt16](repeating: 30_000, count: 800 * 600))
+    let estimated = crop.outputPixelSize(imageWidth: 800, imageHeight: 600)
+    for ratio in CropAspectRatio.allCases where ratio != .free {
+      crop.outputAspectRatio = ratio
+      let inset = crop.inset(borderPercent: 3)
+      #expect(inset.outputAspectRatio == ratio)
+      #expect(crop.replacing(0, with: .init(x: 0.25, y: 0.11)).outputAspectRatio == ratio)
+      let restored = try JSONDecoder().decode(
+        PerspectiveCrop.self, from: JSONEncoder().encode(crop))
+      #expect(restored == crop)
+      let size = crop.outputPixelSize(imageWidth: 800, imageHeight: 600)
+      let value = try #require(ratio.value)
+      #expect(abs(Double(size.width) - value * Double(size.height)) <= 1.5)
+      #expect(
+        abs(Double(size.width * size.height) / Double(estimated.width * estimated.height) - 1)
+          < 0.01)
+      let parameters = ProcessingParameters(
+        borderCrop: 3, flip: true, rotation: 1, filmType: .cropOnly, perspectiveCrop: crop)
+      let predicted = ImageGeometry.outputDimensions(
+        source: .init(width: 800, height: 600), parameters: parameters)
+      let rendered = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+      #expect(predicted == .init(width: rendered.width, height: rendered.height))
+      #expect(rendered.pixels.allSatisfy { $0 == 30_000 })
+      #expect(ratio.transposed.transposed == ratio)
+    }
+    // A legacy document with only four corners must retain its exact size/pixels.
+    crop.outputAspectRatio = nil
+    let encoded = try JSONEncoder().encode(crop)
+    #expect(!String(decoding: encoded, as: UTF8.self).contains("outputAspectRatio"))
+    let legacy = try JSONDecoder().decode(PerspectiveCrop.self, from: encoded)
+    #expect(legacy.outputAspectRatio == nil)
+    #expect(legacy.outputPixelSize(imageWidth: 800, imageHeight: 600).width == estimated.width)
+  }
+
+  @Test("Parallel assist uses a circular pixel threshold on rectangular scans")
+  func parallelAssistPixelMetric() {
+    let crop = PerspectiveCrop.fullFrame
+    let wide = crop.replacing(
+      0, with: .init(x: 0.2, y: 0.03),
+      parallelismAssistThreshold: 18, coordinateSize: (1_000, 500))
+    #expect(abs(wide.topLeft.y) < 1e-12)
+    let distant = crop.replacing(
+      0, with: .init(x: 0.025, y: 0.2),
+      parallelismAssistThreshold: 18, coordinateSize: (1_000, 500))
+    #expect(abs(distant.topLeft.x - 0.025) < 1e-12)
+    #expect(abs(distant.topLeft.y - 0.2) < 1e-12)
+    let tall = crop.replacing(
+      0, with: .init(x: 0.03, y: 0.2),
+      parallelismAssistThreshold: 18, coordinateSize: (500, 1_000))
+    #expect(abs(tall.topLeft.x) < 1e-12)
+  }
+
   @Test("Large identity warp preserves pixels across parallel row ranges")
   func largeIdentityWarpParity() {
     let width = 1_001

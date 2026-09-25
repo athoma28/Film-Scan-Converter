@@ -1,7 +1,7 @@
 # Features
 
-This inventory describes the native application shipped in 0.2.0 Beta 2 and
-the current development source. See [Installation](installation.md), the
+This inventory describes the current native application, including downloadable
+0.2.0 Beta 3. See [Installation](installation.md), the
 [usage guide](how-to-use.md), and
 [development status](development/native-macos.md) for instructions and
 verification.
@@ -14,16 +14,26 @@ verification.
   colour-accurate demosaiced draft, selected-file inspect and full-sensor 1-pass
   previews, and lookahead for the next three unseen files. Actual sizes depend
   on [CFA binning](development/xtrans-preview-mosaic-binning.md).
+- **Load RAW Preview** goes straight to full-sensor detail, including while an
+  automatic inspect preview is running.
 - A separate thumbnail cache supplies 192px sidebar images. RAW thumbnails use
   embedded JPEGs; the main RAW canvas uses demosaiced previews when available.
 - Core Image/Metal correction preview with latest-value-wins scheduling and a
   deterministic CPU fallback. Preview sessions are bounded by count and bytes;
-  the default count is eight. No cache-size control appears in the current UI.
-- Supported point-control gestures on a selected full-sensor RAW use a retained
-  2048px GPU raster without changing the logical canvas; release publishes the
-  exact full-source refinement. CPU fallbacks and export are unchanged.
+  the default count is eight. Full-resolution previews and completed corrections
+  survive selection changes. Cache memory scales to 2 GiB on 16 GiB Macs or
+  3 GiB on 24 GiB Macs; memory pressure releases background entries. No cache-size
+  control appears in the current UI. Up to two neighbouring RAWs prepare at full
+  detail in the background when space permits.
+- At whole-image zoom, supported point-control gestures on a selected
+  full-sensor RAW can use a retained 2048px source without changing the logical
+  canvas. The preview can render that source on either the GPU or CPU path;
+  zoomed GPU inspection instead renders the visible region from the full source,
+  while CPU fallback processes the full source. Releasing the gesture publishes
+  exact full-source detail. Export is unchanged.
 - Native Fit, momentum pan, cursor-centered pinch, step zoom, and 100% current
-  preview pixels. Image and editing/dust overlays share the viewport transform.
+  preview pixels. Settled images pan and zoom without repeating corrections.
+  Image and editing/dust overlays share the viewport transform.
 - Original comparison preserves geometry, pan, and magnification. Source-tier
   upgrades preserve the viewed region. New selections return to Fit.
 - Embedded-JPEG warning when RAW colour is unavailable, first-draft loading
@@ -32,40 +42,39 @@ verification.
 
 ## Develop
 
-- **Film & Inversion**: color negative, B&W negative, slide, and Original scan
-  types, with Natural, Darkroom, Classic, and Bypass negative conversion.
-  Classification initializes new scans without overwriting saved choices.
-- **Natural**: paired RAW/JPEG/XMP reference curves with exposure adaptation.
-  Color uses partial exposure and channel-ratio anchors; B&W uses full exposure
-  anchoring. Negative Exposure adjusts the negative before inversion.
-- Natural color starting looks: Balanced, Fujicolor 400, Fuji 200 Expired,
-  CineStill 800T, and Harman Phoenix II. Fuji 200/CineStill remain experimental.
-  B&W offers Balanced and Shanghai GP3. These are explicit starting looks, not
-  automatic stock identification or universal stock characterizations.
-- **Darkroom**: log-density dye unmix, chroma-gated channel bounds, cast removal,
-  and an H&D paper curve. Cyan/purple masks select Harman Phoenix II with
-  Fujicolor Crystal Archive. Neutral and Kodak Endura Premier papers are also
-  available. The stock catalog includes generic C-41, Phoenix, Fujicolor, Portra,
-  Gold, Ektar, Ultra Max, Aerocolor, and VISION3 variants; additional profiles
-  load from `NegativeDensityProfiles/`. Provenance is recorded in each profile.
-- **Classic**: exponent-based negative inversion. **Original** skips inversion
-  and tone/color corrections while retaining geometry and export.
-- **Tone & Light**: exposure, brightness, contrast, highlights, shadows, smooth
-  ordered curves, and sampled display clipping. B&W supports overall tone
+- **Film Base**: Color C-41, color cyan-mask, B&W negative, Slide, or Original.
+  Classification guesses new scans and applies the first recommended factory
+  look as a starting point; the user can override either choice. Each base has
+  one invert. Color negatives use density-print inversion with a generic C-41
+  or cyan-mask unmix and a neutral print response. Looks never change film base.
+- **Presets**: a compact menu of recommended, factory, and saved looks. Each look is a
+  snapshot of the public sliders, curves, and wheels. Apply assigns those
+  values on the existing preview path. The sliders jump to show the recipe;
+  further edits show Custom. Command-Z undoes apply. Save current stores the
+  same snapshot, identifies replacement names, and retains the name after a
+  failed save. Reset Adjustments preserves film base, calibration, and framing.
+- Factory looks: Clean Invert, Soft People, Punchy Print, Warm, Cool, Foliage,
+  Night Lift, B&W Print, and B&W Soft. These are creative starting points, not
+  measured stock or paper simulations.
+- **Tone & Light**: exposure, brightness, contrast, broad highlights/shadows,
+  focused whites/blacks, smooth ordered curves, and sampled display clipping.
+  B&W supports overall tone
   curves on CPU and GPU; per-channel curves are for color film types.
-- **Color & Balance**: temperature, tint, saturation, vibrance, and shadow,
-  midtone, and highlight color wheels. Near-zero holder pixels that invert to
-  clipped highlights are neutralized in both preview and export.
-- **Looks & Presets**: saved presets, Kodachrome-like Auto, and experimental
-  Prototype Looks. Restore Before reverses the last preset application while
-  preserving frame-specific geometry.
+- **Color & Balance**: temperature, tint, saturation, vibrance, color wheels,
+  Shadow Floor, Midtone Level, and Highlight Ceiling beneath the wheels,
+  and, on color negatives, foliage recovery, cast cleanup, and color
+  separation. Near-zero holder pixels that invert to clipped highlights are
+  neutralized in both preview and export.
 
 ## Geometry And Calibration
 
 - Rotation, horizontal flip, two-point horizontal/vertical straighten, Auto
   Frame, four-corner perspective, and a separate manual canvas crop.
-- Perspective reticles, a 100×100-pixel loupe, grid, and optional parallel-edge
-  assistance. The warp corrects one planar quadrilateral.
+- Perspective reticles, a 100×100-pixel loupe, projective grid, and optional parallel-edge
+  assistance. Frame Ratio restores known proportions such as 3:2; Automatic
+  estimates from the edges. Arrow keys move a selected corner one source pixel,
+  Shift ten; Option disables snapping. Border shading shows the retained frame.
+  The warp corrects one planar quadrilateral, before straighten/manual crop.
 - Manual crop handles, box movement/replacement, and an uncropped editing
   canvas. Clearing manual crop preserves upstream geometry; changing upstream
   geometry clears the dependent crop. Preview, export, and full-output dimension
@@ -80,17 +89,21 @@ verification.
   color negatives, applied before tone, curves, and grading.
 - Capture profiles can store an affine density correction. The offline fitter
   has synthetic and held-out validation machinery; no validated built-in capture
-  correction is supplied. This is separate from Natural curves and Darkroom unmix.
+  correction is supplied. Historical Natural curves and stock unmix profiles
+  remain engine/provenance data; they are not current Develop pickers.
 
 ## Rolls, Stacks, And Settings
 
 - Scans sidebar with multi-selection, Previous/Next Scan in sidebar order,
-  edited/preview-ready/export markers, and stack badges.
+  session-local up/down reordering, edited/preview-ready/export markers, and
+  stack badges.
 - Per-file persisted corrections and session-local Undo/Redo. Continuous slider,
   curve, wheel, and perspective gestures coalesce into one history entry.
   Background saves coalesce rapid edits; normal quit waits for pending saves.
-- Correction copy/paste and selected/all look application preserve destination
-  geometry and measured film base. User film-response profiles retain inversion,
+- Correction copy/paste and selected/all look application transfer public
+  adjustments and preserve destination geometry, film base, and calibration.
+  Version-one presets migrate to these snapshots; the first save/delete keeps
+  the original library as a backup. User film-response profiles retain inversion,
   crossover, density, and display settings.
 - Opt-in repeated-capture proposals for adjacent, same-size scans. Translation
   registration rejects low-texture or ambiguous matches. Auto selects HDR when
@@ -128,8 +141,6 @@ and a library manifest; it validates the app and extracted archive. Developer
 ID/notarization support exists, but the published beta is ad-hoc signed.
 
 ## Limitations
-
-Development source after Beta 2 adds session-local up/down sidebar reordering.
 
 Native dust removal, lens-distortion modeling, and vendor-specific tethering
 are absent. Stacking handles translation only and is

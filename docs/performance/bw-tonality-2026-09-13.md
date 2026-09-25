@@ -1,5 +1,10 @@
 # B&W fine tonality and three-scan reconstruction
 
+**Historical diagnostic evidence.** The Natural/Standard UI and default-curve
+claims below describe the September 13 source. Current Film Base / LookRecipe
+behavior is documented in [development status](../development/native-macos.md).
+These synthetic probes do not establish current photographic acceptance.
+
 September 13, 2026. Source investigation of `4e962c1` plus the working tree,
 and small synthetic probes against the existing release engine. No RAW corpus
 decode, Camera Raw comparison, or photographic profile refit was run.
@@ -46,7 +51,7 @@ These are encoded channel values, not percentages of physical luminance. For
 this table the curves receive the same normalized input; an actual frame's
 normalization differs between the two profiles.
 
-The [small production-code probe](../../native/diagnostics/BWTonalityProbe.swift)
+The [small production-code probe](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/diagnostics/BWTonalityProbe.swift)
 passes a 256 × 256 neutral UInt16 ramp through `FilmProcessing.correctedPreview`
 with B&W defaults, no measured median (gain 1), and no other adjustments.
 For source codes **45,875–58,981**, the result is:
@@ -55,7 +60,7 @@ For source codes **45,875–58,981**, the result is:
 - Shanghai GP3: the same inputs → 3,117 distinct output codes, 6,064–9,180.
 
 The [recorded JSON](bw-tonality-probe-2026-09-13.json) includes the complete
-results. The [runner instructions](../../native/diagnostics/README.md) reuse a
+results. The [runner instructions](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/diagnostics/README.md) reuse a
 current release build and compile only the probe.
 
 Source locations under `native/FilmScanEngine/Sources/`:

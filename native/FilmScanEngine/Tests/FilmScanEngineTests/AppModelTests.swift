@@ -112,7 +112,7 @@ struct AppModelTests {
     try await waitUntil { model.decodedImage != nil && model.previewImage != nil }
     model.setFilmType(.colourNegative)
     for value in stride(from: -100, through: 100, by: 5) {
-      model.setTemperature(value)
+      model.setSemanticTemperature(Double(value))
     }
     try await waitUntil { !model.isRendering && model.parameters.temperature == 100 }
 
@@ -567,7 +567,7 @@ struct AppModelTests {
     #expect(
       FileManager.default.fileExists(atPath: destination.appendingPathComponent("scan.png").path))
 
-    model.setTemperature(25)
+    model.setSemanticTemperature(25)
     model.exportSelected()
     let secondOutput = destination.appendingPathComponent("scan-2.png")
     try await waitUntil {
@@ -577,7 +577,7 @@ struct AppModelTests {
     #expect(model.fullResolutionExportDecodeCount == 1)
     #expect(model.fullResolutionExportDecodeCacheHits == 1)
 
-    model.setTemperature(0)
+    model.setSemanticTemperature(0)
     model.exportSelected()
     let thirdOutput = destination.appendingPathComponent("scan-3.png")
     try await waitUntil {
@@ -1148,20 +1148,21 @@ struct AppModelTests {
   func rawImportUsesDemosaicedDraftPreview() async throws {
     let raw = try #require(appModelRepresentativeRawURL)
 
-    let model = AppModel()
-    model.importFiles([raw])
+    try await withRawPreviewModel(expectedFile: raw) { model in
+      model.importFiles([raw])
 
-    try await waitUntil(timeout: .seconds(8)) { model.previewImage != nil }
-    #expect(
-      model.previewSourceKind == .rawDraft || model.previewSourceKind == .rawDetail
-        || model.previewSourceKind == .rawInspect || model.previewSourceKind == .rawFull)
-    #expect(model.previewSourceKind != .embeddedRAW)
-    #expect(model.decodedImage?.channels == 3)
-    if model.previewSourceKind == .rawDraft {
+      try await waitUntil(timeout: .seconds(8)) { model.previewImage != nil }
       #expect(
-        max(model.decodedImage?.width ?? 0, model.decodedImage?.height ?? 0)
-          <= AppModel.rawDraftPreviewMaxDimension)
-      #expect(!model.isLoading)
+        model.previewSourceKind == .rawDraft || model.previewSourceKind == .rawDetail
+          || model.previewSourceKind == .rawInspect || model.previewSourceKind == .rawFull)
+      #expect(model.previewSourceKind != .embeddedRAW)
+      #expect(model.decodedImage?.channels == 3)
+      if model.previewSourceKind == .rawDraft {
+        #expect(
+          max(model.decodedImage?.width ?? 0, model.decodedImage?.height ?? 0)
+            <= AppModel.rawDraftPreviewMaxDimension)
+        #expect(!model.isLoading)
+      }
     }
   }
 
@@ -1173,61 +1174,132 @@ struct AppModelTests {
   )
   func rawPreviewUpgradesAutomaticallyToFullResolution() async throws {
     let raw = try #require(appModelRepresentativeRawURL)
-    let model = AppModel()
-    model.importFiles([raw])
+    try await withRawPreviewModel(expectedFile: raw) { model in
+      model.importFiles([raw])
 
-    try await waitUntil(timeout: .seconds(8)) {
-      model.previewSourceKind == .rawDraft || model.previewSourceKind == .rawDetail
-        || model.previewSourceKind == .rawInspect || model.previewSourceKind == .rawFull
-    }
-    try await waitUntil(timeout: .seconds(8)) {
-      model.previewSourceKind == .rawInspect || model.previewSourceKind == .rawFull
-    }
-    if model.previewSourceKind == .rawInspect {
-      let inspect = try #require(model.selectedImageDimensions)
-      #expect(max(inspect.width, inspect.height) > AppModel.rawDetailPreviewMaxDimension)
-      #expect(max(inspect.width, inspect.height) <= AppModel.rawInspectPreviewMaxDimension)
-    }
-    try await waitUntil(timeout: .seconds(90)) {
-      model.previewSourceKind == .rawFull && !model.isLoading && !model.isUpgradingRawPreview
-        && !model.isRendering
-    }
-    let dimensions = try #require(model.selectedImageDimensions)
-    let full = try RawImageDecoder.fullResolutionDimensions(raw)
-    #expect(!dimensions.provisional)
-    #expect(model.previewSourceKind == .rawFull)
-    #expect(max(dimensions.width, dimensions.height) > AppModel.rawDetailPreviewMaxDimension)
-    #expect(max(dimensions.width, dimensions.height) >= max(full.width, full.height) * 9 / 10)
-    #expect(!model.canLoadRawDetailPreview)
+      try await waitUntil(timeout: .seconds(8)) {
+        model.previewSourceKind == .rawDraft || model.previewSourceKind == .rawDetail
+          || model.previewSourceKind == .rawInspect || model.previewSourceKind == .rawFull
+      }
+      try await waitUntil(timeout: .seconds(8)) {
+        model.previewSourceKind == .rawInspect || model.previewSourceKind == .rawFull
+      }
+      if model.previewSourceKind == .rawInspect {
+        let inspect = try #require(model.selectedImageDimensions)
+        #expect(max(inspect.width, inspect.height) > AppModel.rawDetailPreviewMaxDimension)
+        #expect(max(inspect.width, inspect.height) <= AppModel.rawInspectPreviewMaxDimension)
+      }
+      try await waitUntil(timeout: .seconds(90)) {
+        model.previewSourceKind == .rawFull && !model.isLoading && !model.isUpgradingRawPreview
+          && !model.isRendering
+      }
+      let dimensions = try #require(model.selectedImageDimensions)
+      let full = try RawImageDecoder.fullResolutionDimensions(raw)
+      #expect(!dimensions.provisional)
+      #expect(model.previewSourceKind == .rawFull)
+      #expect(max(dimensions.width, dimensions.height) > AppModel.rawDetailPreviewMaxDimension)
+      #expect(max(dimensions.width, dimensions.height) >= max(full.width, full.height) * 9 / 10)
+      #expect(!model.canLoadRawDetailPreview)
 
-    let logicalSize = try #require(model.previewImage?.size)
-    let fullBacking = try #require(model.previewImage.flatMap(PreviewBitmap.cgImage))
-    #expect(max(fullBacking.width, fullBacking.height) > AppModel.continuousEditPreviewMaxDimension)
-    let revisionBeforeGesture = model.publishedRenderRevision
-    model.beginEditingGesture(named: "Exposure")
-    model.setExposureEV(0.25)
-    try await waitUntil(timeout: .seconds(15)) {
-      model.publishedRenderRevision > revisionBeforeGesture && !model.isRendering
-    }
-    let proxyRevision = model.publishedRenderRevision
-    let proxyImage = try #require(model.previewImage)
-    let proxyBacking = try #require(PreviewBitmap.cgImage(from: proxyImage))
-    #expect(proxyImage.size == logicalSize)
-    #expect(
-      max(proxyBacking.width, proxyBacking.height) <= AppModel.continuousEditPreviewMaxDimension)
-    #expect(model.status.contains("GPU edit preview"))
+      model.setFilmBase(.colorC41)
+      model.applyLookRecipe(.cleanInvert)
+      model.setManualCrop(.init(x: 0.1, y: 0.1, width: 0.8, height: 0.8))
+      try await waitUntil(timeout: .seconds(15)) { !model.isRendering }
+      let logicalSize = try #require(model.previewImage?.size)
+      let fullBacking = try #require(model.previewImage.flatMap(PreviewBitmap.cgImage))
+      #expect(
+        max(fullBacking.width, fullBacking.height) > AppModel.continuousEditPreviewMaxDimension)
+      let revisionBeforeGesture = model.publishedRenderRevision
+      model.beginEditingGesture(named: "Exposure")
+      model.setExposureEV(0.25)
+      try await waitUntil(timeout: .seconds(15)) {
+        model.publishedRenderRevision > revisionBeforeGesture && !model.isRendering
+      }
+      let proxyRevision = model.publishedRenderRevision
+      let proxyImage = try #require(model.previewImage)
+      let proxyBacking = try #require(PreviewBitmap.cgImage(from: proxyImage))
+      #expect(proxyImage.size == logicalSize)
+      #expect(
+        max(proxyBacking.width, proxyBacking.height) <= AppModel.continuousEditPreviewMaxDimension)
+      #expect(model.status.contains("GPU edit preview"))
 
-    model.endEditingGesture()
-    try await waitUntil(timeout: .seconds(15)) {
-      model.publishedRenderRevision > proxyRevision && !model.isRendering
+      model.endEditingGesture()
+      try await waitUntil(timeout: .seconds(15)) {
+        model.publishedRenderRevision > proxyRevision && !model.isRendering
+      }
+      let refinedImage = try #require(model.previewImage)
+      let refinedBacking = try #require(PreviewBitmap.cgImage(from: refinedImage))
+      #expect(refinedImage.size == logicalSize)
+      #expect(
+        max(refinedBacking.width, refinedBacking.height)
+          > AppModel.continuousEditPreviewMaxDimension)
+      #expect(model.publishedPreviewParameters == model.parameters)
+      #expect(!model.status.contains("edit preview"))
+
+      let trace = PreviewInteractionTrace()
+      model.previewInteractionTrace = trace
+      let demand = PreviewRenderDemand(
+        documentSize: logicalSize,
+        visibleRect: CGRect(x: 512, y: 384, width: 768, height: 512),
+        backingScale: 2, magnification: 1)
+      model.setPreviewRenderDemand(demand)
+      model.beginEditingGesture(named: "Exposure")
+      model.setExposureEV(0.35)
+      try await waitUntil(timeout: .seconds(15)) {
+        !model.isRendering && model.previewDetail != nil
+      }
+      #expect(
+        trace.events.contains {
+          $0.stage == .requestSubmitted && $0.usesProxyOverview == true && $0.hasDetail == true
+        })
+      let overview = try #require(model.previewImage.flatMap(PreviewBitmap.cgImage))
+      #expect(max(overview.width, overview.height) <= 1024)
+      #expect(model.previewImage?.size == logicalSize)
+      let detail = try #require(model.previewDetail)
+      let detailBitmap = try #require(PreviewBitmap.cgImage(from: detail.image))
+      #expect(detail.rect == demand.detailRect)
+      #expect(detailBitmap.width == Int(detail.rect.width))
+      #expect(detailBitmap.height == Int(detail.rect.height))
+      model.endEditingGesture()
+      try await waitUntil(timeout: .seconds(15)) { !model.isRendering }
+      let complete = try #require(model.previewImage.flatMap(PreviewBitmap.cgImage))
+      let expectedDetail = try #require(complete.cropping(to: detail.rect))
+      let actualBytes = try #require(rgba8Bytes(detailBitmap))
+      let expectedBytes = try #require(rgba8Bytes(expectedDetail))
+      #expect(actualBytes.count == expectedBytes.count)
+      #expect(zip(actualBytes, expectedBytes).allSatisfy { abs(Int($0) - Int($1)) <= 1 })
+      #expect(model.previewDetail == nil)
+      #expect(
+        complete.width == Int(logicalSize.width) && complete.height == Int(logicalSize.height))
+      #expect(model.publishedPreviewParameters == model.parameters)
+      model.previewInteractionTrace = nil
+      model.setPreviewRenderDemand(
+        PreviewRenderDemand(
+          documentSize: logicalSize, visibleRect: CGRect(origin: .zero, size: logicalSize),
+          backingScale: 2, magnification: 0.1))
+
+      var legacy = LookRecipe.cleanInvert
+      legacy.photoAdjustments.schemaVersion = 1
+      model.applyLookRecipe(legacy)
+      try await waitUntil(timeout: .seconds(30)) { !model.isRendering }
+      let beforeFallback = model.publishedRenderRevision
+      model.beginEditingGesture(named: "Contrast")
+      model.setContrast(-0.3)
+      try await waitUntil(timeout: .seconds(15)) {
+        model.publishedRenderRevision > beforeFallback && !model.isRendering
+      }
+      let fallback = try #require(model.previewImage.flatMap(PreviewBitmap.cgImage))
+      #expect(max(fallback.width, fallback.height) <= AppModel.continuousEditPreviewMaxDimension)
+      #expect(model.previewImage?.size == logicalSize)
+      let fallbackRevision = model.publishedRenderRevision
+      model.endEditingGesture()
+      try await waitUntil(timeout: .seconds(30)) {
+        model.publishedRenderRevision > fallbackRevision && !model.isRendering
+      }
+      let final = try #require(model.previewImage.flatMap(PreviewBitmap.cgImage))
+      #expect(max(final.width, final.height) > AppModel.continuousEditPreviewMaxDimension)
+      #expect(model.publishedPreviewParameters == model.parameters)
     }
-    let refinedImage = try #require(model.previewImage)
-    let refinedBacking = try #require(PreviewBitmap.cgImage(from: refinedImage))
-    #expect(refinedImage.size == logicalSize)
-    #expect(
-      max(refinedBacking.width, refinedBacking.height) > AppModel.continuousEditPreviewMaxDimension)
-    #expect(model.publishedPreviewParameters == model.parameters)
-    #expect(!model.status.contains("edit preview"))
   }
 
   @Test("Lookahead prefetches the next three unseen files")
@@ -1240,6 +1312,9 @@ struct AppModelTests {
     let short = AppModel.previewLookahead(
       files: files, selected: files[0], cacheLimit: 2)
     #expect(short == [files[1]])
+    #expect(
+      AppModel.previewLookahead(files: files, selected: files[7], cacheLimit: 8)
+        == [files[6], files[5], files[4]])
   }
 
   @Test(
@@ -1252,50 +1327,91 @@ struct AppModelTests {
     let urls = SampleRawCorpus.rawURLs()
     let first = urls[0]
     let second = urls[1]
-    let model = AppModel()
-    model.setPreviewCacheLimit(4)
-    model.importFiles([first, second])
+    try await withRawPreviewModel(expectedFile: first) { model in
+      model.setPreviewCacheLimit(4)
+      model.importFiles([first, second])
 
-    try await waitUntil(timeout: .seconds(8)) { model.previewImage != nil }
-    try await waitUntil(timeout: .seconds(45)) {
-      model.cachedPreviewKind(for: second) == .rawDetail
-        || model.cachedPreviewKind(for: second) == .rawFull
+      try await waitUntil(timeout: .seconds(8)) { model.previewImage != nil }
+      try await waitUntil(timeout: .seconds(45)) {
+        model.cachedPreviewKind(for: second) == .rawDetail
+          || model.cachedPreviewKind(for: second) == .rawFull
+      }
+      let cachedKind = try #require(model.cachedPreviewKind(for: second))
+      #expect(cachedKind == .rawDetail || cachedKind == .rawFull)
+      #expect(
+        model.previewSourceKind == .rawDraft || model.previewSourceKind == .rawDetail
+          || model.previewSourceKind == .rawInspect || model.previewSourceKind == .rawFull)
+
+      model.selection = second
+      model.loadSelection()
+      // The speculative full pass may finish before the test resumes. Selecting
+      // either completed tier must reuse it without downgrading to a draft.
+      #expect(model.previewSourceKind == cachedKind)
+      #expect(model.isUpgradingRawPreview == (cachedKind != .rawFull))
     }
-    #expect(model.cachedPreviewKind(for: second) == .rawDetail)
-    #expect(
-      model.previewSourceKind == .rawDraft || model.previewSourceKind == .rawDetail
-        || model.previewSourceKind == .rawInspect || model.previewSourceKind == .rawFull)
-
-    model.selection = second
-    model.loadSelection()
-    #expect(model.previewSourceKind == .rawDetail)
-    #expect(model.isUpgradingRawPreview)
   }
 
   @Test(
-    "Selecting another RAW demotes the previous full-resolution preview to inspect size",
+    "Full RAW previews survive switching, warm a neighbour, and pan without correction work",
     .enabled(
       if: appModelRawCorpusAvailable && SampleRawCorpus.rawURLs().count >= 2,
-      "sample-raw corpus needs at least two RAWs; demote preview test skipped")
+      "sample-raw corpus needs at least two RAWs; retained preview test skipped")
   )
-  func unselectedFullResPreviewDemotesToInspect() async throws {
+  func fullResPreviewsSurviveNavigation() async throws {
     let urls = SampleRawCorpus.rawURLs()
     let first = urls[0]
     let second = urls[1]
-    let model = AppModel()
-    model.setPreviewCacheLimit(4)
-    model.importFiles([first, second])
+    try await withRawPreviewModel(expectedFile: first) { model in
+      model.setPreviewCacheLimit(4)
+      model.importFiles([first, second])
 
-    try await waitUntil(timeout: .seconds(90)) {
-      model.previewSourceKind == .rawFull && model.selection == first
+      try await waitUntil(timeout: .seconds(90)) {
+        model.previewSourceKind == .rawFull && model.selection == first && !model.isRendering
+      }
+      // Panning a sensor-size image should only move the native viewport.
+      let dimensions = try #require(model.previewImage?.size)
+      let corrections = model.previewCorrectionCount
+      let published = model.publishedRenderRevision
+      let panStart = ContinuousClock.now
+      for index in 0..<1_000 {
+        model.setPreviewRenderDemand(
+          PreviewRenderDemand(
+            documentSize: dimensions,
+            visibleRect: CGRect(x: index * 2, y: index, width: 1000, height: 800),
+            backingScale: 2, magnification: 1))
+      }
+      let panDuration = panStart.duration(to: .now)
+      #expect(model.previewCorrectionCount == corrections)
+      #expect(model.publishedRenderRevision == published)
+      #expect(!model.isRendering)
+      print("RETAINED_PREVIEW 1000 pan demands: \(panDuration)")
+
+      // An adjustment gesture must not throw away background decode progress.
+      model.beginEditingGesture(named: "Exposure")
+      try await waitUntil(timeout: .seconds(90)) {
+        model.cachedPreviewKind(for: second) == .rawFull
+      }
+      model.endEditingGesture()
+      try await waitUntil { !model.isRendering }
+      #expect(model.previewCachePhysicalBytes <= model.previewMemoryByteLimit)
+      let decodeCount = model.fullResolutionPreviewDecodeCount
+      model.selection = second
+      model.loadSelection()
+      #expect(model.previewSourceKind == .rawFull)
+      #expect(!model.isUpgradingRawPreview)
+      try await waitUntil { !model.isRendering }
+      let correctionsBeforeReturn = model.previewCorrectionCount
+      let hits = model.previewRenderCacheHits
+      model.selection = first
+      model.loadSelection()
+      #expect(model.previewSourceKind == .rawFull)
+      #expect(model.cachedPreviewKind(for: second) == .rawFull)
+      #expect(!model.isUpgradingRawPreview)
+      try await waitUntil { !model.isRendering }
+      #expect(model.fullResolutionPreviewDecodeCount == decodeCount)
+      #expect(model.previewCorrectionCount == correctionsBeforeReturn)
+      #expect(model.previewRenderCacheHits == hits + 1)
     }
-    model.selection = second
-    model.loadSelection()
-    try await waitUntil(timeout: .seconds(8)) {
-      model.selection == second && model.previewImage != nil
-    }
-    #expect(model.cachedPreviewKind(for: first) == .rawInspect)
-    #expect(model.cachedPreviewKind(for: first) != .rawFull)
   }
 
   @Test("Standard image import keeps a bounded thumbnail and full-resolution geometry")
@@ -1346,41 +1462,27 @@ struct AppModelTests {
     let first = Task {
       try await decoder.decode(URL(fileURLWithPath: "/tmp/first.tiff"))
     }
-    try await Task.sleep(for: .milliseconds(10))
-    let second = Task {
-      try await decoder.decode(URL(fileURLWithPath: "/tmp/second.tiff"))
+    defer {
+      first.cancel()
+      probe.release()
     }
+    try await waitUntil { probe.invocationCount == 1 }
+    var secondSubmitted = false
+    let second = Task {
+      secondSubmitted = true
+      return try await decoder.decode(URL(fileURLWithPath: "/tmp/second.tiff"))
+    }
+    defer { second.cancel() }
+    // The first decode stays gated until the second task suspends on its actor.
+    try await waitUntil { secondSubmitted }
     second.cancel()
+    probe.release()
 
     _ = try await first.value
     await #expect(throws: CancellationError.self) {
       try await second.value
     }
     #expect(probe.invocationCount == 1)
-  }
-
-  @Test("Legacy color setters keep semantic protected-color intent synchronized")
-  func legacyColorSettersSynchronizeSemanticIntent() {
-    let model = AppModel()
-
-    model.setTemperature(50)
-    model.setTint(-25)
-    model.setSaturation(140)
-    model.setVibrance(0.6)
-
-    let expected = PhotoAdjustmentParameters.migratingLegacy(
-      gamma: 0,
-      shadows: 0,
-      highlights: 0,
-      temperature: 50,
-      tint: -25,
-      saturation: 140
-    )
-    #expect(
-      model.parameters.photoAdjustments.temperatureShiftMired == expected.temperatureShiftMired)
-    #expect(model.parameters.photoAdjustments.tint == expected.tint)
-    #expect(model.parameters.photoAdjustments.saturation == expected.saturation)
-    #expect(model.parameters.photoAdjustments.vibrance == 0.6)
   }
 
   @Test("Semantic color sliders write protected-color intent without extra compression")
@@ -1705,7 +1807,7 @@ struct AppModelTests {
 
     let model = AppModel(settingsStore: store)
 
-    #expect(model.parameters == ProcessingParameters())
+    #expect(model.parameters == ProcessingParameters(photoAdjustments: .init()))
     #expect(model.status.contains("could not be loaded"))
   }
 
@@ -1751,7 +1853,7 @@ struct AppModelTests {
 
     let applied = CorrectionSettings(capturing: source).applying(to: destination)
 
-    #expect(applied.filmType == .colourNegative)
+    #expect(applied.filmType == destination.filmType)
     #expect(applied.photoAdjustments.exposureEV == 1.5)
     #expect(applied.photoAdjustments.vibrance == 0.35)
     #expect(applied.rotation == destination.rotation)
@@ -1783,7 +1885,7 @@ struct AppModelTests {
     let loaded = try store.load()
     #expect(loaded.count == 1)
     #expect(loaded[0].name == "warm print")
-    #expect(loaded[0].settings.parameters.photoAdjustments.exposureEV == 2)
+    #expect(loaded[0].settings.recipe.photoAdjustments.exposureEV == 2)
   }
 
   @Test("App model copies and pastes corrections through the pasteboard contract")
@@ -1800,7 +1902,7 @@ struct AppModelTests {
     #expect(destination.canPasteCorrectionSettings)
     destination.pasteCorrectionSettings()
 
-    #expect(destination.parameters.filmType == .colourNegative)
+    #expect(destination.parameters.filmType == .cropOnly)
     #expect(destination.parameters.photoAdjustments.exposureEV == 1.75)
     #expect(destination.parameters.photoAdjustments.vibrance == 0.5)
   }
@@ -1846,69 +1948,6 @@ struct AppModelTests {
     model.deleteCorrectionPreset(preset)
     #expect(model.namedCorrectionPresets.isEmpty)
     #expect(AppModel(presetStore: store).namedCorrectionPresets.isEmpty)
-  }
-
-  @Test("App model applies the built-in Kodachrome-like look immediately")
-  func appModelAppliesKodachromeLikeLook() async throws {
-    let model = AppModel()
-    let input = try #require(
-      Bundle.module.url(
-        forResource: "input", withExtension: "png",
-        subdirectory: "Fixtures/decode_png8"))
-    model.importFiles([input])
-    try await waitUntil { model.previewImage != nil && !model.isRendering }
-    model.setFilmType(.slide)
-    model.rotateClockwise()
-    try await waitUntil { !model.isRendering }
-    let submissionsBeforeApply = model.renderStats.submittedSnapshots
-
-    model.applyKodachromeLikeLook()
-
-    #expect(model.parameters.filmType == .colourNegative)
-    #expect(model.parameters.filmNegativeParams.enabled)
-    #expect(model.parameters.rotation == 1)
-    #expect(model.parameters.photoAdjustments.vibrance == 0.25)
-    #expect(model.renderStats.submittedSnapshots == submissionsBeforeApply + 1)
-    #expect(model.settingsStatus == "Applied Kodachrome-like Auto.")
-    #expect(model.appliedPresetName == "Kodachrome-like Auto")
-
-    model.removeAppliedPreset()
-
-    #expect(model.parameters.filmType == .slide)
-    #expect(model.parameters.rotation == 1)
-    #expect(model.parameters.photoAdjustments.vibrance == 0)
-    #expect(model.appliedPresetName == nil)
-    #expect(model.settingsStatus.contains("restored the previous adjustments"))
-  }
-
-  @Test("App model applies a prototype display look immediately")
-  func appModelAppliesPrototypeDisplayLook() async throws {
-    let model = AppModel()
-    let input = try #require(
-      Bundle.module.url(
-        forResource: "input", withExtension: "png",
-        subdirectory: "Fixtures/decode_png8"))
-    model.importFiles([input])
-    try await waitUntil { model.previewImage != nil && !model.isRendering }
-    model.setFilmType(.slide)
-    model.rotateClockwise()
-    try await waitUntil { !model.isRendering }
-
-    model.applyAdaptiveDisplayLook(.daylightPrint)
-
-    #expect(model.parameters.filmType == .colourNegative)
-    #expect(model.parameters.filmNegativeParams.enabled)
-    #expect(model.parameters.rotation == 1)
-    #expect(model.parameters.photoAdjustments.tint == -0.10)
-    #expect(model.parameters.midtoneWheel.hue == 72)
-    #expect(model.appliedPresetName == "Daylight Print")
-    #expect(model.settingsStatus == "Applied Daylight Print.")
-
-    model.removeAppliedPreset()
-
-    #expect(model.parameters.filmType == .slide)
-    #expect(model.parameters.rotation == 1)
-    #expect(model.appliedPresetName == nil)
   }
 
   @Test("Preview cache limit persists, expands lookahead, and trims immediately")
@@ -2498,75 +2537,34 @@ struct AppModelTests {
     #expect(model.profileStatus.contains("Calibrated negative profile active"))
   }
 
-  @Test("Color presets expose calibrated and legacy renderers")
-  func colorPresetsExposeCalibratedAndLegacyRenderers() {
+  @Test("Film base selects one invert per base without paper")
+  func filmBaseSelectsOneInvertPerBase() {
     let model = AppModel()
-    model.setFilmType(.colourNegative)
+    model.setFilmBase(.colorC41)
     #expect(model.selectedFilmStockProfileID == FilmStockProfile.genericColorNegative.id)
-    #expect(model.parameters.filmNegativeParams.rendering == .calibratedColor)
+    #expect(model.parameters.filmNegativeParams.rendering == .densityPrint)
+    #expect(
+      model.parameters.filmNegativeParams.densityProfileID
+        == NegativeDensityProfileCatalog.genericC41.id.rawValue)
+    #expect(
+      DensityPrintProcessing.resolvedPaper(from: model.parameters.filmNegativeParams)
+        == DensityPaperProfileCatalog.neutral)
 
-    model.setFilmNegativePreset(.fuji400FreshAlternate)
-    #expect(model.parameters.filmNegativeParams.calibratedColorProfile == .fuji400Fresh)
-    model.setFilmNegativePreset(.fuji200ExpiredAlternate)
-    #expect(model.parameters.filmNegativeParams.calibratedColorProfile == .fuji200Expired)
-    model.setFilmNegativePreset(.cinestill800TAlternate)
-    #expect(model.parameters.filmNegativeParams.calibratedColorProfile == .cinestill800T)
-    model.setFilmNegativePreset(.harmanPhoenixIIAlternate)
-    #expect(model.parameters.filmNegativeParams.calibratedColorProfile == .harmanPhoenixII)
-
-    model.setFilmNegativePreset(.densityPrintHarmanPhoenixII)
+    model.setFilmBase(.colorCyanMask)
     #expect(model.parameters.filmNegativeParams.rendering == .densityPrint)
     #expect(
       model.parameters.filmNegativeParams.densityProfileID
         == NegativeDensityProfileCatalog.harmanPhoenixII.id.rawValue)
     #expect(
-      model.parameters.filmNegativeParams.densityPaperID
-        == DensityPaperProfileCatalog.fujiCrystalArchive.id.rawValue)
+      DensityPrintProcessing.resolvedPaper(from: model.parameters.filmNegativeParams)
+        == DensityPaperProfileCatalog.neutral)
 
-    model.selectedFilmStockProfileID = FilmStockProfile.harmanPhoenixIIAlternate.id
-    model.applySelectedPipelineProfiles()
-    #expect(model.parameters.filmNegativeParams.calibratedColorProfile == .harmanPhoenixII)
-
-    model.setFilmNegativePreset(.legacyColourNegative)
-    #expect(model.parameters.filmNegativeParams == .legacyColourNegative)
-
-    model.setFilmNegativePreset(.colourNegative)
-    model.setCalibratedNegativeExposure(0.75)
-    #expect(model.parameters.filmNegativeParams.rendering == .calibratedColor)
-    #expect(model.parameters.filmNegativeParams.monochromeExposureEV == 0.75)
-
-    model.selectedFilmStockProfileID = FilmStockProfile.genericColorNegative.id
-    model.applySelectedPipelineProfiles()
-    #expect(model.parameters.filmNegativeParams.rendering == .calibratedColor)
-    #expect(!model.parameters.densityPipelineEnabled)
-  }
-
-  @Test(
-    "Physical Phoenix applies Crystal Archive paper; other physical presets keep the current paper"
-  )
-  func physicalPhoenixAppliesCrystalArchivePaper() {
-    let model = AppModel()
-    model.setFilmType(.colourNegative)
-    model.setFilmNegativePreset(.densityPrintGenericC41)
-    model.setDensityPaperID(DensityPaperProfileCatalog.kodakEnduraPremier.id.rawValue)
-    #expect(
-      model.parameters.filmNegativeParams.densityPaperID
-        == DensityPaperProfileCatalog.kodakEnduraPremier.id.rawValue)
-
-    model.setFilmNegativePreset(.densityPrintFuji400)
-    #expect(
-      model.parameters.filmNegativeParams.densityPaperID
-        == DensityPaperProfileCatalog.kodakEnduraPremier.id.rawValue)
-
-    model.setFilmNegativePreset(.densityPrintHarmanPhoenixII)
-    #expect(
-      model.parameters.filmNegativeParams.densityPaperID
-        == DensityPaperProfileCatalog.fujiCrystalArchive.id.rawValue)
-
-    model.setFilmNegativePreset(.densityPrintGenericC41)
-    #expect(
-      model.parameters.filmNegativeParams.densityPaperID
-        == DensityPaperProfileCatalog.fujiCrystalArchive.id.rawValue)
+    model.setFilmBase(.blackAndWhite)
+    #expect(model.parameters.filmNegativeParams.rendering == .calibratedMonochrome)
+    model.setFilmBase(.slide)
+    #expect(!model.parameters.filmNegativeParams.enabled)
+    model.setFilmBase(.original)
+    #expect(model.parameters.filmType == .cropOnly)
   }
 
   @Test("App applies calibrated density correction from the capture profile")
@@ -2609,6 +2607,49 @@ struct AppModelTests {
 
     #expect(model.profileStatus.contains("1 saved profile"))
     #expect(model.availableCaptureProfiles.contains { $0.id == CaptureProfile.default.id })
+  }
+
+  private func withRawPreviewModel(
+    expectedFile: URL,
+    operation: @MainActor (AppModel) async throws -> Void
+  ) async throws {
+    let suiteName = "fsc-raw-preview-test-\(UUID().uuidString)"
+    let preferences = try #require(UserDefaults(suiteName: suiteName))
+    defer { preferences.removePersistentDomain(forName: suiteName) }
+    var model: AppModel? = AppModel(preferences: preferences)
+    weak var releasedModel = model
+    do {
+      try await operation(try #require(model))
+      model?.selection = nil
+      model?.loadSelection()
+      try await waitUntil(timeout: .seconds(90)) {
+        model?.isAnalyzingScanStacks == false
+      }
+      model = nil
+      try await waitUntil(timeout: .seconds(90)) { releasedModel == nil }
+    } catch {
+      if let diagnosticModel = model ?? releasedModel {
+        print(
+          "RAW_PREVIEW_FAILURE expectedInitialFile=\(expectedFile.path) "
+            + "selection=\(diagnosticModel.selection?.path ?? "nil") "
+            + "source=\(diagnosticModel.previewSourceKind?.rawValue ?? "nil") "
+            + "status=\(diagnosticModel.status) rendering=\(diagnosticModel.isRendering) "
+            + "upgrading=\(diagnosticModel.isUpgradingRawPreview) "
+            + "background=\(diagnosticModel.previewBackgroundWorkIsActive) "
+            + "cacheSessions=\(diagnosticModel.previewCacheSessionCount) "
+            + "lookaheadRequests=\(diagnosticModel.lookaheadPreviewRequestCount) "
+            + "fullDecodes=\(diagnosticModel.fullResolutionPreviewDecodeCount) "
+            + "corrections=\(diagnosticModel.previewCorrectionCount) "
+            + "cacheHits=\(diagnosticModel.previewRenderCacheHits)")
+      }
+      model?.selection = nil
+      model?.loadSelection()
+      model = nil
+      // Clearing the task handle does not await native cancellation. Verify
+      // release so a failed test cannot leave decodes running in the next one.
+      try? await waitUntil(timeout: .seconds(90)) { releasedModel == nil }
+      throw error
+    }
   }
 
   private func waitUntil(
@@ -2661,6 +2702,7 @@ private func rgba8Bytes(_ image: CGImage) -> [UInt8]? {
 
 private final class AuthoritativeDecodeProbe: @unchecked Sendable {
   private let lock = NSLock()
+  private let gate = DispatchSemaphore(value: 0)
   private var invocations = 0
 
   var invocationCount: Int {
@@ -2669,7 +2711,9 @@ private final class AuthoritativeDecodeProbe: @unchecked Sendable {
 
   func decode(_ url: URL) throws -> UInt16Image {
     lock.withLock { invocations += 1 }
-    Thread.sleep(forTimeInterval: 0.1)
+    try #require(gate.wait(timeout: .now() + 5) == .success, "Decode gate was not released")
     return UInt16Image(width: 1, height: 1, channels: 3, pixels: [1, 2, 3])
   }
+
+  func release() { gate.signal() }
 }

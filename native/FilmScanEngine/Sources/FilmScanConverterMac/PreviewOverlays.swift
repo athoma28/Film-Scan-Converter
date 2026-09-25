@@ -372,6 +372,8 @@ struct PerspectiveCropOverlay: View {
   let crop: PerspectiveCrop?
   let image: NSImage?
   let imageSize: CGSize
+  let sourceDimensions: PixelDimensions?
+  let borderPercent: Double
   let rotation: Int
   let flipHorizontally: Bool
   let usesParallelAssist: Bool
@@ -380,6 +382,8 @@ struct PerspectiveCropOverlay: View {
 
   @State private var draggedCorner: Int?
   @State private var dragOrigin: PerspectiveCrop?
+  @State private var selectedCorner: Int?
+  @FocusState private var hasKeyboardFocus: Bool
   @Environment(\.editingGestureAction) private var editingGestureAction
 
   var body: some View {
@@ -407,16 +411,25 @@ struct PerspectiveCropOverlay: View {
         let hitPadding = PreviewOverlayGeometry.documentLength(
           PreviewOverlayGeometry.handleHitPadding, magnification: magnification)
         let stroke = PreviewOverlayGeometry.documentLength(
-          PreviewOverlayGeometry.strokeScreenLength, magnification: magnification)
+          PreviewOverlayGeometry.strokeScreenLength, magnification: magnification, minimum: 0.05)
         let loupeSize = PreviewOverlayGeometry.documentLength(
           PreviewOverlayGeometry.loupeScreenLength, magnification: magnification)
-        let assistThreshold =
-          PreviewOverlayGeometry.documentLength(
-            PreviewOverlayGeometry.assistScreenLength, magnification: magnification)
-          / max(1, min(imageRect.width, imageRect.height))
+        let framedCrop = crop.inset(borderPercent: borderPercent)
+        let framePoints = framedCrop.points.map {
+          documentPoint($0, in: imageRect)
+        }
         ZStack {
           Color.clear
             .contentShape(Rectangle())
+
+          Path { path in
+            path.addRect(imageRect)
+            path.move(to: framePoints[0])
+            for point in framePoints.dropFirst() { path.addLine(to: point) }
+            path.closeSubpath()
+          }
+          .fill(Color.black.opacity(0.45), style: FillStyle(eoFill: true))
+          .allowsHitTesting(false)
 
           Path { path in
             path.move(to: points[0])
@@ -428,24 +441,28 @@ struct PerspectiveCropOverlay: View {
           .stroke(Color.accentColor, lineWidth: stroke)
 
           Path { path in
-            for fraction in [0.25, 0.5, 0.75] {
-              let top = interpolate(points[0], points[1], fraction: fraction)
-              let bottom = interpolate(points[3], points[2], fraction: fraction)
-              path.move(to: top)
-              path.addLine(to: bottom)
-              let left = interpolate(points[0], points[3], fraction: fraction)
-              let right = interpolate(points[1], points[2], fraction: fraction)
-              path.move(to: left)
-              path.addLine(to: right)
+            if borderPercent > 0 {
+              path.move(to: framePoints[0])
+              for point in framePoints.dropFirst() { path.addLine(to: point) }
+              path.closeSubpath()
+            }
+            for line in framedCrop.gridLines() {
+              path.move(to: documentPoint(line.start, in: imageRect))
+              path.addLine(to: documentPoint(line.end, in: imageRect))
             }
           }
           .stroke(
             Color.accentColor.opacity(0.85),
-            style: StrokeStyle(lineWidth: max(1, stroke * 0.5), dash: [4, 4])
+            style: StrokeStyle(
+              lineWidth: stroke * 0.5,
+              dash: [
+                PreviewOverlayGeometry.documentLength(
+                  4, magnification: magnification, minimum: 0.05)
+              ])
           )
 
           ForEach(Array(points.enumerated()), id: \.offset) { index, point in
-            cornerReticle(size: handleSize, stroke: stroke)
+            cornerReticle(size: handleSize, stroke: stroke, selected: selectedCorner == index)
               .position(point)
               .help(["Top left", "Top right", "Bottom right", "Bottom left"][index])
               .accessibilityElement()
@@ -459,35 +476,39 @@ struct PerspectiveCropOverlay: View {
               )
               .accessibilityValue(
                 String(
-                  format: "%.0f percent horizontal, %.0f percent vertical",
+                  format: "%.2f percent horizontal, %.2f percent vertical",
                   displayedPoints[index].x * 100,
                   displayedPoints[index].y * 100
                 )
               )
-              .accessibilityHint("Drag the corner, or use the move actions.")
+              .accessibilityHint(
+                "Drag the corner, or move it one source pixel with the move actions."
+              )
               .accessibilityAction(named: Text("Move left")) {
-                nudgeCorner(index, in: crop, displayedX: -0.01, displayedY: 0)
+                nudgeCorner(index, in: crop, displayedX: -1, displayedY: 0)
               }
               .accessibilityAction(named: Text("Move right")) {
-                nudgeCorner(index, in: crop, displayedX: 0.01, displayedY: 0)
+                nudgeCorner(index, in: crop, displayedX: 1, displayedY: 0)
               }
               .accessibilityAction(named: Text("Move up")) {
-                nudgeCorner(index, in: crop, displayedX: 0, displayedY: -0.01)
+                nudgeCorner(index, in: crop, displayedX: 0, displayedY: -1)
               }
               .accessibilityAction(named: Text("Move down")) {
-                nudgeCorner(index, in: crop, displayedX: 0, displayedY: 0.01)
+                nudgeCorner(index, in: crop, displayedX: 0, displayedY: 1)
               }
               .allowsHitTesting(false)
           }
 
-          if let draggedCorner, let image {
+          if let activeCorner = draggedCorner ?? (hasKeyboardFocus ? selectedCorner : nil),
+            let image
+          {
             CornerLoupe(
               image: image,
-              normalizedPoint: displayedPoints[draggedCorner],
+              normalizedPoint: displayedPoints[activeCorner],
               samplePixelSize: 100
             )
             .frame(width: loupeSize, height: loupeSize)
-            .position(points[draggedCorner])
+            .position(points[activeCorner])
             .allowsHitTesting(false)
           }
         }
@@ -498,8 +519,22 @@ struct PerspectiveCropOverlay: View {
             crop: crop,
             points: points,
             imageRect: imageRect,
-            hitRadius: handleSize / 2 + hitPadding,
-            assistThreshold: assistThreshold))
+            hitRadius: handleSize / 2 + hitPadding)
+        )
+        .focusable()
+        .focused($hasKeyboardFocus)
+        .focusEffectDisabled()
+        .onMoveCommand { direction in
+          guard let selectedCorner else { return }
+          let step: Double = NSEvent.modifierFlags.contains(.shift) ? 10 : 1
+          switch direction {
+          case .left: nudgeCorner(selectedCorner, in: crop, displayedX: -step, displayedY: 0)
+          case .right: nudgeCorner(selectedCorner, in: crop, displayedX: step, displayedY: 0)
+          case .up: nudgeCorner(selectedCorner, in: crop, displayedX: 0, displayedY: -step)
+          case .down: nudgeCorner(selectedCorner, in: crop, displayedX: 0, displayedY: step)
+          @unknown default: break
+          }
+        }
       }
     }
     .allowsHitTesting(isActive)
@@ -508,34 +543,35 @@ struct PerspectiveCropOverlay: View {
       if !isActive {
         draggedCorner = nil
         dragOrigin = nil
+        selectedCorner = nil
+        hasKeyboardFocus = false
       }
     }
   }
 
-  private func cornerReticle(size: CGFloat, stroke: CGFloat) -> some View {
-    let cross = max(8, size * 0.85)
-    let pad = max(2, size * 0.14)
+  private func cornerReticle(size: CGFloat, stroke: CGFloat, selected: Bool) -> some View {
+    let cross = size * 0.85
+    let pad = size * 0.14
     return ZStack {
       Circle()
-        .fill(.black.opacity(0.22))
-        .stroke(.white, lineWidth: max(1, stroke * 0.75))
+        .fill(selected ? Color.accentColor.opacity(0.4) : .black.opacity(0.22))
+        .stroke(.white, lineWidth: stroke * 0.75)
       Circle()
         .stroke(Color.accentColor, lineWidth: stroke)
         .padding(pad)
-      Rectangle().fill(.white).frame(width: 1, height: cross)
-      Rectangle().fill(.white).frame(width: cross, height: 1)
-      Circle().fill(Color.accentColor).frame(width: 3, height: 3)
+      Rectangle().fill(.white).frame(width: stroke * 0.5, height: cross)
+      Rectangle().fill(.white).frame(width: cross, height: stroke * 0.5)
+      Circle().fill(Color.accentColor).frame(width: stroke * 1.5, height: stroke * 1.5)
     }
     .frame(width: size, height: size)
-    .shadow(color: .black.opacity(0.65), radius: 2)
+    .shadow(color: .black.opacity(0.65), radius: stroke)
   }
 
   private func perspectiveGesture(
     crop: PerspectiveCrop,
     points: [CGPoint],
     imageRect: CGRect,
-    hitRadius: CGFloat,
-    assistThreshold: Double
+    hitRadius: CGFloat
   ) -> some Gesture {
     DragGesture(minimumDistance: 0, coordinateSpace: .named("previewOverlay"))
       .onChanged { value in
@@ -547,29 +583,19 @@ struct PerspectiveCropOverlay: View {
               to: start, points: points, hitRadius: hitRadius)
           else { return }
           draggedCorner = index
+          selectedCorner = index
+          hasKeyboardFocus = true
           dragOrigin = crop
           editingGestureAction("Perspective", true)
         }
         guard let draggedCorner, let dragOrigin else { return }
-        let clamped = PreviewOverlayGeometry.clampedPoint(
-          PreviewOverlayGeometry.documentGesturePoint(
-            value.location, magnification: magnification),
-          to: imageRect)
-        let displayed = PerspectiveCrop.Point(
-          x: (clamped.x - imageRect.minX) / imageRect.width,
-          y: (clamped.y - imageRect.minY) / imageRect.height)
-        let source = PreviewOverlayGeometry.sourcePoint(
-          fromDisplayed: displayed,
-          rotation: rotation,
-          flipHorizontally: flipHorizontally)
         let assistEnabled = usesParallelAssist && !NSEvent.modifierFlags.contains(.option)
         onCropChanged(
-          assistEnabled
-            ? dragOrigin.replacing(
-              draggedCorner,
-              with: source,
-              parallelismAssistThreshold: assistThreshold)
-            : dragOrigin.replacing(draggedCorner, with: source))
+          PreviewOverlayGeometry.movingPerspectiveCorner(
+            draggedCorner, in: dragOrigin, screenTranslation: value.translation,
+            imageRect: imageRect, magnification: magnification,
+            rotation: rotation, flipHorizontally: flipHorizontally,
+            parallelAssist: assistEnabled))
       }
       .onEnded { _ in
         guard draggedCorner != nil else { return }
@@ -585,28 +611,24 @@ struct PerspectiveCropOverlay: View {
     displayedX: Double,
     displayedY: Double
   ) {
-    let current = PreviewOverlayGeometry.displayedPoint(
-      crop.points[index],
-      rotation: rotation,
-      flipHorizontally: flipHorizontally
-    )
-    let displayed = PerspectiveCrop.Point(
-      x: min(max(Double(current.x) + displayedX, 0), 1),
-      y: min(max(Double(current.y) + displayedY, 0), 1)
-    )
-    let source = PreviewOverlayGeometry.sourcePoint(
-      fromDisplayed: displayed,
-      rotation: rotation,
-      flipHorizontally: flipHorizontally
-    )
-    onCropChanged(crop.replacing(index, with: source))
+    let rotated = rotation % 2 != 0
+    let dimensions =
+      sourceDimensions
+      ?? PixelDimensions(
+        width: Int(rotated ? imageSize.height : imageSize.width),
+        height: Int(rotated ? imageSize.width : imageSize.height))
+    onCropChanged(
+      PreviewOverlayGeometry.nudgingPerspectiveCorner(
+        index, in: crop, displayedPixels: CGSize(width: displayedX, height: displayedY),
+        sourceDimensions: dimensions, rotation: rotation, flipHorizontally: flipHorizontally))
   }
 
-  private func interpolate(_ start: CGPoint, _ end: CGPoint, fraction: CGFloat) -> CGPoint {
-    CGPoint(
-      x: start.x + (end.x - start.x) * fraction,
-      y: start.y + (end.y - start.y) * fraction
-    )
+  private func documentPoint(_ source: PerspectiveCrop.Point, in imageRect: CGRect) -> CGPoint {
+    let point = PreviewOverlayGeometry.displayedPoint(
+      source, rotation: rotation, flipHorizontally: flipHorizontally)
+    return CGPoint(
+      x: imageRect.minX + point.x * imageRect.width,
+      y: imageRect.minY + point.y * imageRect.height)
   }
 }
 
@@ -618,6 +640,7 @@ private struct CornerLoupe: View {
   var body: some View {
     GeometryReader { geometry in
       let scale = geometry.size.width / max(1, samplePixelSize)
+      let unit = geometry.size.width / PreviewOverlayGeometry.loupeScreenLength
       let scaledSize = CGSize(
         width: image.size.width * scale,
         height: image.size.height * scale
@@ -630,20 +653,21 @@ private struct CornerLoupe: View {
             x: (0.5 - normalizedPoint.x) * scaledSize.width,
             y: (0.5 - normalizedPoint.y) * scaledSize.height
           )
-        Rectangle().fill(.black.opacity(0.8)).frame(width: 1, height: 34)
-        Rectangle().fill(.black.opacity(0.8)).frame(width: 34, height: 1)
-        Rectangle().fill(.white).frame(width: 1, height: 18)
-        Rectangle().fill(.white).frame(width: 18, height: 1)
-        Circle().stroke(Color.accentColor, lineWidth: 2).frame(width: 10, height: 10)
+        Rectangle().fill(.black.opacity(0.8)).frame(width: unit, height: 34 * unit)
+        Rectangle().fill(.black.opacity(0.8)).frame(width: 34 * unit, height: unit)
+        Rectangle().fill(.white).frame(width: unit, height: 18 * unit)
+        Rectangle().fill(.white).frame(width: 18 * unit, height: unit)
+        Circle().stroke(Color.accentColor, lineWidth: 2 * unit).frame(
+          width: 10 * unit, height: 10 * unit)
       }
-      .clipShape(RoundedRectangle(cornerRadius: 8))
-      .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white, lineWidth: 2))
+      .clipShape(RoundedRectangle(cornerRadius: 8 * unit))
+      .overlay(RoundedRectangle(cornerRadius: 8 * unit).stroke(.white, lineWidth: 2 * unit))
       .overlay(
-        RoundedRectangle(cornerRadius: 10)
-          .stroke(Color.accentColor, lineWidth: 2)
-          .padding(-3)
+        RoundedRectangle(cornerRadius: 10 * unit)
+          .stroke(Color.accentColor, lineWidth: 2 * unit)
+          .padding(-3 * unit)
       )
-      .shadow(color: .black.opacity(0.8), radius: 5)
+      .shadow(color: .black.opacity(0.8), radius: 5 * unit)
     }
     .accessibilityHidden(true)
   }

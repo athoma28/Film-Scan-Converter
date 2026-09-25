@@ -101,6 +101,7 @@ public enum CorrectionScenario: String, Codable, CaseIterable, Sendable {
         blueFromGreen: -0.03
       )
     }
+    parameters.photoAdjustments.schemaVersion = base.photoAdjustments.schemaVersion
     return parameters
   }
 }

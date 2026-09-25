@@ -21,17 +21,17 @@ are met:
   with the hardened runtime, submits to Apple, staples, validates the ticket,
   and runs Gatekeeper assessment before rebuilding the final ZIP.
 
-The published download is an ad-hoc-signed technical beta. A new artifact must
+The Beta 3 download is an ad-hoc-signed technical beta. Each new artifact must
 have its own version/build and matching source commit. Successful local
 assembly is not evidence of notarization or an independent-Mac installation.
 
 ## Build the unsigned beta
 
-Install LibRaw and start from a clean release commit. Set `RELEASE_VERSION`,
+Install LibRaw and `pkg-config`, then start from a clean release commit. Set `RELEASE_VERSION`,
 `RELEASE_SUFFIX`, and `RELEASE_BUILD` to unused release identifiers, then run:
 
 ```sh
-brew install libraw
+brew install libraw pkg-config
 RELEASE_MODE=unsigned-beta \
 RELEASE_LABEL="${RELEASE_SUFFIX:?set a prerelease suffix}" \
 APP_VERSION="${RELEASE_VERSION:?set a release version}" \
@@ -107,9 +107,11 @@ Before attaching artifacts to a GitHub prerelease:
    the unreleased label only for the version being published. Run native and
    legacy test suites and require green GitHub Actions runs for the release commit.
 2. Confirm the source commit is the commit represented by the release tag.
-3. Verify the checksum with `shasum -a 256 -c <artifact>.sha256`.
+3. In the directory containing the ZIP and checksum (normally `dist/`), verify
+   with `shasum -a 256 -c <artifact>.sha256`. The checksum records the ZIP basename.
 4. Inspect the ZIP for unexpected `._`/AppleDouble files and confirm all four
-   release documents exist at archive root and inside the app.
+   release documents exist in its named payload directory alongside the app and
+   inside the app bundle.
 5. Reopen TIFF, JPEG, PNG, and DNG fixtures. TIFF/JPEG/PNG must report named
    sRGB profiles; DNG must validate its output-referred linear-sRGB metadata.
 6. Exercise import, preview, correction, crop/perspective/frame, preset,
@@ -129,9 +131,9 @@ or Homebrew LibRaw:
    pass Gatekeeper without a bypass.
 3. Import a standard image and representative camera RAW, compare corrected
    preview orientation to reopened full-resolution output, and exercise Fit,
-   pan, zoom, Original comparison, previous/next scan, and Load RAW Preview
-   skip-ahead. Confirm the embedded-JPEG warning when RAW colour is unavailable
-   and the aligned-stack badge when a stack is enabled. Inspect versus
+   pan, zoom, Original comparison, previous/next scan, and the Load RAW Preview
+   request when available. Confirm the embedded-JPEG warning when RAW colour is
+   unavailable and the aligned-stack badge when a stack is enabled. Inspect versus
    full-res is not labeled on the canvas.
 4. Export and reopen TIFF, JPEG, PNG, and DNG. Confirm dimensions, orientation,
    depth, metadata, and color interpretation.

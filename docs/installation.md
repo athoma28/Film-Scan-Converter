@@ -2,15 +2,16 @@
 
 ## Published Beta
 
-The latest published download is
-[Film Scan Converter 0.2.0 Beta 2](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.2),
-released September 9, 2026 for Apple Silicon Macs running macOS 14 or later.
+Download [Film Scan Converter 0.2.0 Beta 3](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.3),
+for Apple Silicon Macs running macOS 14 or later. Check the
+[releases page](https://github.com/athoma28/Film-Scan-Converter/releases) for
+newer downloads.
 
 1. Download the ZIP and matching `.sha256` file from that release.
 2. From the download folder, verify the archive:
 
     ```sh
-    shasum -a 256 -c Film-Scan-Converter-0.2.0-beta.2-apple-silicon.zip.sha256
+    shasum -a 256 -c Film-Scan-Converter-0.2.0-beta.3-apple-silicon.zip.sha256
     ```
 
 3. Unzip it and move **Film Scan Converter.app** to Applications.
@@ -20,7 +21,7 @@ released September 9, 2026 for Apple Silicon Macs running macOS 14 or later.
    Open Anyway** if that option is offered. Do not disable Gatekeeper globally.
 
 The archive includes licensing, notices, release notes, and its bundled-library
-manifest. Its [release page](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.2)
+manifest. Its [release page](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.3)
 owns the binary-specific feature list and limitations.
 
 ## Current Source
@@ -29,7 +30,7 @@ Requires macOS 14 or later, Swift 6 through Xcode/Command Line Tools, and Homebr
 Intel source builds are outside the distributed Apple Silicon test matrix.
 
 ```sh
-brew install libraw
+brew install libraw pkg-config
 git clone https://github.com/athoma28/Film-Scan-Converter.git
 cd Film-Scan-Converter
 swift run --package-path native/FilmScanEngine FilmScanConverterMac

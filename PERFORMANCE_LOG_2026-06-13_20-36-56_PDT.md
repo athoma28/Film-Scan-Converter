@@ -65,7 +65,7 @@ Pixel-equivalence checks passed for dust masks, histograms, contour zebra overla
 - Lazy-load Matplotlib only when non-default saturation adjustment is used.
 - Remove an unused GUI-level RawPy import.
 
-## Current Measurements
+## Measurements At This Snapshot
 
 Original `main` implementation versus `dev`, representative 2.16 MP `uint16` image, exact output pixels:
 

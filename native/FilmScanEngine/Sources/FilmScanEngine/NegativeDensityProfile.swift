@@ -46,6 +46,11 @@ public struct NegativeDensityProfile: Codable, Equatable, Sendable, Identifiable
   public var autoDensity: Bool
   public var autoGrade: Bool
   public var castRemovalStrength: Double
+  /// True suppresses shadow-only cast guesses when no neutral axis is found.
+  /// Nil preserves the behavior of existing bundled and user profile files.
+  public var castRemovalRequiresNeutralEvidence: Bool?
+  /// Optional roll/capture-specific neutral response; absent in older profiles.
+  public var logNeutralBalance: NegativeLogNeutralBalance?
   public var notes: String
 
   public init(
@@ -124,6 +129,23 @@ public struct NegativeDensityProfile: Codable, Equatable, Sendable, Identifiable
 }
 
 public enum NegativeDensityProfileCatalog {
+  public static let lucky200: NegativeDensityProfile = {
+    var profile = NegativeDensityProfile(
+      id: NegativeDensityProfileID(rawValue: "lucky_200_daylight"),
+      displayName: "Lucky 200 Daylight",
+      provenance: .tuned,
+      attribution: "Film Scan Converter; unpaired Tahoe digital RAF reference study",
+      maskFamily: .orange,
+      unmixRGB: [[1, 0, 0], [0, 1, 0], [0, 0, 1]],
+      unmixStrength: 0,
+      castRemovalStrength: 0,
+      notes: "Tuned for the supplied Lucky C200 roll and scan setup using pavement, "
+        + "granite, foliage, and water in nearby digital scenes. Not a measured emulsion profile.")
+    profile.logNeutralBalance = NegativeLogNeutralBalance(
+      referenceRGB: [-1.22, -1.30, -1.05], scaleRGB: [1, 1, 1], strengthRGB: [1, 0, 1])
+    return profile
+  }()
+
   public static let genericC41 = NegativeDensityProfile(
     id: NegativeDensityProfileID(rawValue: "generic_c41"),
     displayName: "Generic C-41",
@@ -341,6 +363,7 @@ public enum NegativeDensityProfileCatalog {
 
   public static let bundled: [NegativeDensityProfile] = [
     genericC41,
+    lucky200,
     harmanPhoenixII,
     fujicolor400,
     fujicolor200,

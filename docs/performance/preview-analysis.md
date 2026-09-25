@@ -1,5 +1,10 @@
 # CPU Preview Diagnostics and Darkroom Analysis
 
+**Dated benchmark evidence.** These measurements isolate CPU analysis stages;
+they do not measure current full-preview cache residency or screen presentation.
+See the [current architecture](../development/realtime-preview-plan.md) and
+[test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md) for current behavior and opt-in commands.
+
 The initial measurements below are from September 4. A
 [September 8 follow-up](#darkroom-percentile-reuse) removes repeated
 sorting from textured Darkroom analysis with a fresh same-session baseline.

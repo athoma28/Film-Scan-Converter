@@ -12,6 +12,10 @@ public enum FilmProcessing {
     parameters: ProcessingParameters,
     flatField: UInt16Image? = nil
   ) -> UInt16Image {
+    if parameters.photoAdjustments.usesPhotographicTone {
+      return correctedPhotographicPreview(
+        image: image, parameters: parameters, flatField: flatField)
+    }
     if parameters.densityPipelineEnabled,
       parameters.densityBaseDensity != nil,
       parameters.filmType == .colourNegative
@@ -105,8 +109,11 @@ public enum FilmProcessing {
           if let densityAnalysis {
             working = DensityPrintProcessing.apply(image: working, analysis: densityAnalysis)
           } else {
-            working = DensityPrintProcessing.apply(
-              image: working, params: parameters.filmNegativeParams)
+            let analysis = DensityPrintProcessing.analyze(
+              image: working,
+              profile: DensityPrintProcessing.resolvedProfile(from: parameters.filmNegativeParams),
+              paper: DensityPrintProcessing.resolvedPaper(for: parameters))
+            working = DensityPrintProcessing.apply(image: working, analysis: analysis)
           }
           if needsLinearSeam {
             working = applySemanticLinearAdjustmentsToDisplayImage(

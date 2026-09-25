@@ -125,6 +125,18 @@ public struct DensityPaperProfile: Codable, Equatable, Sendable, Identifiable {
 }
 
 public enum DensityPaperProfileCatalog {
+  /// An authored neutral print response; deliberately no claim of a measured paper.
+  public static let softPortrait = DensityPaperProfile(
+    id: DensityPaperProfileID(rawValue: "soft_portrait"),
+    displayName: "Soft Portrait",
+    attribution: "Film Scan Converter creative print response",
+    dMax: 2.15,
+    toeSharpnessBase: 3.2,
+    shoulderSharpnessBase: 2.4,
+    paperMidtoneGamma: 0.10,
+    notes: "Gentler neutral print response without channel crossover or tinted whites."
+  )
+
   public static let neutral = DensityPaperProfile(
     id: DensityPaperProfileID(rawValue: "neutral"),
     displayName: "Neutral",
@@ -166,6 +178,7 @@ public enum DensityPaperProfileCatalog {
     neutral,
     kodakEnduraPremier,
     fujiCrystalArchive,
+    softPortrait,
   ]
 
   public static func profile(id: String) -> DensityPaperProfile {

@@ -1,0 +1,26 @@
+[
+  {
+    "name": "clean-invert-v2",
+    "schemaVersion": 2,
+    "photoOverrides": {},
+    "variantIDs": ["baseline", "highlights_m0_25", "highlights_m0_1", "highlights_p0_1", "highlights_p0_25", "shadows_m0_25", "shadows_m0_1", "shadows_p0_1", "shadows_p0_25", "lift_protect", "open_shadows", "darken_open", "compress_range", "contrast_recover"]
+  },
+  {
+    "name": "clean-invert-v3",
+    "schemaVersion": 3,
+    "photoOverrides": {},
+    "variantIDs": ["baseline", "highlights_m0_25", "highlights_m0_1", "highlights_p0_1", "highlights_p0_25", "shadows_m0_25", "shadows_m0_1", "shadows_p0_1", "shadows_p0_25", "lift_protect", "open_shadows", "darken_open", "compress_range", "contrast_recover"]
+  },
+  {
+    "name": "modest-color-v2",
+    "schemaVersion": 2,
+    "photoOverrides": {"temperatureShiftMired": 15, "tint": 0.08, "saturation": 0.2, "vibrance": 0.15},
+    "variantIDs": ["baseline", "exposureEV_p0_5", "shadows_p0_25", "contrast_p0_25", "lift_protect", "open_shadows"]
+  },
+  {
+    "name": "modest-color-v3",
+    "schemaVersion": 3,
+    "photoOverrides": {"temperatureShiftMired": 15, "tint": 0.08, "saturation": 0.2, "vibrance": 0.15},
+    "variantIDs": ["baseline", "exposureEV_p0_5", "shadows_p0_25", "contrast_p0_25", "lift_protect", "open_shadows"]
+  }
+]
