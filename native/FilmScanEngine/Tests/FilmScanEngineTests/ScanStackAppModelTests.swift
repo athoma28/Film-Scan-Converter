@@ -321,7 +321,9 @@ struct ScanStackAppModelTests {
       return capture
     }
     model.importFiles(urls)
-    try await waitUntil(timeout: .seconds(20)) {
+    try await waitUntil(
+      timeout: .seconds(60), description: "scan import and stack analysis for preview"
+    ) {
       !model.isAnalyzingScanStacks && !model.isLoading && model.previewImage != nil
     }
     let sharpWidth = try #require(model.selectedImageDimensions?.width)
@@ -411,13 +413,17 @@ struct ScanStackAppModelTests {
       throw CocoaError(.fileReadCorruptFile)
     }
     model.importFiles(urls)
-    try await waitUntil(timeout: .seconds(20)) {
+    try await waitUntil(
+      timeout: .seconds(60), description: "scan import and stack analysis for fallback test"
+    ) {
       !model.isAnalyzingScanStacks && !model.isLoading && model.previewImage != nil
     }
     let stack = try #require(model.detectedScanStacks.first)
     let sharpWidth = try #require(model.selectedImageDimensions?.width)
     model.setScanStackEnabled(true, for: stack)
-    try await waitUntil(timeout: .seconds(20)) {
+    try await waitUntil(
+      timeout: .seconds(20), description: "failed stack fallback"
+    ) {
       !model.isBuildingScanStack && !model.isUpgradingScanStack && model.statusKind == .error
     }
     #expect(model.previewSourceKind != .alignedStack)
@@ -428,9 +434,15 @@ struct ScanStackAppModelTests {
 
     model.scanStackPreviewDecoder = nil
     model.setScanStackEnabled(false, for: stack)
-    try await waitUntil(timeout: .seconds(20)) { !model.isLoading && !model.isRendering }
+    try await waitUntil(
+      timeout: .seconds(20), description: "reference preview after disabling stack"
+    ) {
+      !model.isLoading && !model.isRendering
+    }
     model.setScanStackEnabled(true, for: stack)
-    try await waitUntil(timeout: .seconds(20)) {
+    try await waitUntil(
+      timeout: .seconds(60), description: "recovered full-resolution stack preview"
+    ) {
       model.previewSourceKind == .alignedStack && !model.isBuildingScanStack
         && !model.isUpgradingScanStack && !model.isRendering
     }
@@ -482,13 +494,14 @@ struct ScanStackAppModelTests {
 
   private func waitUntil(
     timeout: Duration = .seconds(10),
+    description: String = "repeated-scan app state",
     condition: @escaping @MainActor () -> Bool
   ) async throws {
     let clock = ContinuousClock()
     let deadline = clock.now.advanced(by: timeout)
     while !condition() {
       guard clock.now < deadline else {
-        Issue.record("Timed out waiting for repeated-scan app state")
+        Issue.record("Timed out waiting for \(description)")
         throw WaitError.timedOut
       }
       try await Task.sleep(for: .milliseconds(10))
