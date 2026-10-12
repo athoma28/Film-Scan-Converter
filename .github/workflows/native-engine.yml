@@ -49,10 +49,29 @@ jobs:
         run: brew install libraw
       - name: Check RAW decode compatibility boundaries
         run: bash native/test-raw-compatibility.sh
+      - name: Check native numeric-field interaction
+        run: |
+          set -o pipefail
+          swift test --package-path native/FilmScanEngine \
+            --enable-code-coverage --no-parallel \
+            --filter AdjustmentValueFieldInteractionTests 2>&1 | tee /tmp/fsc-native-field-ci.log
+          python3 - <<'PY'
+          from pathlib import Path
+          if "Test run with 1 test passed" not in Path("/tmp/fsc-native-field-ci.log").read_text():
+              raise SystemExit("Numeric-field test exited without a completion summary")
+          PY
       - name: Run native engine regression gate
-        run: >-
-          swift test --package-path native/FilmScanEngine
-          --enable-code-coverage --no-parallel
+        run: |
+          set -o pipefail
+          swift test --package-path native/FilmScanEngine \
+            --enable-code-coverage --no-parallel 2>&1 | tee /tmp/fsc-native-regression-ci.log
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          output = Path("/tmp/fsc-native-regression-ci.log").read_text()
+          if not re.search(r"Test run with [1-9]\d* tests passed", output):
+              raise SystemExit("Native regression exited without a completion summary")
+          PY
       - name: Report native code coverage
         run: |
           TEST_BINARY=$(find native/FilmScanEngine/.build -path '*/debug/FilmScanEnginePackageTests.xctest/Contents/MacOS/FilmScanEnginePackageTests' -print -quit)

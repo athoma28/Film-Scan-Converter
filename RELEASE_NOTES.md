@@ -29,10 +29,11 @@ beta and is not Apple-notarized.
 - Stronger protection for unreadable settings, stale framing/repair results,
   cancellation, and Undo/Redo during active adjustment gestures.
 
-Release-source verification passed 924 native tests with 22 intentional skips
-and zero failures, plus all 4,608 CPU/Metal comparator cases within the existing
-2/255 tolerance. Six full-resolution photographs passed same-source preview
-checks and exact reopened production-CPU TIFF checks. The repaired-RAW output,
+Release-source verification reported 924 native tests: 902 passed, 22 intentional
+skips, and zero failures. All 4,608 comparator cases passed: 4,164 GPU comparisons
+within the existing 2/255 tolerance and 444 verified CPU routes. Six
+full-resolution photographs passed same-source preview checks and exact reopened
+production-CPU TIFF checks. The repaired-RAW output,
 three-frame roll/re-export/relaunch workflow, TIFF/JPEG/PNG/DNG output-reader
 contract, and all five freshly rendered preferred-look checkpoints passed.
 Legacy Python, diagnostic runner/contracts, storage-tool safety tests, RAW
@@ -41,9 +42,11 @@ build also passed. The release packager validates the app and extracted ZIP,
 dependency closure, licenses, ad-hoc signatures, and archive checksum. The release
 page records the source commit, artifact hashes, and GitHub Actions acceptance.
 
-Two subsequent assertion-only changes for Xcode 16.2 compatibility passed the
-focused RAW release suite (26 passed, one intentional measurement skip). The
-production implementation and preferred-look ledger remained unchanged.
+Release CI follow-through updated Xcode 16.2 assertion compatibility and the
+native numeric-field test's activation/focus setup. Production code and the
+preferred-look ledger remained unchanged. CI now runs that interaction check
+explicitly and requires completed test summaries for both it and the full
+regression suite; final macOS 14/15 outcomes are recorded on the release page.
 
 Compatibility: repair-bearing settings use schema 3. Earlier builds reject
 these stores instead of discarding repairs; settings without repairs retain

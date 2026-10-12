@@ -1,4 +1,5 @@
 import AppKit
+import CoreFoundation
 import Observation
 import SwiftUI
 import Testing
@@ -90,7 +91,10 @@ struct AdjustmentValueEditingTests {
 struct AdjustmentValueFieldInteractionTests {
   @Test("Native field buffers typing, commits Return and focus loss, and cancels Escape")
   func nativeCommitAndCancel() async throws {
-    _ = NSApplication.shared
+    let application = NSApplication.shared
+    let previousActivationPolicy = application.activationPolicy()
+    try #require(application.setActivationPolicy(.regular))
+    defer { application.setActivationPolicy(previousActivationPolicy) }
     let state = NumericEntryState()
     let window = NSWindow(
       contentRect: CGRect(x: -10_000, y: -10_000, width: 180, height: 80),
@@ -115,13 +119,21 @@ struct AdjustmentValueFieldInteractionTests {
         .padding(12)
       ))
     window.contentView = hosting
+    window.center()
     window.makeKeyAndOrderFront(nil)
+    application.activate(ignoringOtherApps: true)
     defer {
       hosting.rootView = AnyView(EmptyView())
       window.contentView = nil
       window.close()
     }
 
+    try await waitUntil("key test window", in: hosting, window: window) {
+      window.layoutIfNeeded()
+      hosting.layoutSubtreeIfNeeded()
+      window.displayIfNeeded()
+      return application.isActive && window.isKeyWindow
+    }
     var editor = try await beginEditing(in: hosting, window: window)
     try await observeNativeTurn(
       "before typing", editor: editor, in: hosting, window: window, state: state)
@@ -183,9 +195,10 @@ struct AdjustmentValueFieldInteractionTests {
         && !hasEditableTextField(in: hosting)
     }
     // This isolated SwiftUI host exposes no process-local AX children even
-    // while its real native controls are present. Dispatch a real click only to
-    // the centered numeric control in this test window instead.
+    // while its real native controls are present. Dispatch a real click on the
+    // centered numeric control through the application event dispatcher.
     let point = hosting.convert(CGPoint(x: hosting.bounds.midX, y: hosting.bounds.midY), to: nil)
+    var events: [NSEvent] = []
     for kind in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
       let event = try #require(
         NSEvent.mouseEvent(
@@ -193,7 +206,13 @@ struct AdjustmentValueFieldInteractionTests {
           timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
           context: nil, eventNumber: 1, clickCount: 1, pressure: 1
         ))
-      window.sendEvent(event)
+      events.append(event)
+    }
+    performInNativeRunLoop {
+      for event in events {
+        NSApplication.shared.sendEvent(event)
+        NSApplication.shared.updateWindows()
+      }
     }
     try await waitUntil("text editor focus", in: hosting, window: window) {
       window.firstResponder is NSTextView
@@ -215,6 +234,7 @@ struct AdjustmentValueFieldInteractionTests {
     state: NumericEntryState
   ) async throws {
     try await Task.sleep(for: .milliseconds(20))
+    processPendingAppKitEvents()
     hosting.layoutSubtreeIfNeeded()
     let owner = try #require(
       editableTextFields(in: hosting).first { $0.currentEditor() === editor },
@@ -249,7 +269,9 @@ struct AdjustmentValueFieldInteractionTests {
     _ description: String, in hosting: NSView, window: NSWindow, ready: () -> Bool
   ) async throws {
     let deadline = ContinuousClock.now.advanced(by: .seconds(3))
-    while !ready() {
+    while true {
+      processPendingAppKitEvents()
+      if ready() { return }
       try #require(
         ContinuousClock.now < deadline,
         "Timed out waiting for \(description). \(nativeState(in: hosting, window: window))"
@@ -258,10 +280,41 @@ struct AdjustmentValueFieldInteractionTests {
     }
   }
 
+  // Dispatch pending native events while awaiting activation and field focus.
+  // Swift's async test runner does not run the AppKit application event loop.
+  private func processPendingAppKitEvents() {
+    performInNativeRunLoop { self.dispatchPendingAppKitEvents() }
+  }
+
+  // AppKit can stop its current run loop. Contain that stop in a nested loop
+  // instead of Swift's outer async-main executor.
+  private func performInNativeRunLoop(_ action: @escaping @MainActor () -> Void) {
+    CFRunLoopPerformBlock(CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue) {
+      MainActor.assumeIsolated { action() }
+    }
+    CFRunLoopRunInMode(.defaultMode, 0.005, false)
+  }
+
+  private func dispatchPendingAppKitEvents() {
+    let application = NSApplication.shared
+    for _ in 0..<32 {
+      guard
+        let event = application.nextEvent(
+          matching: .any, until: Date(timeIntervalSinceNow: 0.001),
+          inMode: .default, dequeue: true)
+      else { break }
+      application.sendEvent(event)
+      application.updateWindows()
+    }
+    application.updateWindows()
+  }
+
   private func nativeState(in hosting: NSView, window: NSWindow) -> String {
     let responder = window.firstResponder.map { String(describing: type(of: $0)) } ?? "nil"
     let state =
-      "windowKey=\(window.isKeyWindow) visible=\(window.isVisible) "
+      "appActive=\(NSApplication.shared.isActive) "
+      + "activationPolicy=\(NSApplication.shared.activationPolicy().rawValue) "
+      + "windowKey=\(window.isKeyWindow) visible=\(window.isVisible) "
       + "firstResponder=\(responder) hostingFrame=\(hosting.frame)"
     return state + "\n" + accessibilityTree(hosting)
   }

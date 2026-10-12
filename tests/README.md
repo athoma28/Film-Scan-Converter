@@ -52,6 +52,17 @@ This compiles the sustained-preview harness but leaves its measurement disabled
 unless explicitly enabled. Keep throwing work and compound budget calculations
 outside test macros so the supported older toolchain can compile the assertions.
 
+The native numeric-field check requires a visible, active, key test window before
+sending clicks. It restores the previous application activation policy afterward.
+CI runs this check before the complete regression gate so a focus/setup failure
+reports promptly; the full suite still exercises it again. Both steps require
+a passing Swift Testing completion summary as well as a successful exit code.
+
+```sh
+swift test --disable-sandbox -c release --package-path native/FilmScanEngine \
+  --no-parallel --filter AdjustmentValueFieldInteractionTests
+```
+
 ### Current default coverage
 
 These suites cover the current film-base/look workflow and preview changes;

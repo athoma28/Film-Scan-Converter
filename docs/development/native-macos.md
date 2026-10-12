@@ -152,9 +152,10 @@ The release source is identified by tag `v0.3.0-beta.1`, version 0.3.0/build 4.
 Local gates ran against the native production implementation shipped unchanged
 in this release. The initial 412 package/source/test/fixture/diagnostic hashes
 remained unchanged across those gates. The test-only CI follow-through below
-records the subsequent assertion compatibility changes. Release metadata and
-documentation were updated for publication. Concurrent inspiration-asset cleanup
-is preserved separately; private scans and generated outputs remain ignored.
+records the subsequent assertion compatibility and native test-host changes.
+Release metadata and documentation were updated for publication. Concurrent
+inspiration-asset cleanup is preserved separately; private scans and generated
+outputs remain ignored.
 
 On arm64 macOS 15.7.9 (24G830), Swift 6.1.2 and LibRaw 0.22.2, with normal macOS
 graphics access:
@@ -186,11 +187,26 @@ inside two thumbnail assertions and could not type-check a compound optional
 budget assertion. Two test files now calculate those values before the macros;
 assertion coverage and all production hashes remain unchanged. The focused
 release check passed **27 tests: 26 passed, one intentional sustained-measurement
-skip, zero failures, 117.700 s** after rebuilding. The complete local suite above
-was not repeated after these test-only changes; final macOS 14/15 CI acceptance
-and the release source commit are recorded on the release page. The focused
-command is in the test guide. Earlier candidate hashes remain in the ignored
-release evidence alongside the final package record.
+skip, zero failures, 117.700 s** after rebuilding.
+
+The macOS 14 rerun then failed the numeric-field fixture while waiting for
+text-editor focus: its window was visible but not key. The fixture now requires
+an active application and key window, dispatches clicks through `NSApplication`,
+services pending events within bounded nested native run loops, and restores
+the previous activation policy. The focused local interaction test passed all
+typing, Return, Escape, focus-loss and stale-source assertions, with a completed
+one-test summary. Earlier dispatch experiments that exited without a summary
+were rejected as incomplete. CI runs this fixture before the full suite; both
+steps preserve command failures and reject logs without a completed Swift
+Testing summary. Final macOS 14/15 CI acceptance and the release source commit
+are recorded on the release page. Focused commands are in the test guide.
+Earlier candidate hashes remain in the ignored release evidence alongside the
+final package record.
+
+The complete local release suite was repeated after these test-host changes:
+**924 tests: 902 passed, 22 intentional skips, zero failures, 240.466 s**.
+It included the native field interaction and completed with a passing summary.
+All production source hashes still matched the original release-source gates.
 
 Commands and switches remain in the [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md)
 and [Building](building.md). Ignored `dist/release-0.3.0-beta.1/` retains source

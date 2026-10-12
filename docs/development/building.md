@@ -22,8 +22,10 @@ swift run --package-path native/FilmScanEngine FilmScanConverterMac
 Launch Services, bundled dependencies, signing, or the distributed ZIP. Use the
 [release runbook](native-release.md) for packaged-app validation.
 
-The native CI workflow runs the C/C++ compatibility gate, Swift regression with
-coverage, and app build on macOS 14 and 15. Its macOS 15 job also checks formatting
+The native CI workflow runs the C/C++ compatibility gate, an early native
+numeric-field interaction check, Swift regression with coverage, and app build
+on macOS 14 and 15. Both Swift test steps require a passing completion summary.
+Its macOS 15 job also checks formatting
 and assembles/validates an unsigned beta. It does not supply private RAW inputs,
 run the standalone comparator, or enable the performance and representative-roll
 tests. The [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md)
