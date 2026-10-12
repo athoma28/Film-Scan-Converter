@@ -37,6 +37,17 @@ extension FilmProcessing {
         && inversion.rendering == .densityPrint
       ? densityAnalysis ?? photographicDensityAnalysis(image: image, parameters: parameters) : nil
     let curves = PhotographicCurves(parameters)
+    let tone =
+      parameters.photoAdjustments.usesPhotographicTone
+      ? PhotographicTone.Prepared(parameters.photoAdjustments) : nil
+    let color =
+      !isBW && parameters.photoAdjustments.hasColorAdjustment
+      ? ProtectedColorAdjustment.Prepared(parameters.photoAdjustments) : nil
+    let calibratedInversion =
+      negative && inversion.enabled
+        && ((isBW && inversion.rendering == .calibratedMonochrome)
+          || (!isBW && inversion.rendering == .calibratedColor))
+      ? FilmNegativeProcessing.PreparedPhotographicInversion(params: inversion) : nil
 
     if parameters.densityPipelineEnabled, let base = parameters.densityBaseDensity,
       negative, inversion.rendering == .powerLaw, working.channels == 3
@@ -44,7 +55,8 @@ extension FilmProcessing {
       let field =
         flatField.map {
           prepareGeometry(
-            image: $0.resized(width: image.width, height: image.height), parameters: parameters)
+            image: $0.resized(width: image.width, height: image.height), parameters: parameters,
+            sourceRepairs: false)
         }
         ?? UInt16Image(
           width: working.width, height: working.height, channels: 3,
@@ -73,7 +85,8 @@ extension FilmProcessing {
         linear.pixels[i + 2] = rgb.red
       }
       return finishPhotographic(
-        linear: linear, sensor: working, parameters: parameters, curves: curves)
+        linear: linear, sensor: working, parameters: parameters, curves: curves,
+        tone: tone, color: color)
     }
 
     return mapCorrectionBands(working) { band in
@@ -91,7 +104,10 @@ extension FilmProcessing {
         }
       } else {
         var values = [Double](repeating: 0, count: band.width * band.height * 3)
-        for pixel in 0..<(band.width * band.height) {
+        // Inversion and color-space conversion are independent per pixel, just
+        // like the finishing stages. Reuse their bounded workers while keeping
+        // the same band-sized scratch and exact scalar arithmetic.
+        processCorrectionPixels(&values, pixelCount: band.width * band.height) { pixel, values in
           let source = pixel * band.channels
           let b = band.pixels[source]
           let g = band.pixels[source + (band.channels == 3 ? 1 : 0)]
@@ -103,31 +119,37 @@ extension FilmProcessing {
             rgb = FilmNegativeProcessing.linearSRGBToRec2020(
               red: value.red, green: value.green, blue: value.blue)
           } else {
-            var channels = [Double(b) / 65_535, Double(g) / 65_535, Double(r) / 65_535]
-            if negative && inversion.enabled {
+            var blue = Double(b) / 65_535
+            var green = Double(g) / 65_535
+            var red = Double(r) / 65_535
+            if let calibratedInversion {
               if isBW {
-                let gray = channels[0] * 0.114 + channels[1] * 0.587 + channels[2] * 0.299
-                let value = FilmNegativeProcessing.photographicCalibratedValue(
-                  gray, channel: 1, params: inversion)
-                channels = [value, value, value]
+                let gray = blue * 0.114 + green * 0.587 + red * 0.299
+                let value = calibratedInversion.value(gray, channel: 1)
+                blue = value
+                green = value
+                red = value
               } else {
-                channels = (0..<3).map {
-                  FilmNegativeProcessing.photographicCalibratedValue(
-                    channels[$0], channel: $0, params: inversion)
-                }
+                blue = calibratedInversion.value(blue, channel: 0)
+                green = calibratedInversion.value(green, channel: 1)
+                red = calibratedInversion.value(red, channel: 2)
               }
             } else if negative {
               if isBW {
-                let gray = 1 - (channels[0] * 0.114 + channels[1] * 0.587 + channels[2] * 0.299)
-                channels = [gray, gray, gray]
+                let gray = 1 - (blue * 0.114 + green * 0.587 + red * 0.299)
+                blue = gray
+                green = gray
+                red = gray
               } else {
-                channels = channels.map { 1 - $0 }
+                blue = 1 - blue
+                green = 1 - green
+                red = 1 - red
               }
             }
             rgb = FilmNegativeProcessing.linearSRGBToRec2020(
-              red: PhotographicTone.decode(channels[2]),
-              green: PhotographicTone.decode(channels[1]),
-              blue: PhotographicTone.decode(channels[0]))
+              red: PhotographicTone.decode(red),
+              green: PhotographicTone.decode(green),
+              blue: PhotographicTone.decode(blue))
           }
           values[pixel * 3] = rgb.blue
           values[pixel * 3 + 1] = rgb.green
@@ -136,27 +158,34 @@ extension FilmProcessing {
         linear = RenderReadyLinearImage(width: band.width, height: band.height, pixels: values)
       }
       return finishPhotographic(
-        linear: linear, sensor: band, parameters: parameters, curves: curves)
+        linear: linear, sensor: band, parameters: parameters, curves: curves,
+        tone: tone, color: color)
     }
   }
 
   private static func finishPhotographic(
     linear source: RenderReadyLinearImage,
-    sensor: UInt16Image, parameters: ProcessingParameters, curves: PhotographicCurves
+    sensor: UInt16Image, parameters: ProcessingParameters, curves: PhotographicCurves,
+    tone: PhotographicTone.Prepared?, color: ProtectedColorAdjustment.Prepared?
   ) -> UInt16Image {
     var linear = source
     let isBW = parameters.filmType == .blackAndWhiteNegative
     if parameters.filmType == .colourNegative, !parameters.filmDyeMixing.isNeutral {
       linear.applyFilmDyeMixing(parameters.filmDyeMixing)
     }
-    linear.applyLinearToneAdjustments(parameters.photoAdjustments)
-    if !isBW, parameters.photoAdjustments.hasColorAdjustment {
-      linear.applyProtectedColorAdjustments(parameters.photoAdjustments)
+    if let tone {
+      linear.applyPhotographicTone(tone)
+    } else {
+      linear.applyLinearToneAdjustments(parameters.photoAdjustments)
+    }
+    if let color {
+      linear.applyProtectedColorAdjustments(color)
     }
     let pixels = linear.pixels
     var output = [UInt16](repeating: 0, count: pixels.count)
     let wheels = [parameters.highlightWheel, parameters.midtoneWheel, parameters.shadowWheel]
     let pushes = wheels.map { FilmProcessing.wheelRGB($0) }
+    let applyWheels = !isBW && wheels.contains(where: { !$0.isNeutral })
     processCorrectionPixels(&output, pixelCount: linear.pixelCount) { pixel, output in
       let i = pixel * 3
       let srgb = FilmNegativeProcessing.linearRec2020ToSRGB(
@@ -173,7 +202,7 @@ extension FilmProcessing {
       r = curves.value(r, channel: 2)
       g = curves.value(g, channel: 1)
       b = curves.value(b, channel: 0)
-      if !isBW, wheels.contains(where: { !$0.isNeutral }) {
+      if applyWheels {
         let y = 0.299 * r + 0.587 * g + 0.114 * b
         let masks = [highlightMask(y), midtoneMask(y), shadowMask(y)]
         for j in 0..<3 {

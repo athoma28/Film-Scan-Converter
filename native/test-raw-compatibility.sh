@@ -14,3 +14,8 @@ libraw_include_dir="$(pkg-config --variable=includedir libraw_r)"
 "${CXX:-clang++}" -x c++ -std=c++14 -Wall -Wextra -Werror -I "$libraw_include_dir" \
   "$script_dir/tests/RawDecodeCompatibilityTests.c" -o "$test_dir/cpp-test"
 "$test_dir/cpp-test"
+
+# Exact directional X-Trans homogeneity, including NaN/Inf and truncated tiles.
+"${CXX:-clang++}" -std=c++14 -O3 -Wall -Wextra -Werror \
+  "$script_dir/tests/XTransHomogeneityTests.cpp" -o "$test_dir/xtrans-homogeneity-test"
+"$test_dir/xtrans-homogeneity-test"

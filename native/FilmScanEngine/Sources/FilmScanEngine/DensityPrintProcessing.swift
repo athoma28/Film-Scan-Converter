@@ -127,6 +127,13 @@ public enum DensityPrintProcessing {
   public static let shadowLumaBand = (0.72, 0.92)
   static let parallelPixelThreshold = 100_000
 
+  /// Every input is already a UInt16 code. Store the original Double result,
+  /// without interpolation or Float rounding, once for this finite domain.
+  /// The scalar analysis path remains independent of this rendering lookup.
+  static let logTransmittanceByCode: [Double] = (0...Int(UInt16.max)).map { code in
+    log10(max(FilmNegativeProcessing.sRGBToLinear(Double(code) / 65_535.0), epsilon))
+  }
+
   public static func resolvedProfile(from params: FilmNegativeParams) -> NegativeDensityProfile {
     var profile = NegativeDensityProfileCatalog.profile(id: params.densityProfileID)
       .withUnmix(
@@ -336,12 +343,9 @@ public enum DensityPrintProcessing {
   private static func pixelDensities(
     blue: UInt16, green: UInt16, red: UInt16, analysis: DensityPrintAnalysis
   ) -> (blue: Double, green: Double, red: Double) {
-    let linearB = max(FilmNegativeProcessing.sRGBToLinear(Double(blue) / 65_535.0), epsilon)
-    let linearG = max(FilmNegativeProcessing.sRGBToLinear(Double(green) / 65_535.0), epsilon)
-    let linearR = max(FilmNegativeProcessing.sRGBToLinear(Double(red) / 65_535.0), epsilon)
-    let logB = log10(linearB)
-    let logG = log10(linearG)
-    let logR = log10(linearR)
+    let logB = logTransmittanceByCode[Int(blue)]
+    let logG = logTransmittanceByCode[Int(green)]
+    let logR = logTransmittanceByCode[Int(red)]
     let unmixedB =
       analysis.unmixBlue.blue * logB + analysis.unmixBlue.green * logG
       + analysis.unmixBlue.red * logR
@@ -524,10 +528,6 @@ public enum DensityPrintProcessing {
   static func inverseSoftplus(_ y: Double) -> Double {
     if y > 20 { return y }
     return log(max(exp(y) - 1, epsilon))
-  }
-
-  static func defaultGradeRange() -> Double {
-    autoGradeTarget * autoGradeNominalRatio
   }
 
   static func effectiveGradeRange(

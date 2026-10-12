@@ -11,6 +11,13 @@ import SwiftUI
 /// through `Image(decorative:scale:)` keeps preview, thumbnail, and loupe
 /// drawing on one image.
 enum PreviewBitmap {
+  // Core Image contexts support concurrent callers. Keep thumbnail compilation
+  // and GPU resources shared while each conversion owns its output bitmap.
+  nonisolated(unsafe) private static let thumbnailContext = CIContext(
+    options: [.cacheIntermediates: false])
+  private static let thumbnailColorSpace =
+    CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
+
   static func nsImage(from cgImage: CGImage, logicalSize: NSSize? = nil) -> NSImage {
     let size = logicalSize ?? NSSize(width: cgImage.width, height: cgImage.height)
     let image = NSImage(size: size)
@@ -22,20 +29,20 @@ enum PreviewBitmap {
   /// Simple complementary invert of a JPEG/ImageIO thumbnail, rendered into
   /// named sRGB so SwiftUI does not undo it with DeviceRGB channel swapping.
   static func invertedNSImage(from cgImage: CGImage) -> NSImage? {
-    let inverted = CIImage(cgImage: cgImage).applyingFilter("CIColorInvert")
-    let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
-    let context = CIContext(options: [.cacheIntermediates: false])
-    guard
-      let rendered = context.createCGImage(
-        inverted,
-        from: inverted.extent,
-        format: .RGBA8,
-        colorSpace: colorSpace
-      )
-    else {
-      return nil
-    }
+    guard let rendered = invertedCGImage(from: cgImage) else { return nil }
     return nsImage(from: rendered)
+  }
+
+  /// Bitmap preparation can run on the thumbnail worker; AppKit wrapping stays
+  /// with the caller that publishes the finished image on the main actor.
+  static func invertedCGImage(from cgImage: CGImage) -> CGImage? {
+    let inverted = CIImage(cgImage: cgImage).applyingFilter("CIColorInvert")
+    return thumbnailContext.createCGImage(
+      inverted,
+      from: inverted.extent,
+      format: .RGBA8,
+      colorSpace: thumbnailColorSpace,
+      deferred: false)
   }
 
   static func cgImage(from image: NSImage) -> CGImage? {

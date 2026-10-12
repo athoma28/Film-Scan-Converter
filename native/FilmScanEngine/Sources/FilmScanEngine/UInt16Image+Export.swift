@@ -61,9 +61,11 @@ extension UInt16Image {
   public func write(
     to url: URL,
     format: ExportFormat,
-    parameters: ExportParameters
+    parameters: ExportParameters,
+    overwriteExisting: Bool = true
   ) throws {
-    _ = try writeMeasured(to: url, format: format, parameters: parameters)
+    _ = try writeMeasured(
+      to: url, format: format, parameters: parameters, overwriteExisting: overwriteExisting)
   }
 
   /// Writes through the production export path and returns coarse stage timings.
@@ -72,7 +74,8 @@ extension UInt16Image {
   public func writeMeasured(
     to url: URL,
     format: ExportFormat,
-    parameters: ExportParameters
+    parameters: ExportParameters,
+    overwriteExisting: Bool = true
   ) throws -> ExportWriteMetrics {
     let directory = url.deletingLastPathComponent()
     if !FileManager.default.fileExists(atPath: directory.path) {
@@ -81,95 +84,52 @@ extension UInt16Image {
 
     switch format {
     case .tiff:
-      return try writeTIFF(to: url, parameters: parameters)
+      return try writeTIFF(to: url, parameters: parameters, overwriteExisting: overwriteExisting)
     case .jpeg:
-      return try writeJPEG(to: url, parameters: parameters)
+      return try writeJPEG(to: url, parameters: parameters, overwriteExisting: overwriteExisting)
     case .png:
-      return try writePNG(to: url)
+      return try writePNG(to: url, overwriteExisting: overwriteExisting)
     case .dng:
-      return try writeDNGMeasured(to: url)
+      return try writeDNGMeasured(to: url, overwriteExisting: overwriteExisting)
     }
   }
 
   private func writeJPEG(
-    to url: URL, parameters: ExportParameters
+    to url: URL, parameters: ExportParameters, overwriteExisting: Bool
   ) throws -> ExportWriteMetrics {
     let packingStart = ContinuousClock.now
     guard let cgImage = makeExportCGImage8() else {
       throw ExportError.creationFailed
     }
     let packingSeconds = exportSeconds(packingStart.duration(to: .now))
-
-    let writerStart = ContinuousClock.now
-    let stagingURL = exportStagingURL(for: url)
-    defer { try? FileManager.default.removeItem(at: stagingURL) }
-
-    guard
-      let destination = CGImageDestinationCreateWithURL(
-        stagingURL as CFURL, "public.jpeg" as CFString, 1, nil
-      )
-    else {
-      throw ExportError.destinationCreationFailed(url, .jpeg)
+    return try writeImageIO(
+      cgImage, to: url, format: .jpeg,
+      packingSeconds: packingSeconds, overwriteExisting: overwriteExisting
+    ) {
+      [kCGImageDestinationLossyCompressionQuality: parameters.jpegQuality]
     }
-
-    let options: [CFString: Any] = [
-      kCGImageDestinationLossyCompressionQuality: parameters.jpegQuality
-    ]
-    CGImageDestinationAddImage(destination, cgImage, options as CFDictionary)
-
-    guard CGImageDestinationFinalize(destination) else {
-      throw ExportError.finalizationFailed(url, .jpeg)
-    }
-    try commitStagedExport(stagingURL, to: url, format: .jpeg)
-    return try exportMetrics(
-      url: url,
-      packingSeconds: packingSeconds,
-      writerSeconds: exportSeconds(writerStart.duration(to: .now)),
-      packedPixelBytes: width * height * 3
-    )
   }
 
   private func writeTIFF(
-    to url: URL, parameters: ExportParameters
+    to url: URL, parameters: ExportParameters, overwriteExisting: Bool
   ) throws -> ExportWriteMetrics {
     let packingStart = ContinuousClock.now
-    guard let cgImage = makeExportCGImageRGB16() else {
+    guard let cgImage = makeExportCGImage16() else {
       throw ExportError.creationFailed
     }
     let packingSeconds = exportSeconds(packingStart.duration(to: .now))
-
-    let writerStart = ContinuousClock.now
-    let stagingURL = exportStagingURL(for: url)
-    defer { try? FileManager.default.removeItem(at: stagingURL) }
-
-    guard
-      let destination = CGImageDestinationCreateWithURL(
-        stagingURL as CFURL, "public.tiff" as CFString, 1, nil
-      )
-    else {
-      throw ExportError.destinationCreationFailed(url, .tiff)
+    return try writeImageIO(
+      cgImage, to: url, format: .tiff,
+      packingSeconds: packingSeconds, overwriteExisting: overwriteExisting
+    ) {
+      [
+        kCGImagePropertyTIFFCompression: tiffCompressionValue(parameters.tiffCompression),
+        kCGImagePropertyOrientation: 1,
+      ]
     }
-
-    let options: [CFString: Any] = [
-      kCGImagePropertyTIFFCompression: tiffCompressionValue(parameters.tiffCompression),
-      kCGImagePropertyOrientation: 1,
-    ]
-
-    CGImageDestinationAddImage(destination, cgImage, options as CFDictionary)
-
-    guard CGImageDestinationFinalize(destination) else {
-      throw ExportError.finalizationFailed(url, .tiff)
-    }
-    try commitStagedExport(stagingURL, to: url, format: .tiff)
-    return try exportMetrics(
-      url: url,
-      packingSeconds: packingSeconds,
-      writerSeconds: exportSeconds(writerStart.duration(to: .now)),
-      packedPixelBytes: width * height * 6
-    )
   }
 
-  private func writePNG(to url: URL) throws -> ExportWriteMetrics {
+  private func writePNG(to url: URL, overwriteExisting: Bool) throws -> ExportWriteMetrics {
     guard channels >= 3 else {
       throw ExportError.unsupportedChannels
     }
@@ -178,31 +138,51 @@ extension UInt16Image {
       throw ExportError.creationFailed
     }
     let packingSeconds = exportSeconds(packingStart.duration(to: .now))
+    // A fixed, reversible byte predictor avoids ImageIO's per-row filter
+    // search while retaining every 16-bit sample and the named sRGB profile.
+    return try writeImageIO(
+      cgImage, to: url, format: .png,
+      packingSeconds: packingSeconds, overwriteExisting: overwriteExisting
+    ) {
+      [
+        kCGImagePropertyPNGDictionary: [
+          kCGImagePropertyPNGCompressionFilter: IMAGEIO_PNG_FILTER_AVG
+        ]
+      ]
+    }
+  }
 
+  /// All ImageIO formats share staging, failure cleanup, and collision-safe commit.
+  private func writeImageIO(
+    _ cgImage: CGImage,
+    to url: URL,
+    format: ExportFormat,
+    packingSeconds: Double,
+    overwriteExisting: Bool,
+    options: () -> [CFString: Any]
+  ) throws -> ExportWriteMetrics {
     let writerStart = ContinuousClock.now
     let stagingURL = exportStagingURL(for: url)
     defer { try? FileManager.default.removeItem(at: stagingURL) }
 
     guard
       let destination = CGImageDestinationCreateWithURL(
-        stagingURL as CFURL, "public.png" as CFString, 1, nil
+        stagingURL as CFURL, format.utType as CFString, 1, nil
       )
     else {
-      throw ExportError.destinationCreationFailed(url, .png)
+      throw ExportError.destinationCreationFailed(url, format)
     }
-
-    CGImageDestinationAddImage(destination, cgImage, nil)
-
+    CGImageDestinationAddImage(destination, cgImage, options() as CFDictionary)
     guard CGImageDestinationFinalize(destination) else {
-      throw ExportError.finalizationFailed(url, .png)
+      throw ExportError.finalizationFailed(url, format)
     }
-
-    try commitStagedExport(stagingURL, to: url, format: .png)
+    try commitStagedExport(
+      stagingURL, to: url, format: format, overwriteExisting: overwriteExisting)
     return try exportMetrics(
       url: url,
       packingSeconds: packingSeconds,
       writerSeconds: exportSeconds(writerStart.duration(to: .now)),
-      packedPixelBytes: width * height * 6
+      packedPixelBytes: width * height * (cgImage.bitsPerPixel / 8)
     )
   }
 
@@ -214,12 +194,15 @@ extension UInt16Image {
   private func commitStagedExport(
     _ stagingURL: URL,
     to url: URL,
-    format: ExportFormat
+    format: ExportFormat,
+    overwriteExisting: Bool
   ) throws {
     do {
-      if FileManager.default.fileExists(atPath: url.path) {
+      if overwriteExisting, FileManager.default.fileExists(atPath: url.path) {
         _ = try FileManager.default.replaceItemAt(url, withItemAt: stagingURL)
       } else {
+        // App jobs reserve names before rendering. A late collision must fail
+        // without replacing another application's file.
         try FileManager.default.moveItem(at: stagingURL, to: url)
       }
     } catch {
@@ -243,29 +226,6 @@ extension UInt16Image {
   }
 
   public func makeExportCGImage16() -> CGImage? {
-    guard let data = rgb16Data() else {
-      return nil
-    }
-
-    guard let provider = CGDataProvider(data: data as CFData) else {
-      return nil
-    }
-    return CGImage(
-      width: width,
-      height: height,
-      bitsPerComponent: 16,
-      bitsPerPixel: 48,
-      bytesPerRow: width * 6,
-      space: Self.renderedOutputColorSpace,
-      bitmapInfo: .byteOrder16Little,
-      provider: provider,
-      decode: nil,
-      shouldInterpolate: false,
-      intent: .defaultIntent
-    )
-  }
-
-  package func makeExportCGImageRGB16() -> CGImage? {
     guard let data = rgb16Data() else {
       return nil
     }

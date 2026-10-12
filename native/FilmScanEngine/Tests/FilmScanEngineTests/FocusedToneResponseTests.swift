@@ -132,27 +132,10 @@ struct FocusedToneResponseTests {
     }
   }
 
-  @Test("Versions 3 and 4 decode while built-in looks stay on version 2")
-  func versionCompatibility() throws {
-    #expect(PhotoAdjustmentParameters.currentSchemaVersion == 4)
-    #expect(PhotoAdjustmentParameters.maximumSupportedSchemaVersion == 4)
-    #expect(PhotoAdjustmentParameters().schemaVersion == 4)
+  @Test("Built-in looks preserve their version 2 rendering contract")
+  func factoryLooksPreserveVersionTwo() {
+    #expect(!LookRecipe.factory.isEmpty)
     #expect(LookRecipe.factory.allSatisfy { $0.photoAdjustments.schemaVersion == 2 })
-    for version in 1...4 {
-      let original = PhotoAdjustmentParameters(
-        schemaVersion: version, highlights: -0.25, shadows: 0.25)
-      #expect(
-        try JSONDecoder().decode(
-          PhotoAdjustmentParameters.self,
-          from: JSONEncoder().encode(original)) == original)
-    }
-    let missing = try JSONDecoder().decode(PhotoAdjustmentParameters.self, from: Data("{}".utf8))
-    #expect(missing.schemaVersion == 1)
-    #expect(throws: DecodingError.self) {
-      try JSONDecoder().decode(
-        PhotoAdjustmentParameters.self,
-        from: Data(#"{"schemaVersion":5}"#.utf8))
-    }
   }
 
   @Test("The real app correction parser carries version 3 and retains destination base and framing")

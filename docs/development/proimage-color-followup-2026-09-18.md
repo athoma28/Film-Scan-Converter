@@ -1,10 +1,18 @@
 # Pro Image color separation and preferred FSC looks
 
 **September 18 evidence; status checked September 19.** These scores and exports
-predate the Film Base / LookRecipe migration. The current fitter still requires
-`balanced-curves.json`, which a fresh native baseline no longer produces. The
-[runbook](color-evaluation.md#current-compatibility) tracks this and the
-clipboard contract gaps; this note does not establish a passing current run.
+predate the Film Base / LookRecipe migration. At that check, the fitter still
+required `balanced-curves.json`, which a fresh native baseline no longer produced.
+The [runbook](color-evaluation.md#current-compatibility) records the repaired
+schema-2 workflow and its verification; this note is historical evidence.
+
+The [September 25 follow-through](roadmap-follow-through-2026-09-25.md#reproducible-color-workflow)
+records the later public-control rerun. It uses Cast Cleanup/Color Separation
+on canonical Film Bases while retaining private calibration, rather than refitting
+the six private dye-mixing coefficients described here. Its measurements and
+recipes belong to that separate checkpoint. The
+[research registry](../research/index.md#color-evidence-map) maps both local
+artifact roots; development status records subsequent verification.
 
 The user's feedback changes how the [initial study](camera-raw-color-study-2026-09-18.md)
 should be judged. Fuji 400 Fresh `DSCF3115` Automatic is excellent to them; the
@@ -161,13 +169,13 @@ reproduction steps:
   --workflow proimage --full --output dist/proimage-study-next
 ```
 
-Resolve the missing Balanced baseline and current clipboard contract before
-starting a fresh complete run. Keep the historical output intact; it has no
-guarded-run provenance.
+Use the current runbook for a fresh complete run. Keep the historical output
+intact; it has no guarded-run provenance.
 
-`fit` recomputes all three native fits and the partial mixing-transfer trial.
-`report` checks the preferred-image hashes and settings, exports corrections,
-records central and expanded-region scores, and creates the review gallery.
+The historical `fit` stage recomputed all three native fits and the partial
+mixing-transfer trial. Its `report` checked the preferred-image hashes and settings,
+exported corrections, recorded central and expanded-region scores, and created
+the review gallery.
 Sources and settings are tracked; private image artifacts remain under ignored
 `dist/`. A renderer change can invalidate the saved preference hashes and requires
 explicit review of those appearances.

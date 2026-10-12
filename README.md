@@ -7,13 +7,17 @@ roll-wide corrections, and full-resolution export.
 
 ## Download And Source Status
 
-The current downloadable build is
-[0.2.0 Beta 3](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.3),
+The latest release recorded in this repository is
+[0.3.0 Beta 1](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.3.0-beta.1),
 for Apple Silicon Macs running macOS 14 or later. It is ad-hoc signed and is not
 Apple-notarized. See [Installation](docs/installation.md) for the download and
 source-build paths.
 
-## Current Application
+## Current Source Application
+
+Version 0.3.0 Beta 1 includes the current native workflow. See the
+[feature inventory](docs/features.md) for the release/source boundary and
+[release notes](RELEASE_NOTES.md) for artifact-specific behavior.
 
 - Import camera RAW, TIFF, PNG, JPEG, and BMP. RAW previews progress from a
   demosaiced draft through an inspect preview to full-sensor detail; completed
@@ -32,8 +36,10 @@ source-build paths.
   comparison preserve the viewed region where appropriate.
 - Save per-file edits with undo/redo. Copy corrections or apply a look to selected
   or all scans while keeping each destination's film base, calibration, and
-  geometry. Browse scans in sidebar order and optionally reorder them during
-  the session.
+  geometry. Selectively transfer exposure, tone, color, curves, or grading.
+  Browse scans in sidebar order and optionally reorder them during the session.
+- Inspect and edit dust candidate masks, then explicitly apply optional texture
+  repairs with per-file persistence and undo/redo.
 - Combine opt-in repeated captures using translation alignment and Noise or HDR
   stacking. Calibrate with film-base sampling, flat fields, and optional density
   and dye controls. A live camera preview is available for devices macOS exposes.
@@ -42,9 +48,9 @@ source-build paths.
   for a settings-only re-export. Export corrected, labeled PDF contact sheets for
   selected or all scans, with one tile per enabled stack.
 
-Native dust detection displays candidates but does not remove them. Stack
-alignment handles translation only, and DNG export contains processed RGB rather
-than sensor RAW. Broader photographic and roll/stack validation, output review
+Dust detection displays editable candidates; optional repairs change the image
+only when explicitly applied. Stack alignment handles translation only, and DNG export contains processed
+RGB rather than sensor RAW. Broader photographic and roll/stack validation, output review
 on an independent Mac, and notarized distribution remain open. See the
 [feature inventory](docs/features.md), [current verification](docs/development/native-macos.md),
 and [roadmap](docs/improvements/MacOS-Native-Roadmap.md).
@@ -74,3 +80,9 @@ For color, film-preset, and Camera Raw comparisons, use the
 [color evaluation runbook](docs/development/color-evaluation.md) for preflight,
 production renders, measurements, and the current compatibility limits of the
 historical studies.
+
+Use the [research index](docs/research/index.md) and
+[performance index](docs/performance/index.md) to find active work, dated evidence,
+rejected experiments, and parked scope. The
+[documentation maintenance guide](docs/development/documentation-maintenance.md)
+defines ownership and the repeatable link/navigation check.

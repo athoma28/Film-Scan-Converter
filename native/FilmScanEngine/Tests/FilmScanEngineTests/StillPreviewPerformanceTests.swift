@@ -112,18 +112,77 @@ struct StillPreviewPerformanceTests {
     let gpu = try #require(upgradedRenderer.render(parameters: parameters, showOriginal: false))
     let cpu = try #require(
       FilmProcessing.correctedPreview(image: upgraded, parameters: parameters).makePreviewCGImage())
-    let differences = zip(try pixels(gpu), try pixels(cpu)).map { abs(Int($0) - Int($1)) }
-    #expect((differences.max() ?? 0) <= 2)
+    try expectPreviewRGBPixelsMatch(gpu, cpu, tolerance: 2)
   }
 
-  @Test("Renderer reports its retained RGBA backing independently of shared source arrays")
+  @Test("Renderer reserves RGBA backing but materializes it only for a supported render")
   func rendererAccountsForRetainedRGBABacking() throws {
     let image = source()
     let renderer = try #require(StillPreviewRenderer(image: image, analysisImage: image))
-    #expect(renderer.retainedRGBAByteCount == image.width * image.height * 4 * 2)
+    let reservedBytes = image.width * image.height * 4 * 2
+    #expect(renderer.maximumRetainedRGBAByteCount == reservedBytes)
+    #expect(renderer.retainedRGBAByteCount == 0)
     let other = try #require(
       StillPreviewRenderer(image: image, analysisImage: source(width: 8, height: 8)))
-    #expect(other.retainedRGBAByteCount == renderer.retainedRGBAByteCount)
+    #expect(other.maximumRetainedRGBAByteCount == reservedBytes)
+    #expect(other.retainedRGBAByteCount == 0)
+    _ = try #require(renderer.render(parameters: .init(filmType: .cropOnly), showOriginal: true))
+    #expect(renderer.retainedRGBAByteCount == reservedBytes)
+    #expect(other.retainedRGBAByteCount == 0)
+    _ = try #require(renderer.render(parameters: .init(filmType: .cropOnly), showOriginal: true))
+    #expect(renderer.retainedRGBAByteCount == reservedBytes)
+  }
+
+  @Test("Source-dependent CPU routing leaves RGBA backing unmaterialized")
+  func flatDensityDoesNotMaterializeBacking() throws {
+    let image = UInt16Image(
+      width: 37, height: 23, channels: 3,
+      pixels: .init(repeating: 23_000, count: 37 * 23 * 3))
+    let renderer = try #require(StillPreviewRenderer(image: image))
+    let parameters = ProcessingParameters(
+      filmType: .colourNegative, filmNegativeParams: .densityPrintGenericC41)
+    #expect(StillPreviewRenderer.supports(parameters: parameters, showOriginal: false))
+    #expect(!renderer.supports(parameters: parameters, showOriginal: false))
+    #expect(renderer.render(parameters: parameters, showOriginal: false) == nil)
+    #expect(renderer.retainedRGBAByteCount == 0)
+    _ = try #require(renderer.render(parameters: parameters, showOriginal: true))
+    #expect(renderer.retainedRGBAByteCount == renderer.maximumRetainedRGBAByteCount)
+  }
+
+  @Test("Lazy source pixels survive release of the caller's image")
+  func lazySourceOwnsInputUntilMaterialization() throws {
+    let renderer = try autoreleasepool {
+      // Separate analysis storage ensures that only the lazy display source
+      // keeps the caller's full-size pixels alive until their first render.
+      try #require(
+        StillPreviewRenderer(image: source(), analysisImage: source(width: 8, height: 8)))
+    }
+    #expect(renderer.retainedRGBAByteCount == 0)
+    let parameters = ProcessingParameters(filmType: .cropOnly)
+    let output = try #require(renderer.render(parameters: parameters, showOriginal: true))
+    let fresh = try #require(StillPreviewRenderer(image: source()))
+    let expected = try #require(fresh.render(parameters: parameters, showOriginal: true))
+    try expectPreviewRGBPixelsMatch(output, expected, tolerance: 0)
+  }
+
+  @Test("Concurrent first renders preserve one immutable source and complete output pixels")
+  func lazyBackingSupportsConcurrentFirstRenders() throws {
+    let image = source(width: 613, height: 433)
+    let renderer = try #require(StillPreviewRenderer(image: image))
+    let parameters = ProcessingParameters(
+      filmType: .slide, photoAdjustments: .init(exposureEV: 0.4, saturation: 0.1))
+    let fresh = try #require(StillPreviewRenderer(image: image))
+    let expected = try #require(fresh.render(parameters: parameters, showOriginal: false))
+    let outputs = ConcurrentPreviewOutputs()
+    #expect(renderer.retainedRGBAByteCount == 0)
+    DispatchQueue.concurrentPerform(iterations: 8) { _ in
+      outputs.append(renderer.render(parameters: parameters, showOriginal: false))
+    }
+    #expect(outputs.images.count == 8)
+    for output in outputs.images {
+      try expectPreviewRGBPixelsMatch(#require(output), expected, tolerance: 0)
+    }
+    #expect(renderer.retainedRGBAByteCount == renderer.maximumRetainedRGBAByteCount)
   }
 
   @Test(
@@ -152,8 +211,7 @@ struct StillPreviewPerformanceTests {
       #expect(gpu.height == expectedDimensions.height)
       #expect(gpu.width == cpu.width)
       #expect(gpu.height == cpu.height)
-      let differences = zip(try pixels(gpu), try pixels(cpu)).map { abs(Int($0) - Int($1)) }
-      #expect((differences.max() ?? 0) <= 2)
+      try expectPreviewRGBPixelsMatch(gpu, cpu, tolerance: 2)
     }
   }
 
@@ -181,6 +239,7 @@ struct StillPreviewPerformanceTests {
       topLeft: .init(x: 0.1, y: 0.1), topRight: .init(x: 0.9, y: 0.1),
       bottomRight: .init(x: 0.9, y: 0.9), bottomLeft: .init(x: 0.1, y: 0.9))
     #expect(!StillPreviewRenderer.supports(parameters: parameters, showOriginal: false))
+    #expect(renderer.retainedRGBAByteCount == 0)
   }
 
   private func expectFreshPixels(
@@ -191,7 +250,7 @@ struct StillPreviewPerformanceTests {
     let fresh = try #require(StillPreviewRenderer(image: image))
     let cachedOutput = try #require(renderer.render(parameters: parameters, showOriginal: false))
     let freshOutput = try #require(fresh.render(parameters: parameters, showOriginal: false))
-    #expect(try pixels(cachedOutput) == pixels(freshOutput))
+    try expectPreviewRGBPixelsMatch(cachedOutput, freshOutput, tolerance: 0)
   }
 
   private func source(width: Int = 47, height: Int = 31) -> UInt16Image {
@@ -199,12 +258,22 @@ struct StillPreviewPerformanceTests {
     return UInt16Image(width: width, height: height, channels: 3, pixels: values)
   }
 
-  private func pixels(_ image: CGImage) throws -> [UInt8] {
-    let data = try #require(image.dataProvider?.data)
-    let pointer = try #require(CFDataGetBytePtr(data))
-    return (0..<image.height).flatMap { row in
-      Array(UnsafeBufferPointer(start: pointer + row * image.bytesPerRow, count: image.width * 4))
-    }
+}
+
+private final class ConcurrentPreviewOutputs: @unchecked Sendable {
+  private let lock = NSLock()
+  private var values: [CGImage?] = []
+
+  var images: [CGImage?] {
+    lock.lock()
+    defer { lock.unlock() }
+    return values
+  }
+
+  func append(_ image: CGImage?) {
+    lock.lock()
+    defer { lock.unlock() }
+    values.append(image)
   }
 }
 

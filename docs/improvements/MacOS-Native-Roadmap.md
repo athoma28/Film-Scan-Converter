@@ -4,7 +4,7 @@ This is the ordered plan for remaining product work. Implemented capabilities
 and dated validation belong in [development status](../development/native-macos.md);
 user-facing behavior belongs in [Features](../features.md).
 
-Reviewed against the local working tree on September 25, 2026 UTC. These priorities
+Reviewed against the local working tree on October 11, 2026 UTC. These priorities
 target remaining source behavior after Beta 3. Film Base / LookRecipe,
 retained previews, bounded neighbour warming, version-4 tone controls, and
 priority RAW scheduling are implemented. The immediate workflow repairs and
@@ -12,6 +12,10 @@ perspective/framing improvements are complete; the
 [September 25 validation](../development/roadmap-follow-through-2026-09-25.md)
 records photographic Metal comparisons, full-resolution exports, the migrated
 color study, and remaining limits.
+The later September 27–October 2 performance implementations are also complete
+source work; their bounded evidence and further candidates are in the
+[performance index](../performance/index.md). A documentation review does not
+rerun the recorded checks or establish acceptance for a newer binary.
 
 Distribution is last at the owner's request. Real repeated-capture quality
 validation is explicitly pending until independent rescans/brackets are available.
@@ -24,6 +28,34 @@ a measured performance problem, or establish distribution evidence.
 Computer Use testing was deferred at the owner's request in the recorded
 validation work. Automated and file-based verification continue; the photographic
 and distribution acceptance below remains open.
+
+## 0.3 Workflow Scope
+
+The September 30 source work adds selective adjustment sync/paste, original-folder
+export defaults with per-job destination snapshots, and opt-in dust repair.
+Dust identification remains separate from image changes: editable masks feed
+explicit automatic repair, while a healing brush supports automatic or chosen
+texture sources. Repairs persist in source coordinates and survive framing edits.
+October 3 source work adds recovery of the open roll, sidebar order, primary
+selection, and multiselection, including unavailable paths on disconnected drives.
+Close All Scans starts an empty roll while preserving per-image corrections.
+Transient history/previews, enabled stacks, and export jobs do not restore.
+
+The [October 10–11 development loop](../development/roadmap-loop-2026-10-10.md)
+adds every-save settings validation and recovery, late export collision handling,
+automatic/manual donor and mask-consumption guards, separate async action history,
+stale Auto Frame rejection, export preparation cancellation, and session-owned
+CPU preparation. Its sustained navigation and
+matched CPU-revisit studies establish bounded automated evidence; the CPU edit
+benefit has a higher settled physical-memory cost. These are completed workflow
+repairs, while the acceptance decisions below remain open.
+
+Before release, judge detection false positives and healing on real grain,
+edges, skin, fine texture, and difficult backgrounds at full resolution.
+The initial repair operator uses CPU fallback and conservative component limits;
+synthetic correctness and reopened-file checks do not establish photographic
+restoration quality. Continue the packaged/photographic and distribution
+acceptance sequence below. Current verification is recorded in development status.
 
 ## Active Color/Control Follow-Up
 
@@ -38,6 +70,12 @@ work. Thirteen frame-specific skin candidates passed training-based selection;
 individual-region regressions and failed transfers remain documented. User
 feedback and independent whole-profile validation are still required before
 changing defaults. Factory recipes and the preference ledger were preserved.
+
+The next decision is photographic review of those candidates, followed by a
+bounded validation on unseen photographs if a candidate is worth pursuing.
+Neither a lower reference error nor a completed migration authorizes promotion
+to a stock-wide/default recipe. The [research index](../research/index.md)
+separates this active question from parked profile calibration.
 
 ## Validation Sequence
 
@@ -75,66 +113,28 @@ Add organization features only if this workflow demonstrates a need.
 
 ## Standing Regression Requirements
 
-Maintain deterministic CPU/export pixels and the
-[frozen three-pass camera-scan oracle](../development/raw-decode-compatibility.md).
-Preserve bounded latest-value-wins preview work, one authoritative RAW
-export decode at a time, selected-file export-cache invalidation, safe cancellation,
-collision handling, and cleanup. Geometry edits and comparison share coordinate
-semantics; upstream geometry changes invalidate dependent canvas crops.
-
-Completed 1-pass full-sensor previews and corrected rasters may survive navigation
-within the RAM/count budget. Speculative work reserves display space and must not
-evict useful cached entries; memory pressure drops unselected entries and suspends
-speculation. Preserve revision-based render invalidation and statistics, one
-foreground plus at most one speculative decode on supported-memory machines,
-and export priority. Settled pan/zoom must continue to reuse the corrected raster.
-
-Look application must preserve the destination's film base, inversion IDs,
-calibration, and geometry. Keep v1-to-v2 migration, lossless library backup,
-unsupported-version rejection, no-op edits, and clipboard revision caching under
-regression coverage. Saved tone versions 1–3 must retain their prior rendering;
-editing a range or grading-level control promotes version 2/3 to version 4 in
-one undo step, while version 1 requires the explicit Update Tone Controls action
-and factory looks remain pinned to version 2. The standalone
-CPU/Metal gate now includes current Film Bases, all factory recipes across
-editable bases, public controls, combined grading, and version-4 tone cases
-alongside the historical grid. Continue adding cases for new controls; synthetic
-parity does not replace photographic or full-resolution acceptance.
+The [native contracts](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/README.md#implementation-contracts)
+own processing, preview/memory, saved-edit migration, repair, geometry, queue,
+and persistence invariants. The
+[test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md)
+owns their commands and opt-in gates; [development status](../development/native-macos.md#verification-summary)
+owns results. Keep those owners current when changing behavior rather than
+maintaining a second contract copy in the roadmap.
 
 Performance work requires a measured bottleneck, identical workload/quality in
-before/after runs, physical-footprint reporting, and equivalence tests. Current
-[export](../performance/40mp-export.md) and [analysis](../performance/preview-analysis.md)
-evidence supplies regression baselines. The bounded
-[full-resolution edit proxy](../performance/preview-scale-2026-09-14.md) is also
-implemented and requires an exact final frame after every gesture. Measure the
-current retained-preview/cache and concurrent-decode paths before using the dated
-results as a present-day latency or memory claim. Completed
-optimizations are not pending roadmap items. New profiling can justify another
-bounded repair.
-
-## Completed Source-Audit Repairs
-
-The three September 20 follow-ups are now fixed and regression-tested:
-
-- An uninitialized destination retains a pending copied look, resolves its film
-  base on first decode, then applies the copied public controls. Saved Original
-  frames retain their intentional base; relaunch and Undo/Redo preserve the intent.
-- Rapid selection changes keep one render drain alive until its detached worker
-  returns, reject the stale result, and consume the newest pending selection.
-- **Load RAW Preview** remains available during inspect upgrades and requests
-  full-sensor detail directly, cancelling inspect through the shared decoder gate.
-
-Perspective now supports known frame proportions, a projective grid, visible
-border framing, displacement-based corner drags, screen-distance snapping, and
-one-source-pixel keyboard nudges. Reset Corners preserves the ratio in one undo
-step. Existing automatic ratios and saved crops retain their prior behavior.
+before/after runs, physical-footprint reporting, and equivalence checks. The
+[performance index](../performance/index.md) identifies the applicable evidence
+and limits. Historical baselines must be remeasured against current source before
+claiming a present-day gain. Completed optimizations and source-audit repairs are
+recorded evidence, not pending roadmap items.
 
 ## Evidence-Driven Product Candidates
 
 - Further preview tiling using an established interpolator, if profiling finds
   slow full-detail edits after retained-raster navigation and existing transient
   region rendering are accounted for.
-- Applied dust removal, with representative masks and restoration quality.
+- Further dust restoration quality work beyond the initial editable-mask/healing
+  implementation, supported by representative real scans.
 - Film-edge assistance or broader batch organization when a
   real photographic workflow needs them.
 - Calibration beyond one planar perspective warp, supported by repeatable

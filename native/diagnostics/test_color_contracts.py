@@ -30,9 +30,14 @@ class ColorContractTests(unittest.TestCase):
         expanded = paired.preference_parameters(original)
         self.assertEqual(original, {'photoAdjustments': {'schemaVersion': 1, 'exposureEV': 0.1}})
         self.assertEqual(expanded, paired.preference_parameters(expanded))
+        self.assertEqual(expanded['dustRepairs'], [])
         changed = copy.deepcopy(expanded)
         changed['photoAdjustments']['whites'] = 0.1
         self.assertNotEqual(expanded, paired.preference_parameters(changed))
+        repaired = copy.deepcopy(expanded)
+        repaired['dustRepairs'] = [{'points': [[0.5, 0.5]], 'radius': 0.01}]
+        self.assertEqual(repaired, paired.preference_parameters(repaired))
+        self.assertNotEqual(expanded, paired.preference_parameters(repaired))
 
     def test_public_color_trials_preserve_inversion_and_calibration(self):
         original = dict(filmType=1, filmDyeMixing={'redFromGreen': 0.13},

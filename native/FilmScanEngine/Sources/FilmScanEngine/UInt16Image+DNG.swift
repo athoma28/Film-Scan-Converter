@@ -3,17 +3,20 @@ import Dispatch
 import Foundation
 
 extension UInt16Image {
-  func writeDNG(to url: URL) throws {
-    _ = try writeDNGMeasured(to: url)
-  }
-
-  func writeDNGMeasured(to url: URL) throws -> ExportWriteMetrics {
+  func writeDNGMeasured(
+    to url: URL,
+    overwriteExisting: Bool = true,
+    packingBufferByteLimit: Int = 16 * 1_024 * 1_024,
+    beforeWrite: (Int) throws -> Void = { _ in }
+  ) throws -> ExportWriteMetrics {
     guard channels == 1 || channels == 3 else {
       throw ExportError.creationFailed
     }
 
     let writer = DNGWriter(width: width, height: height, channels: channels, pixels: pixels)
-    return try writer.write(to: url)
+    return try writer.write(
+      to: url, overwriteExisting: overwriteExisting,
+      packingBufferByteLimit: packingBufferByteLimit, beforeWrite: beforeWrite)
   }
 }
 
@@ -28,7 +31,6 @@ private final class DNGWriter {
     case short = 3
     case long = 4
     case rational = 5
-    case undefined = 7
     case signedRational = 10
   }
 
@@ -62,11 +64,28 @@ private final class DNGWriter {
     self.pixels = pixels
   }
 
-  func write(to url: URL) throws -> ExportWriteMetrics {
+  func write(
+    to url: URL,
+    overwriteExisting: Bool,
+    packingBufferByteLimit: Int,
+    beforeWrite: (Int) throws -> Void
+  ) throws -> ExportWriteMetrics {
+    try Task.checkCancellation()
     let packingStart = ContinuousClock.now
-    let imageStrip = buildLinearImageData()
-    let header = buildHeader(stripByteCount: imageStrip.count)
-    let packingSeconds = dngSeconds(packingStart.duration(to: .now))
+    let bytesPerPixel = channels * MemoryLayout<UInt16>.stride
+    let pixelCount = width * height
+    let stripByteCount = pixelCount * bytesPerPixel
+    // Classic TIFF stores the strip length in a UInt32. Reject before its
+    // conversion in the unchanged header builder can trap.
+    guard stripByteCount <= Int(UInt32.max), packingBufferByteLimit >= bytesPerPixel else {
+      throw UInt16Image.ExportError.creationFailed
+    }
+    let pixelsPerBand = min(
+      pixelCount, min(packingBufferByteLimit, 16 * 1_024 * 1_024) / bytesPerPixel)
+    var buffer = Data(count: pixelsPerBand * bytesPerPixel)
+    let header = buildHeader(stripByteCount: stripByteCount)
+    var packingSeconds = dngSeconds(packingStart.duration(to: .now))
+    var bandPackingSeconds = 0.0
 
     let writerStart = ContinuousClock.now
     let stagingURL = url.deletingLastPathComponent().appendingPathComponent(
@@ -78,68 +97,92 @@ private final class DNGWriter {
       FileManager.default.createFile(atPath: stagingURL.path, contents: nil)
       let handle = try FileHandle(forWritingTo: stagingURL)
       defer { try? handle.close() }
+      try beforeWrite(header.count)
+      try Task.checkCancellation()
       try handle.write(contentsOf: header)
-      try handle.write(contentsOf: imageStrip)
+      for start in stride(from: 0, to: pixelCount, by: pixelsPerBand) {
+        try Task.checkCancellation()
+        let count = min(pixelsPerBand, pixelCount - start)
+        try buffer.withUnsafeMutableBytes { rawBuffer in
+          let packingStart = ContinuousClock.now
+          packLinearPixels(start: start, count: count, into: rawBuffer)
+          bandPackingSeconds += dngSeconds(packingStart.duration(to: .now))
+          try Task.checkCancellation()
+          // FileHandle's synchronous write cannot retain these borrowed bytes.
+          // This avoids copying the final partial band or making the reusable
+          // owner copy-on-write on the next fill.
+          let band = Data(
+            bytesNoCopy: rawBuffer.baseAddress!, count: count * bytesPerPixel,
+            deallocator: .none)
+          try beforeWrite(band.count)
+          try Task.checkCancellation()
+          try handle.write(contentsOf: band)
+        }
+      }
+      try Task.checkCancellation()
       try handle.close()
 
-      if FileManager.default.fileExists(atPath: url.path) {
+      if overwriteExisting, FileManager.default.fileExists(atPath: url.path) {
         _ = try FileManager.default.replaceItemAt(url, withItemAt: stagingURL)
       } else {
         try FileManager.default.moveItem(at: stagingURL, to: url)
       }
+    } catch is CancellationError {
+      throw CancellationError()
     } catch {
       throw UInt16Image.ExportError.commitFailed(url, .dng, error)
     }
 
+    packingSeconds += bandPackingSeconds
+    let writerSeconds = max(
+      0, dngSeconds(writerStart.duration(to: .now)) - bandPackingSeconds)
     let values = try url.resourceValues(forKeys: [.fileSizeKey])
     return ExportWriteMetrics(
       pixelPackingSeconds: packingSeconds,
-      encodingFinalizationSeconds: dngSeconds(writerStart.duration(to: .now)),
-      packedPixelBytes: imageStrip.count,
+      encodingFinalizationSeconds: writerSeconds,
+      packedPixelBytes: stripByteCount,
       outputBytes: values.fileSize ?? 0
     )
   }
 
-  private func buildLinearImageData() -> Data {
-    let outputChannels = channels == 1 ? 1 : 3
-    let pixelCount = width * height
-    var strip = Data(count: pixelCount * outputChannels * MemoryLayout<UInt16>.size)
+  private func packLinearPixels(
+    start sourceStart: Int, count pixelCount: Int, into rawBuffer: UnsafeMutableRawBufferPointer
+  ) {
     let sourcePixels = pixels
     let sourceChannels = channels
     let transfer = Self.sRGBToLinear16
 
-    strip.withUnsafeMutableBytes { rawBuffer in
-      guard let baseAddress = rawBuffer.baseAddress?.assumingMemoryBound(to: UInt16.self) else {
-        return
-      }
-      let output = SendableMutableBuffer(baseAddress)
-      let workerCount =
-        pixelCount >= 100_000
-        ? max(1, min(8, ProcessInfo.processInfo.activeProcessorCount))
-        : 1
-      let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
+    guard let baseAddress = rawBuffer.baseAddress?.assumingMemoryBound(to: UInt16.self) else {
+      return
+    }
+    let output = SendableMutableBuffer(baseAddress)
+    let workerCount =
+      pixelCount >= 100_000
+      ? max(1, min(8, ProcessInfo.processInfo.activeProcessorCount))
+      : 1
+    let pixelsPerWorker = (pixelCount + workerCount - 1) / workerCount
 
-      DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
-        let start = worker * pixelsPerWorker
-        let end = min(start + pixelsPerWorker, pixelCount)
-        guard start < end else { return }
+    DispatchQueue.concurrentPerform(iterations: workerCount) { worker in
+      let start = worker * pixelsPerWorker
+      let end = min(start + pixelsPerWorker, pixelCount)
+      guard start < end else { return }
 
-        if sourceChannels == 3 {
-          for pixelIndex in start..<end {
-            let component = pixelIndex * 3
-            output.baseAddress[component] = transfer[Int(sourcePixels[component + 2])].littleEndian
-            output.baseAddress[component + 1] =
-              transfer[Int(sourcePixels[component + 1])].littleEndian
-            output.baseAddress[component + 2] = transfer[Int(sourcePixels[component])].littleEndian
-          }
-        } else {
-          for pixelIndex in start..<end {
-            output.baseAddress[pixelIndex] = transfer[Int(sourcePixels[pixelIndex])].littleEndian
-          }
+      if sourceChannels == 3 {
+        for pixelIndex in start..<end {
+          let component = (sourceStart + pixelIndex) * 3
+          let destination = pixelIndex * 3
+          output.baseAddress[destination] = transfer[Int(sourcePixels[component + 2])].littleEndian
+          output.baseAddress[destination + 1] =
+            transfer[Int(sourcePixels[component + 1])].littleEndian
+          output.baseAddress[destination + 2] = transfer[Int(sourcePixels[component])].littleEndian
+        }
+      } else {
+        for pixelIndex in start..<end {
+          output.baseAddress[pixelIndex] =
+            transfer[Int(sourcePixels[sourceStart + pixelIndex])].littleEndian
         }
       }
     }
-    return strip
   }
 
   private func buildHeader(stripByteCount: Int) -> Data {

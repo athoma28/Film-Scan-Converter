@@ -8,7 +8,9 @@ profiles. The color-negative Film Base defaults use density-print inversion with
 a neutral paper response. This page records engine concepts and provenance rather
 than the current inspector layout.
 [Development status](development/native-macos.md) owns current validation;
-[the roadmap](improvements/MacOS-Native-Roadmap.md) owns active work.
+[the roadmap](improvements/MacOS-Native-Roadmap.md) owns active work. The
+[research registry](research/index.md) maps each track to its runbook, dated
+evidence and promotion limits.
 
 ## Engine Models And Historical Names
 
@@ -60,9 +62,12 @@ Neither tool installs an unreviewed candidate automatically.
 
 The September 18 paired color/control investigation is active, separately from
 the broader parked calibration project. Its [runbook](development/color-evaluation.md)
-records current recipe/schema migration blockers and the required preference,
-parser, full-resolution, and CPU/Metal checks. Historical fit scores do not
-validate current factory looks.
+describes the repaired schema-2 public-recipe workflow and required preference,
+parser, full-resolution, and CPU/Metal checks. The
+[September 25 follow-through](development/roadmap-follow-through-2026-09-25.md#reproducible-color-workflow)
+records the completed migration run, including exclusions and failed transfers.
+Historical fit scores do not validate current factory looks or subsequent engine
+changes.
 
 The reference corpus is local and untracked. Recorded sample counts and fit
 scores describe the datasets used for those fits, not the current directory's

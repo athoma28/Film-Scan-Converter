@@ -1,0 +1,1290 @@
+{
+  "schemaVersion": 1,
+  "kind": "Current-source ordinary release AppModel retained-canvas and count-driven full-source eviction collection; descriptive single run",
+  "collectedDate": "2026-10-11",
+  "generatedAt": "2026-10-11T07:13:32Z",
+  "provenance": {
+    "sourceRevision": "2b4da0930df3ccebc08c1e3197a8ec242df448ac",
+    "sourceState": "Existing dirty working tree frozen in matching source archive; no clean-commit equivalence claimed",
+    "sourceManifest": {
+      "file": "dist/roadmap-loop-2026-10-10/retention-and-detection-manifest.json",
+      "sha256": "57563a3cb2930bd68615f13c3e4f9ef79967a3c8d983c10e911301bdd056fb0b",
+      "capturedAtUTC": "2026-10-11T07:11:56.637698+00:00"
+    },
+    "sourceArchive": {
+      "file": "dist/roadmap-loop-2026-10-10/retention-and-detection-source.tar.gz",
+      "sha256": "442b10317b8cfe8c14d72cfc847b29fc00065d50b64adc75182c7d9074cdb5e1"
+    },
+    "compiledBinarySHA256": {
+      "native/FilmScanEngine/.build/arm64-apple-macosx/release/FilmScanConverterMac": "60252c8aad509352836d857941c91493a8ed365d19ad7b5721e41592d797be00",
+      "native/FilmScanEngine/.build/arm64-apple-macosx/release/FilmScanEnginePackageTests.xctest/Contents/MacOS/FilmScanEnginePackageTests": "981f0436a6d288d2ea93c4e1998073351cab1dada076e458df2e340c5323eb0d",
+      "native/FilmScanEngine/.build/arm64-apple-macosx/release/FilmScanPreviewComparator": "edffc50843aee71f0be36e51890dbe3149c50fa95bd6be2b794bf79197884808"
+    },
+    "compiledSourceSHA256": {
+      "native/FilmScanEngine/Package.swift": "4626521a2bcb183e1320f96c9a04844c6836ffaf70f90d53f4b5208cd0b7f586",
+      "native/FilmScanEngine/Tests/FilmScanEngineTests/SustainedPreviewPerformanceTests.swift": "5dd086d559700473f0459937c959947d12604455deb4e28f652698957d3be4cd",
+      "native/FilmScanEngine/Sources/FilmScanConverterMac/AppModel.swift": "ef52ea1ca90d5629a02e52a636e8c791d3aae8a64d99872d0fb75e60badc55f7",
+      "native/FilmScanEngine/Sources/FilmScanConverterMac/PreviewSessionCache.swift": "1182b67d30566713fef16e339f17c4e0ddc127efbfe9f16b742b88fcee6cc8d6",
+      "native/FilmScanEngine/Sources/FilmScanConverterMac/RetainedCanvasPreviewCache.swift": "dbeaa26f5a82b842f757e5c5d6ae9dcb32b91a8fb903d9b2bd1f0c1298a179d1",
+      "native/FilmScanEngine/Sources/FilmScanEngine/CPUPreviewPreparationCache.swift": "88356736d7705aaeaa6041253cc255293468522f0a4c9515840884ae7a6dd91e",
+      "native/FilmScanEngine/Sources/FilmScanPreviewRenderer/StillPreviewRenderer.swift": "93896a0ca126dae5c5b8ea1a365ccb1f15f2e1eab58d3a53cf473657b1fa1c14",
+      "native/FilmScanEngine/Sources/FilmScanConverterMac/PerFileSettingsStore.swift": "595f3b87f4f36e6251b469e5f9925bf2a471fb674e2320426c526119dd4c0d30",
+      "native/FilmScanEngine/Sources/FilmScanEngine/RawImageDecoder.swift": "c79b2c4530ddddc8e028191d33ec54e232b61a4c7d20019e80e5767e2b09a89b"
+    },
+    "executionTimeSourceMatchesCapturedCohort": true,
+    "executionTimeSourceSHA256": {
+      "harness": "5dd086d559700473f0459937c959947d12604455deb4e28f652698957d3be4cd",
+      "appModel": "ef52ea1ca90d5629a02e52a636e8c791d3aae8a64d99872d0fb75e60badc55f7"
+    },
+    "environment": {
+      "hardware": "Apple M4 Pro, Mac16,7, 48 GiB RAM",
+      "hardwareIdentifier": "Mac16,7",
+      "operatingSystem": "Version 15.7.9 (Build 24G830)",
+      "physicalMemoryBytes": 51539607552,
+      "processorCount": 14,
+      "thermalStateAtStart": 0,
+      "swift": "Apple Swift version 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)\nTarget: arm64-apple-macosx15.0",
+      "libraw": "0.22.2"
+    },
+    "environmentManifest": {
+      "file": "dist/roadmap-loop-2026-10-10/workflow-source-manifest.json",
+      "sha256": "8964a9336b3fe78c6dff6ca5464dbda336a39b7bb380d2d7351657c15bb38801",
+      "role": "Earlier same-machine/toolchain environment capture; compiled cohort uses retention-and-detection manifest"
+    },
+    "originalReport": {
+      "file": "dist/roadmap-loop-2026-10-10/sustained-preview-8-loops.json",
+      "sha256": "30c65e9486ef9b2cf18d3e78ff16941352a0fbea83cc631127df4cb242c52eec"
+    },
+    "fullLog": {
+      "file": "dist/roadmap-loop-2026-10-10/sustained-preview-8-loops.log",
+      "sha256": "5ec7e925d31c4317453cacc8502b856f905e5c35dff64fd7128333feca109604"
+    },
+    "testRuntimeSeconds": 54.853,
+    "reportedTests": 1,
+    "reportedFailures": 0
+  },
+  "workload": {
+    "inputRoot": "sample-raw",
+    "frames": ["fuji400-fresh/DSCF2833.RAF", "fuji400-fresh/DSCF2851.RAF", "fuji400-fresh/DSCF2856.RAF"],
+    "inputSHA256": {
+      "fuji400-fresh/DSCF2833.RAF": "c71a348038f397743360ca41a2ac099f51b81c1dd81e319b39e39a05711f2fe7",
+      "fuji400-fresh/DSCF2851.RAF": "834867cca5f2aca9511ca6d4335320b554b48af0f30a31b110f2a27a34320b9e",
+      "fuji400-fresh/DSCF2856.RAF": "134e0e419cfa58c0c20d4702eef777fc40567956241d6f17aaa424efd0e57767"
+    },
+    "filmBase": "colorC41",
+    "lookRecipe": "cleanInvert",
+    "initialExposureEVByFrame": {
+      "fuji400-fresh/DSCF2833.RAF": 0,
+      "fuji400-fresh/DSCF2851.RAF": 0.125,
+      "fuji400-fresh/DSCF2856.RAF": 0.25
+    },
+    "postNavigationFirstFrameExposureEV": 0.25,
+    "cacheCountLimit": 2,
+    "loops": 8,
+    "measuredNavigationSwitches": 24,
+    "normalMachinePreviewByteBudget": true,
+    "observedPreviewBudgetBytes": 3221225472,
+    "pollingMilliseconds": 10,
+    "settingsIsolation": "Temporary PerFileSettingsStore/ProfileStore and isolated UserDefaults suite",
+    "retainedCanvasStorageContract": "Each complete corrected bitmap is reduced to half its width and height while retaining full logical dimensions; sizes are source-contract evidence, not stored per-switch bitmap dimensions",
+    "sourceCountEvictionEvidence": "Three sources and cache count two; every measured target lacks a cachedSourceKindBeforeSelection, two rawFull sessions remain after settlement, and every measured selection accepts one full-source decode",
+    "noByteBudgetSaturationClaim": true
+  },
+  "columnDefinitions": {
+    "timingsMilliseconds": ["firstModelPublicationMilliseconds", "fullSourceAndStatisticsAndBackgroundSettledMilliseconds"],
+    "workCounters": ["publishedFullSourceDecodes", "corrections", "renderedCacheHits", "lookaheadSubmissions", "statisticsComputations", "submittedSnapshots", "displayedRenders", "droppedSnapshots"],
+    "stateValues": ["chargedPreviewBytes", "previewBudgetBytes", "sessions", "retainedCanvases", "physicalFootprintBytes", "processLifetimePeakPhysicalFootprintBytes", "reusableBytes"],
+    "processMemory": ["physicalFootprintBytes", "processLifetimePeakPhysicalFootprintBytes", "reusableBytes"]
+  },
+  "measurement": {
+    "memoryBeforeModel": [7406096, 7406096, 442368],
+    "importToFullSettledMilliseconds": 2896.746875,
+    "importWorkCounters": [2, 3, 0, 1, 3, 3, 3, 0],
+    "warmup": [
+      {
+        "phase": "warmup",
+        "iteration": 0,
+        "frame": "fuji400-fresh/DSCF2851.RAF",
+        "cachedSourceKindBeforeSelection": "rawFull",
+        "immediateRetainedCanvas": false,
+        "firstPublicationSourceKind": "rawFull",
+        "firstPublicationUsedRetainedCanvas": false,
+        "timingsMilliseconds": [61.246666, 91.406083],
+        "workCounters": [0, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "warmup 0 fuji400-fresh/DSCF2851.RAF",
+          "selection": "DSCF2851.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull"
+          },
+          "values": [1521131520, 3221225472, 2, 1, 1121602704, 1201982584, 1549320192],
+          "cumulativeCounters": [2, 4, 0, 1, 4, 4, 4, 0]
+        }
+      },
+      {
+        "phase": "warmup",
+        "iteration": 0,
+        "frame": "fuji400-fresh/DSCF2856.RAF",
+        "immediateRetainedCanvas": false,
+        "firstPublicationSourceKind": "rawDraft",
+        "firstPublicationUsedRetainedCanvas": false,
+        "timingsMilliseconds": [200.215625, 1774.139083],
+        "workCounters": [1, 3, 0, 0, 3, 3, 3, 0],
+        "settledState": {
+          "label": "warmup 0 fuji400-fresh/DSCF2856.RAF",
+          "selection": "DSCF2856.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1561359360, 3221225472, 2, 2, 1239207200, 1239207200, 1582809088],
+          "cumulativeCounters": [3, 7, 0, 1, 7, 7, 7, 0]
+        }
+      }
+    ],
+    "navigation": [
+      {
+        "phase": "navigation",
+        "iteration": 0,
+        "frame": "fuji400-fresh/DSCF2833.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.167917, 1265.5156670000001],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 0 fuji400-fresh/DSCF2833.RAF",
+          "selection": "DSCF2833.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1279643032, 1319718200, 1587789824],
+          "cumulativeCounters": [4, 8, 0, 1, 8, 8, 8, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 0,
+        "frame": "fuji400-fresh/DSCF2851.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.157708, 1262.244083],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 0 fuji400-fresh/DSCF2851.RAF",
+          "selection": "DSCF2851.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1199476120, 1319718200, 1670332416],
+          "cumulativeCounters": [5, 9, 0, 1, 9, 9, 9, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 0,
+        "frame": "fuji400-fresh/DSCF2856.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.150375, 1330.657375],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 0 fuji400-fresh/DSCF2856.RAF",
+          "selection": "DSCF2856.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1117375968, 1319718200, 1752956928],
+          "cumulativeCounters": [6, 10, 0, 1, 10, 10, 10, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 1,
+        "frame": "fuji400-fresh/DSCF2833.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.163083, 1305.317666],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 1 fuji400-fresh/DSCF2833.RAF",
+          "selection": "DSCF2833.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1117244896, 1319718200, 1755021312],
+          "cumulativeCounters": [7, 11, 0, 1, 11, 11, 11, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 1,
+        "frame": "fuji400-fresh/DSCF2851.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.169834, 1404.317209],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 1 fuji400-fresh/DSCF2851.RAF",
+          "selection": "DSCF2851.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1119260200, 1319718200, 1755070464],
+          "cumulativeCounters": [8, 12, 0, 1, 12, 12, 12, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 1,
+        "frame": "fuji400-fresh/DSCF2856.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.177625, 1520.900875],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 1 fuji400-fresh/DSCF2856.RAF",
+          "selection": "DSCF2856.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1118031472, 1319718200, 1756807168],
+          "cumulativeCounters": [9, 13, 0, 1, 13, 13, 13, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 2,
+        "frame": "fuji400-fresh/DSCF2833.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.159333, 1391.477875],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 2 fuji400-fresh/DSCF2833.RAF",
+          "selection": "DSCF2833.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1118801712, 1319718200, 1756839936],
+          "cumulativeCounters": [10, 14, 0, 1, 14, 14, 14, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 2,
+        "frame": "fuji400-fresh/DSCF2851.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.159292, 1445.974167],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 2 fuji400-fresh/DSCF2851.RAF",
+          "selection": "DSCF2851.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1119342432, 1319718200, 1758806016],
+          "cumulativeCounters": [11, 15, 0, 1, 15, 15, 15, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 2,
+        "frame": "fuji400-fresh/DSCF2856.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.173583, 1457.956833],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 2 fuji400-fresh/DSCF2856.RAF",
+          "selection": "DSCF2856.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1119440736, 1319718200, 1758822400],
+          "cumulativeCounters": [12, 16, 0, 1, 16, 16, 16, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 3,
+        "frame": "fuji400-fresh/DSCF2833.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.156583, 1329.5155],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 3 fuji400-fresh/DSCF2833.RAF",
+          "selection": "DSCF2833.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1120292704, 1319718200, 1758855168],
+          "cumulativeCounters": [13, 17, 0, 1, 17, 17, 17, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 3,
+        "frame": "fuji400-fresh/DSCF2851.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.152125, 1413.7543329999999],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 3 fuji400-fresh/DSCF2851.RAF",
+          "selection": "DSCF2851.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1120243552, 1319718200, 1758904320],
+          "cumulativeCounters": [14, 18, 0, 1, 18, 18, 18, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 3,
+        "frame": "fuji400-fresh/DSCF2856.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.16125, 1367.974625],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 3 fuji400-fresh/DSCF2856.RAF",
+          "selection": "DSCF2856.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1119096672, 1319718200, 1762017280],
+          "cumulativeCounters": [15, 19, 0, 1, 19, 19, 19, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 4,
+        "frame": "fuji400-fresh/DSCF2833.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.170959, 1468.345167],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 4 fuji400-fresh/DSCF2833.RAF",
+          "selection": "DSCF2833.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1119391584, 1319718200, 1762017280],
+          "cumulativeCounters": [16, 20, 0, 1, 20, 20, 20, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 4,
+        "frame": "fuji400-fresh/DSCF2851.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.170917, 1417.703084],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 4 fuji400-fresh/DSCF2851.RAF",
+          "selection": "DSCF2851.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1120522080, 1319718200, 1762344960],
+          "cumulativeCounters": [17, 21, 0, 1, 21, 21, 21, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 4,
+        "frame": "fuji400-fresh/DSCF2856.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.163709, 1448.1952919999999],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 4 fuji400-fresh/DSCF2856.RAF",
+          "selection": "DSCF2856.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1120898984, 1319718200, 1762344960],
+          "cumulativeCounters": [18, 22, 0, 1, 22, 22, 22, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 5,
+        "frame": "fuji400-fresh/DSCF2833.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.15475, 1489.815125],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 5 fuji400-fresh/DSCF2833.RAF",
+          "selection": "DSCF2833.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1119784968, 1319718200, 1763917824],
+          "cumulativeCounters": [19, 23, 0, 1, 23, 23, 23, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 5,
+        "frame": "fuji400-fresh/DSCF2851.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.173584, 1356.813334],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 5 fuji400-fresh/DSCF2851.RAF",
+          "selection": "DSCF2851.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1119899656, 1319718200, 1763966976],
+          "cumulativeCounters": [20, 24, 0, 1, 24, 24, 24, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 5,
+        "frame": "fuji400-fresh/DSCF2856.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.148, 1468.064875],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 5 fuji400-fresh/DSCF2856.RAF",
+          "selection": "DSCF2856.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1120391176, 1319718200, 1764261888],
+          "cumulativeCounters": [21, 25, 0, 1, 25, 25, 25, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 6,
+        "frame": "fuji400-fresh/DSCF2833.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.161708, 1388.622833],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 6 fuji400-fresh/DSCF2833.RAF",
+          "selection": "DSCF2833.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1120391176, 1319718200, 1764261888],
+          "cumulativeCounters": [22, 26, 0, 1, 26, 26, 26, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 6,
+        "frame": "fuji400-fresh/DSCF2851.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.159875, 1414.438208],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 6 fuji400-fresh/DSCF2851.RAF",
+          "selection": "DSCF2851.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1120391176, 1319718200, 1764261888],
+          "cumulativeCounters": [23, 27, 0, 1, 27, 27, 27, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 6,
+        "frame": "fuji400-fresh/DSCF2856.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.175792, 1455.73775],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 6 fuji400-fresh/DSCF2856.RAF",
+          "selection": "DSCF2856.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1120342024, 1319718200, 1764425728],
+          "cumulativeCounters": [24, 28, 0, 1, 28, 28, 28, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 7,
+        "frame": "fuji400-fresh/DSCF2833.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.172875, 1412.058084],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 7 fuji400-fresh/DSCF2833.RAF",
+          "selection": "DSCF2833.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1120309256, 1319718200, 1764540416],
+          "cumulativeCounters": [25, 29, 0, 1, 29, 29, 29, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 7,
+        "frame": "fuji400-fresh/DSCF2851.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.296208, 1526.636416],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 7 fuji400-fresh/DSCF2851.RAF",
+          "selection": "DSCF2851.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1120358408, 1319718200, 1764540416],
+          "cumulativeCounters": [26, 30, 0, 1, 30, 30, 30, 0]
+        }
+      },
+      {
+        "phase": "navigation",
+        "iteration": 7,
+        "frame": "fuji400-fresh/DSCF2856.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.154125, 1456.153875],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "navigation 7 fuji400-fresh/DSCF2856.RAF",
+          "selection": "DSCF2856.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1120030728, 1319718200, 1764900864],
+          "cumulativeCounters": [27, 31, 0, 1, 31, 31, 31, 0]
+        }
+      }
+    ],
+    "navigationWorkCounters": [24, 24, 0, 0, 24, 24, 24, 0],
+    "editStartedWithRetainedCanvas": true,
+    "recovery": [
+      {
+        "phase": "pressure recovery",
+        "iteration": 0,
+        "frame": "fuji400-fresh/DSCF2851.RAF",
+        "cachedSourceKindBeforeSelection": "rawFull",
+        "immediateRetainedCanvas": false,
+        "firstPublicationSourceKind": "rawFull",
+        "firstPublicationUsedRetainedCanvas": false,
+        "timingsMilliseconds": [76.067708, 91.152833],
+        "workCounters": [0, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "pressure recovery 0 fuji400-fresh/DSCF2851.RAF",
+          "selection": "DSCF2851.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull"
+          },
+          "values": [1521131520, 3221225472, 2, 1, 1120702472, 1319718200, 1767849984],
+          "cumulativeCounters": [32, 41, 0, 2, 41, 41, 41, 0]
+        }
+      },
+      {
+        "phase": "pressure recovery",
+        "iteration": 0,
+        "frame": "fuji400-fresh/DSCF2856.RAF",
+        "immediateRetainedCanvas": false,
+        "firstPublicationSourceKind": "rawDraft",
+        "firstPublicationUsedRetainedCanvas": false,
+        "timingsMilliseconds": [474.658083, 2570.101333],
+        "workCounters": [1, 3, 0, 0, 3, 3, 3, 0],
+        "settledState": {
+          "label": "pressure recovery 0 fuji400-fresh/DSCF2856.RAF",
+          "selection": "DSCF2856.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1561359360, 3221225472, 2, 2, 1121046656, 1319718200, 1767964672],
+          "cumulativeCounters": [33, 44, 0, 2, 44, 44, 44, 0]
+        }
+      },
+      {
+        "phase": "pressure recovery",
+        "iteration": 0,
+        "frame": "fuji400-fresh/DSCF2833.RAF",
+        "immediateRetainedCanvas": true,
+        "firstPublicationUsedRetainedCanvas": true,
+        "timingsMilliseconds": [0.162208, 1687.46375],
+        "workCounters": [1, 1, 0, 0, 1, 1, 1, 0],
+        "settledState": {
+          "label": "pressure recovery 0 fuji400-fresh/DSCF2833.RAF",
+          "selection": "DSCF2833.RAF",
+          "sourceKind": "rawFull",
+          "retainedCanvasVisible": false,
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "values": [1601587200, 3221225472, 2, 3, 1122619592, 1319718200, 1767964672],
+          "cumulativeCounters": [34, 45, 0, 2, 45, 45, 45, 0]
+        }
+      }
+    ],
+    "phaseStates": [
+      {
+        "label": "first full-source import",
+        "selection": "DSCF2833.RAF",
+        "sourceKind": "rawFull",
+        "retainedCanvasVisible": false,
+        "cachedSourceKinds": {
+          "fuji400-fresh/DSCF2833.RAF": "rawFull",
+          "fuji400-fresh/DSCF2851.RAF": "rawFull"
+        },
+        "values": [998667264, 3221225472, 2, 0, 624478920, 985320136, 1547436032],
+        "cumulativeCounters": [2, 3, 0, 1, 3, 3, 3, 0]
+      },
+      {
+        "label": "three-frame warmup settled",
+        "selection": "DSCF2856.RAF",
+        "sourceKind": "rawFull",
+        "retainedCanvasVisible": false,
+        "cachedSourceKinds": {
+          "fuji400-fresh/DSCF2851.RAF": "rawFull",
+          "fuji400-fresh/DSCF2856.RAF": "rawFull"
+        },
+        "values": [1561359360, 3221225472, 2, 2, 1239207200, 1239207200, 1582809088],
+        "cumulativeCounters": [3, 7, 0, 1, 7, 7, 7, 0]
+      },
+      {
+        "label": "navigation settled",
+        "selection": "DSCF2856.RAF",
+        "sourceKind": "rawFull",
+        "retainedCanvasVisible": false,
+        "cachedSourceKinds": {
+          "fuji400-fresh/DSCF2851.RAF": "rawFull",
+          "fuji400-fresh/DSCF2856.RAF": "rawFull"
+        },
+        "values": [1601587200, 3221225472, 2, 3, 1120030728, 1319718200, 1764900864],
+        "cumulativeCounters": [27, 31, 0, 1, 31, 31, 31, 0]
+      },
+      {
+        "label": "retained revisit after edit",
+        "selection": "DSCF2833.RAF",
+        "sourceKind": "rawFull",
+        "retainedCanvasVisible": false,
+        "cachedSourceKinds": {
+          "fuji400-fresh/DSCF2833.RAF": "rawFull",
+          "fuji400-fresh/DSCF2856.RAF": "rawFull"
+        },
+        "values": [1601587200, 3221225472, 2, 3, 1120374792, 1319718200, 1767735296],
+        "cumulativeCounters": [28, 34, 0, 1, 34, 34, 34, 0]
+      },
+      {
+        "label": "Original comparison",
+        "selection": "DSCF2833.RAF",
+        "sourceKind": "rawFull",
+        "retainedCanvasVisible": false,
+        "cachedSourceKinds": {
+          "fuji400-fresh/DSCF2833.RAF": "rawFull",
+          "fuji400-fresh/DSCF2856.RAF": "rawFull"
+        },
+        "values": [1601587200, 3221225472, 2, 3, 1281183824, 1319718200, 1767735296],
+        "cumulativeCounters": [28, 35, 0, 1, 35, 35, 35, 0]
+      },
+      {
+        "label": "before simulated app pressure",
+        "selection": "DSCF2833.RAF",
+        "sourceKind": "rawFull",
+        "retainedCanvasVisible": false,
+        "cachedSourceKinds": {
+          "fuji400-fresh/DSCF2833.RAF": "rawFull",
+          "fuji400-fresh/DSCF2856.RAF": "rawFull"
+        },
+        "values": [1601587200, 3221225472, 2, 3, 1120800848, 1319718200, 1767849984],
+        "cumulativeCounters": [31, 40, 0, 1, 40, 40, 40, 0]
+      },
+      {
+        "label": "simulated app pressure settled",
+        "selection": "DSCF2833.RAF",
+        "sourceKind": "rawFull",
+        "retainedCanvasVisible": false,
+        "cachedSourceKinds": {
+          "fuji400-fresh/DSCF2833.RAF": "rawFull"
+        },
+        "values": [740451840, 3221225472, 1, 0, 637783952, 1319718200, 2089353216],
+        "cumulativeCounters": [31, 40, 0, 1, 40, 40, 40, 0]
+      },
+      {
+        "label": "pressure released and background settled",
+        "selection": "DSCF2833.RAF",
+        "sourceKind": "rawFull",
+        "retainedCanvasVisible": false,
+        "cachedSourceKinds": {
+          "fuji400-fresh/DSCF2833.RAF": "rawFull",
+          "fuji400-fresh/DSCF2851.RAF": "rawFull"
+        },
+        "values": [998667264, 3221225472, 2, 0, 561303440, 1319718200, 2089353216],
+        "cumulativeCounters": [32, 40, 0, 2, 40, 40, 40, 0]
+      },
+      {
+        "label": "Close All settled",
+        "retainedCanvasVisible": false,
+        "cachedSourceKinds": {},
+        "values": [0, 3221225472, 0, 0, 317313080, 1319718200, 2410971136],
+        "cumulativeCounters": [34, 45, 0, 2, 45, 45, 45, 0]
+      }
+    ],
+    "finalCumulativeCounters": [34, 45, 0, 2, 45, 45, 45, 0],
+    "memoryAfterVerifiedModelRelease": [317313080, 1319718200, 2410971136],
+    "finalCorrectedPreviewSHA256": {
+      "fuji400-fresh/DSCF2833.RAF": "c62e04b8d52377e50f762b8e94159805a0709c75d1e6a6ae4025b4978f01bb52",
+      "fuji400-fresh/DSCF2851.RAF": "7195b4fd2a3ab98c88f5623ba976b216a0a79eebd292dd82162ef9028e83c798",
+      "fuji400-fresh/DSCF2856.RAF": "1502c0cf29a780dd6a7c0624e1de3ba2af9358dfdc22f60f935e7d854e002150"
+    },
+    "finalCorrectedHashPhase": "DSCF2833 hash is after the post-navigation exposure edit to 0.25 and Original departure/recovery; other frames retain their initial settings. Navigation equality used the separate pre-edit warmup hashes in the harness, which are not emitted.",
+    "fullSourceParametersByFrame": {
+      "fuji400-fresh/DSCF2833.RAF": {
+        "blueCurveControlPoints": [],
+        "blueCurveEnabled": false,
+        "borderCrop": 0,
+        "cropRectCoordinateSpace": "imageAxes",
+        "curveControlPoints": [],
+        "curveEnabled": false,
+        "darkThreshold": 25,
+        "densityC41Profile": {
+          "densityOffset": {
+            "blue": 0,
+            "green": 0,
+            "red": 0
+          },
+          "densitySlope": {
+            "blue": 1,
+            "green": 1,
+            "red": 1
+          }
+        },
+        "densityCorrection": {
+          "blueOutput": {
+            "blue": 1,
+            "green": 0,
+            "red": 0
+          },
+          "greenOutput": {
+            "blue": 0,
+            "green": 1,
+            "red": 0
+          },
+          "offset": {
+            "blue": 0,
+            "green": 0,
+            "red": 0
+          },
+          "redOutput": {
+            "blue": 0,
+            "green": 0,
+            "red": 1
+          }
+        },
+        "densityDisplayParams": {
+          "exposureEV": 0,
+          "maximumSceneGain": 16,
+          "toneMap": "linear",
+          "whiteBalance": {
+            "blue": 1,
+            "green": 1,
+            "red": 1
+          }
+        },
+        "densityPipelineEnabled": false,
+        "dustRepairs": [],
+        "filmBaseChosenByUser": true,
+        "filmDyeMixing": {
+          "blueFromGreen": 0,
+          "blueFromRed": 0,
+          "greenFromBlue": 0,
+          "greenFromRed": 0,
+          "redFromBlue": 0,
+          "redFromGreen": 0
+        },
+        "filmNegativeParams": {
+          "blueRatio": 0.86,
+          "calibratedColorProfile": "generic",
+          "calibratedMonochromeProfile": "generic",
+          "densityCastRemovalStrength": 0.5,
+          "densityNeutralProtection": true,
+          "densityProfileID": "generic_c41",
+          "densityUnmixRGB": [1, -0.05, -0.02, -0.04, 1, -0.08, -0.01, -0.1, 1],
+          "densityUnmixStrength": 0.45,
+          "enabled": true,
+          "greenExp": 1.5,
+          "monochromeExposureEV": 0,
+          "redRatio": 1.36,
+          "rendering": "densityPrint"
+        },
+        "filmType": 1,
+        "flip": false,
+        "gamma": 0,
+        "greenCurveControlPoints": [],
+        "greenCurveEnabled": false,
+        "highlightWheel": {
+          "hue": 0,
+          "strength": 0
+        },
+        "highlights": 0,
+        "lightThreshold": 100,
+        "manualCropAspectRatio": "Free",
+        "midtoneWheel": {
+          "hue": 0,
+          "strength": 0
+        },
+        "photoAdjustments": {
+          "blacks": 0,
+          "brightness": 0,
+          "contrast": 0,
+          "exposureEV": 0.25,
+          "highlightCeiling": 0,
+          "highlights": -0.08,
+          "midtoneLevel": 0,
+          "saturation": 0,
+          "schemaVersion": 2,
+          "shadowFloor": 0,
+          "shadows": 0.04,
+          "temperatureShiftMired": 0,
+          "tint": 0,
+          "vibrance": 0.08,
+          "whites": 0
+        },
+        "redCurveControlPoints": [],
+        "redCurveEnabled": false,
+        "rotation": 0,
+        "saturation": 100,
+        "shadowWheel": {
+          "hue": 0,
+          "strength": 0
+        },
+        "shadows": 0,
+        "straightenAngle": 0,
+        "temperature": 0,
+        "tint": 0
+      },
+      "fuji400-fresh/DSCF2851.RAF": {
+        "blueCurveControlPoints": [],
+        "blueCurveEnabled": false,
+        "borderCrop": 0,
+        "cropRectCoordinateSpace": "imageAxes",
+        "curveControlPoints": [],
+        "curveEnabled": false,
+        "darkThreshold": 25,
+        "densityC41Profile": {
+          "densityOffset": {
+            "blue": 0,
+            "green": 0,
+            "red": 0
+          },
+          "densitySlope": {
+            "blue": 1,
+            "green": 1,
+            "red": 1
+          }
+        },
+        "densityCorrection": {
+          "blueOutput": {
+            "blue": 1,
+            "green": 0,
+            "red": 0
+          },
+          "greenOutput": {
+            "blue": 0,
+            "green": 1,
+            "red": 0
+          },
+          "offset": {
+            "blue": 0,
+            "green": 0,
+            "red": 0
+          },
+          "redOutput": {
+            "blue": 0,
+            "green": 0,
+            "red": 1
+          }
+        },
+        "densityDisplayParams": {
+          "exposureEV": 0,
+          "maximumSceneGain": 16,
+          "toneMap": "linear",
+          "whiteBalance": {
+            "blue": 1,
+            "green": 1,
+            "red": 1
+          }
+        },
+        "densityPipelineEnabled": false,
+        "dustRepairs": [],
+        "filmBaseChosenByUser": true,
+        "filmDyeMixing": {
+          "blueFromGreen": 0,
+          "blueFromRed": 0,
+          "greenFromBlue": 0,
+          "greenFromRed": 0,
+          "redFromBlue": 0,
+          "redFromGreen": 0
+        },
+        "filmNegativeParams": {
+          "blueRatio": 0.86,
+          "calibratedColorProfile": "generic",
+          "calibratedMonochromeProfile": "generic",
+          "densityCastRemovalStrength": 0.5,
+          "densityNeutralProtection": true,
+          "densityProfileID": "generic_c41",
+          "densityUnmixRGB": [1, -0.05, -0.02, -0.04, 1, -0.08, -0.01, -0.1, 1],
+          "densityUnmixStrength": 0.45,
+          "enabled": true,
+          "greenExp": 1.5,
+          "monochromeExposureEV": 0,
+          "redRatio": 1.36,
+          "rendering": "densityPrint"
+        },
+        "filmType": 1,
+        "flip": false,
+        "gamma": 0,
+        "greenCurveControlPoints": [],
+        "greenCurveEnabled": false,
+        "highlightWheel": {
+          "hue": 0,
+          "strength": 0
+        },
+        "highlights": 0,
+        "lightThreshold": 100,
+        "manualCropAspectRatio": "Free",
+        "midtoneWheel": {
+          "hue": 0,
+          "strength": 0
+        },
+        "photoAdjustments": {
+          "blacks": 0,
+          "brightness": 0,
+          "contrast": 0,
+          "exposureEV": 0.125,
+          "highlightCeiling": 0,
+          "highlights": -0.08,
+          "midtoneLevel": 0,
+          "saturation": 0,
+          "schemaVersion": 2,
+          "shadowFloor": 0,
+          "shadows": 0.04,
+          "temperatureShiftMired": 0,
+          "tint": 0,
+          "vibrance": 0.08,
+          "whites": 0
+        },
+        "redCurveControlPoints": [],
+        "redCurveEnabled": false,
+        "rotation": 0,
+        "saturation": 100,
+        "shadowWheel": {
+          "hue": 0,
+          "strength": 0
+        },
+        "shadows": 0,
+        "straightenAngle": 0,
+        "temperature": 0,
+        "tint": 0
+      },
+      "fuji400-fresh/DSCF2856.RAF": {
+        "blueCurveControlPoints": [],
+        "blueCurveEnabled": false,
+        "borderCrop": 0,
+        "cropRectCoordinateSpace": "imageAxes",
+        "curveControlPoints": [],
+        "curveEnabled": false,
+        "darkThreshold": 25,
+        "densityC41Profile": {
+          "densityOffset": {
+            "blue": 0,
+            "green": 0,
+            "red": 0
+          },
+          "densitySlope": {
+            "blue": 1,
+            "green": 1,
+            "red": 1
+          }
+        },
+        "densityCorrection": {
+          "blueOutput": {
+            "blue": 1,
+            "green": 0,
+            "red": 0
+          },
+          "greenOutput": {
+            "blue": 0,
+            "green": 1,
+            "red": 0
+          },
+          "offset": {
+            "blue": 0,
+            "green": 0,
+            "red": 0
+          },
+          "redOutput": {
+            "blue": 0,
+            "green": 0,
+            "red": 1
+          }
+        },
+        "densityDisplayParams": {
+          "exposureEV": 0,
+          "maximumSceneGain": 16,
+          "toneMap": "linear",
+          "whiteBalance": {
+            "blue": 1,
+            "green": 1,
+            "red": 1
+          }
+        },
+        "densityPipelineEnabled": false,
+        "dustRepairs": [],
+        "filmBaseChosenByUser": true,
+        "filmDyeMixing": {
+          "blueFromGreen": 0,
+          "blueFromRed": 0,
+          "greenFromBlue": 0,
+          "greenFromRed": 0,
+          "redFromBlue": 0,
+          "redFromGreen": 0
+        },
+        "filmNegativeParams": {
+          "blueRatio": 0.86,
+          "calibratedColorProfile": "generic",
+          "calibratedMonochromeProfile": "generic",
+          "densityCastRemovalStrength": 0.5,
+          "densityNeutralProtection": true,
+          "densityProfileID": "generic_c41",
+          "densityUnmixRGB": [1, -0.05, -0.02, -0.04, 1, -0.08, -0.01, -0.1, 1],
+          "densityUnmixStrength": 0.45,
+          "enabled": true,
+          "greenExp": 1.5,
+          "monochromeExposureEV": 0,
+          "redRatio": 1.36,
+          "rendering": "densityPrint"
+        },
+        "filmType": 1,
+        "flip": false,
+        "gamma": 0,
+        "greenCurveControlPoints": [],
+        "greenCurveEnabled": false,
+        "highlightWheel": {
+          "hue": 0,
+          "strength": 0
+        },
+        "highlights": 0,
+        "lightThreshold": 100,
+        "manualCropAspectRatio": "Free",
+        "midtoneWheel": {
+          "hue": 0,
+          "strength": 0
+        },
+        "photoAdjustments": {
+          "blacks": 0,
+          "brightness": 0,
+          "contrast": 0,
+          "exposureEV": 0.25,
+          "highlightCeiling": 0,
+          "highlights": -0.08,
+          "midtoneLevel": 0,
+          "saturation": 0,
+          "schemaVersion": 2,
+          "shadowFloor": 0,
+          "shadows": 0.04,
+          "temperatureShiftMired": 0,
+          "tint": 0,
+          "vibrance": 0.08,
+          "whites": 0
+        },
+        "redCurveControlPoints": [],
+        "redCurveEnabled": false,
+        "rotation": 0,
+        "saturation": 100,
+        "shadowWheel": {
+          "hue": 0,
+          "strength": 0
+        },
+        "shadows": 0,
+        "straightenAngle": 0,
+        "temperature": 0,
+        "tint": 0
+      }
+    }
+  },
+  "aggregates": {
+    "firstModelPublicationMilliseconds": {
+      "minimum": 0.148,
+      "median": 0.1623955,
+      "maximum": 0.296208,
+      "samples": 24
+    },
+    "fullSourceSettledMilliseconds": {
+      "minimum": 1262.244083,
+      "median": 1414.0962705,
+      "maximum": 1526.636416,
+      "samples": 24
+    },
+    "immediateRetainedCanvasPublications": 24,
+    "perFrameNavigation": {
+      "fuji400-fresh/DSCF2833.RAF": {
+        "samples": 8,
+        "firstModelPublicationMilliseconds": {
+          "minimum": 0.15475,
+          "median": 0.1623955,
+          "maximum": 0.172875,
+          "samples": 8
+        },
+        "fullSourceSettledMilliseconds": {
+          "minimum": 1265.5156670000001,
+          "median": 1390.050354,
+          "maximum": 1489.815125,
+          "samples": 8
+        }
+      },
+      "fuji400-fresh/DSCF2851.RAF": {
+        "samples": 8,
+        "firstModelPublicationMilliseconds": {
+          "minimum": 0.152125,
+          "median": 0.16485450000000001,
+          "maximum": 0.296208,
+          "samples": 8
+        },
+        "fullSourceSettledMilliseconds": {
+          "minimum": 1262.244083,
+          "median": 1414.0962705,
+          "maximum": 1526.636416,
+          "samples": 8
+        }
+      },
+      "fuji400-fresh/DSCF2856.RAF": {
+        "samples": 8,
+        "firstModelPublicationMilliseconds": {
+          "minimum": 0.148,
+          "median": 0.1624795,
+          "maximum": 0.177625,
+          "samples": 8
+        },
+        "fullSourceSettledMilliseconds": {
+          "minimum": 1330.657375,
+          "median": 1455.9458125,
+          "maximum": 1520.900875,
+          "samples": 8
+        }
+      }
+    },
+    "navigationSettledPhysicalFootprintBytes": {
+      "minimum": 1117244896,
+      "maximum": 1279643032
+    },
+    "navigationChargedPreviewBytes": {
+      "minimum": 1601587200,
+      "maximum": 1601587200
+    },
+    "navigationMaximumSessionCount": 2,
+    "navigationMaximumRetainedCanvasCount": 3,
+    "simulatedPressureChargedPreviewByteDecrease": 861135360,
+    "simulatedPressurePhysicalFootprintByteDecrease": 483016896,
+    "afterVerifiedReleasePhysicalFootprintMinusBeforeModelBytes": 309906984
+  },
+  "correctnessGuards": ["All 24 settled navigation bitmaps matched their per-frame pre-edit warmup hashes; actual current photo adjustments, density profile, film base, publication parameters, rawFull source kind, and full logical dimensions were checked.", "All immediate retained publications matched current parameters and full logical source dimensions; their half-size storage is not full-resolution detail.", "The post-navigation first-frame exposure edit replaced retained pixels with current publication and changed the corrected bitmap hash.", "Original produced different pixels, departed with Original disabled, and later returned to the same edited corrected hash and exposure.", "Simulated app pressure removed unselected sessions and all retained canvases, preserving the current bitmap hash and logical dimensions; recovery hashes and settings matched.", "Close All drained background work, cleared displayed pixels, all sessions and retained canvases, and charged preview bytes; weak AppModel release was verified before the final physical-footprint sample.", "All three original RAW file SHA256 values were identical before and after the run."],
+  "limits": ["Programmatic AppModel publication, not native-input or screen-presentation latency.", "Immediate retained-canvas publication and settled full-source output are timed separately; no full-detail first-display claim is made.", "The first three frames prime the app cache; filesystem caches are uncontrolled.", "The two-session count limit drives this cohort's eviction; the normal machine byte budget is not deliberately saturated.", "Charged preview bytes are accounting, distinct from process physical footprint.", "Peak footprint covers the process lifetime and is not a per-switch peak.", "Pressure is simulated by the app handler, not induced system-wide memory pressure.", "Full-source decode counts exclude discarded results and native work cancelled before publication.", "Three X-T5 scans and descriptive samples do not establish general performance or memory gains.", "Bitmap hashes and source hashes check reuse correctness, not photographic quality.", "Source/toolchain binary-manifest evidence should accompany this report for comparisons.", "One current-source run has no matched old-code control and does not establish an improvement or regression.", "The machine was not verified quiescent: a read-only check at 2026-10-11 07:11 UTC found unrelated CPU workloads. They were left alone; this process ran serially relative to study builds and benchmarks.", "Sub-millisecond retained-publication values cover synchronous programmatic model state immediately after loadSelection, not an awaited display frame or screen presentation.", "All 24 navigation samples accepted one full-source decode and one correction each, with zero rendered raster cache hits; retained canvas reuse does not mean decoded-source reuse.", "Reported decoder counters count accepted results; cancelled or discarded native decode work is excluded.", "Pressure calls the app handler directly; no OS notification delivery, system-wide pressure, or thermal-cost validation was performed.", "Verified model release left 317313080 bytes of process physical footprint versus 7406096 bytes before model creation. It establishes model/cache ownership release, not complete physical return or a cause for the residual.", "The process-lifetime peak is cumulative; settled phase samples do not establish each operation peak.", "Navigation bitmap hashes are same-workload reuse guards; no fresh CPU oracle, CPU/Metal parity, or photographic quality claim is made."]
+}

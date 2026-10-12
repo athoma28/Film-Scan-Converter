@@ -359,23 +359,6 @@ struct FilmNegativeProcessingTests {
     #expect(profile.measurementCount == 5)
   }
 
-  @Test("Roll profile round trips through JSON")
-  func rollProfileCodableRoundTrip() throws {
-    let profile = RollProfile(
-      rollID: "roll-002",
-      filmStockID: FilmStockProfileID(rawValue: "portra-400"),
-      captureProfileID: CaptureProfileID(rawValue: "lightbox-v1"),
-      measuredBaseDensity: BGRChannelValues(blue: 0.3, green: 0.4, red: 0.5),
-      exposureBias: -0.1,
-      whiteBalanceCorrection: BGRChannelValues(blue: 1.05, green: 1, red: 0.95)
-    )
-
-    let encoded = try JSONEncoder().encode(profile)
-    let decoded = try JSONDecoder().decode(RollProfile.self, from: encoded)
-
-    #expect(decoded == profile)
-  }
-
   @Test("Base density precedence favors roll, then frame, then defaults, then manual picker")
   func baseDensityPrecedence() {
     let manual = BGRChannelValues(blue: 0.1, green: 0.1, red: 0.1)

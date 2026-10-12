@@ -13,12 +13,11 @@ struct PreviewSessionCache {
 
   private struct Entry {
     let session: CachedPreviewSession
-    let sourceByteCount: Int
     var rendered: CachedRenderedPreview?
 
-    var physicalByteCount: Int { sourceByteCount + (rendered?.byteCount ?? 0) }
+    var physicalByteCount: Int { session.byteCount + (rendered?.byteCount ?? 0) }
     var reservedByteCount: Int {
-      sourceByteCount + max(session.displayByteReservation, rendered?.byteCount ?? 0)
+      session.reservedByteCount + max(session.displayByteReservation, rendered?.byteCount ?? 0)
     }
   }
 
@@ -27,7 +26,7 @@ struct PreviewSessionCache {
 
   var count: Int { entries.count }
   var physicalByteCount: Int { entries.values.reduce(0) { $0 + $1.physicalByteCount } }
-  private var reservedByteCount: Int { entries.values.reduce(0) { $0 + $1.reservedByteCount } }
+  var reservedByteCount: Int { entries.values.reduce(0) { $0 + $1.reservedByteCount } }
 
   subscript(key: String) -> CachedPreviewSession? { entries[key]?.session }
 
@@ -55,7 +54,7 @@ struct PreviewSessionCache {
     {
       return
     }
-    let entry = Entry(session: session, sourceByteCount: session.byteCount)
+    let entry = Entry(session: session)
     if speculative,
       !canAdmitSession(forKey: key, estimatedByteCount: entry.reservedByteCount, limits: limits)
     {
@@ -135,8 +134,10 @@ struct CachedPreviewSession: Sendable {
   let displaySource: UInt16Image
   let analysisSource: UInt16Image
   let previewRenderer: StillPreviewRenderer
+  let cpuPreviewPreparation: CPUPreviewPreparationCache
   let continuousEditSource: UInt16Image?
   let continuousEditRenderer: StillPreviewRenderer?
+  let continuousEditCPUPreparation: CPUPreviewPreparationCache?
   let sourcePixelDimensions: PixelDimensions?
 
   init(
@@ -144,22 +145,48 @@ struct CachedPreviewSession: Sendable {
     displaySource: UInt16Image,
     analysisSource: UInt16Image,
     previewRenderer: StillPreviewRenderer,
+    cpuPreviewPreparation: CPUPreviewPreparationCache? = nil,
     continuousEditSource: UInt16Image? = nil,
     continuousEditRenderer: StillPreviewRenderer? = nil,
+    continuousEditCPUPreparation: CPUPreviewPreparationCache? = nil,
     sourcePixelDimensions: PixelDimensions?
   ) {
     self.sourceKind = sourceKind
     self.displaySource = displaySource
     self.analysisSource = analysisSource
     self.previewRenderer = previewRenderer
+    self.cpuPreviewPreparation =
+      cpuPreviewPreparation ?? CPUPreviewPreparationCache(image: displaySource)
     self.continuousEditSource = continuousEditSource
     self.continuousEditRenderer = continuousEditRenderer
+    self.continuousEditCPUPreparation = continuousEditSource.map { source in
+      continuousEditCPUPreparation
+        ?? CPUPreviewPreparationCache(image: source, analysisImage: analysisSource)
+    }
     self.sourcePixelDimensions = sourcePixelDimensions
   }
 
   var displayByteReservation: Int { displaySource.width * displaySource.height * 4 }
 
   var byteCount: Int {
+    sourceArrayByteCount + previewRenderer.retainedRGBAByteCount
+      + (continuousEditRenderer?.retainedRGBAByteCount ?? 0)
+      + retainedCPUGeometryByteCount
+  }
+
+  var reservedByteCount: Int {
+    sourceArrayByteCount + previewRenderer.maximumRetainedRGBAByteCount
+      + (continuousEditRenderer?.maximumRetainedRGBAByteCount ?? 0)
+      + retainedCPUGeometryByteCount
+  }
+
+  private var retainedCPUGeometryByteCount: Int {
+    cpuPreviewPreparation.retainedGeometryByteCount
+      + (continuousEditCPUPreparation === cpuPreviewPreparation
+        ? 0 : continuousEditCPUPreparation?.retainedGeometryByteCount ?? 0)
+  }
+
+  private var sourceArrayByteCount: Int {
     let sharesAnalysisStorage = displaySource.pixels.withUnsafeBufferPointer { display in
       analysisSource.pixels.withUnsafeBufferPointer { analysis in
         display.baseAddress == analysis.baseAddress
@@ -167,10 +194,8 @@ struct CachedPreviewSession: Sendable {
     }
     let analysisCount = sharesAnalysisStorage ? 0 : analysisSource.pixels.count
     let continuousEditCount = continuousEditSource?.pixels.count ?? 0
-    let continuousEditRendererBytes = continuousEditRenderer?.retainedRGBAByteCount ?? 0
     return (displaySource.pixels.count + analysisCount + continuousEditCount)
       * MemoryLayout<UInt16>.stride
-      + previewRenderer.retainedRGBAByteCount + continuousEditRendererBytes
   }
 }
 

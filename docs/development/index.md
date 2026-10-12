@@ -4,10 +4,19 @@ New product work belongs in the native Swift/macOS app. Use
 [development status](native-macos.md) for current behavior and evidence and the
 [roadmap](../improvements/MacOS-Native-Roadmap.md) for remaining work.
 
+Use the [research index](../research/index.md) to find active investigations,
+completed output-control evidence, and parked calibration scope. Use the
+[performance index](../performance/index.md) for the measurement history and
+remaining experiments. The [documentation maintenance guide](documentation-maintenance.md)
+defines ownership, evidence retention and checks for future changes.
+
 ## Keeping Verification Current
 
 Beta 3 includes Film Base / LookRecipe, retained previews, and version-4 tone
-and grading controls. The [verification summary](native-macos.md#verification-summary)
+and grading controls. The 0.3.0 Beta 1 release adds selective adjustment transfer,
+source-folder export defaults, editable dust masks with optional repairs, and
+open-roll restoration with Close All Scans.
+The [verification summary](native-macos.md#verification-summary)
 distinguishes complete-suite results from later focused checks; a published
 binary or older test report does not validate subsequent working-tree changes.
 
@@ -17,18 +26,22 @@ binary or older test report does not validate subsequent working-tree changes.
 | What has actually been checked, and what remains unverified? | [Development status](native-macos.md#verification-summary) |
 | How should the app behave? | [Native contracts](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/README.md), [preview architecture](realtime-preview-plan.md), and [Features](../features.md) |
 | Can the historical color studies run on today's engine? | [Color evaluation compatibility status](color-evaluation.md) |
-| Why was a performance or color decision made? | Dated reports linked below; their numbers apply to the recorded source, settings, corpus, and machine |
+| Why was a performance or color decision made? | [Performance evidence](../performance/index.md) and [research registry](../research/index.md); dated numbers apply to the recorded source, settings, corpus, and machine |
 
 When a test or harness changes, update its command in the test guide and record
 fresh results in development status. Include source revision/working-tree changes,
-environment, cohort, skips/failures, and unrun checks. Preserve dated measurements
-and preference ledgers; label superseded behavior rather than rewriting old
-evidence as a new run. Documentation-only edits do not require refreshing RAW
+environment, cohort, skips/failures, and unrun checks. Keep dated reports that
+support current claims or decisions, and preserve the user-preferred color
+checkpoints. Git history retains superseded snapshots. Never present an older
+measurement as a fresh run. Documentation-only edits do not require refreshing RAW
 fixtures, full color galleries, or every benchmark.
 
 The [September 25 UTC follow-through](roadmap-follow-through-2026-09-25.md)
 records the immediate workflow repairs, public-recipe color migration,
 photographic output checks, and perspective/frame-ratio changes.
+The [October 10–11 roadmap loop](roadmap-loop-2026-10-10.md) records settings
+recovery, export collisions, automatic dust-repair checks and fresh native
+workflow validation.
 
 ## Build, Test, And Release
 
@@ -40,8 +53,21 @@ photographic output checks, and perspective/frame-ratio changes.
 - [Contributing](../contributing.md): source ownership and change requirements.
 - [Native package](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/README.md): targets, commands, and contracts.
 
-## Architecture And Performance
+## Architecture And Current Evidence
 
+The [performance index](../performance/index.md) maps earlier discovery reports
+to subsequent implementation, rejected candidates, and remaining experiments.
+Start there for the complete history; the links below support current contracts.
+
+- [October 2 performance implementation](../performance/implementation-2026-10-02.md):
+  exact density lookup, two-pass dust closing, thumbnail workers, bounded DNG
+  packing, stack reference reuse, and invalidated preview-stage checks.
+- [October 12 non-JPEG export](../performance/non-jpeg-export-2026-10-12.md):
+  faster lossless PNG filtering, matched full-resolution measurements, unchanged
+  TIFF/DNG writers, fresh preferences and rejected DNG packing work.
+- [October 2 performance discovery](../performance/opportunities-2026-10-02.md):
+  source audit that led to the completed implementation, with a measured RGBA8
+  packing candidate rejected for regressions; remaining questions are in the index.
 - [Slider-to-preview latency](../performance/slider-preview-latency-2026-09-24.md):
   property-level window updates and proxy overviews during zoomed edits, with
   matched native-window latency, full-detail agreement, and refinement limits.
@@ -54,51 +80,22 @@ photographic output checks, and perspective/frame-ratio changes.
 - [Editing and retained-image work reuse](../performance/edit-switch-work-reuse-2026-09-23.md):
   memoized diagnostics on cached revisits, statistics-only gesture completion,
   and atomic color-wheel updates, with a bounded real-RAW measurement.
-- [RAW draft unpack optimization](../performance/raw-preview-unpack-2026-09-22.md):
-  15.2–30.3% lower draft-decode latency on three X-T5 frames, exact pixels,
-  contention limits, and app navigation/memory guards.
-- [C-41 shared output optimization](../performance/c41-shared-output-2026-09-22.md):
-  57.2% lower full-resolution render-and-consume latency in a controlled M4 Pro
-  comparison, exact pixels, retained-buffer checks and memory tradeoffs.
-- [C-41 refinement measurements](../performance/c41-refinement-discovery-2026-09-22.md):
-  completed Stage 2 collection with split render/consumer timing, physical
-  footprint, repeated pixel hashes, and a fresh CPU/Metal guard.
-- [Optimization target discovery](../performance/optimization-target-discovery-2026-09-22.md):
-  source-only metric inventory, provenance checks, and ranked targets that led
-  to the subsequent bounded C-41 refinement measurement; no fresh benchmark run
-  was part of the discovery pass.
-- [Retained-preview performance](../performance/retained-preview-2026-09-19.md):
-  fresh app-path navigation and physical-footprint samples, retained-raster
-  reuse, and avoiding speculative RAW decodes that a full cache cannot admit.
-- [Viewport rendering and work reuse](../performance/viewport-and-work-reuse-2026-09-16.md):
-  September 16 measurements of CPU preparation, bounded scratch, visible-region
-  rendering, and asynchronous statistics. Its original cache/scheduling policy
-  predates the current retained-preview architecture.
-
 - [RAW upgrade compatibility](raw-decode-compatibility.md): X-T5 source geometry,
   color continuity, and unchanged pixel references across LibRaw upgrades.
-- [Performance implementation](../performance/implementation-2026-09-13.md):
-  background persistence, exact Natural B&W lookup, preview publication,
-  analysis reuse, GPU manual crop, and retained-memory accounting.
 - [Full-resolution edit scaling](../performance/preview-scale-2026-09-14.md):
   real-RAW render-size measurements and the bounded continuous-edit proxy.
-- [Second research pass](../performance/research-pass-two-2026-09-13.md):
-  measured settings stalls, an exact B&W lookup prototype, HDR weighting and
-  precision counterexamples, and bounded implementation steps.
-- [Performance research directions](../performance/research-directions-2026-09-12.md):
-  September 12 source findings, interactive-edit repairs, and staged decode,
-  GPU preview, and export experiments.
-- [B&W tonality investigation](../performance/bw-tonality-2026-09-13.md):
-  confirmed flat-curve loss, HDR merge headroom and precision probes, and
-  small-region reconstruction experiments.
+- [CPU point correction and viewport overviews](../performance/cpu-point-work-2026-09-28.md):
+  scalar channel work, correction at the requested overview size, exact output
+  checks, bracketed full-source timings and excluded contended proxy samples.
+- [September 27 performance implementation](../performance/implementation-2026-09-27.md):
+  CPU viewport correction, prepared rendering state, deferred GPU backing,
+  auxiliary workers, and independent export writers with bounded measurements.
 - [Still preview architecture](realtime-preview-plan.md): image tiers,
   scheduling, viewport, and preview/export boundaries.
 - [X-Trans mosaic binning](xtrans-preview-mosaic-binning.md): why requested
   preview bounds produce discrete pixel sizes.
 - [40 MP export benchmark](../performance/40mp-export.md): workload definitions,
   stage timing, deterministic decode evidence, and memory/cancellation checks.
-- [Preview analysis benchmark](../performance/preview-analysis.md): bounded CPU
-  diagnostics and Darkroom analysis, including September 8 sort-reuse measurements.
 - [RAW compatibility benchmark](native-raw-benchmark.md): the frozen
   `rawPyCompatibility` decoder evidence, separate from camera-scan export.
 
@@ -125,11 +122,13 @@ effectiveness, RAW decode parity, or full-resolution export agreement.
 [Color evaluation against references](color-evaluation.md) is the agent runbook
 for the active paired Camera Raw, Pro Image, and segmented-skin studies. It covers
 preflight, reproducible renders, fitting, preference preservation, and validation.
-It also records the open recipe/schema migration gaps in the study scripts;
-passing preflight alone does not establish a successful end-to-end study.
+The current workflow uses canonical Film Base and public LookRecipe controls;
+see the [verification summary](native-macos.md#verification-summary) for completed
+runs and remaining limits.
 
-[Photographic tone controls](photographic-tone-controls-2026-09-22.md) documents
-the versioned rendering contract, crop interaction, and validation evidence.
+[Photographic tone controls](photographic-tone-controls-2026-09-22.md) records
+the version-2 implementation. The [separated tone-range study](tone-range-separation-2026-09-24.md)
+documents the later version-4 response used by new neutral edits.
 
 [Density-matrix fitting](density-matrix-calibration.md) and
 [reference-curve calibration](reference-negative-calibration.md) document

@@ -105,9 +105,10 @@ struct PhotoAdjustmentParametersTests {
     #expect(!migratedJSON.contains("removeDust"))
   }
 
-  @Test("Versioned adjustment parameters round trip through JSON")
-  func codableRoundTrip() throws {
+  @Test("All supported saved versions preserve every adjustment", arguments: 1...4)
+  func codableRoundTrip(version: Int) throws {
     let parameters = PhotoAdjustmentParameters(
+      schemaVersion: version,
       exposureEV: 1.25,
       brightness: -0.2,
       contrast: 0.35,
@@ -116,7 +117,8 @@ struct PhotoAdjustmentParametersTests {
       temperatureShiftMired: 18,
       tint: -0.1,
       saturation: 0.2,
-      vibrance: 0.45
+      vibrance: 0.45, warmHueRecovery: 0.25, whites: 0.2, blacks: -0.3,
+      shadowFloor: 0.3, midtoneLevel: -0.2, highlightCeiling: -0.4
     )
 
     let encoded = try JSONEncoder().encode(parameters)
@@ -124,4 +126,70 @@ struct PhotoAdjustmentParametersTests {
 
     #expect(decoded == parameters)
   }
+
+  @Test(
+    "Saved versions retain present values and neutral defaults for omitted controls",
+    arguments: 1...4)
+  func omittedControlsDefaultToNeutral(version: Int) throws {
+    let saved = Data("{\"schemaVersion\":\(version),\"brightness\":-0.5,\"highlights\":0.4}".utf8)
+    let decoded = try JSONDecoder().decode(PhotoAdjustmentParameters.self, from: saved)
+    #expect(
+      decoded
+        == PhotoAdjustmentParameters(schemaVersion: version, brightness: -0.5, highlights: 0.4))
+    // Historical defaults must stay neutral even if new-edit initialization changes.
+    #expect(decoded.whites == 0)
+    #expect(decoded.blacks == 0)
+    #expect(decoded.shadowFloor == 0)
+    #expect(decoded.midtoneLevel == 0)
+    #expect(decoded.highlightCeiling == 0)
+  }
+
+  @Test("Documents without a tone version retain the version 1 defaults")
+  func missingVersionDefaultsToLegacy() throws {
+    let decoded = try JSONDecoder().decode(PhotoAdjustmentParameters.self, from: Data("{}".utf8))
+    #expect(decoded == PhotoAdjustmentParameters(schemaVersion: 1))
+  }
+
+  @Test("Unknown saved tone versions are rejected", arguments: [0, 5])
+  func unsupportedVersionIsRejected(version: Int) {
+    #expect(throws: DecodingError.self) {
+      try JSONDecoder().decode(
+        PhotoAdjustmentParameters.self, from: Data("{\"schemaVersion\":\(version)}".utf8))
+    }
+  }
+
+  @Test("New edits use version 4 while supporting saved versions 1 through 4")
+  func currentVersionContract() {
+    #expect(PhotoAdjustmentParameters.currentSchemaVersion == 4)
+    #expect(PhotoAdjustmentParameters.maximumSupportedSchemaVersion == 4)
+    #expect(PhotoAdjustmentParameters().schemaVersion == 4)
+  }
+
+  @Test("Processing settings retain current photographic controls through serialization")
+  func processingSettingsRoundTrip() throws {
+    let original = ProcessingParameters(
+      photoAdjustments: .init(exposureEV: 1, whites: 0.2, blacks: -0.3))
+    #expect(
+      try JSONDecoder().decode(
+        ProcessingParameters.self, from: JSONEncoder().encode(original)) == original)
+  }
+
+  @Test(
+    "Every numeric adjustment rejects nonfinite saved values",
+    arguments: [
+      "exposureEV", "brightness", "contrast", "highlights", "shadows", "whites", "blacks",
+      "shadowFloor", "midtoneLevel", "highlightCeiling", "temperatureShiftMired",
+      "tint", "saturation", "vibrance", "warmHueRecovery",
+    ], ["NaN", "Inf", "-Inf"])
+  func rejectsNonfiniteAdjustment(field: String, value: String) {
+    let decoder = JSONDecoder()
+    decoder.nonConformingFloatDecodingStrategy = .convertFromString(
+      positiveInfinity: "Inf", negativeInfinity: "-Inf", nan: "NaN")
+    #expect(throws: DecodingError.self) {
+      try decoder.decode(
+        PhotoAdjustmentParameters.self,
+        from: Data("{\"schemaVersion\":4,\"\(field)\":\"\(value)\"}".utf8))
+    }
+  }
+
 }

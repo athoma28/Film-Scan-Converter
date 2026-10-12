@@ -2,7 +2,11 @@
 
 ## Published Beta
 
-Download [Film Scan Converter 0.2.0 Beta 3](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.3),
+The latest release recorded in this repository is 0.3.0 Beta 1, including
+selective adjustment transfer, source-folder export defaults, saved dust repair,
+and open-roll restoration. Use the release's notes for the behavior of a downloaded binary.
+
+Download [Film Scan Converter 0.3.0 Beta 1](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.3.0-beta.1),
 for Apple Silicon Macs running macOS 14 or later. Check the
 [releases page](https://github.com/athoma28/Film-Scan-Converter/releases) for
 newer downloads.
@@ -11,7 +15,7 @@ newer downloads.
 2. From the download folder, verify the archive:
 
     ```sh
-    shasum -a 256 -c Film-Scan-Converter-0.2.0-beta.3-apple-silicon.zip.sha256
+    shasum -a 256 -c Film-Scan-Converter-0.3.0-beta.1-apple-silicon.zip.sha256
     ```
 
 3. Unzip it and move **Film Scan Converter.app** to Applications.
@@ -21,7 +25,7 @@ newer downloads.
    Open Anyway** if that option is offered. Do not disable Gatekeeper globally.
 
 The archive includes licensing, notices, release notes, and its bundled-library
-manifest. Its [release page](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.3)
+manifest. Its [release page](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.3.0-beta.1)
 owns the binary-specific feature list and limitations.
 
 ## Current Source

@@ -83,7 +83,7 @@ struct FilmDyeMixingTests {
   }
 
   @Test("Basic positive-scan inversion applies dye mixing in linear light")
-  func basicInversionUsesDyeMixingSeam() {
+  func basicInversionUsesDyeMixingSeam() throws {
     let image = UInt16Image(
       width: 1,
       height: 1,
@@ -110,6 +110,16 @@ struct FilmDyeMixingTests {
     let actual = FilmProcessing.correctedPreview(image: image, parameters: parameters)
 
     #expect(actual != neutral)
+    #expect(actual.width == image.width && actual.height == image.height)
+    #expect(actual.channels == 3)
+    try #require(actual.pixels.count == 3)
+    // Independent reference: invert, apply sRGB EOTF, convert to Rec.2020,
+    // mix red by -0.15*(blue-red) and blue by 0.10*(red-blue), then encode sRGB.
+    // This catches mixing in display values or in the wrong linear working space.
+    let expected: [UInt16] = [51747, 38026, 0]
+    for index in expected.indices {
+      #expect(abs(Int(actual.pixels[index]) - Int(expected[index])) <= 1)
+    }
   }
 
   @Test("Density processing applies dye mixing on the shared linear seam")
@@ -187,8 +197,8 @@ struct FilmDyeMixingTests {
 
   @Test("GPU dye mixing matches CPU within two display codes")
   func gpuParity() throws {
-    let width = 64
-    let height = 48
+    let width = 73
+    let height = 47
     let image = UInt16Image(
       width: width,
       height: height,
@@ -217,32 +227,7 @@ struct FilmDyeMixingTests {
       FilmProcessing.correctedPreview(image: image, parameters: parameters)
         .makePreviewCGImage()
     )
-    let gpuPixels = try #require(rgbaPixels(gpu))
-    let cpuPixels = try #require(rgbaPixels(cpu))
-
-    let differences = zip(gpuPixels, cpuPixels).map { gpu, cpu in
-      abs(Int(gpu) - Int(cpu))
-    }
-    let maximumDifference = differences.max() ?? 0
-    let worstIndex = differences.firstIndex(of: maximumDifference) ?? 0
-
-    #expect(
-      maximumDifference <= 2,
-      "Worst component \(worstIndex): GPU \(gpuPixels[worstIndex]), CPU \(cpuPixels[worstIndex])"
-    )
-  }
-
-  private func rgbaPixels(_ image: CGImage) -> [UInt8]? {
-    guard let data = image.dataProvider?.data,
-      let pointer = CFDataGetBytePtr(data)
-    else {
-      return nil
-    }
-    return Array(
-      UnsafeBufferPointer(
-        start: pointer,
-        count: image.width * image.height * 4
-      )
-    )
+    try expectPreviewRGBPixelsMatch(
+      gpu, cpu, tolerance: 2, label: "Dye mixing", requireOpaque: true)
   }
 }

@@ -1,5 +1,7 @@
+import CoreGraphics
 import FilmScanEngine
 import Foundation
+import ImageIO
 
 /// Offline control-reachability experiment. All pixels are rendered by the production
 /// CPU pipeline; no user settings or bundled profiles are modified.
@@ -37,9 +39,38 @@ enum PairedReferenceStudy {
       ? UInt16Image(
         width: image.width, height: image.height, channels: 3,
         pixels: image.pixels.flatMap { [$0, $0, $0] }) : image
-    try display.write(
-      to: directory.appendingPathComponent(name + ".png"), format: .png,
-      parameters: ExportParameters(format: .png))
+    try writeDiagnosticPNG(display, to: directory.appendingPathComponent(name + ".png"))
+  }
+
+  private static func writeDiagnosticPNG(_ image: UInt16Image, to url: URL) throws {
+    // Preference checkpoints pin historical PNG bytes as well as settings.
+    // Keep their adaptive encoding while app exports use the faster fixed
+    // filter. Rendering, RGB16 packing, and named sRGB remain production work.
+    guard let cgImage = image.makeExportCGImage16() else {
+      throw UInt16Image.ExportError.creationFailed
+    }
+    let stagingURL = url.deletingLastPathComponent().appendingPathComponent(
+      ".\(url.lastPathComponent).\(UUID().uuidString).tmp")
+    defer { try? FileManager.default.removeItem(at: stagingURL) }
+    guard
+      let destination = CGImageDestinationCreateWithURL(
+        stagingURL as CFURL, "public.png" as CFString, 1, nil)
+    else {
+      throw UInt16Image.ExportError.destinationCreationFailed(url, .png)
+    }
+    CGImageDestinationAddImage(destination, cgImage, nil)
+    guard CGImageDestinationFinalize(destination) else {
+      throw UInt16Image.ExportError.finalizationFailed(url, .png)
+    }
+    do {
+      if FileManager.default.fileExists(atPath: url.path) {
+        _ = try FileManager.default.replaceItemAt(url, withItemAt: stagingURL)
+      } else {
+        try FileManager.default.moveItem(at: stagingURL, to: url)
+      }
+    } catch {
+      throw UInt16Image.ExportError.commitFailed(url, .png, error)
+    }
   }
 
   static func run(manifest: String) throws {

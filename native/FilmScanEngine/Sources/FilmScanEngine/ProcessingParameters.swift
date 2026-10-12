@@ -382,6 +382,8 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
   public var perspectiveCrop: PerspectiveCrop?
   public var manualCrop: NormalizedCropRect?
   public var manualCropAspectRatio: CropAspectRatio
+  /// Localized healing edits in original scan coordinates; never part of a look.
+  public var dustRepairs: [DustRepairStroke]
 
   public init(
     borderCrop: Double = 0,
@@ -422,7 +424,8 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     cropRectCoordinateSpace: NormalizedCropCoordinateSpace = .imageAxes,
     perspectiveCrop: PerspectiveCrop? = nil,
     manualCrop: NormalizedCropRect? = nil,
-    manualCropAspectRatio: CropAspectRatio = .free
+    manualCropAspectRatio: CropAspectRatio = .free,
+    dustRepairs: [DustRepairStroke] = []
   ) {
     self.borderCrop = borderCrop
     self.flip = flip
@@ -472,6 +475,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     self.perspectiveCrop = perspectiveCrop
     self.manualCrop = manualCrop
     self.manualCropAspectRatio = manualCropAspectRatio
+    self.dustRepairs = dustRepairs
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -490,6 +494,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     case densityCorrection, densityC41Profile, densityDisplayParams
     case darkThreshold, lightThreshold, cropRect, cropRectCoordinateSpace
     case perspectiveCrop, manualCrop, manualCropAspectRatio
+    case dustRepairs
   }
 
   public init(from decoder: Decoder) throws {
@@ -573,6 +578,7 @@ public struct ProcessingParameters: Codable, Equatable, Sendable {
     manualCrop = try container.decodeIfPresent(NormalizedCropRect.self, forKey: .manualCrop)
     manualCropAspectRatio =
       try container.decodeIfPresent(CropAspectRatio.self, forKey: .manualCropAspectRatio) ?? .free
+    dustRepairs = try container.decodeIfPresent([DustRepairStroke].self, forKey: .dustRepairs) ?? []
   }
 
   /// Keeps the frozen integer color fields aligned with semantic intent so the

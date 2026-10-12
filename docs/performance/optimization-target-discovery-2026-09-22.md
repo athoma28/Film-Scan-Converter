@@ -47,19 +47,19 @@ No caches were purged. Reading the selected RAW for hashing can warm filesystem
 pages; no future run should be called physically cold on that basis.
 
 Compact collection artifacts are under ignored
-[`dist/optimization-target-discovery-2026-09-22/`](../../dist/optimization-target-discovery-2026-09-22/manifest.json),
+`dist/optimization-target-discovery-2026-09-22/`,
 budgeted to **1 MiB**, with no images:
 
-- [Environment, dirty state, source/binary fingerprints, selected input and next workload](../../dist/optimization-target-discovery-2026-09-22/manifest.json)
-- [Metric inventory with exact switches, inputs, outputs, assertions and limitations](../../dist/optimization-target-discovery-2026-09-22/metric-inventory.json)
-- [Index of existing compact reports](../../dist/optimization-target-discovery-2026-09-22/report-index.json)
-- [Historical raw samples and recomputed summaries](../../dist/optimization-target-discovery-2026-09-22/historical-observations.json)
-- [Source-manifest comparisons](../../dist/optimization-target-discovery-2026-09-22/provenance-comparison.json)
+- Environment, dirty state, source/binary fingerprints, selected input and next workload (`dist/optimization-target-discovery-2026-09-22/manifest.json`)
+- Metric inventory with exact switches, inputs, outputs, assertions and limitations (`dist/optimization-target-discovery-2026-09-22/metric-inventory.json`)
+- Index of existing compact reports (`dist/optimization-target-discovery-2026-09-22/report-index.json`)
+- Historical raw samples and recomputed summaries (`dist/optimization-target-discovery-2026-09-22/historical-observations.json`)
+- Source-manifest comparisons (`dist/optimization-target-discovery-2026-09-22/provenance-comparison.json`)
 
 ## What is actually measured or asserted
 
-Commands and input contracts remain in [tests/README.md](../../tests/README.md)
-and [native/README.md](../../native/README.md). Each opt-in switch enables only
+Commands and input contracts remain in [tests/README.md](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md)
+and [native/README.md](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/README.md). Each opt-in switch enables only
 its named workload. Use one exact filter, release mode and serial execution;
 create an output variable's parent directory first.
 
@@ -97,7 +97,7 @@ below simply because its command is cheaper.
 ### 1. Full-resolution C-41 refinement and unnecessary final-render work
 
 **Decision: measure again before optimizing.** This has the strongest relevant
-provenance. The [saved tone timing JSON](../../dist/tone-controls-fixed-final-2026-09-22/performance.json)
+provenance. The saved tone timing JSON (`dist/tone-controls-fixed-final-2026-09-22/performance.json`)
 matches the current engine/harness source and its saved binary, although it was
 not rerun in this collection. Source is the 7752×5184 one-pass RAW preview of
 `fuji400-fresh/DSCF2833.RAF`, C-41 + Clean Invert, tone schema 2, with immutable
@@ -167,9 +167,9 @@ current-source gain or sustained-roll capacity result is established.
 ### 3. Three-pass export decode/demosaic cost
 
 **Decision: defer; refresh one-file stage timing before considering decoder work.**
-The September 16 [determinism report](raw-work-reuse-determinism-2026-09-16.json),
-based on `4e962c1` plus its recorded local work, uses the same Fuji frame,
-40.186368 MP, LibRaw 0.22.2, eight unpack/demosaic workers and LZW TIFF.
+A September 16 determinism run, based on `4e962c1` plus its recorded local work,
+uses the same Fuji frame, 40.186368 MP, LibRaw 0.22.2, eight unpack/demosaic
+workers and LZW TIFF.
 Its environment fingerprint is less complete than the newer tone collection;
 do not substitute today's environment as historical metadata.
 

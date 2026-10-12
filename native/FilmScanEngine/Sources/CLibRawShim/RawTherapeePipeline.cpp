@@ -5,6 +5,7 @@
  */
 #include "CLibRawShim.h"
 #include "RawDecodeCompatibility.h"
+#include "XTransHomogeneity.h"
 
 #include <libraw/libraw.h>
 #include <dispatch/dispatch.h>

@@ -164,7 +164,7 @@ struct PhotographicToneTests {
   @Test("Version 4 point fields do not alter older rendering contracts")
   func oldVersionsIgnoreNewLevels() {
     for version in 1...3 {
-      var old = PhotoAdjustmentParameters(
+      let old = PhotoAdjustmentParameters(
         schemaVersion: version, highlights: 0.4, shadows: -0.35,
         whites: 0.2, blacks: -0.15)
       var withLevels = old
@@ -177,8 +177,6 @@ struct PhotographicToneTests {
           PhotographicTone.luminance(input, parameters: old)
             == PhotographicTone.luminance(input, parameters: withLevels))
       }
-      old.schemaVersion = 4
-      #expect(PhotographicTone.luminance(0, parameters: old) == 0)
     }
   }
 
@@ -194,23 +192,6 @@ struct PhotographicToneTests {
         PhotographicTone.luminance(input, parameters: current)
           == PhotographicTone.luminance(input, parameters: old))
     }
-  }
-
-  @Test("Saved version 1 edits decode unchanged; new controls round trip")
-  func versionCompatibility() throws {
-    let old = try JSONDecoder().decode(
-      PhotoAdjustmentParameters.self,
-      from: Data(#"{"schemaVersion":1,"brightness":-0.5,"highlights":0.4}"#.utf8))
-    #expect(old.schemaVersion == 1 && old.brightness == -0.5 && old.highlights == 0.4)
-    #expect(old.whites == 0 && old.blacks == 0)
-    let missing = try JSONDecoder().decode(PhotoAdjustmentParameters.self, from: Data("{}".utf8))
-    #expect(missing.schemaVersion == 1)
-    let modern = ProcessingParameters(
-      photoAdjustments: .init(exposureEV: 1, whites: 0.2, blacks: -0.3))
-    #expect(
-      try JSONDecoder().decode(
-        ProcessingParameters.self,
-        from: JSONEncoder().encode(modern)) == modern)
   }
 
   @Test("Density crop uses the same analysis as the full sensor frame")

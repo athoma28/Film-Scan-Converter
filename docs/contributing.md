@@ -12,6 +12,11 @@ paired color/control investigation is active under the
 [color evaluation runbook](development/color-evaluation.md). Python application
 work follows the [maintenance policy](legacy-python.md).
 
+Use the [documentation maintenance guide](development/documentation-maintenance.md)
+for ownership and evidence retention, the [research index](research/index.md)
+for investigation scope, and the [performance index](performance/index.md) for
+measurement history and remaining experiments.
+
 ## Useful Contributions
 
 - Fix reproducible crashes, incorrect pixels, data loss, or workflow defects.
@@ -42,7 +47,11 @@ result, and a shareable sample when image-specific. Use the
   only where needed for measurement, compatibility, or profile provenance.
   Update the test guide when commands, opt-in flags, fixtures, or suite names
   change. Record new results in development status with source state, environment,
-  pass/skip/failure counts, and unrun checks; keep dated reports as snapshots.
+  pass/skip/failure counts, and unrun checks. Keep dated reports in the docs tree
+  only while they support a current claim, reproducible decision, or regression
+  contract; Git history retains superseded runs. Keep generated benchmark captures
+  in ignored output directories unless they support a current claim or a maintained
+  workflow reads them.
 - Write PR descriptions around the final behavior, relevant evidence, and any
   material limitations. Use [Building](development/building.md) and the
   [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md) for validation commands.
@@ -54,6 +63,8 @@ cancellation conventions. Document public contracts and non-obvious invariants.
 Run strict recursive `swift format lint` over the manifest, Sources, and Tests;
 run native tests with normal macOS graphics access. CPU-only sandbox failures
 do not establish GPU or AppKit regressions. Keep `git diff --check` clean.
+For documentation changes, run `python3 tools/check-docs.py` to verify public
+links, anchors and navigation. It requires no native build or private inputs.
 
 Python maintenance should match surrounding style and avoid unrelated
 formatting churn. Run its regression suite when Python behavior or fixtures change.

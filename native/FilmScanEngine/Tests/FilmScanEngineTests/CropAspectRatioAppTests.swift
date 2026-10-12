@@ -88,7 +88,7 @@ struct CropAspectRatioAppTests {
       FilmProcessing.correctedPreview(image: previewSource, parameters: resized)
         .makePreviewCGImage())
     #expect(preview.width == expectedPreview.width && preview.height == expectedPreview.height)
-    #expect(preview.dataProvider?.data as Data? == expectedPreview.dataProvider?.data as Data?)
+    try expectPreviewRGBPixelsMatch(preview, expectedPreview)
     #expect(model.selectedCanvasDimensions == .init(width: expected.width, height: expected.height))
     // Cover the outward rounding of normalized edges to whole output pixels.
     #expect(abs(Double(expected.width) - 0.8 * Double(expected.height)) <= 2)

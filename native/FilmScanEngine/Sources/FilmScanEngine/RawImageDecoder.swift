@@ -212,37 +212,11 @@ public enum RawImageDecoder {
     var stageHashes = fsc_raw_stage_hashes()
     var errorBytes = [CChar](repeating: 0, count: 512)
     let previewBound = Int32(maxDimension ?? 0)
-    let code = url.withUnsafeFileSystemRepresentation { path in
-      if profile == .rawTherapeeCameraScan, let cancellation {
-        return withUnsafeMutablePointer(to: &stageHashes) { hashes in
-          fsc_decode_raw_cancellable(
-            path, fullResolution ? 1 : 0, previewBound, &output,
-            collectDiagnostics ? hashes : nil, cancellation.handle,
-            &errorBytes, errorBytes.count)
-        }
-      }
-      if collectDiagnostics {
-        return fsc_decode_raw_direct_with_profile_diagnostics(
-          path,
-          fullResolution ? 1 : 0,
-          previewBound,
-          profile.cValue,
-          &output,
-          &stageHashes,
-          &errorBytes,
-          errorBytes.count
-        )
-      }
-      return fsc_decode_raw_direct_with_profile(
-        path,
-        fullResolution ? 1 : 0,
-        previewBound,
-        profile.cValue,
-        &output,
-        &errorBytes,
-        errorBytes.count
-      )
-    }
+    let code = decodeNativeSource(
+      url, fullResolution: fullResolution, profile: profile,
+      collectDiagnostics: collectDiagnostics, previewBound: previewBound,
+      cancellation: cancellation, output: &output,
+      stageHashes: &stageHashes, errorBytes: &errorBytes)
     defer { fsc_free_raw_direct(&output) }
     try cancellation?.checkCancellation()
     try Task.checkCancellation()
@@ -263,15 +237,7 @@ public enum RawImageDecoder {
 
     let pixelCount = Int(output.pixel_count)
     let copyStart = ContinuousClock.now
-    let pixels = [UInt16](unsafeUninitializedCapacity: pixelCount) { buffer, initializedCount in
-      let bgr = UnsafeBufferPointer(start: sourcePixels, count: pixelCount)
-      for i in stride(from: 0, to: pixelCount, by: 3) {
-        buffer[i] = bgr[i + 2]
-        buffer[i + 1] = bgr[i + 1]
-        buffer[i + 2] = bgr[i]
-      }
-      initializedCount = pixelCount
-    }
+    let pixels = copiedRGBPixels(from: sourcePixels, componentCount: pixelCount)
     let copySeconds = rawDecodeSeconds(copyStart.duration(to: .now))
     let colorDescription = withUnsafePointer(to: output.color_description) {
       $0.withMemoryRebound(to: CChar.self, capacity: 5) {
@@ -280,30 +246,9 @@ public enum RawImageDecoder {
     }
     let version = String(cString: fsc_libraw_version())
     let processing = RawProcessingStages(rawValue: output.processing_flags)
-    let diagnostics: RawDecodeDiagnostics?
-    if collectDiagnostics, profile == .rawTherapeeCameraScan {
-      let capturedDiagnostics = RawDecodeDiagnostics(
-        mosaicRawWidth: Int(stageHashes.mosaic_raw_width),
-        mosaicRawHeight: Int(stageHashes.mosaic_raw_height),
-        mosaicFilters: stageHashes.mosaic_filters,
-        mosaicCFABytes: Int(stageHashes.mosaic_cfa_bytes),
-        unpackedMosaicSHA256: stageHashString(stageHashes.unpacked_mosaic_sha256),
-        demosaicedSHA256: stageHashString(stageHashes.demosaiced_sha256),
-        processedImageSHA256: stageHashString(stageHashes.processed_image_sha256),
-        postISOImageSHA256: stageHashString(stageHashes.post_iso_sha256),
-        swiftImageSHA256: sha256Hex(pixels)
-      )
-      guard capturedDiagnostics.hasCompleteStageDigests else {
-        DecodeLog.rawDecodeFailed(
-          path: url.lastPathComponent,
-          error: "LibRaw did not capture every requested RAW stage diagnostic."
-        )
-        throw RawImageDecoderError.invalidDiagnostics
-      }
-      diagnostics = capturedDiagnostics
-    } else {
-      diagnostics = nil
-    }
+    let diagnostics = try captureDiagnostics(
+      profile: profile, collectDiagnostics: collectDiagnostics,
+      stageHashes: stageHashes, pixels: pixels, sourceName: url.lastPathComponent)
     DecodeLog.rawDecodeComplete(
       path: url.lastPathComponent,
       width: Int(output.width),
@@ -340,10 +285,93 @@ public enum RawImageDecoder {
     )
   }
 
+  /// The caller owns output's allocation and frees it after copying all pixels.
+  private static func decodeNativeSource(
+    _ url: URL, fullResolution: Bool, profile: RawDecodeProfile,
+    collectDiagnostics: Bool, previewBound: Int32, cancellation: RawDecodeCancellation?,
+    output: inout fsc_raw_direct, stageHashes: inout fsc_raw_stage_hashes,
+    errorBytes: inout [CChar]
+  ) -> Int32 {
+    url.withUnsafeFileSystemRepresentation { path in
+      if profile == .rawTherapeeCameraScan, let cancellation {
+        return withUnsafeMutablePointer(to: &stageHashes) { hashes in
+          fsc_decode_raw_cancellable(
+            path, fullResolution ? 1 : 0, previewBound, &output,
+            collectDiagnostics ? hashes : nil, cancellation.handle,
+            &errorBytes, errorBytes.count)
+        }
+      }
+      if collectDiagnostics {
+        return fsc_decode_raw_direct_with_profile_diagnostics(
+          path,
+          fullResolution ? 1 : 0,
+          previewBound,
+          profile.cValue,
+          &output,
+          &stageHashes,
+          &errorBytes,
+          errorBytes.count
+        )
+      }
+      return fsc_decode_raw_direct_with_profile(
+        path,
+        fullResolution ? 1 : 0,
+        previewBound,
+        profile.cValue,
+        &output,
+        &errorBytes,
+        errorBytes.count
+      )
+    }
+  }
+
+  private static func copiedRGBPixels(
+    from sourcePixels: UnsafePointer<UInt16>, componentCount: Int
+  ) -> [UInt16] {
+    [UInt16](unsafeUninitializedCapacity: componentCount) { buffer, initializedCount in
+      let bgr = UnsafeBufferPointer(start: sourcePixels, count: componentCount)
+      for i in stride(from: 0, to: componentCount, by: 3) {
+        buffer[i] = bgr[i + 2]
+        buffer[i + 1] = bgr[i + 1]
+        buffer[i + 2] = bgr[i]
+      }
+      initializedCount = componentCount
+    }
+  }
+
+  private static func captureDiagnostics(
+    profile: RawDecodeProfile, collectDiagnostics: Bool,
+    stageHashes: fsc_raw_stage_hashes, pixels: [UInt16], sourceName: String
+  ) throws -> RawDecodeDiagnostics? {
+    guard collectDiagnostics, profile == .rawTherapeeCameraScan else { return nil }
+    let capturedDiagnostics = RawDecodeDiagnostics(
+      mosaicRawWidth: Int(stageHashes.mosaic_raw_width),
+      mosaicRawHeight: Int(stageHashes.mosaic_raw_height),
+      mosaicFilters: stageHashes.mosaic_filters,
+      mosaicCFABytes: Int(stageHashes.mosaic_cfa_bytes),
+      unpackedMosaicSHA256: stageHashString(stageHashes.unpacked_mosaic_sha256),
+      demosaicedSHA256: stageHashString(stageHashes.demosaiced_sha256),
+      processedImageSHA256: stageHashString(stageHashes.processed_image_sha256),
+      postISOImageSHA256: stageHashString(stageHashes.post_iso_sha256),
+      swiftImageSHA256: sha256Hex(pixels)
+    )
+    guard capturedDiagnostics.hasCompleteStageDigests else {
+      DecodeLog.rawDecodeFailed(
+        path: sourceName,
+        error: "LibRaw did not capture every requested RAW stage diagnostic."
+      )
+      throw RawImageDecoderError.invalidDiagnostics
+    }
+    return capturedDiagnostics
+  }
+
   public struct ThumbnailResult: Sendable {
     public let image: UInt16Image
     public let width: Int
     public let height: Int
+    /// Source dimensions from the same RAW metadata session, independent of
+    /// the embedded JPEG and any requested thumbnail bound.
+    public let fullResolutionDimensions: PixelDimensions?
   }
 
   public static func extractThumbnail(
@@ -442,7 +470,9 @@ public enum RawImageDecoder {
     return ThumbnailResult(
       image: UInt16Image(width: width, height: height, channels: 3, pixels: pixels),
       width: width,
-      height: height
+      height: height,
+      fullResolutionDimensions: output.source_width > 0 && output.source_height > 0
+        ? PixelDimensions(width: Int(output.source_width), height: Int(output.source_height)) : nil
     )
   }
 

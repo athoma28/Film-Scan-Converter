@@ -664,6 +664,8 @@ struct RawImageDecoderTests {
     #expect(thumbnail.image.channels == 3)
     #expect(thumbnail.image.pixels.count == thumbnail.width * thumbnail.height * 3)
     #expect(thumbnail.image.makePreviewCGImage() != nil)
+    #expect(
+      thumbnail.fullResolutionDimensions == (try RawImageDecoder.fullResolutionDimensions(rawURL)))
   }
 
   @Test(
@@ -682,6 +684,26 @@ struct RawImageDecoderTests {
     #expect(thumbnail.image.width == thumbnail.width)
     #expect(thumbnail.image.height == thumbnail.height)
     #expect(thumbnail.image.pixels.count == thumbnail.width * thumbnail.height * 3)
+    #expect(
+      thumbnail.fullResolutionDimensions == (try RawImageDecoder.fullResolutionDimensions(rawURL)))
+  }
+
+  @Test(
+    "Shared thumbnail metadata matches standalone source geometry across the available corpus",
+    .enabled(
+      if: representativeRawAvailable,
+      "sample-raw corpus unavailable; shared thumbnail metadata test skipped")
+  )
+  func sharedThumbnailSourceDimensions() throws {
+    for url in SampleRawCorpus.rawURLs().prefix(8) {
+      let expected = try RawImageDecoder.fullResolutionDimensions(url)
+      let thumbnail = try RawImageDecoder.extractThumbnail(url, maxDimension: 256)
+      #expect(thumbnail.fullResolutionDimensions == expected)
+      #expect(max(thumbnail.width, thumbnail.height) <= 256)
+      #expect(thumbnail.image.width == thumbnail.width)
+      #expect(thumbnail.image.height == thumbnail.height)
+      #expect(max(expected.width, expected.height) > 256)
+    }
   }
 
   @Test("Standard images do not enter the RAW decoder")

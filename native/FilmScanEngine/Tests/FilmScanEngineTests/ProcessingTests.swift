@@ -27,163 +27,39 @@ struct ProcessingTests {
     #expect(actual == image)
   }
 
-  @Test("Neutral white balance (temp=0, tint=0) returns the same image")
-  func whiteBalanceNeutral() throws {
-    let (input, expected, shape, metadata) = try FixtureLoader.loadFloat64Case("wb_t0_tint0")
-
+  @Test(
+    "White balance preserves exact frozen compatibility pixels",
+    arguments: [
+      ("wb_t0_tint0", 0, 0),
+      ("wb_t65_tintm40", 65, -40),
+      ("wb_tm30_tint20", -30, 20),
+      ("wb_t100_tintm100", 100, -100),
+    ])
+  func whiteBalance(caseName: String, temperature: Int, tint: Int) throws {
+    let (input, expected, shape, metadata) = try FixtureLoader.loadFloat64Case(caseName)
     #expect(metadata.stage == "wb_adjust_coeff")
-
     let actual = FilmProcessing.wbAdjustCoeff(
-      image: input,
-      width: shape[1],
-      height: shape[0],
-      channels: shape[2],
-      temp: 0,
-      tint: 0
-    )
-
-    #expect(actual.count == expected.count)
-    for i in actual.indices {
-      #expect(actual[i] == expected[i])
-    }
-  }
-
-  @Test("Warm white balance (temp=65, tint=-40) matches Python reference")
-  func whiteBalanceWarm() throws {
-    let (input, expected, shape, _) = try FixtureLoader.loadFloat64Case("wb_t65_tintm40")
-
-    let actual = FilmProcessing.wbAdjustCoeff(
-      image: input,
-      width: shape[1],
-      height: shape[0],
-      channels: shape[2],
-      temp: 65,
-      tint: -40
-    )
-
-    #expect(actual.count == expected.count)
-    for i in actual.indices {
-      #expect(actual[i] == expected[i])
-    }
-  }
-
-  @Test("Cool white balance (temp=-30, tint=20) matches Python reference")
-  func whiteBalanceCool() throws {
-    let (input, expected, shape, _) = try FixtureLoader.loadFloat64Case("wb_tm30_tint20")
-
-    let actual = FilmProcessing.wbAdjustCoeff(
-      image: input,
-      width: shape[1],
-      height: shape[0],
-      channels: shape[2],
-      temp: -30,
-      tint: 20
-    )
-
-    #expect(actual.count == expected.count)
-    for i in actual.indices {
-      #expect(actual[i] == expected[i])
-    }
-  }
-
-  @Test("Extreme white balance (temp=100, tint=-100) matches Python reference")
-  func whiteBalanceExtreme() throws {
-    let (input, expected, shape, _) = try FixtureLoader.loadFloat64Case("wb_t100_tintm100")
-
-    let actual = FilmProcessing.wbAdjustCoeff(
-      image: input,
-      width: shape[1],
-      height: shape[0],
-      channels: shape[2],
-      temp: 100,
-      tint: -100
-    )
-
-    #expect(actual.count == expected.count)
-    for i in actual.indices {
-      #expect(actual[i] == expected[i])
-    }
-  }
-
-  @Test("Neutral saturation (sat=100) returns the same image")
-  func saturationNeutral() throws {
-    let (input, expected, shape, metadata) = try FixtureLoader.loadFloat64Case("sat_100")
-
-    #expect(metadata.stage == "sat_adjust")
-
-    let actual = FilmProcessing.satAdjust(
-      image: input,
-      width: shape[1],
-      height: shape[0],
-      channels: shape[2],
-      saturation: 100
-    )
-
-    #expect(actual.count == expected.count)
-    for i in actual.indices {
-      #expect(actual[i] == expected[i])
-    }
-  }
-
-  @Test("Boosted saturation (sat=150) matches Python reference")
-  func saturationBoosted() throws {
-    let (input, expected, shape, _) = try FixtureLoader.loadFloat64Case("sat_150")
-
-    let actual = FilmProcessing.satAdjust(
-      image: input,
-      width: shape[1],
-      height: shape[0],
-      channels: shape[2],
-      saturation: 150
-    )
-
-    assertFloat64Equal(actual, expected)
-  }
-
-  @Test("Reduced saturation (sat=50) matches Python reference within documented float tolerance")
-  func saturationReduced() throws {
-    let (input, expected, shape, _) = try FixtureLoader.loadFloat64Case("sat_50")
-
-    let actual = FilmProcessing.satAdjust(
-      image: input,
-      width: shape[1],
-      height: shape[0],
-      channels: shape[2],
-      saturation: 50
-    )
-
-    assertFloat64Equal(actual, expected)
+      image: input, width: shape[1], height: shape[0], channels: shape[2],
+      temp: temperature, tint: tint)
+    try assertFloat64Equal(actual, expected, tolerance: 0)
   }
 
   @Test(
-    "Desaturated to grayscale (sat=0) matches Python reference within documented float tolerance")
-  func saturationGrayscale() throws {
-    let (input, expected, shape, _) = try FixtureLoader.loadFloat64Case("sat_0")
-
+    "Saturation preserves frozen compatibility pixels within each case's tolerance",
+    arguments: [
+      ("sat_100", 100, 0.0),
+      ("sat_150", 150, 0.5),
+      ("sat_50", 50, 0.5),
+      ("sat_0", 0, 0.5),
+      ("sat_200", 200, 0.5),
+    ])
+  func saturation(caseName: String, saturation: Int, tolerance: Double) throws {
+    let (input, expected, shape, metadata) = try FixtureLoader.loadFloat64Case(caseName)
+    #expect(metadata.stage == "sat_adjust")
     let actual = FilmProcessing.satAdjust(
-      image: input,
-      width: shape[1],
-      height: shape[0],
-      channels: shape[2],
-      saturation: 0
-    )
-
-    assertFloat64Equal(actual, expected)
-  }
-
-  @Test("Max saturation (sat=200) matches Python reference within documented float tolerance")
-  func saturationMax() throws {
-    let (input, expected, shape, _) = try FixtureLoader.loadFloat64Case("sat_200")
-
-    let actual = FilmProcessing.satAdjust(
-      image: input,
-      width: shape[1],
-      height: shape[0],
-      channels: shape[2],
-      saturation: 200
-    )
-
-    assertFloat64Equal(actual, expected)
+      image: input, width: shape[1], height: shape[0], channels: shape[2],
+      saturation: saturation)
+    try assertFloat64Equal(actual, expected, tolerance: tolerance)
   }
 
   @Test("Saturation clips white-balanced highlights before HSV conversion")
@@ -356,14 +232,19 @@ struct ProcessingTests {
     #expect(actual.pixels == expected)
   }
 
-  private func assertFloat64Equal(_ actual: [Double], _ expected: [Double], tolerance: Double = 0.5)
-  {
-    #expect(actual.count == expected.count)
-    for i in actual.indices {
-      let diff = abs(actual[i] - expected[i])
-      #expect(diff <= tolerance || actual[i] == expected[i])
+  private func assertFloat64Equal(
+    _ actual: [Double], _ expected: [Double], tolerance: Double = 0.5,
+    sourceLocation: SourceLocation = #_sourceLocation
+  ) throws {
+    try #require(actual.count == expected.count, sourceLocation: sourceLocation)
+    for index in actual.indices {
+      #expect(
+        abs(actual[index] - expected[index]) <= tolerance,
+        "Component \(index): expected \(expected[index]), got \(actual[index])",
+        sourceLocation: sourceLocation)
     }
   }
+
   @Test("Identity LUT with two control points passes through unchanged")
   func curveLUTIdentity() {
     let points = [CurvePoint(input: 0, output: 0), CurvePoint(input: 1, output: 1)]
@@ -638,50 +519,24 @@ struct ProcessingTests {
     }
   }
 
-  @Test("Curve LUT clamps below first control point to first output")
-  func curveLUTExtrapolatesBelow() {
+  @Test(
+    "Curve LUT clamps both ends to the endpoint outputs",
+    arguments: [(0.1, 0.9), (0.8, 0.2)])
+  func curveLUTClampsEndpoints(firstOutput: Double, lastOutput: Double) throws {
     let points = [
-      CurvePoint(input: 0.3, output: 0.1),
-      CurvePoint(input: 0.7, output: 0.9),
-      CurvePoint(input: 1, output: 1),
+      CurvePoint(input: 0.3, output: firstOutput),
+      CurvePoint(input: 0.7, output: lastOutput),
     ]
-    let lut = FilmProcessing.buildCurveLUT(controlPoints: points)
-    #expect(lut != nil)
-    let lutValues = lut!
-
-    let belowIdx = Int(0.1 * 65535)
-    let belowOut = lutValues[belowIdx]
-    let firstOutput = UInt16(0.1 * 65535)
-    let diff = belowOut > firstOutput ? belowOut - firstOutput : firstOutput - belowOut
-    #expect(
-      diff <= 1,
-      "Below first point should clamp to first output \(firstOutput), got \(belowOut)")
-
-    let extremeIdx = 0
-    let extremeOut = lutValues[extremeIdx]
-    let d2 = extremeOut > firstOutput ? extremeOut - firstOutput : firstOutput - extremeOut
-    #expect(
-      d2 <= 1,
-      "At index 0 should also clamp to first output \(firstOutput), got \(extremeOut)")
-  }
-
-  @Test("Curve LUT clamps above last control point to last output")
-  func curveLUTExtrapolatesAbove() {
-    let points = [
-      CurvePoint(input: 0, output: 0),
-      CurvePoint(input: 0.3, output: 0.1),
-    ]
-    let lut = FilmProcessing.buildCurveLUT(controlPoints: points)
-    #expect(lut != nil)
-    let lutValues = lut!
-
-    let aboveIdx = Int(0.5 * 65535)
-    let aboveOut = lutValues[aboveIdx]
-    let lastOut = UInt16(0.1 * 65535)
-    let diff = aboveOut > lastOut ? aboveOut - lastOut : lastOut - aboveOut
-    #expect(
-      diff <= 1,
-      "Above last point should clamp to last output \(lastOut), got \(aboveOut)")
+    let lut = try #require(FilmProcessing.buildCurveLUT(controlPoints: points))
+    try #require(lut.count == Int(UInt16.max) + 1)
+    let firstCode = Int(firstOutput * Double(UInt16.max))
+    let lastCode = Int(lastOutput * Double(UInt16.max))
+    for index in [0, 1, 6_553, 19_660] {
+      #expect(abs(Int(lut[index]) - firstCode) <= 1, "Lower clamp at \(index)")
+    }
+    for index in [45_875, 52_428, 65_534, 65_535] {
+      #expect(abs(Int(lut[index]) - lastCode) <= 1, "Upper clamp at \(index)")
+    }
   }
 
   @Test("Color wheel hue=360 produces same result as hue=0")
@@ -701,38 +556,67 @@ struct ProcessingTests {
     }
   }
 
-  @Test("B&W negative film type skips curve application")
-  func bWNegativeSkipsCurves() {
-    let image = UInt16Image(
-      width: 1, height: 1, channels: 3,
-      pixels: [100, 200, 300]
-    )
-    let points = [
-      CurvePoint(input: 0, output: 0),
-      CurvePoint(input: 0.5, output: 0.25),
-      CurvePoint(input: 1, output: 1),
-    ]
-    let params = ProcessingParameters(
-      filmType: .blackAndWhiteNegative, curveEnabled: true, curveControlPoints: points)
-    let result = FilmProcessing.correctedPreview(image: image, parameters: params)
-    #expect(
-      result.channels == 1,
-      "B&W negative should produce 1-channel output, got \(result.channels)")
+  private var monochromeTestImage: UInt16Image {
+    UInt16Image(
+      width: 4, height: 1, channels: 3,
+      pixels: [
+        10_000, 12_000, 14_000,
+        12_000, 24_000, 36_000,
+        45_000, 30_000, 15_000,
+        65_000, 60_000, 55_000,
+      ])
   }
 
-  @Test("B&W negative film type skips color wheel application")
-  func bWNegativeSkipsColorWheels() {
-    let image = UInt16Image(
-      width: 1, height: 1, channels: 3,
-      pixels: [100, 200, 300]
-    )
-    let params = ProcessingParameters(
-      filmType: .blackAndWhiteNegative,
-      highlightWheel: ColorWheel(hue: 0, strength: 1.0))
-    let result = FilmProcessing.correctedPreview(image: image, parameters: params)
-    #expect(
-      result.channels == 1,
-      "B&W negative should produce 1-channel output with color wheels, got \(result.channels)")
+  @Test("Legacy B&W tone curves change pixels without introducing color channels")
+  func monochromeAppliesOverallCurve() throws {
+    let image = monochromeTestImage
+    var parameters = ProcessingParameters(filmType: .blackAndWhiteNegative)
+    let baseline = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+    parameters.curveEnabled = true
+    parameters.curveControlPoints = [.init(input: 0, output: 0), .init(input: 1, output: 0.5)]
+    let actual = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+
+    #expect(actual.width == baseline.width && actual.height == baseline.height)
+    #expect(actual.channels == 1)
+    try #require(actual.pixels.count == baseline.pixels.count)
+    #expect(actual.pixels != baseline.pixels)
+    // A straight line with slope 0.5 halves every encoded value, independently
+    // of the inversion profile; one code permits LUT floating-point rounding.
+    for index in actual.pixels.indices {
+      #expect(abs(Int(actual.pixels[index]) - Int(baseline.pixels[index]) / 2) <= 1)
+    }
+  }
+
+  @Test(
+    "Legacy B&W ignores color-only controls without changing pixels",
+    arguments: ["curves", "wheels", "balance"])
+  func monochromeIgnoresColorControls(control: String) {
+    let image = monochromeTestImage
+    var parameters = ProcessingParameters(filmType: .blackAndWhiteNegative)
+    let baseline = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+    switch control {
+    case "curves":
+      parameters.redCurveEnabled = true
+      parameters.redCurveControlPoints = [.init(input: 0, output: 0.8), .init(input: 1, output: 1)]
+      parameters.greenCurveEnabled = true
+      parameters.greenCurveControlPoints = [
+        .init(input: 0, output: 0), .init(input: 1, output: 0.2),
+      ]
+      parameters.blueCurveEnabled = true
+      parameters.blueCurveControlPoints = [
+        .init(input: 0, output: 0.4), .init(input: 1, output: 0.6),
+      ]
+    case "wheels":
+      parameters.highlightWheel = ColorWheel(hue: 0, strength: 1)
+      parameters.midtoneWheel = ColorWheel(hue: 120, strength: 1)
+      parameters.shadowWheel = ColorWheel(hue: 240, strength: 1)
+    default:
+      parameters.temperature = 100
+      parameters.tint = -100
+      parameters.saturation = 0
+    }
+    #expect(baseline.channels == 1)
+    #expect(FilmProcessing.correctedPreview(image: image, parameters: parameters) == baseline)
   }
 
   @Test("Color wheel with strength=1.0 on smooth mid-gray produces visible shift")
@@ -749,32 +633,31 @@ struct ProcessingTests {
       "Full-strength red midtone wheel should visibly shift mid-gray, total shift=\(shift)")
   }
 
-  @Test("Three active color wheels combine without crashing")
-  func threeActiveWheelsProduceOutput() {
-    let pixels: [Double] = (0..<300).map { _ in Double.random(in: 0...65535) }
+  @Test("Combined color wheels change color while preserving luminance and valid output")
+  func combinedWheelsPreserveLuminance() throws {
+    let pixels: [Double] = [
+      0, 0, 0,
+      3_000, 9_000, 12_000,
+      26_000, 32_000, 38_000,
+      42_000, 48_000, 54_000,
+    ]
     let params = ProcessingParameters(
       highlightWheel: ColorWheel(hue: 30, strength: 0.6),
       midtoneWheel: ColorWheel(hue: 150, strength: 0.4),
       shadowWheel: ColorWheel(hue: 270, strength: 0.8))
     let result = FilmProcessing.applyColorWheels(
-      image: pixels, pixelCount: 100, channels: 3, parameters: params)
-    #expect(result.count == pixels.count)
-    for val in result {
-      #expect(val >= 0 && val <= 65535, "Output value \(val) out of range [0, 65535]")
+      image: pixels, pixelCount: 4, channels: 3, parameters: params)
+    try #require(result.count == pixels.count)
+    #expect(Array(result[0..<3]) == [0, 0, 0])
+    #expect(result.allSatisfy { $0.isFinite && (0...65_535).contains($0) })
+    for base in stride(from: 3, to: pixels.count, by: 3) {
+      #expect(Array(result[base..<(base + 3)]) != Array(pixels[base..<(base + 3)]))
+      let before =
+        (0.114 * pixels[base] + 0.587 * pixels[base + 1] + 0.299 * pixels[base + 2]) / 65_535
+      let after =
+        (0.114 * result[base] + 0.587 * result[base + 1] + 0.299 * result[base + 2]) / 65_535
+      #expect(abs(after - before) <= 0.001)
     }
-  }
-
-  @Test("Curve LUT at index 0 and 65535 produce valid output")
-  func curveLUTBoundaries() {
-    let points = [
-      CurvePoint(input: 0.2, output: 0.8),
-      CurvePoint(input: 0.8, output: 0.2),
-    ]
-    let lut = FilmProcessing.buildCurveLUT(controlPoints: points)
-    #expect(lut != nil)
-    let lutValues = lut!
-    #expect(lutValues[0] >= 0 && lutValues[0] <= 65535)
-    #expect(lutValues[65535] >= 0 && lutValues[65535] <= 65535)
   }
 
   @Test("Curve LUT with zero-range segment (duplicate inputs) handles gracefully")
@@ -800,7 +683,7 @@ struct ProcessingTests {
 
   @Test("Color wheel strength at exactly 0.0 produces no change")
   func colorWheelZeroStrengthIdentity() {
-    let pixels: [Double] = (0..<30).map { _ in Double(UInt16.random(in: 0...65535)) }
+    let pixels: [Double] = (0..<30).map { Double(($0 * 2_371) % 65_536) }
     let params = ProcessingParameters(
       highlightWheel: ColorWheel(hue: 180, strength: 0))
     let result = FilmProcessing.applyColorWheels(

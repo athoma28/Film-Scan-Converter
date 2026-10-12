@@ -354,31 +354,18 @@ void fsc_free_raw_direct(fsc_raw_direct *output) {
     memset(output, 0, sizeof(*output));
 }
 
-int fsc_raw_full_dimensions(
-    const char *path,
+static int adjusted_full_dimensions(
+    libraw_data_t *raw,
     fsc_raw_dimensions *output,
     char *error_message,
     size_t error_message_capacity
 ) {
-    if (path == NULL || output == NULL) {
-        return fail(-1, "Invalid RAW dimension arguments.", error_message, error_message_capacity);
-    }
     memset(output, 0, sizeof(*output));
-
-    libraw_data_t *raw = libraw_init(LIBRAW_OPTIONS_NONE);
-    if (raw == NULL) {
-        return fail(-1, "LibRaw could not allocate a metadata reader.", error_message, error_message_capacity);
-    }
+    fsc_restore_legacy_raw_geometry(raw);
+    raw->params.half_size = 0;
     int code = check_libraw(
-        libraw_open_file(raw, path), error_message, error_message_capacity
+        libraw_adjust_sizes_info_only(raw), error_message, error_message_capacity
     );
-    if (code == LIBRAW_SUCCESS) {
-        fsc_restore_legacy_raw_geometry(raw);
-        raw->params.half_size = 0;
-        code = check_libraw(
-            libraw_adjust_sizes_info_only(raw), error_message, error_message_capacity
-        );
-    }
     if (code == LIBRAW_SUCCESS) {
         uint32_t width = raw->sizes.iwidth;
         uint32_t height = raw->sizes.iheight;
@@ -393,6 +380,29 @@ int fsc_raw_full_dimensions(
             output->width = width;
             output->height = height;
         }
+    }
+    return code;
+}
+
+int fsc_raw_full_dimensions(
+    const char *path,
+    fsc_raw_dimensions *output,
+    char *error_message,
+    size_t error_message_capacity
+) {
+    if (path == NULL || output == NULL) {
+        return fail(-1, "Invalid RAW dimension arguments.", error_message, error_message_capacity);
+    }
+    memset(output, 0, sizeof(*output));
+    libraw_data_t *raw = libraw_init(LIBRAW_OPTIONS_NONE);
+    if (raw == NULL) {
+        return fail(-1, "LibRaw could not allocate a metadata reader.", error_message, error_message_capacity);
+    }
+    int code = check_libraw(
+        libraw_open_file(raw, path), error_message, error_message_capacity
+    );
+    if (code == LIBRAW_SUCCESS) {
+        code = adjusted_full_dimensions(raw, output, error_message, error_message_capacity);
     }
     libraw_close(raw);
     return code;
@@ -514,6 +524,14 @@ int fsc_extract_thumbnail(
     output->height = (uint32_t)raw->thumbnail.theight;
     output->data = copy;
     output->data_size = jpeg_size;
+
+    // Thumbnail extraction is complete before touching source geometry. A
+    // metadata failure must not discard a valid embedded JPEG.
+    fsc_raw_dimensions dimensions;
+    if (adjusted_full_dimensions(raw, &dimensions, NULL, 0) == LIBRAW_SUCCESS) {
+        output->source_width = dimensions.width;
+        output->source_height = dimensions.height;
+    }
 
     fsc_thumbnail_cleanup *cleanup = malloc(sizeof(fsc_thumbnail_cleanup));
     cleanup->raw = raw;

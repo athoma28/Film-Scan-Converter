@@ -19,10 +19,7 @@ struct LinearToneAdjustmentTests {
 
     let result = image.applyingLinearToneAdjustments(neutral)
 
-    #expect(result.pixels.count == pixels.count)
-    for i in pixels.indices {
-      #expect(result.pixels[i] == pixels[i])
-    }
+    #expect(result == image)
   }
 
   @Test("Positive exposure multiplies all channels by 2^EV")
@@ -50,20 +47,6 @@ struct LinearToneAdjustmentTests {
     let expected = pixels.map { $0 * 0.5 }
     for i in pixels.indices {
       #expect(abs(result.pixels[i] - expected[i]) < 1e-12)
-    }
-  }
-
-  @Test("Zero exposure is identity")
-  func zeroExposure() {
-    let pixels: [Double] = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]
-    let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(
-      schemaVersion: 1, exposureEV: 0, brightness: 0, contrast: 0)
-
-    let result = image.applyingLinearToneAdjustments(params)
-
-    for i in pixels.indices {
-      #expect(result.pixels[i] == pixels[i])
     }
   }
 
@@ -149,19 +132,6 @@ struct LinearToneAdjustmentTests {
     #expect(resultDark > dark)
     #expect(abs(resultMid - mid) < 1e-10)
     #expect(resultBright < bright)
-  }
-
-  @Test("Zero contrast is identity around the pivot")
-  func zeroContrast() {
-    let pixels: [Double] = [0.09, 0.18, 0.36, 0.18, 0.18, 0.18]
-    let image = makeImage(pixels: pixels)
-    let params = PhotoAdjustmentParameters(schemaVersion: 1, contrast: 0)
-
-    let result = image.applyingLinearToneAdjustments(params)
-
-    for i in pixels.indices {
-      #expect(abs(result.pixels[i] - pixels[i]) < 1e-12)
-    }
   }
 
   @Test("Positive highlights compress bright pixels more than dark ones")
@@ -367,9 +337,6 @@ struct LinearToneAdjustmentTests {
     let result = image.applyingLinearToneAdjustments(params)
 
     for pixel in result.pixels {
-      #expect(!pixel.isNaN)
-      #expect(pixel != .infinity)
-      #expect(pixel != -.infinity)
       #expect(pixel.isFinite)
     }
   }

@@ -228,6 +228,9 @@ struct PerFileSettingsPersistenceTests {
     let input = directory.appendingPathComponent("current.tif")
     let oldInput = directory.appendingPathComponent("previous.tif")
     let model = AppModel(settingsStore: store)
+    #expect(model.parameters == ProcessingParameters(photoAdjustments: .init()))
+    #expect(model.statusKind == .error)
+    #expect(model.status.contains("could not be loaded"))
     model.selection = input
     model.setExposureEV(1.25)
 
@@ -241,7 +244,8 @@ struct PerFileSettingsPersistenceTests {
 
     // Restoring a valid library must preserve its other files while the current
     // session's latest edits take precedence for the file being edited.
-    try store.save(
+    try replaceSettingsDocument(
+      at: store.fileURL,
       .init(
         settingsByPath: [
           oldInput.path: parameters(exposure: -2), input.path: parameters(exposure: -1),
@@ -292,12 +296,176 @@ struct PerFileSettingsPersistenceTests {
     model.setExposureEV(1.25)
     model.undo()
     #expect(!model.hasEdits(for: input))
-    try store.save(
+    try replaceSettingsDocument(
+      at: store.fileURL,
       .init(settingsByPath: [input.path: parameters(exposure: -1)], editedPaths: [input.path]))
     try await model.flushSettings()
     let recovered = try store.loadState()
     #expect(recovered.settingsByPath[input.path]?.photoAdjustments.exposureEV == 0)
     #expect(recovered.editedPaths.isEmpty)
+  }
+
+  @Test(
+    "Every store save validates existing bytes, including after a successful read",
+    arguments: [
+      "not json", #"{"schemaVersion":99,"settingsByPath":{},"editedPaths":[]}"#,
+      #"{"schemaVersion":2,"settingsByPath":42}"#,
+    ])
+  func protectsDocumentsReplacedAfterRead(document: String) throws {
+    let directory = temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = PerFileSettingsStore(baseDirectory: directory)
+    try store.save(empty)
+    _ = try store.loadState()
+    let original = Data(document.utf8)
+    try original.write(to: store.fileURL, options: .atomic)
+    let pending = PerFileSettingsStore.State(
+      settingsByPath: ["/offline/current.tif": parameters(exposure: 1.25)],
+      editedPaths: ["/offline/current.tif"])
+
+    #expect(throws: (any Error).self) { try store.save(pending) }
+    #expect(try Data(contentsOf: store.fileURL) == original)
+    #expect(throws: (any Error).self) { try store.saveMergingWithExisting(pending) }
+    #expect(try Data(contentsOf: store.fileURL) == original)
+
+    try FileManager.default.removeItem(at: store.fileURL)
+    try store.save(pending)
+    #expect(try store.loadState() == pending)
+  }
+
+  @Test(
+    "Live edits preserve a settings document replaced after startup and retry after removal or repair",
+    arguments: [
+      "not json", #"{"schemaVersion":99,"settingsByPath":{},"editedPaths":[]}"#,
+      #"{"schemaVersion":2,"settingsByPath":42}"#,
+    ])
+  func appProtectsDocumentsReplacedAfterStartup(document: String) async throws {
+    let directory = temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = PerFileSettingsStore(baseDirectory: directory)
+    let input = directory.appendingPathComponent("current.tif")
+    let previous = directory.appendingPathComponent("previous.tif")
+    let outside = directory.appendingPathComponent("recovered-outside-session.tif")
+    try store.save(
+      .init(settingsByPath: [previous.path: parameters(exposure: -2)], editedPaths: [previous.path])
+    )
+    let model = AppModel(settingsStore: store)
+    model.selection = input
+    let original = Data(document.utf8)
+    try original.write(to: store.fileURL, options: .atomic)
+    model.setExposureEV(1.25)
+
+    do {
+      try await model.flushSettings()
+      Issue.record("The unreadable replacement document unexpectedly saved")
+    } catch {}
+    #expect(try Data(contentsOf: store.fileURL) == original)
+    try await waitUntil { model.settingsStatus.contains("could not be saved") }
+    model.setExposureEV(1.5)
+    do {
+      try await model.flushSettings()
+      Issue.record("Further edits overwrote the unreadable replacement document")
+    } catch {}
+    #expect(try Data(contentsOf: store.fileURL) == original)
+
+    try FileManager.default.removeItem(at: store.fileURL)
+    try await model.flushSettings()
+    try await waitUntil { model.settingsStatus.isEmpty }
+    var repaired = try store.loadState()
+    #expect(repaired.settingsByPath[input.path]?.photoAdjustments.exposureEV == 1.5)
+    #expect(repaired.settingsByPath[previous.path]?.photoAdjustments.exposureEV == -2)
+
+    try original.write(to: store.fileURL, options: .atomic)
+    model.setExposureEV(1.75)
+    do {
+      try await model.flushSettings()
+      Issue.record("A second unreadable replacement document unexpectedly saved")
+    } catch {}
+    #expect(try Data(contentsOf: store.fileURL) == original)
+    // The repaired document can contain files never loaded by this session.
+    // Its conflicting current-file values and edited marker must not win.
+    repaired.settingsByPath[outside.path] = parameters(exposure: -3)
+    repaired.editedPaths.insert(outside.path)
+    repaired.settingsByPath[input.path] = parameters(exposure: -1)
+    repaired.editedPaths.remove(input.path)
+    try replaceSettingsDocument(at: store.fileURL, repaired)
+    try await model.flushSettings()
+    try await waitUntil { model.settingsStatus.isEmpty }
+    #expect(try store.loadState().settingsByPath[input.path]?.photoAdjustments.exposureEV == 1.75)
+    for exposure in [2.0, 2.25, 2.5] {
+      model.setExposureEV(exposure)
+      try await model.flushSettings()
+      #expect(try store.loadState().settingsByPath[outside.path]?.photoAdjustments.exposureEV == -3)
+    }
+    let recovered = try store.loadState()
+    #expect(recovered.settingsByPath.count == 3)
+    #expect(recovered.settingsByPath[input.path]?.photoAdjustments.exposureEV == 2.5)
+    #expect(recovered.settingsByPath[previous.path]?.photoAdjustments.exposureEV == -2)
+    #expect(recovered.settingsByPath[outside.path]?.photoAdjustments.exposureEV == -3)
+    #expect(recovered.editedPaths == [input.path, previous.path, outside.path])
+  }
+
+  @Test("Mid-session recovery preserves outside files and clears a stale edited marker after undo")
+  func midSessionRecoveryPreservesUneditedSessionValues() async throws {
+    let directory = temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = PerFileSettingsStore(baseDirectory: directory)
+    try store.save(empty)
+    let input = directory.appendingPathComponent("current.tif")
+    let outside = directory.appendingPathComponent("recovered-outside-session.tif")
+    let model = AppModel(settingsStore: store)
+    model.selection = input
+    let original = Data("not json".utf8)
+    try original.write(to: store.fileURL, options: .atomic)
+    model.setExposureEV(1.25)
+    do {
+      try await model.flushSettings()
+      Issue.record("The unreadable replacement document unexpectedly saved")
+    } catch {}
+    #expect(try Data(contentsOf: store.fileURL) == original)
+    model.undo()
+    #expect(!model.hasEdits(for: input))
+    try replaceSettingsDocument(
+      at: store.fileURL,
+      .init(
+        settingsByPath: [
+          input.path: parameters(exposure: -1), outside.path: parameters(exposure: -2),
+        ], editedPaths: [input.path, outside.path]))
+    try await model.flushSettings()
+    for _ in 0..<3 {
+      model.setExposureEV(0.25)
+      model.undo()
+      try await model.flushSettings()
+      let recovered = try store.loadState()
+      #expect(recovered.settingsByPath[input.path]?.photoAdjustments.exposureEV == 0)
+      #expect(recovered.settingsByPath[outside.path]?.photoAdjustments.exposureEV == -2)
+      #expect(recovered.editedPaths == [outside.path])
+    }
+  }
+
+  @Test("Recovery merging is local to the session that observed the failed read")
+  func recoveryDoesNotChangeAnotherSessionsSaveContract() throws {
+    let directory = temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = PerFileSettingsStore(baseDirectory: directory)
+    try store.save(empty)
+    let recoveringSession = store.makeSessionSaveOperation(requiresRecovery: false)
+    let unaffectedSession = store.makeSessionSaveOperation(requiresRecovery: false)
+    let state = PerFileSettingsStore.State(
+      settingsByPath: ["/offline/current.tif": parameters(exposure: 1.25)],
+      editedPaths: ["/offline/current.tif"])
+    try Data("not json".utf8).write(to: store.fileURL, options: .atomic)
+    #expect(throws: (any Error).self) { try recoveringSession(state) }
+    try replaceSettingsDocument(
+      at: store.fileURL,
+      .init(settingsByPath: ["/offline/outside.tif": parameters(exposure: -2)], editedPaths: []))
+    try recoveringSession(state)
+    #expect(try store.loadState().settingsByPath["/offline/outside.tif"] != nil)
+
+    // A session that has not lost a readable document still saves its complete
+    // owned snapshot rather than synchronizing with another session's entries.
+    try unaffectedSession(state)
+    #expect(try store.loadState() == state)
   }
 
   @Test("Persistence completions ignore stale results and preserve unrelated status on recovery")
@@ -332,6 +500,13 @@ struct PerFileSettingsPersistenceTests {
     var value = ProcessingParameters()
     value.photoAdjustments.exposureEV = exposure
     return value
+  }
+
+  /// Repairs intentionally invalid fixture bytes outside the guarded save API.
+  private func replaceSettingsDocument(at url: URL, _ state: PerFileSettingsStore.State) throws {
+    let document = PerFileSettingsStore.Document(
+      settingsByPath: state.settingsByPath, editedPaths: state.editedPaths)
+    try JSONEncoder().encode(document).write(to: url, options: .atomic)
   }
 
   private func temporaryDirectory() -> URL {

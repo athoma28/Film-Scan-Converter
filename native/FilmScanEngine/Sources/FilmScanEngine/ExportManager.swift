@@ -58,8 +58,22 @@ public actor ExportManager {
 
   private let signpostLog = OSLog(
     subsystem: "film.scan.converter", category: "Export")
+  private let writer: @Sendable (ExportRequest) throws -> Void
 
-  public init() {}
+  public init() {
+    writer = { request in
+      try request.image.write(
+        to: request.destinationURL,
+        format: request.parameters.format,
+        parameters: request.parameters,
+        overwriteExisting: false)
+    }
+  }
+
+  /// Allows tests to hold synchronous writes at their worker boundary.
+  init(writer: @escaping @Sendable (ExportRequest) throws -> Void) {
+    self.writer = writer
+  }
 
   public func export(
     requests: [ExportRequest],
@@ -69,13 +83,14 @@ public actor ExportManager {
 
     for (index, request) in requests.enumerated() {
       if Task.isCancelled {
-        for remaining in requests[index...] {
+        for (remainingIndex, remaining) in requests.enumerated().dropFirst(index) {
           results.append(
             ExportResult(
               sourceURL: remaining.sourceURL,
               destinationURL: remaining.destinationURL,
               error: ExportManagerError.cancelled
             ))
+          progress?(remainingIndex + 1, requests.count, false)
         }
         return results
       }
@@ -155,7 +170,10 @@ public actor ExportManager {
     return results.sorted { $0.0 < $1.0 }.map { $0.1 }
   }
 
-  private func exportOne(request: ExportRequest) async -> ExportResult {
+  // Synchronous packing and ImageIO work must leave the orchestration actor so
+  // independent task-group jobs can overlap. The caller still bounds workers;
+  // task-group cancellation reaches this worker before its write starts.
+  private nonisolated func exportOne(request: ExportRequest) async -> ExportResult {
     guard !Task.isCancelled else {
       return ExportResult(
         sourceURL: request.sourceURL,
@@ -185,29 +203,21 @@ public actor ExportManager {
       signpostID: writeID,
       "file=%{public}s correlation=%{public}s",
       request.sourceURL.lastPathComponent, request.correlationID)
-    do {
-      try request.image.write(
-        to: request.destinationURL,
-        format: request.parameters.format,
-        parameters: request.parameters
-      )
+    defer {
       os_signpost(
         .end, log: signpostLog, name: "Write and Finalize",
         signpostID: writeID,
         "file=%{public}s correlation=%{public}s",
         request.sourceURL.lastPathComponent, request.correlationID)
-
+    }
+    do {
+      try writer(request)
       return ExportResult(
         sourceURL: request.sourceURL,
         destinationURL: request.destinationURL,
         error: nil
       )
     } catch {
-      os_signpost(
-        .end, log: signpostLog, name: "Write and Finalize",
-        signpostID: writeID,
-        "file=%{public}s correlation=%{public}s",
-        request.sourceURL.lastPathComponent, request.correlationID)
       return ExportResult(
         sourceURL: request.sourceURL,
         destinationURL: request.destinationURL,

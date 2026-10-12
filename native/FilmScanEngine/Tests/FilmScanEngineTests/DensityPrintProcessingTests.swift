@@ -1,4 +1,3 @@
-import CoreGraphics
 import FilmScanPreviewRenderer
 import Foundation
 import Testing
@@ -52,9 +51,25 @@ struct DensityPrintProcessingTests {
     assertChannel(blended.2, blue: 0, green: 0.25, red: 0.75)
   }
 
-  @Test("Density-print analysis insets 20% like calibrated inversion")
-  func densityPrintAnalysisDefaultBorderMatchesCalibratedMedians() {
-    #expect(DensityPrintProcessing.analyzeBorderPercent == 20)
+  @Test("Default density analysis excludes the outer 20% rebate")
+  func densityPrintAnalysisExcludesRebate() {
+    let interior = deterministicImage(width: 12, height: 12)
+    var pixels = [UInt16](repeating: 0, count: 20 * 20 * 3)
+    for y in 0..<12 {
+      let source = y * 12 * 3
+      let destination = ((y + 4) * 20 + 4) * 3
+      pixels.replaceSubrange(
+        destination..<(destination + 12 * 3),
+        with: interior.pixels[source..<(source + 12 * 3)])
+    }
+    let bordered = UInt16Image(width: 20, height: 20, channels: 3, pixels: pixels)
+    let profile = NegativeDensityProfileCatalog.genericC41
+    let expected = DensityPrintProcessing.analyze(
+      image: interior, profile: profile, borderPercent: 0)
+    #expect(DensityPrintProcessing.analyze(image: bordered, profile: profile) == expected)
+    #expect(
+      DensityPrintProcessing.analyze(image: bordered, profile: profile, borderPercent: 0)
+        != expected)
   }
 
   @Test("Phoenix II physical profile is a digital-scene tuned cyan-mask unmix")
@@ -89,10 +104,6 @@ struct DensityPrintProcessingTests {
     let white = DensityPrintProcessing.encodeReflectance(0)
     #expect(black == 0)
     #expect(white == 65_535)
-
-    let mid = FilmNegativeProcessing.sRGBToLinear(0.5)
-    let encoded = FilmNegativeProcessing.linearToSRGB(mid)
-    #expect(abs(encoded - 0.5) < 1e-6)
   }
 
   @Test("sRGB linearization round-trips at the endpoints and midtones")
@@ -198,17 +209,13 @@ struct DensityPrintProcessingTests {
       to: directory.appendingPathComponent("user_portra_400.json"))
 
     let loaded = NegativeDensityProfileCatalog.load(from: directory)
-    #expect(loaded.contains { $0.id.rawValue == "user_portra_400" })
-    #expect(loaded.contains { $0.displayName == "User Portra 400" })
+    #expect(loaded == [custom])
   }
 
   @Test("GPU density-print preview matches CPU within 2/255")
-  func gpuDensityPrintMatchesCPU() {
+  func gpuDensityPrintMatchesCPU() throws {
     let image = deterministicImage(width: 64, height: 48)
-    guard let renderer = StillPreviewRenderer(image: image) else {
-      #expect(Bool(false), "Could not create still preview renderer")
-      return
-    }
+    let renderer = try #require(StillPreviewRenderer(image: image))
 
     let configs: [(String, ProcessingParameters)] = [
       (
@@ -235,32 +242,13 @@ struct DensityPrintProcessingTests {
       ),
     ]
 
-    var maxDiff = 0
-    var worstName = ""
     for (name, parameters) in configs {
-      guard
-        let gpu = renderer.render(parameters: parameters, showOriginal: false),
-        let cpu = FilmProcessing.correctedPreview(image: image, parameters: parameters)
-          .makePreviewCGImage(),
-        let gpuPixels = rgbaPixels(gpu),
-        let cpuPixels = rgbaPixels(cpu)
-      else {
-        #expect(Bool(false), "Render failed for \(name)")
-        continue
-      }
-      var comboMax = 0
-      for index in gpuPixels.indices {
-        comboMax = max(comboMax, abs(Int(gpuPixels[index]) - Int(cpuPixels[index])))
-      }
-      if comboMax > maxDiff {
-        maxDiff = comboMax
-        worstName = name
-      }
+      let gpu = try #require(renderer.render(parameters: parameters, showOriginal: false))
+      let cpu = try #require(
+        FilmProcessing.correctedPreview(image: image, parameters: parameters).makePreviewCGImage())
+      try expectPreviewRGBPixelsMatch(
+        gpu, cpu, tolerance: 2, label: "Density print \(name)", requireOpaque: true)
     }
-    #expect(
-      maxDiff <= 2,
-      "Density-print GPU max diff \(maxDiff)/255 at '\(worstName)'"
-    )
   }
 
   @Test(
@@ -397,13 +385,6 @@ struct DensityPrintProcessingTests {
       pixels.append(UInt16(truncatingIfNeeded: state >> 32))
     }
     return UInt16Image(width: width, height: height, channels: 3, pixels: pixels)
-  }
-
-  private func rgbaPixels(_ image: CGImage) -> [UInt8]? {
-    guard let data = image.dataProvider?.data, let pointer = CFDataGetBytePtr(data) else {
-      return nil
-    }
-    return Array(UnsafeBufferPointer(start: pointer, count: image.width * image.height * 4))
   }
 
   private func referenceMAE(

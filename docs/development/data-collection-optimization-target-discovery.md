@@ -1,6 +1,6 @@
 # Data collection and optimization target discovery
 
-Prepared 2026-09-22 as a reusable, resource-aware step. This runbook records
+Prepared September 22, 2026; workflow status reviewed October 2, 2026. This runbook records
 what to collect before choosing the next optimization. It does not authorize
 changing processing defaults, regenerating reference fixtures, or treating
 historical reports as a fresh baseline.
@@ -10,12 +10,20 @@ and [Stage 2 C-41 refinement collection](../performance/c41-refinement-discovery
 The latter separates production rendering from bitmap consumption and identifies
 the dominant measured stage without changing production behavior.
 
-Implemented follow-ups: [C-41 shared output](../performance/c41-shared-output-2026-09-22.md)
-and [RAW draft unpack](../performance/raw-preview-unpack-2026-09-22.md). Their
-before/after cohorts, rejected trials, correctness guards and limits are recorded
-separately from the discovery measurements.
+Implemented follow-ups include [C-41 shared output](../performance/c41-shared-output-2026-09-22.md),
+[RAW draft unpack](../performance/raw-preview-unpack-2026-09-22.md),
+[edit/navigation work reuse](../performance/edit-switch-work-reuse-2026-09-23.md),
+[slider observation/overview work](../performance/slider-preview-latency-2026-09-24.md),
+[CPU preparation and workers](../performance/implementation-2026-09-27.md),
+[scalar correction/requested overviews](../performance/cpu-point-work-2026-09-28.md),
+and [October 2 CPU/dust/thumbnail/I/O work](../performance/implementation-2026-10-02.md).
+Their before/after cohorts, rejected trials, correctness guards and limits are
+recorded separately from discovery measurements. The
+[performance index](../performance/index.md) tracks this sequence and the
+measurement questions that remain open; completed opportunities must not be
+selected again as if their implementation were still absent.
 
-## Purpose and current finding
+## Purpose and evidence boundary
 
 The regular native regression suite establishes correctness, pixel consistency,
 work scheduling, and selected cache and memory invariants. CI also reports code
@@ -40,8 +48,8 @@ photographic preference or another workflow.
 Use these maintained guides as the source of commands and contracts:
 
 - [Developer guide](index.md) and [Building and testing](building.md)
-- [Native package and benchmark commands](../../native/README.md)
-- [Test-suite inventory and benchmark switches](../../tests/README.md)
+- [Native package and benchmark commands](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/README.md)
+- [Test-suite inventory and benchmark switches](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md)
 - [Current verification status](native-macos.md)
 - [Preview architecture](realtime-preview-plan.md)
 - [Color-evaluation compatibility and measurement rules](color-evaluation.md)
@@ -74,8 +82,9 @@ or thermal headroom.
    ignored output folder. Keep generated images, exports, and private scans in
    ignored sample-raw/ and dist/. Never add those artifacts to Git.
 6. Estimate free space before a run that creates images. The full color-study
-   workflow can generate multiple gigabytes; its plan command is not a substitute
-   for resolving the documented recipe/schema integration gaps.
+   workflow can generate multiple gigabytes; inspect the color runbook's current
+   compatibility and required input cohorts, then run its doctor and plan commands
+   before rendering. A successful plan is not a completed photographic study.
 7. Do not purge caches or claim a physically cold disk unless the method actually
    guarantees it. Record first-run and warm-filesystem samples separately.
 
@@ -95,7 +104,7 @@ order, not a product roadmap.
 | Navigation and retained memory | First/cached/uncached switch timings, cache fill, logical bytes, process physical/peak footprint in selected app-path runs | Longer-roll settled capacity, eviction/reload cost, latency and physical-footprint curves under memory pressure, selected-file memory headroom | High |
 | RAW decode | Decode stage timings, stage-boundary hashes, serial/parallel agreement, camera and dimensions in RAW tools | Milliseconds per megapixel by decode stage and sensor class; throughput and cancellation latency under foreground/background contention | High |
 | Export | Decode/process/write stages, queue completion, output size/hash, cancellation, physical and peak footprint, heap snapshots | Time and bytes per megapixel by format; throughput across formats and image sizes; peak live memory per job; queue wait versus active-work time | High |
-| Image tone and color | Pixel hashes and CPU/Metal parity; sampled luminance percentiles and per-channel clipping; selected reference MAE and color-study region scores | Highlight/shadow headroom and clipping by channel; signed color bias plus absolute error by region; explicit non-skin controls; controlled texture/detail proxies | High after study migration |
+| Image tone and color | Pixel hashes and CPU/Metal parity; sampled luminance percentiles and per-channel clipping; selected reference MAE and color-study region scores | Highlight/shadow headroom and clipping by channel; signed color bias plus absolute error by region; explicit non-skin controls; controlled texture/detail proxies | High when relevant inputs/parser/output guards are ready |
 | Robustness and workflow | Decode/export failures, progress, cleanup, cancellation ordering, input hashes, preference checkpoints | Failure and retry rates across a defined corpus; cancellation response at each stage; export artifact size and cleanup verification at scale | Medium |
 | System cost | Physical footprint and limited process-memory samples | Energy per 100 MP or completed export, CPU/GPU utilization, thermal state and sustained throughput | Later |
 | Test health | Swift code coverage, test counts, skipped cases, suite duration | Per-suite duration trend and flaky/timeout frequency; keep suite duration separate from app latency | Medium |
@@ -105,6 +114,11 @@ order, not a product roadmap.
 - AppModel render statistics already split preparation, queue wait, render,
   interaction-to-publication latency, and publication gaps. These describe model
   publication; they do not include physical screen presentation.
+- The native-window interaction runner adds a same-window revision marker and
+  ScreenCaptureKit compositor observations. The [September 24 latency study](../performance/slider-preview-latency-2026-09-24.md)
+  already collected setter-to-capture timing, actual input scheduling and release
+  refinement. It does not measure native pointer-event delivery or physical
+  display scan-out. Reuse it before adding another presentation harness.
 - AppPerformanceSignposts labels queueing, settings/classification, decode,
   correction, geometry, writing, cleanup, preview conversion, analysis, GPU
   rendering, and display publication stages. Instruments can correlate those
@@ -166,7 +180,13 @@ Choose only the path related to the candidate:
   dist/c41-refinement-next` runs the selected DSCF2833 one-pass preview and proxy
   with split render/consumer timing plus separate memory/hash passes. It requires
   Metal, emits no disk images, and does not require archived study inputs. See
-  the [test guide](../../tests/README.md#focused-tone-control-audit).
+  the [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md#focused-tone-control-audit).
+- CPU point correction/requested overview: `run-cpu-point-work-probe.py` builds
+  and freezes an ordinary production release arm, with full or proxy source,
+  exact parameters, and 72 untimed branch oracles. Its [September 28 record](../performance/cpu-point-work-2026-09-28.md#evidence)
+  includes the command and baseline requirements. One current-source arm is not
+  a before/after comparison; its timers exclude decode, first complete warp,
+  bitmap packing and publication.
 - Preview tier, crop, or edit-proxy questions: use PreviewScalePerformanceTests
   on its documented RAF, or the app-path preview benchmark if at least four
   suitable RAFs are present.
@@ -188,9 +208,11 @@ scenes only if the first result leaves uncertainty about generality.
 
 Existing app-path tests time AppModel publication and use a small number of
 repetitions. They do not measure mouse delivery or actual presentation on
-screen. For a user-visible target, add a separately documented Instruments or
-native-app capture that records a real control gesture through presented frames.
-Keep model publication and screen presentation as separate timestamps.
+screen. The native-window runner already supplies separately documented
+setter/compositor timing; repeat the [September 24 workload](../performance/slider-preview-latency-2026-09-24.md#reproduction)
+when that answers the question. For real pointer delivery or physical presentation,
+add the required timestamp sources explicitly. Keep programmatic setters, native
+input, model publication, capture delivery and display scan-out distinct.
 
 For retained previews, use a long enough navigation sequence to observe settled
 cache contents, eviction, reloads, background work, and memory-pressure response.
@@ -205,10 +227,13 @@ reflect host conditions rather than the code.
 
 ### Stage 4: image-quality measurements
 
-Use the color-evaluation runbook before fitting presets, comparing Camera Raw,
-changing defaults, or interpreting gallery results. First resolve its current
-recipe/schema migration gaps. The orchestration tests do not render images and
-the saved historical galleries are not fresh evidence for the current engine.
+Use the [color-evaluation runbook](color-evaluation.md#current-compatibility)
+before fitting presets, comparing Camera Raw, changing defaults, or interpreting
+gallery results. Its September 25 workflow uses canonical Film Base and public
+LookRecipe documents; the old recipe migration blocker is historical. Confirm
+current preflight, real app-parser, source/input provenance and required
+full-resolution checks before making a study claim. Orchestration tests do not
+render images, and historical galleries are not fresh evidence after engine changes.
 
 When the workflow is ready, choose a small deterministic cohort with verified
 registration and content hashes. Include held-out regions or frames, inspect
@@ -243,6 +268,15 @@ Each report should make it possible to reproduce and interpret the measurement:
   allocator bytes in distinct fields;
 - output hashes, output sizes, and quality checks needed to establish equivalent
   results.
+
+State the report's status (source inspection, baseline collection, rejected trial,
+or implementation comparison), the date/time zone, and which claim each artifact
+supports. List ignored `dist/` and private `sample-raw/` artifacts as code paths
+with their availability limits; public documentation links must resolve in a
+clean checkout/site. Keep compact supporting data in Git only when needed for a
+live claim or regression contract. Retain an exact revision/path when a necessary
+superseded record moves to Git history. See the
+[performance index](../performance/index.md#evidence-availability-and-provenance).
 
 Use median and raw samples for small runs. With only three or five samples, p95
 is effectively the slowest observation and is a descriptive marker, not a stable
@@ -283,13 +317,16 @@ than hiding it in a combined score.
 
 These are candidate additions after the staged collection identifies a gap:
 
-1. A compact benchmark manifest that normalizes per-harness provenance and emits
-   a single index of existing JSON reports without copying image artifacts.
+1. A compact machine-readable index that normalizes the existing per-harness
+   provenance and lists JSON reports without copying image artifacts. The
+   maintained performance index already organizes the decisions and open work.
 2. A selected-input benchmark lane that records preview/edit latency, export
    stage timings, work counters, and process physical footprint for the same
    source cohort.
-3. A frame-presentation probe that correlates real input, model publication, and
-   presented frame timestamps during common sliders, zoom, pan, and selection.
+3. Extend the existing native-window capture only if real pointer input, pan,
+   zoom, or selection is needed; the current runner already correlates
+   programmatic sliders and captured compositor revisions. Record the distinct
+   timestamp boundaries before calling any value screen latency.
 4. A sustained-roll cache test with settled-capacity and memory-pressure phases,
    reporting evictions, reloads, wasted speculative work, and user-visible
    latency.

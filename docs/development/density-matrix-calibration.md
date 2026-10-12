@@ -20,6 +20,9 @@ This fitter does not supply a validated built-in capture correction matrix;
 that requires measured reference pairs and held-out validation. The current source includes separate Natural reference curves and Darkroom stock dye-unmix matrices.
 Those catalogs have their own provenance and are not outputs of this affine
 capture-profile fitter.
+The [research registry](../research/index.md) separates this parked track from
+the active [paired color/control workflow](color-evaluation.md), whose public
+recipe fits do not supply a measured-density capture matrix.
 
 ## Input contract
 
@@ -46,9 +49,17 @@ The fitter solves three weighted regularized least-squares systems with an
 identity-matrix/zero-offset prior. It reports fit RMSE, held-out RMSE, the
 held-out identity-baseline RMSE, relative improvement, and a pass/fail gate.
 The gate passes only when the fitted transform beats identity by the configured
-minimum relative improvement. A pass is necessary evidence, not sufficient
+minimum relative improvement. The document's default `minimumValidationImprovement`
+is `0.01` (1% relative RMSE); this is separate from the historical 5% reference-curve
+review criterion. A pass is necessary evidence, not sufficient
 evidence for shipping: real candidates still need representative stocks,
 capture setups, neutral/hue diagnostics, and visual review.
+
+Choose regularization, weights and acceptance limits using fitting/selection
+data. If the validation set influences those choices, it becomes selection data;
+keep a separate frame/roll cohort outside that process for a final promotion claim.
+Report metrics in the declared log-exposure domain, not as display-RGB MAE or
+Delta E. Preserve failed reports as well as passing ones.
 
 Run the committed synthetic smoke example:
 
@@ -63,3 +74,19 @@ The output contains a `candidateCaptureProfile` carrying the fitted density
 matrix and the complete report. The command never installs that candidate. It
 exits with status 2 after writing the report when the held-out gate fails.
 The example is synthetic and must never be treated as product calibration data.
+
+## Provenance and handoff
+
+The schema-1 input and output definitions live in
+`native/FilmScanEngine/Sources/FilmScanEngine/DensityMatrixCalibration.swift`;
+the command wrapper is
+`native/FilmScanEngine/Sources/FilmScanProfileCalibrator/main.swift`. Tests cover
+synthetic recovery, weighting, leakage rejection and gate behavior. Those
+contracts do not establish real-capture quality.
+
+For an authorized resumed experiment, keep the exact sample-extraction and
+alignment procedure, input content hashes, stock/capture profile values, source
+state, tool versions, command, output and visual review together. The fitter's
+JSON report does not independently record all of that provenance. Follow the
+[experiment requirements](../research-brief-film-inversion.md) and
+[research handoff procedure](../research/index.md#record-and-hand-off-the-decision).

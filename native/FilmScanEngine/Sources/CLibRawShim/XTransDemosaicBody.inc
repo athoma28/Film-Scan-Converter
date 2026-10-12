@@ -341,6 +341,18 @@
 
             /* Build homogeneity maps from the derivatives:			*/
             memset(homo, 0, ndir * LIBRAW_AHD_TILE * LIBRAW_AHD_TILE);
+            if (!rawPyCompatibility)
+            {
+                // The Lab plane is dead after every derivative is complete.
+                // Reuse its bytes for one exact threshold map, then process
+                // each direction in contiguous columns. Keep the compatibility
+                // path's original loop and all final tie/averaging decisions.
+                if (ndir == 8)
+                    fsc_xtrans_homogeneity<LIBRAW_AHD_TILE, 8>(drv, lab, homo, mrow, mcol);
+                else
+                    fsc_xtrans_homogeneity<LIBRAW_AHD_TILE, 4>(drv, lab, homo, mrow, mcol);
+            }
+            else
             for (int row = 4; row < mrow - 4; row++)
                 for (int col = 4; col < mcol - 4; col++)
                 {

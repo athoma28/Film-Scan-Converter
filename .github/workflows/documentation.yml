@@ -1,0 +1,32 @@
+name: Documentation
+
+on:
+  push:
+    paths:
+      - ".github/workflows/documentation.yml"
+      - "**/*.md"
+      - "docs/**"
+      - "mkdocs.yml"
+      - "tools/check-docs.py"
+      - "native/**"
+      - "tests/**"
+  pull_request:
+    paths:
+      - ".github/workflows/documentation.yml"
+      - "**/*.md"
+      - "docs/**"
+      - "mkdocs.yml"
+      - "tools/check-docs.py"
+      - "native/**"
+      - "tests/**"
+
+jobs:
+  links-and-navigation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check public links and navigation
+        run: python3 tools/check-docs.py

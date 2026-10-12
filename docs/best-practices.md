@@ -8,8 +8,10 @@ film-base measurement, and roll-wide edits easier to review. For each roll:
    cutouts can confuse **Auto Frame**, especially on underexposed images.
    Review its result in **Geometry** and use Straighten Edge, Perspective, or
    Manual Crop where needed.
-3. Remove visible dust before capture. The native **Dust Mask** shows candidates
-   but does not remove them from exports.
+3. Remove visible dust before capture. **Dust Mask** identifies candidates;
+   the current source adds optional explicit repairs. Inspect repaired grain,
+   edges and fine detail before exporting. Beta 3 provides detection only; see
+   [the dust workflow](how-to-use.md#calibrate) for source behavior.
 4. Fill the camera frame with the photograph while leaving enough visible film
    edge if you intend to use **Auto Detect Edge** for film-base measurement.
 5. Use a high CRI light source, or a high-quality LED display such as a high-end LCD or OLED display, as a backlight. Minimize stray light from external light sources.

@@ -4,11 +4,23 @@ import FilmScanEngine
 import Metal
 
 public final class StillPreviewRenderer: @unchecked Sendable {
-  private let source: CIImage
+  private var unmaterializedImage: UInt16Image?
+  private let sourceLock = NSLock()
+  private var source: CIImage?
+  private let backingByteLock = NSLock()
+  private var backingBytes = 0
   /// RGBA16 bitmap retained by the Core Image source, in addition to the
   /// caller's UInt16 source and analysis arrays. Excludes transient GPU/output
-  /// allocations, which Core Image manages separately.
-  public let retainedRGBAByteCount: Int
+  /// allocations, which Core Image manages separately. It remains zero until
+  /// the first supported render materializes the source on a rendering worker.
+  public var retainedRGBAByteCount: Int {
+    backingByteLock.lock()
+    defer { backingByteLock.unlock() }
+    return backingBytes
+  }
+  /// Reserve the complete possible backing before admitting a lazy renderer.
+  /// Materialization must not increase a session's cache reservation.
+  public let maximumRetainedRGBAByteCount: Int
   private let densityAnalysisCache = DensityPrintAnalysisCache()
   private let curveLUTLock = NSLock()
   private var curveLUTCache: [CurveLUTKey: CIImage] = [:]
@@ -46,22 +58,35 @@ public final class StillPreviewRenderer: @unchecked Sendable {
 
   public init?(image: UInt16Image, analysisImage: UInt16Image? = nil) {
     guard
-      let rgba = image.rgba16Data(),
+      image.channels == 1 || image.channels == 3,
       let kernel = Self.sharedKernel
     else {
       return nil
     }
-
+    unmaterializedImage = image
     self.analysisImage = analysisImage ?? image
-    retainedRGBAByteCount = rgba.count
-    source = CIImage(
+    maximumRetainedRGBAByteCount = image.width * image.height * 4 * MemoryLayout<UInt16>.stride
+    correctionKernel = kernel
+  }
+
+  private func materializedSource() -> CIImage? {
+    sourceLock.lock()
+    defer { sourceLock.unlock() }
+    if let source { return source }
+    guard let image = unmaterializedImage, let rgba = image.rgba16Data() else { return nil }
+    let materialized = CIImage(
       bitmapData: rgba,
       bytesPerRow: image.width * 4 * MemoryLayout<UInt16>.stride,
       size: CGSize(width: image.width, height: image.height),
       format: .RGBA16,
-      colorSpace: nil
-    )
-    correctionKernel = kernel
+      colorSpace: nil)
+    source = materialized
+    unmaterializedImage = nil
+    // Accounting has its own short lock: cache readers never wait for packing.
+    backingByteLock.lock()
+    backingBytes = rgba.count
+    backingByteLock.unlock()
+    return materialized
   }
 
   private let analysisImage: UInt16Image
@@ -72,7 +97,8 @@ public final class StillPreviewRenderer: @unchecked Sendable {
   /// Version 2 shares immutable sensor-frame analysis across CPU/GPU/proxies.
   /// Cropped Original/crop-only views retain exact CPU UInt16-to-UInt8 packing.
   public static func supports(parameters: ProcessingParameters, showOriginal: Bool) -> Bool {
-    guard !parameters.densityPipelineEnabled,
+    guard parameters.dustRepairs.isEmpty,
+      !parameters.densityPipelineEnabled,
       parameters.cropRect == nil,
       parameters.perspectiveCrop == nil,
       abs(parameters.straightenAngle) < 0.000_001
@@ -233,241 +259,205 @@ public final class StillPreviewRenderer: @unchecked Sendable {
   }
 
   private func correctedGraph(parameters: ProcessingParameters, showOriginal: Bool) -> CIImage? {
-    guard supports(parameters: parameters, showOriginal: showOriginal) else { return nil }
-    let oriented = croppedSource(parameters: parameters)
-    let output: CIImage
+    guard supports(parameters: parameters, showOriginal: showOriginal),
+      let source = materializedSource()
+    else { return nil }
+    let oriented = croppedSource(parameters: parameters, source: source)
+    if showOriginal || parameters.filmType == .cropOnly { return oriented }
 
-    if showOriginal || parameters.filmType == .cropOnly {
-      output = oriented
-    } else {
-      let lutImage = curveLUTImage(parameters: parameters)
+    let lutImage = curveLUTImage(parameters: parameters)
+    return correctionKernel.apply(
+      extent: oriented.extent,
+      roiCallback: { inputIndex, destinationRect in
+        inputIndex == 1 ? lutImage.extent : destinationRect
+      },
+      arguments: correctionKernelArguments(
+        parameters: parameters, source: oriented, lutImage: lutImage))
+  }
 
-      var fnp = parameters.filmNegativeParams
-      if parameters.photoAdjustments.usesPhotographicTone, fnp.enabled, fnp.measuredMedians == nil {
-        fnp.measuredMedians = FilmNegativeProcessing.computeMedians(
-          image: analysisImage.resizedToFit(maxDimension: 256))
-      }
-      let dyeMixing = parameters.filmDyeMixing.clamped()
-      let usesCalibratedMonochrome =
-        parameters.filmType == .blackAndWhiteNegative
-        && fnp.rendering == .calibratedMonochrome
-      let usesCalibratedColor =
-        parameters.filmType == .colourNegative
-        && fnp.rendering == .calibratedColor
-      let usesDensityPrint =
-        parameters.filmType == .colourNegative
-        && fnp.rendering == .densityPrint
-      let fnEnabled =
-        parameters.filmNegativeParams.enabled
-        && (parameters.filmType == .colourNegative || parameters.filmType == .blackAndWhiteNegative)
-        && (usesCalibratedMonochrome || usesCalibratedColor || usesDensityPrint
-          || fnp.measuredMedians != nil)
-      let renderingMode: Float =
-        switch fnp.rendering {
-        case .powerLaw: 0
-        case .calibratedMonochrome: 1
-        case .calibratedColor: 2
-        case .densityPrint: 3
-        }
-      let calibratedColorProfile: Float =
-        switch fnp.calibratedColorProfile {
-        case .generic: 0
-        case .fuji400Fresh: 1
-        case .fuji200Expired: 2
-        case .cinestill800T: 3
-        case .harmanPhoenixII: 4
-        }
-      let calibratedMonochromeProfile: Float =
-        switch fnp.calibratedMonochromeProfile {
-        case .generic: 0
-        case .shanghaiGP3: 1
-        }
-      let (fnRExp, fnGExp, fnBExp): (Float, Float, Float)
-      let (fnRMult, fnGMult, fnBMult): (Float, Float, Float)
-
-      if fnEnabled {
-        switch fnp.rendering {
-        case .powerLaw:
-          if let medians = fnp.measuredMedians {
-            fnRExp = Float(-(fnp.greenExp * fnp.redRatio))
-            fnGExp = Float(-fnp.greenExp)
-            fnBExp = Float(-(fnp.greenExp * fnp.blueRatio))
-            let multipliers = FilmNegativeProcessing.computeMultipliers(
-              medians: medians,
-              params: fnp
-            )
-            fnRMult = Float(multipliers.r)
-            fnGMult = Float(multipliers.g)
-            fnBMult = Float(multipliers.b)
-          } else {
-            fnRExp = 0
-            fnGExp = 0
-            fnBExp = 0
-            fnRMult = 1
-            fnGMult = 1
-            fnBMult = 1
-          }
-        case .calibratedColor:
-          let gains = FilmNegativeProcessing.calibratedColorInputGains(
-            measuredMedians: fnp.measuredMedians,
-            profile: fnp.calibratedColorProfile
-          )
-          fnRExp = 0
-          fnGExp = 0
-          fnBExp = 0
-          fnRMult = Float(gains.red)
-          fnGMult = Float(gains.green)
-          fnBMult = Float(gains.blue)
-        case .calibratedMonochrome:
-          let gain = Float(
-            FilmNegativeProcessing.calibratedMonochromeInputGain(
-              measuredMedians: fnp.measuredMedians,
-              profile: fnp.calibratedMonochromeProfile
-            )
-          )
-          fnRExp = 0
-          fnGExp = 0
-          fnBExp = 0
-          fnRMult = gain
-          fnGMult = gain
-          fnBMult = gain
-        case .densityPrint:
-          fnRExp = 0
-          fnGExp = 0
-          fnBExp = 0
-          fnRMult = 1
-          fnGMult = 1
-          fnBMult = 1
-        }
-      } else {
-        fnRExp = 0
-        fnGExp = 0
-        fnBExp = 0
-        fnRMult = 1
-        fnGMult = 1
-        fnBMult = 1
-      }
-
-      let densityAnalysis =
-        usesDensityPrint && fnEnabled
-        ? densityPrintAnalysis(parameters: parameters)
-        : nil
-      let dp = densityAnalysis
-      func densityFloat(_ value: Double) -> Float { Float(value) }
-
-      guard
-        let corrected = correctionKernel.apply(
-          extent: oriented.extent,
-          roiCallback: { inputIndex, destinationRect in
-            inputIndex == 1 ? lutImage.extent : destinationRect
-          },
-          arguments: [
-            oriented,
-            lutImage,
-            Float(parameters.filmType.rawValue),
-            Float(parameters.temperature),
-            Float(parameters.tint),
-            Float(parameters.gamma),
-            Float(parameters.shadows),
-            Float(parameters.highlights),
-            Float(parameters.saturation),
-            Float(parameters.photoAdjustments.exposureEV),
-            Float(parameters.photoAdjustments.brightness),
-            Float(parameters.photoAdjustments.contrast),
-            Float(parameters.photoAdjustments.highlights),
-            Float(parameters.photoAdjustments.shadows),
-            Float(parameters.photoAdjustments.schemaVersion),
-            Float(parameters.photoAdjustments.whites),
-            Float(parameters.photoAdjustments.blacks),
-            Float(parameters.photoAdjustments.shadowFloor),
-            Float(parameters.photoAdjustments.midtoneLevel),
-            Float(parameters.photoAdjustments.highlightCeiling),
-            Float(
-              fnEnabled && fnp.rendering == .powerLaw
-                ? FilmNegativeProcessing.calibrationTargetFraction
-                : 0.18
-            ),
-            Float(parameters.photoAdjustments.temperatureShiftMired),
-            Float(parameters.photoAdjustments.tint),
-            Float(parameters.photoAdjustments.saturation),
-            Float(parameters.photoAdjustments.vibrance),
-            Float(parameters.photoAdjustments.warmHueRecovery ?? 0),
-            Float(dyeMixing.redFromGreen),
-            Float(dyeMixing.redFromBlue),
-            Float(dyeMixing.greenFromRed),
-            Float(dyeMixing.greenFromBlue),
-            Float(dyeMixing.blueFromRed),
-            Float(dyeMixing.blueFromGreen),
-            Float(parameters.highlightWheel.hue),
-            Float(parameters.highlightWheel.strength),
-            Float(parameters.midtoneWheel.hue),
-            Float(parameters.midtoneWheel.strength),
-            Float(parameters.shadowWheel.hue),
-            Float(parameters.shadowWheel.strength),
-            Float(fnEnabled ? 1 : 0),
-            renderingMode,
-            calibratedColorProfile,
-            calibratedMonochromeProfile,
-            Float(fnp.monochromeExposureEV),
-            fnRExp,
-            fnGExp,
-            fnBExp,
-            fnRMult,
-            fnGMult,
-            fnBMult,
-            densityFloat(dp?.unmixBlue.blue ?? 1),
-            densityFloat(dp?.unmixBlue.green ?? 0),
-            densityFloat(dp?.unmixBlue.red ?? 0),
-            densityFloat(dp?.unmixGreen.blue ?? 0),
-            densityFloat(dp?.unmixGreen.green ?? 1),
-            densityFloat(dp?.unmixGreen.red ?? 0),
-            densityFloat(dp?.unmixRed.blue ?? 0),
-            densityFloat(dp?.unmixRed.green ?? 0),
-            densityFloat(dp?.unmixRed.red ?? 1),
-            densityFloat(dp?.floors.blue ?? 0),
-            densityFloat(dp?.floors.green ?? 0),
-            densityFloat(dp?.floors.red ?? 0),
-            densityFloat(dp?.ceils.blue ?? 1),
-            densityFloat(dp?.ceils.green ?? 1),
-            densityFloat(dp?.ceils.red ?? 1),
-            densityFloat(dp?.slopes.blue ?? 2.9),
-            densityFloat(dp?.slopes.green ?? 2.9),
-            densityFloat(dp?.slopes.red ?? 2.9),
-            densityFloat(dp?.pivots.blue ?? 0.2),
-            densityFloat(dp?.pivots.green ?? 0.2),
-            densityFloat(dp?.pivots.red ?? 0.2),
-            densityFloat(dp?.curvatures.blue ?? 0),
-            densityFloat(dp?.curvatures.green ?? 0),
-            densityFloat(dp?.curvatures.red ?? 0),
-            densityFloat(dp?.paperDMin.blue ?? 0),
-            densityFloat(dp?.paperDMin.green ?? 0),
-            densityFloat(dp?.paperDMin.red ?? 0),
-            densityFloat(dp?.paperDMax ?? 2.3),
-            densityFloat(dp?.paperMidtoneGamma ?? 0.15),
-            densityFloat(dp?.paperGammaWidth ?? 0.6),
-            densityFloat(dp?.toeSharpnessBase ?? 4.0),
-            densityFloat(dp?.shoulderSharpnessBase ?? 3.0),
-            densityFloat(dp?.toeHeight ?? 0.90),
-            densityFloat(dp?.shoulderHeight ?? 0.35),
-            densityFloat(dp?.referenceLinear ?? 0.75),
-            densityFloat(dp?.dyeMixBlue.blue ?? 1),
-            densityFloat(dp?.dyeMixBlue.green ?? 0),
-            densityFloat(dp?.dyeMixBlue.red ?? 0),
-            densityFloat(dp?.dyeMixGreen.blue ?? 0),
-            densityFloat(dp?.dyeMixGreen.green ?? 1),
-            densityFloat(dp?.dyeMixGreen.red ?? 0),
-            densityFloat(dp?.dyeMixRed.blue ?? 0),
-            densityFloat(dp?.dyeMixRed.green ?? 0),
-            densityFloat(dp?.dyeMixRed.red ?? 1),
-          ]
-        )
-      else {
-        return nil
-      }
-      output = corrected
+  private func filmNegativeKernelInput(parameters: ProcessingParameters) -> (
+    parameters: FilmNegativeParams, enabled: Bool,
+    exponents: SIMD3<Float>, multipliers: SIMD3<Float>
+  ) {
+    var negative = parameters.filmNegativeParams
+    if parameters.photoAdjustments.usesPhotographicTone,
+      negative.enabled, negative.measuredMedians == nil
+    {
+      negative.measuredMedians = FilmNegativeProcessing.computeMedians(
+        image: analysisImage.resizedToFit(maxDimension: 256))
     }
+    let isNegative =
+      parameters.filmType == .colourNegative || parameters.filmType == .blackAndWhiteNegative
+    let hasRenderingInputs =
+      (parameters.filmType == .blackAndWhiteNegative && negative.rendering == .calibratedMonochrome)
+      || (parameters.filmType == .colourNegative && negative.rendering == .calibratedColor)
+      || (parameters.filmType == .colourNegative && negative.rendering == .densityPrint)
+      || negative.measuredMedians != nil
+    let enabled = negative.enabled && isNegative && hasRenderingInputs
+    let coefficients = Self.filmNegativeCoefficients(negative, enabled: enabled)
+    return (negative, enabled, coefficients.exponents, coefficients.multipliers)
+  }
 
-    return output
+  private static func filmNegativeCoefficients(_ negative: FilmNegativeParams, enabled: Bool) -> (
+    exponents: SIMD3<Float>, multipliers: SIMD3<Float>
+  ) {
+    let neutral: (SIMD3<Float>, SIMD3<Float>) = (.zero, SIMD3(repeating: 1))
+    guard enabled else { return neutral }
+    switch negative.rendering {
+    case .powerLaw:
+      guard let medians = negative.measuredMedians else { return neutral }
+      let exponents = SIMD3(
+        Float(-(negative.greenExp * negative.redRatio)),
+        Float(-negative.greenExp),
+        Float(-(negative.greenExp * negative.blueRatio)))
+      let multipliers = FilmNegativeProcessing.computeMultipliers(
+        medians: medians, params: negative)
+      return (exponents, SIMD3(Float(multipliers.r), Float(multipliers.g), Float(multipliers.b)))
+    case .calibratedColor:
+      let gains = FilmNegativeProcessing.calibratedColorInputGains(
+        measuredMedians: negative.measuredMedians, profile: negative.calibratedColorProfile)
+      return (.zero, SIMD3(Float(gains.red), Float(gains.green), Float(gains.blue)))
+    case .calibratedMonochrome:
+      let gain = Float(
+        FilmNegativeProcessing.calibratedMonochromeInputGain(
+          measuredMedians: negative.measuredMedians, profile: negative.calibratedMonochromeProfile))
+      return (.zero, SIMD3(repeating: gain))
+    case .densityPrint:
+      return neutral
+    }
+  }
+
+  /// Positional arguments follow correctionKernelSource's signature. Keep each
+  /// channel in its declared order when adding or changing kernel inputs.
+  private func correctionKernelArguments(
+    parameters: ProcessingParameters, source: CIImage, lutImage: CIImage
+  ) -> [Any] {
+    let negative = filmNegativeKernelInput(parameters: parameters)
+    let fnp = negative.parameters
+    let fnEnabled = negative.enabled
+    let dyeMixing = parameters.filmDyeMixing.clamped()
+    let renderingMode: Float =
+      switch fnp.rendering {
+      case .powerLaw: 0
+      case .calibratedMonochrome: 1
+      case .calibratedColor: 2
+      case .densityPrint: 3
+      }
+    let calibratedColorProfile: Float =
+      switch fnp.calibratedColorProfile {
+      case .generic: 0
+      case .fuji400Fresh: 1
+      case .fuji200Expired: 2
+      case .cinestill800T: 3
+      case .harmanPhoenixII: 4
+      }
+    let calibratedMonochromeProfile: Float =
+      switch fnp.calibratedMonochromeProfile {
+      case .generic: 0
+      case .shanghaiGP3: 1
+      }
+    let dp =
+      parameters.filmType == .colourNegative && fnp.rendering == .densityPrint && fnEnabled
+      ? densityPrintAnalysis(parameters: parameters) : nil
+    return [
+      source,
+      lutImage,
+      Float(parameters.filmType.rawValue),
+      Float(parameters.temperature),
+      Float(parameters.tint),
+      Float(parameters.gamma),
+      Float(parameters.shadows),
+      Float(parameters.highlights),
+      Float(parameters.saturation),
+      Float(parameters.photoAdjustments.exposureEV),
+      Float(parameters.photoAdjustments.brightness),
+      Float(parameters.photoAdjustments.contrast),
+      Float(parameters.photoAdjustments.highlights),
+      Float(parameters.photoAdjustments.shadows),
+      Float(parameters.photoAdjustments.schemaVersion),
+      Float(parameters.photoAdjustments.whites),
+      Float(parameters.photoAdjustments.blacks),
+      Float(parameters.photoAdjustments.shadowFloor),
+      Float(parameters.photoAdjustments.midtoneLevel),
+      Float(parameters.photoAdjustments.highlightCeiling),
+      Float(
+        fnEnabled && fnp.rendering == .powerLaw
+          ? FilmNegativeProcessing.calibrationTargetFraction
+          : 0.18
+      ),
+      Float(parameters.photoAdjustments.temperatureShiftMired),
+      Float(parameters.photoAdjustments.tint),
+      Float(parameters.photoAdjustments.saturation),
+      Float(parameters.photoAdjustments.vibrance),
+      Float(parameters.photoAdjustments.warmHueRecovery ?? 0),
+      Float(dyeMixing.redFromGreen),
+      Float(dyeMixing.redFromBlue),
+      Float(dyeMixing.greenFromRed),
+      Float(dyeMixing.greenFromBlue),
+      Float(dyeMixing.blueFromRed),
+      Float(dyeMixing.blueFromGreen),
+      Float(parameters.highlightWheel.hue),
+      Float(parameters.highlightWheel.strength),
+      Float(parameters.midtoneWheel.hue),
+      Float(parameters.midtoneWheel.strength),
+      Float(parameters.shadowWheel.hue),
+      Float(parameters.shadowWheel.strength),
+      Float(fnEnabled ? 1 : 0),
+      renderingMode,
+      calibratedColorProfile,
+      calibratedMonochromeProfile,
+      Float(fnp.monochromeExposureEV),
+      negative.exponents[0],
+      negative.exponents[1],
+      negative.exponents[2],
+      negative.multipliers[0],
+      negative.multipliers[1],
+      negative.multipliers[2],
+      Float(dp?.unmixBlue.blue ?? 1),
+      Float(dp?.unmixBlue.green ?? 0),
+      Float(dp?.unmixBlue.red ?? 0),
+      Float(dp?.unmixGreen.blue ?? 0),
+      Float(dp?.unmixGreen.green ?? 1),
+      Float(dp?.unmixGreen.red ?? 0),
+      Float(dp?.unmixRed.blue ?? 0),
+      Float(dp?.unmixRed.green ?? 0),
+      Float(dp?.unmixRed.red ?? 1),
+      Float(dp?.floors.blue ?? 0),
+      Float(dp?.floors.green ?? 0),
+      Float(dp?.floors.red ?? 0),
+      Float(dp?.ceils.blue ?? 1),
+      Float(dp?.ceils.green ?? 1),
+      Float(dp?.ceils.red ?? 1),
+      Float(dp?.slopes.blue ?? 2.9),
+      Float(dp?.slopes.green ?? 2.9),
+      Float(dp?.slopes.red ?? 2.9),
+      Float(dp?.pivots.blue ?? 0.2),
+      Float(dp?.pivots.green ?? 0.2),
+      Float(dp?.pivots.red ?? 0.2),
+      Float(dp?.curvatures.blue ?? 0),
+      Float(dp?.curvatures.green ?? 0),
+      Float(dp?.curvatures.red ?? 0),
+      Float(dp?.paperDMin.blue ?? 0),
+      Float(dp?.paperDMin.green ?? 0),
+      Float(dp?.paperDMin.red ?? 0),
+      Float(dp?.paperDMax ?? 2.3),
+      Float(dp?.paperMidtoneGamma ?? 0.15),
+      Float(dp?.paperGammaWidth ?? 0.6),
+      Float(dp?.toeSharpnessBase ?? 4.0),
+      Float(dp?.shoulderSharpnessBase ?? 3.0),
+      Float(dp?.toeHeight ?? 0.90),
+      Float(dp?.shoulderHeight ?? 0.35),
+      Float(dp?.referenceLinear ?? 0.75),
+      Float(dp?.dyeMixBlue.blue ?? 1),
+      Float(dp?.dyeMixBlue.green ?? 0),
+      Float(dp?.dyeMixBlue.red ?? 0),
+      Float(dp?.dyeMixGreen.blue ?? 0),
+      Float(dp?.dyeMixGreen.green ?? 1),
+      Float(dp?.dyeMixGreen.red ?? 0),
+      Float(dp?.dyeMixRed.blue ?? 0),
+      Float(dp?.dyeMixRed.green ?? 0),
+      Float(dp?.dyeMixRed.red ?? 1),
+    ]
   }
 
   /// Computes bounded clipping and tone statistics from the displayed image.
@@ -542,7 +532,7 @@ public final class StillPreviewRenderer: @unchecked Sendable {
     }
   }
 
-  private func orientedSource(parameters: ProcessingParameters) -> CIImage {
+  private func orientedSource(parameters: ProcessingParameters, source: CIImage) -> CIImage {
     let rotated: CIImage
     switch ((parameters.rotation % 4) + 4) % 4 {
     case 1:
@@ -564,8 +554,8 @@ public final class StillPreviewRenderer: @unchecked Sendable {
     )
   }
 
-  private func croppedSource(parameters: ProcessingParameters) -> CIImage {
-    let oriented = orientedSource(parameters: parameters)
+  private func croppedSource(parameters: ProcessingParameters, source: CIImage) -> CIImage {
+    let oriented = orientedSource(parameters: parameters, source: source)
     guard let crop = parameters.manualCrop,
       let bounds = ImageGeometry.pixelBounds(
         for: crop,

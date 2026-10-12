@@ -4,6 +4,9 @@ The current renderer uses bounded image sources, Core Image/Metal correction,
 and one native viewport shared by the image and overlays. See
 [development status](native-macos.md) for verification and the
 [roadmap](../improvements/MacOS-Native-Roadmap.md) for remaining work.
+This page owns the implemented architecture despite the historical filename.
+It includes the October 2 source changes beyond the recorded Beta 3 package;
+remaining work belongs in the roadmap.
 
 ## Sources And Ownership
 
@@ -15,6 +18,7 @@ and one native viewport shared by the image and overlays. See
 | RAW lookahead | Requested 3200px for up to three unseen neighbours. |
 | RAW full preview | Full-sensor 1-pass decode retained across selection changes; up to two neighbours prefetch full detail when space permits. |
 | RAW continuous edit | A 2048px raster retained with the selected full preview; used only during supported point-control gestures. |
+| RAW revisit canvas | Independent half-width/half-height sRGB snapshot of the latest completed correction, captured on departure; full logical dimensions preserve zoom while RAW detail reloads. |
 | Classification | Separate 256px analysis source. |
 | RAW export | Independent final-quality three-pass camera-scan decode; one selected-file result may be retained for settings-only re-export. |
 
@@ -29,12 +33,31 @@ if RAW colour is unavailable.
 Preview sessions use LRU eviction, a persisted count limit (default eight), and
 one eighth of physical RAM capped at 3 GiB (2 GiB on a 16 GiB Mac). The current UI
 has no cache-size selector. Sidebar thumbnails have separate count/byte limits.
-The budget counts decoded sources, renderer backing, interaction proxies, and
+The budget counts decoded sources, renderer backing, interaction proxies, CPU
+preparation buffers, and
 corrected display rasters; admission reserves display space in advance. Speculation
-never evicts completed entries. Eviction releases sources and corrected rasters
+never evicts completed entries. Eviction releases sources, CPU preparation and corrected rasters
 together, preserves the selected image, and can allow that image alone to exceed
 the budget. System memory pressure drops all unselected entries and suspends
 prefetch until pressure returns to normal.
+
+Revisit canvases survive decoded-session eviction. One worker downsamples a
+completed full-RAW raster, with only the latest departure pending. At most 24
+snapshots occupy at most 256 MiB or one eighth of the preview budget, whichever
+is smaller; their bytes and pending worker inputs are charged to session
+admission. They retain no decoder, renderer, or statistics closure. A restored
+canvas must match saved parameters and cannot represent Original, an editor
+canvas, or a stack. Its draft decode enables editing, but does not replace the
+sharper snapshot or remeasure its medians; inspect is skipped and full detail
+rebuilds directly. Original or an edit resumes rendering from the available
+source. Flat-field changes, pressure, and Close All invalidate pending snapshots.
+
+Renderer construction retains the immutable UInt16 source and defers RGBA16
+Core Image backing until the first supported render needs it on a worker.
+Materialization is synchronized and happens once. Cache admission reserves the
+maximum possible backing before accepting the session; logical retained-byte
+accounting follows the backing actually created. CPU-only work can keep the
+renderer unmaterialized.
 
 Draft, inspect, full preview, neighbour lookahead, stack members, and RAW export
 share a priority scheduler. Macs with at least 16 GiB RAM permit two concurrent
@@ -68,16 +91,36 @@ changes invalidate that reuse. Eligible point edits on a selected full RAW can
 also use the interaction proxy when correction falls back to CPU; they retain
 the same full-source refinement on release. Other requests, including geometry
 and detailed viewport work, use the appropriate full source or visible region.
-A selected-source CPU cache reuses unchanged geometry and Darkroom analysis.
+Each cached session owns CPU preparation for its immutable full and interaction
+sources. Returning to that session reuses unchanged geometry and Darkroom
+analysis for the next point edit, within the same LRU byte budget.
+Eligible photographic CPU fallbacks also correct a bounded overview of the
+prepared geometry and the exact visible region during an edit. Their analysis
+remains anchored to the immutable sensor source, and release renders the complete
+image with current parameters. Legacy tone version 1, sensor-space density processing,
+and Original retain complete rendering. The cache charges retained CPU geometry
+and overview buffers once per owner. Every completed worker triggers trimming,
+including a worker whose obsolete frame is discarded; later buffer growth cannot
+leave unselected sessions over budget.
+When supported GPU rendering bypasses changed CPU geometry, the worker releases
+incompatible full and interaction preparation. Density reference rendering does
+the same for its owner. Matching geometry survives point edits and comparisons.
+Charged cache bytes are not a process-memory ceiling: the active image and a
+draining render can retain source/preparation after LRU eviction. Temporary
+viewport/proxy results also have worker lifetimes. Physical-footprint measurements
+must remain separate from cache accounting.
 For full-RAW GPU edits at inspection zoom, the background overview uses the
 retained 2048px source; the visible detail still renders from sensor pixels.
 The overview is temporary and cannot enter the complete-raster cache.
 Color/tone linear scratch is bounded by row bands, preserving full-source
 analysis and arithmetic.
+CPU tone, protected-color, and calibrated-inversion processing prepares
+settings-dependent coefficients, gains, and curve state once and shares that
+immutable state across pixel workers. The scalar operation sequence and saved
+tone-version behavior remain the rendering contract.
 Monotonic latency/gap metrics and the `Frame Published` signpost measure publication,
 not screen presentation. ImageIO calls remain synchronous. See the
-[work-reuse follow-up](../performance/viewport-and-work-reuse-2026-09-16.md) and
-[earlier proxy measurement](../performance/preview-scale-2026-09-14.md).
+[proxy measurement](../performance/preview-scale-2026-09-14.md).
 
 Darkroom's CPU analysis supplies both CPU rendering and GPU uniforms. Sorted
 sample channels are reused across percentile queries. Each immutable renderer
@@ -96,9 +139,38 @@ background owner. Cache accounting includes renderer RGBA16 source backing and
 the continuous-edit proxy and completed display raster. The selected session only
 exceeds the byte budget when it cannot fit by itself; all other entries are
 evicted first.
-The [September 13 performance implementation](../performance/implementation-2026-09-13.md)
-records the earlier dispatch, durability, and lookup decisions; its cache and
-rendering policy has since changed.
+The [persistence contract](../performance/settings-persistence-implementation.md)
+documents write ordering, retry, and durability behavior.
+
+## Auxiliary Work And Export
+
+Flat-field loading runs through the shared decode scheduler. The current field
+remains available until a valid replacement completes; newer loads, Clear, and
+direct replacement cancel outstanding requests. Only the current load generation
+can publish a field or failure. Image export and contact-sheet export wait while
+a flat-field load is pending.
+
+Rebate workers prepare full-size flat fields after leaving the main actor. They
+capture immutable source/field buffers and reject results if the source
+generation changes. Dust detection, geometry transforms, mask conversion, and
+counting also run on a worker; the main actor wraps the completed bitmap and
+publishes status. Cancellation propagates to these workers and is checked between
+synchronous stages; it does not interrupt every image-processing primitive.
+Geometry changes, including Clear Crop, cancel pending dust work and remove
+previously published masks.
+
+Sidebar thumbnails are prepared on workers from immutable inputs. RAW embedded
+thumbnail pixels and source dimensions come from one metadata session with
+bounded thumbnail output;
+standard-image decoding and bitmap preparation likewise leave the main actor.
+Main-actor completion rejects cancelled tasks before wrapping/publishing the
+image. This does not use the full-resolution export decode cache.
+
+Standard-image app exports permit up to two independent synchronous packing and
+writing workers. The export actor bounds worker submission and returns results in
+input order. Cancellation lets active write stages finish and leaves pending jobs
+unwritten; staged commit and failure cleanup remain per-output responsibilities.
+RAW and aligned-stack exports retain the one-file-at-a-time decode contract.
 
 ## Viewport And Geometry
 
@@ -120,7 +192,9 @@ crop retains earlier geometry. Changing that geometry invalidates the dependent
 crop and stale diagnostic overlays.
 
 Full-resolution stacks retain original sample statistics and HDR weights by
-merging temporary original-capture storage in row bands. A failed sharper tier
+merging temporary original-capture storage in row bands. The anchor's already
+decoded reference is retained once rather than written and reread as another
+spool; remaining captures use temporary storage. A failed sharper tier
 retains a usable prior result and reports the failure.
 
 ## Verification
@@ -134,3 +208,8 @@ Re-measure the [renderer and app-path benchmarks](https://github.com/athoma28/Fi
 when source sizes, scheduling, kernels, geometry, or cache ownership change.
 [Analysis benchmarks](../performance/preview-analysis.md) isolate diagnostics
 and Darkroom work. Their timings do not establish whole-app slider latency.
+Use the [performance index](../performance/index.md) for dated evidence and
+follow-up questions. Obsolete requests are checked at render-stage boundaries;
+point-edit progress remains useful until source, geometry, comparison, or repair
+state invalidates it. The October 2 checks cover these boundaries without
+establishing a new screen-presentation measurement.

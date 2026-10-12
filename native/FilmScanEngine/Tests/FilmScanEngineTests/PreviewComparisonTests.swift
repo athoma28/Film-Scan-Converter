@@ -61,12 +61,12 @@ struct PreviewComparisonTests {
     #expect(original.height == corrected.height)
     #expect(original.width == expected.width)
     #expect(original.height == expected.height)
-    #expect(pixelData(original) == pixelData(expected))
-    #expect(pixelData(original) != pixelData(corrected))
+    try expectPreviewRGBPixelsMatch(original, expected)
+    #expect(try previewRGBPixels(original) != previewRGBPixels(corrected))
 
     model.showOriginal = false
     try await waitForPreview(model)
-    #expect(pixelData(try displayedImage(model)) == pixelData(corrected))
+    try expectPreviewRGBPixelsMatch(try displayedImage(model), corrected)
 
     // Editors need access to the uncropped negative without changing the saved
     // composition or letting their temporary canvas state affect comparison.
@@ -86,7 +86,7 @@ struct PreviewComparisonTests {
     model.endSourceGeometryEditing()
     #expect(model.dustMaskImage == nil)
     try await waitForPreview(model)
-    #expect(pixelData(try displayedImage(model)) == pixelData(expected))
+    try expectPreviewRGBPixelsMatch(try displayedImage(model), expected)
 
     model.beginManualCropEditing()
     try await waitForPreview(model)
@@ -97,7 +97,7 @@ struct PreviewComparisonTests {
     model.endManualCropEditing()
     #expect(model.dustMaskImage == nil)
     try await waitForPreview(model)
-    #expect(pixelData(try displayedImage(model)) == pixelData(expected))
+    try expectPreviewRGBPixelsMatch(try displayedImage(model), expected)
 
     // Loading a selection resets temporary editor state even without a view
     // delivering its overlay cleanup callback.
@@ -105,7 +105,7 @@ struct PreviewComparisonTests {
     model.loadSelection()
     try await waitForPreview(model)
     #expect(!model.showOriginal)
-    #expect(pixelData(try displayedImage(model)) == pixelData(corrected))
+    try expectPreviewRGBPixelsMatch(try displayedImage(model), corrected)
     try await model.flushSettings()
     let persisted = try store.loadState()
     #expect(persisted == savedState)
@@ -213,7 +213,7 @@ struct PreviewComparisonTests {
     let expected = try #require(
       FilmProcessing.correctedPreview(image: source, parameters: model.parameters)
         .makePreviewCGImage())
-    #expect(pixelData(try displayedImage(model)) == pixelData(expected))
+    try expectPreviewRGBPixelsMatch(try displayedImage(model), expected)
     try await model.flushSettings()
     let persisted = try store.loadState()
     let saved = try #require(persisted.settingsByPath[input.standardizedFileURL.path])
@@ -226,7 +226,7 @@ struct PreviewComparisonTests {
     model.undo()
     try await waitForPreview(model)
     #expect(model.parameters == initial)
-    #expect(pixelData(try displayedImage(model)) == pixelData(committedPreview))
+    try expectPreviewRGBPixelsMatch(try displayedImage(model), committedPreview)
   }
 
   @Test(
@@ -305,7 +305,7 @@ struct PreviewComparisonTests {
     model.endSourceGeometryEditing()
     model.showOriginal = wasComparing
     try await waitForPreview(model)
-    #expect(pixelData(try displayedImage(model)) == pixelData(committedPreview))
+    try expectPreviewRGBPixelsMatch(try displayedImage(model), committedPreview)
     model.redo()
     try await waitForPreview(model)
     #expect(!model.showOriginal)
@@ -331,12 +331,7 @@ struct PreviewComparisonTests {
   ) throws {
     let reference = try #require(expected.makePreviewCGImage())
     let displayed = try displayedImage(model)
-    try #require(displayed.width == reference.width)
-    try #require(displayed.height == reference.height)
-    let actualPixels = try rgbPixels(displayed)
-    let expectedPixels = try rgbPixels(reference)
-    let maxError = zip(actualPixels, expectedPixels).map { abs(Int($0) - Int($1)) }.max()
-    #expect(try #require(maxError) <= tolerance)
+    try expectPreviewRGBPixelsMatch(displayed, reference, tolerance: tolerance)
   }
 
   private func expectEditingCanvas(
@@ -349,28 +344,9 @@ struct PreviewComparisonTests {
       FilmProcessing.correctedPreview(image: source, parameters: canvasParameters)
         .makePreviewCGImage())
     let displayed = try displayedImage(model)
-    try #require(displayed.width == expected.width)
-    try #require(displayed.height == expected.height)
-    // Reset can use Metal's RGBA8 image with aligned rows. Ignore padding and
-    // the unused alpha byte; all geometry-forced CPU renders remain exact.
-    let actualPixels = try rgbPixels(displayed)
-    let expectedPixels = try rgbPixels(expected)
-    let maxError = zip(actualPixels, expectedPixels).map { abs(Int($0) - Int($1)) }.max()
-    #expect(try #require(maxError) <= tolerance)
-  }
-
-  private func rgbPixels(_ image: CGImage) throws -> [UInt8] {
-    try #require(image.bitsPerComponent == 8 && image.bitsPerPixel == 32)
-    let data = try #require(pixelData(image))
-    var pixels = [UInt8]()
-    pixels.reserveCapacity(image.width * image.height * 3)
-    for y in 0..<image.height {
-      for x in 0..<image.width {
-        let start = y * image.bytesPerRow + x * 4
-        pixels.append(contentsOf: data[start..<start + 3])
-      }
-    }
-    return pixels
+    // Reset can use Metal's RGBA8 image with aligned rows. Compare visible RGB;
+    // all geometry-forced CPU renders remain exact.
+    try expectPreviewRGBPixelsMatch(displayed, expected, tolerance: tolerance)
   }
 
   private func makeSource() -> UInt16Image {
@@ -415,9 +391,5 @@ struct PreviewComparisonTests {
     }
     let mask = try #require(model.dustMaskImage)
     #expect(mask.size == model.previewImage?.size)
-  }
-
-  private func pixelData(_ image: CGImage) -> Data? {
-    image.dataProvider?.data as Data?
   }
 }

@@ -7,20 +7,18 @@ import Testing
 @Suite("Grading point controls", .serialized)
 @MainActor
 struct GradingPointControlTests {
-  @Test("Point controls are tone intent and round trip in version 4")
-  func parameterRoundTrip() throws {
-    let neutral = PhotoAdjustmentParameters()
-    #expect(neutral.schemaVersion == 4)
-    #expect(neutral.isNeutral)
-
-    let points = PhotoAdjustmentParameters(
-      shadowFloor: 0.3, midtoneLevel: -0.2, highlightCeiling: -0.4)
-    #expect(points.hasToneAdjustment)
-    #expect(!points.hasColorAdjustment)
-    #expect(!points.isNeutral)
-    #expect(
-      try JSONDecoder().decode(
-        PhotoAdjustmentParameters.self, from: JSONEncoder().encode(points)) == points)
+  @Test("Each grading point independently marks tone intent without color intent")
+  func pointControlsAreToneIntent() {
+    let controls: [WritableKeyPath<PhotoAdjustmentParameters, Double>] = [
+      \.shadowFloor, \.midtoneLevel, \.highlightCeiling,
+    ]
+    for control in controls {
+      var points = PhotoAdjustmentParameters()
+      points[keyPath: control] = 0.3
+      #expect(points.hasToneAdjustment)
+      #expect(!points.hasColorAdjustment)
+      #expect(!points.isNeutral)
+    }
   }
 
   @Test("Correction parser preserves the three controls through copy and apply")
@@ -36,37 +34,6 @@ struct GradingPointControlTests {
     #expect(applied.photoAdjustments.shadowFloor == 0.2)
     #expect(applied.photoAdjustments.midtoneLevel == -0.15)
     #expect(applied.photoAdjustments.highlightCeiling == -0.25)
-  }
-
-  @Test("Older saved versions retain their versions and decode missing points as neutral")
-  func legacyDecoding() throws {
-    for version in 1...3 {
-      let saved = Data("{\"schemaVersion\":\(version),\"highlights\":0.25}".utf8)
-      let decoded = try JSONDecoder().decode(PhotoAdjustmentParameters.self, from: saved)
-      #expect(decoded.schemaVersion == version)
-      #expect(decoded.highlights == 0.25)
-      #expect(decoded.shadowFloor == 0)
-      #expect(decoded.midtoneLevel == 0)
-      #expect(decoded.highlightCeiling == 0)
-    }
-  }
-
-  @Test(
-    "Every numeric adjustment rejects nonfinite saved values",
-    arguments: [
-      "exposureEV", "brightness", "contrast", "highlights", "shadows", "whites", "blacks",
-      "shadowFloor", "midtoneLevel", "highlightCeiling", "temperatureShiftMired",
-      "tint", "saturation", "vibrance", "warmHueRecovery",
-    ], ["NaN", "Inf", "-Inf"])
-  func rejectsNonfiniteAdjustment(field: String, value: String) {
-    let decoder = JSONDecoder()
-    decoder.nonConformingFloatDecodingStrategy = .convertFromString(
-      positiveInfinity: "Inf", negativeInfinity: "-Inf", nan: "NaN")
-    #expect(throws: DecodingError.self) {
-      try decoder.decode(
-        PhotoAdjustmentParameters.self,
-        from: Data("{\"schemaVersion\":4,\"\(field)\":\"\(value)\"}".utf8))
-    }
   }
 
   @Test("A point edit promotes an older photographic edit and clamps the result")

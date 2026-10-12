@@ -1,11 +1,18 @@
 # Camera Raw color and control study — September 18, 2026
 
 **Historical results; status checked September 19.** The measurements below describe
-the September 18 renderer and schema-1 correction workflow. The current working
-tree separates Film Base from LookRecipe, changes fresh automatic initialization,
-and migrates pasted corrections to schema-2 public recipe snapshots. The
-[maintained runbook](color-evaluation.md#current-compatibility) lists
-remaining diagnostic integration gaps. This note does not validate those changes.
+the September 18 renderer and schema-1 correction workflow. The later Film Base /
+LookRecipe migration changed automatic initialization and pasted corrections.
+The [maintained runbook](color-evaluation.md#current-compatibility) records the
+current schema-2 workflow and its verification. This note does not validate those
+changes.
+
+The [September 25 follow-through](roadmap-follow-through-2026-09-25.md#reproducible-color-workflow)
+records a separate completed schema-2 rerun using canonical Film Bases and public
+controls. Its baseline, fitted recipes and scores differ from this archive. The
+[research registry](../research/index.md#color-evidence-map) keeps the original,
+interrupted and completed artifact roots distinct; use development status for
+checks after that rerun.
 
 FSC can get substantially closer to these Camera Raw references with its existing
 renderer. The main obstacle is reaching the right channel response and tone balance
@@ -162,6 +169,11 @@ These are September 18 findings. In particular, the named-stock classifier and
 old preset UI described here are not the current Film Base / LookRecipe workflow.
 Curve composition, saturation and crop-related concerns still need their own
 validation; the historical probe is not a test run against today's working tree.
+Whites/Blacks and grading levels were subsequently added as versioned controls;
+see the [separated tone-range report](tone-range-separation-2026-09-24.md) and
+[current behavior](native-macos.md). The recommendations below preserve the
+study-time diagnosis rather than serving as a current implementation backlog;
+the [roadmap](../improvements/MacOS-Native-Roadmap.md) owns remaining priorities.
 
 1. **Mask color is being used to guess a named stock.** Fresh classification chooses
    Phoenix II Darkroom for seven of eleven Fuji 400 frames, three of four Lucky
@@ -247,7 +259,8 @@ for the proposed rework, which still needs preview/export benchmarks.
 ## Reproduce
 
 Use the [color evaluation runbook](color-evaluation.md) for maintained setup,
-ordered stages and the current migration gaps. The read-only entry points are:
+ordered stages and current compatibility/verification limits. The read-only
+entry points are:
 
 ```sh
 .venv/bin/python native/diagnostics/color-study.py doctor \
@@ -256,9 +269,9 @@ ordered stages and the current migration gaps. The read-only entry points are:
   --workflow paired --full --output dist/paired-study-next
 ```
 
-After reconciling current recipe and clipboard contracts, the runbook's `run`
-workflow builds the production renderer, runs the fits and full/crop cohorts,
-and validates generated documents. Use a fresh output directory; the historical
+The runbook's repaired `run` workflow builds the production renderer, runs the
+public-recipe fits and full/crop cohorts, and validates generated documents.
+Use a fresh output directory; the historical
 `dist/camera-raw-study` has no runner provenance and cannot be resumed. Low-level
 scripts reuse cached scans and alignment and do not detect source/data changes.
 Generated images and full parameter JSON stay in ignored `dist/`; no presets are

@@ -31,6 +31,85 @@ struct CorrectionClipboardTests {
     #expect(pasteboard.dataReads == 3)
   }
 
+  @Test("Full paste closes a held adjustment gesture and records its own persistent undo step")
+  func fullPasteKeepsGestureHistorySeparate() async throws {
+    let directory = FileManager.default.temporaryDirectory
+      .appendingPathComponent("fsc-paste-history-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let store = PerFileSettingsStore(baseDirectory: directory)
+    let pasteboard = CountingPasteboard()
+    let clipboard = CorrectionSettingsClipboard(pasteboard: pasteboard)
+    let model = try await loadedModel(clipboard: clipboard, store: store)
+    defer { model.closeAllScans() }
+    model.rotateClockwise()
+    model.setManualCrop(.init(x: 0.1, y: 0.15, width: 0.8, height: 0.7))
+    let before = model.parameters
+    model.beginEditingGesture(named: "Exposure")
+    model.setExposureEV(0.25)
+    model.setExposureEV(0.5)
+    let adjusted = model.parameters
+    let settings = CorrectionSettings(recipe: .warm)
+    pasteboard.replace(data: try JSONEncoder().encode(settings))
+    let expected = settings.applying(to: adjusted)
+    try #require(expected != adjusted)
+
+    model.pasteCorrectionSettings()
+    #expect(model.parameters == expected)
+    #expect(model.undoActionName == "Paste Corrections")
+    #expect(model.parameters.rotation == before.rotation)
+    #expect(model.parameters.manualCrop == before.manualCrop)
+    // The slider's eventual release must not wrap the paste in another entry.
+    model.endEditingGesture()
+    model.undo()
+    #expect(model.parameters == adjusted)
+    #expect(model.undoActionName == "Exposure")
+    model.undo()
+    #expect(model.parameters == before)
+    #expect(model.redoActionName == "Exposure")
+    model.redo()
+    #expect(model.parameters == adjusted)
+    #expect(model.redoActionName == "Paste Corrections")
+    model.redo()
+    #expect(model.parameters == expected)
+    try await model.flushSettings()
+    let key = try #require(model.selection?.standardizedFileURL.path)
+    var persisted = expected
+    persisted.filmNegativeParams.measuredMedians = nil
+    #expect(try store.loadState().settingsByPath[key] == persisted)
+  }
+
+  @Test(
+    "Empty and invalid clipboard commands preserve the held adjustment gesture",
+    arguments: [false, true])
+  func rejectedPastePreservesGesture(invalid: Bool) async throws {
+    let pasteboard = CountingPasteboard()
+    let clipboard = CorrectionSettingsClipboard(pasteboard: pasteboard)
+    let model = try await loadedModel(clipboard: clipboard)
+    defer { model.closeAllScans() }
+    if invalid { pasteboard.replace(data: Data("invalid".utf8)) }
+    let before = model.parameters
+    let previousUndo = model.undoActionName
+    model.beginEditingGesture(named: "Exposure")
+    model.setExposureEV(0.25)
+    let firstSample = model.parameters
+    model.pasteCorrectionSettings()
+    #expect(model.parameters == firstSample)
+    #expect(
+      model.settingsStatus
+        == (invalid
+          ? "Clipboard correction settings are not valid."
+          : "The clipboard does not contain correction settings."))
+    model.setExposureEV(0.5)
+    model.endEditingGesture()
+    let adjusted = model.parameters
+    #expect(model.undoActionName == "Exposure")
+    model.undo()
+    #expect(model.parameters == before)
+    #expect(model.undoActionName == previousUndo)
+    model.redo()
+    #expect(model.parameters == adjusted)
+  }
+
   @Test("Malformed native payload errors are cached and invalidate when replaced")
   func failedReadsInvalidate() throws {
     let pasteboard = CountingPasteboard()
@@ -96,6 +175,22 @@ struct CorrectionClipboardTests {
     pasteboard.acceptsData = true
     try clipboard.write(CorrectionSettings(recipe: .cool))
     #expect(try clipboard.read()?.recipe == .cool)
+  }
+
+  private func loadedModel(
+    clipboard: CorrectionSettingsClipboard, store: PerFileSettingsStore? = nil
+  ) async throws -> AppModel {
+    let input = try #require(
+      Bundle.module.url(
+        forResource: "input", withExtension: "png", subdirectory: "Fixtures/decode_png8"))
+    let model = AppModel(settingsStore: store, settingsClipboard: clipboard)
+    model.importFiles([input])
+    let deadline = ContinuousClock.now + .seconds(15)
+    while model.isLoading || model.isRendering || model.previewImage == nil {
+      try #require(ContinuousClock.now < deadline, "Timed out waiting for clipboard workflow")
+      try await Task.sleep(for: .milliseconds(2))
+    }
+    return model
   }
 }
 

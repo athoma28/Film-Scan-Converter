@@ -1,10 +1,19 @@
 # Coalesced settings persistence
 
+**Historical implementation contract.** This record describes the persistence
+worker introduced after the September 13 investigation, including the store
+schema at that time. Current repair-bearing per-file documents use schema 3;
+unrepaired stores retain schema 2. Clipboard/named-preset schema versions are a
+separate contract. See [native contracts](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/README.md)
+and [development status](../development/native-macos.md) for current recovery,
+unsupported-document, and verification behavior.
+
 The September 13 follow-up's settings stall is addressed by
 `PerFileSettingsPersistence`. The main actor updates its current settings and
 replaces one per-file delta in a locked mailbox. A serial utility queue owns a
 separate history dictionary and performs both JSON encoding and atomic writes.
-The on-disk version-two JSON format and version-one migration remain unchanged.
+At this implementation step, the on-disk version-two JSON format and version-one
+migration remained unchanged.
 
 The mailbox retains at most one pending operation per changed path plus one
 reset marker. Revisions include set, removal, edited-state changes, and reset.

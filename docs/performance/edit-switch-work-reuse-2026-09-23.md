@@ -125,9 +125,9 @@ swift test --disable-sandbox -c release \
   --filter PreviewStatisticsPerformanceTests
 ```
 
-The [test guide](../../tests/README.md) lists the independent editing replay and
+The [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md) lists the independent editing replay and
 app-path navigation switches. Run timing processes sequentially, after builds.
 The local evidence root is ignored
-[`dist/edit-switch-performance-2026-09-23/`](../../dist/edit-switch-performance-2026-09-23/):
+`dist/edit-switch-performance-2026-09-23`:
 the statistics JSON/log, app-path JSON/log, regression logs, formatting result,
 baseline app-source snapshots, and source/binary manifest.

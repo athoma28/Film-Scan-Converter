@@ -2,8 +2,8 @@
 
 Film Scan Converter converts camera-scanned film negatives and slides in a
 native macOS application. The feature and usage guides describe the current
-application, including published
-[0.2.0 Beta 3](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.3).
+0.3.0 Beta 1 source and its workflow. Download the documented release
+[0.3.0 Beta 1](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.3.0-beta.1).
 See [Installation](installation.md) for download and source-build instructions.
 
 ## Use The Application
@@ -23,6 +23,12 @@ See [Installation](installation.md) for download and source-build instructions.
   recorded source state rather than the latest build.
 - [Color evaluation runbook](development/color-evaluation.md): reproduce paired
   reference studies, skin RGB measurements, and film-preset comparisons.
+- [Research index](research/index.md): active investigations, completed evidence,
+  parked calibration scope, and the limits of each result.
+- [Performance index](performance/index.md): measured changes, rejected candidates,
+  and remaining experiments.
+- [Documentation maintenance](development/documentation-maintenance.md): source
+  ownership, evidence retention, and automated link/navigation checks.
 
 The native app is the only target for new features. The
 [legacy Python application](legacy-python.md) retains applied dust removal and

@@ -265,14 +265,18 @@ struct PreviewRetentionTests {
     #expect(!model.hasCachedPreview(for: urls[0]))
     #expect(model.hasCachedPreview(for: urls[3]))
     let corrections = model.previewCorrectionCount
+    let pressureHandlingCount = model.previewMemoryPressureHandlingCount
     model.handlePreviewMemoryPressure(isUnderPressure: true)
+    #expect(model.previewMemoryPressureHandlingCount == pressureHandlingCount + 1)
     #expect(model.previewCacheSessionCount == 1)
     #expect(model.hasCachedPreview(for: urls[3]))
     model.loadSelection()
     try await settled(model)
     #expect(model.previewCorrectionCount == corrections)
     #expect(model.previewCacheSessionCount == 1)
+    let pressureHandlingCountBeforeRelease = model.previewMemoryPressureHandlingCount
     model.handlePreviewMemoryPressure(isUnderPressure: false)
+    #expect(model.previewMemoryPressureHandlingCount == pressureHandlingCountBeforeRelease)
   }
 
   private func fixtureURL() throws -> URL {

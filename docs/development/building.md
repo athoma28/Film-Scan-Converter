@@ -4,6 +4,11 @@ The native package requires macOS 14 or later, Swift 6 (Xcode or Command Line
 Tools), and Homebrew LibRaw plus `pkg-config`. Commands below run from the
 repository root.
 
+Use [development status](native-macos.md#verification-summary) for recorded
+results and the [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md)
+to select checks for a change. A build, default test pass, photographic gate,
+performance measurement, and packaged release validate different boundaries.
+
 ```sh
 brew install libraw pkg-config
 bash native/test-raw-compatibility.sh
@@ -23,6 +28,9 @@ and assembles/validates an unsigned beta. It does not supply private RAW inputs,
 run the standalone comparator, or enable the performance and representative-roll
 tests. The [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md)
 separates default coverage, local-corpus checks, and opt-in measurements.
+The configured lanes are defined in
+[native-engine.yml](https://github.com/athoma28/Film-Scan-Converter/blob/main/.github/workflows/native-engine.yml).
+Documentation-only paths do not trigger that native workflow.
 
 ## Graphics And Release Checks
 
@@ -40,7 +48,8 @@ swift test --disable-sandbox -c release \
   --package-path native/FilmScanEngine --no-parallel
 ```
 
-After building, use `--skip-build` to run the same binaries again. The standalone
+After building, use `--skip-build` with the same configuration to run the same
+binaries again; omit it after changing sources, fixtures, or build options. The standalone
 CPU/Metal comparator is an additional opt-in check:
 
 ```sh
@@ -73,13 +82,21 @@ are separate from Swift and legacy regression discovery:
 
 ```sh
 .venv/bin/python -m unittest discover -s native/diagnostics \
-  -p 'test_color_study.py' -v
+  -p 'test_color*.py' -v
 ```
 
-Those tests validate orchestration and input contracts; they do not refresh the
+This runs both the runner and recipe-contract tests. They validate orchestration
+and input contracts; they do not refresh the
 dated color reports or establish CPU/Metal parity.
 
 ## Documentation
+
+Run the dependency-free public-link/navigation gate first:
+
+```sh
+python3 tools/check-docs.py
+git diff --check
+```
 
 Build the documentation with MkDocs and the Material theme:
 
@@ -87,6 +104,95 @@ Build the documentation with MkDocs and the Material theme:
 python3 -m venv /tmp/film-scan-docs-venv
 /tmp/film-scan-docs-venv/bin/python -m pip install mkdocs-material
 /tmp/film-scan-docs-venv/bin/mkdocs build --strict --site-dir /tmp/film-scan-docs-site
+```
+
+Keep generated sites and study images out of tracked documentation. Review links,
+navigation, current-source claims, and dated evidence when moving or retiring a
+page; a strict build checks documentation structure, not the truth of product or
+measurement claims.
+The [documentation maintenance guide](documentation-maintenance.md) defines
+page ownership, artifact retention, and the checks run by documentation CI.
+
+## Local generated data
+
+Completed studies keep results and reproduction Markdown plus a small structured
+report/source/input bundle under the
+[retention policy](documentation-maintenance.md#keeping-evidence-available).
+The shared retained `dist/` budget is 250 MiB, including packaged releases and
+cleanup receipts; private originals in `sample-raw/` are separate. Preview the retained
+files, compression and temporary-artifact removal before applying:
+
+```sh
+python3 tools/retain-study-results.py
+# Stop studies and readers before applying the reviewed retention plan.
+python3 tools/retain-study-results.py --apply
+```
+
+Large result JSON is stored losslessly as `.json.gz`. Restore one report when a
+tool needs plain JSON:
+
+```sh
+python3 tools/retain-study-results.py --restore-results \
+  dist/xt5-matrix-study-2026-10-03/analysis/scores.json.gz
+```
+
+The archive remains intact. After inspection, run retention again to remove the
+temporary plain report; it verifies an exact archive match before removing it.
+Edited reports are preserved and require a separate output path.
+
+Completed galleries, full exports and image/array caches are retired. Reports
+still record what was rendered and checked at the time; removed pixels must be
+regenerated for new visual review or rescoring. Keep original median metadata,
+the explicitly selected historical scan inputs, source snapshots/test fixtures
+and frozen `baseline-build` objects read by maintained comparisons. The
+[X-T5 reproduction record](../research/xt5-matrix-reproduction.md) distinguishes
+method replay on today's engine from reconstruction of its historical source.
+Older studies without a complete source snapshot support method replay;
+their source/input hashes alone cannot restore an uncommitted historical engine.
+
+Preview rebuildable Swift caches with the dependency-free cleanup tool:
+
+```sh
+python3 tools/clean-generated.py
+# Stop running builds, apps launched from .build, and studies before applying.
+python3 tools/clean-generated.py --apply
+```
+
+The tool accepts only the native package's ignored `.build` and the X-T5
+runner's isolated `build` scratch directory after validating its separately
+pinned renderers. It checks open files before deletion and writes a receipt
+under `dist/cleanup-receipts/`. Rebuild before running standalone probes that
+link release objects or using `--skip-build`. This cache cleaner does not decide
+study retention. Keep the required frozen comparison objects, historical inputs,
+`.venv` and private scans.
+
+While a study is active, repeated rasters can share storage without removing
+evidence paths:
+
+```sh
+python3 tools/compact-study.py dist/xt5-matrix-study-2026-10-03
+python3 tools/compact-study.py dist/xt5-matrix-study-2026-10-03 --apply
+```
+
+Compaction requires macOS and a filesystem supporting copy-on-write clones.
+Stop study writers first. It replaces only byte-identical large image/array
+copies with independent clones, preserving their content, modes, and access and
+modification times. Inodes and filesystem creation/change times can change.
+Existing extended attributes stay intact; macOS may add its filesystem
+provenance attribute to a new clone.
+Files with incompatible ownership, attributes, or ACLs are left intact and
+recorded as exclusions in the optional `--report` JSON receipt.
+Writes to one clone do not change another. The reported duplicate-byte estimate
+is logical data; APFS free space and `du` can account for shared storage
+differently. Recorded artifact hashes stay unchanged because file bytes and
+paths stay unchanged; source/input freshness checks still apply before any study
+resume. Clones do not reduce Finder's logical folder size and do not replace
+completed-study retention. The tools default to a read-only preview.
+
+Run their isolated safety checks without modifying real study data:
+
+```sh
+python3 -m unittest discover -s tools -p 'test_*.py'
 ```
 
 ## Legacy Python

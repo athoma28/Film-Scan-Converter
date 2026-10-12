@@ -1,0 +1,2779 @@
+{
+  "schemaVersion": 1,
+  "kind": "Frozen baseline/current/baseline recheck; descriptive first detailed CPU gesture after cached RAW revisit",
+  "collectedDate": "2026-10-11",
+  "environment": {
+    "hardware": "Apple M4 Pro, Mac16,7, 48 GiB RAM",
+    "libraw": "0.22.2",
+    "swift": "Apple Swift version 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)\nTarget: arm64-apple-macosx15.0\n",
+    "system": "ProductName:\t\tmacOS\nProductVersion:\t\t15.7.9\nBuildVersion:\t\t24G830\n",
+    "earlierSameMachineCapture": {
+      "file": "dist/roadmap-loop-2026-10-10/workflow-source-manifest.json",
+      "sha256": "8964a9336b3fe78c6dff6ca5464dbda336a39b7bb380d2d7351657c15bb38801"
+    },
+    "hardwareModel": "Mac16,7",
+    "operatingSystem": "Version 15.7.9 (Build 24G830)",
+    "physicalMemoryBytes": 51539607552
+  },
+  "runOrder": ["baseline-1", "current-1", "baseline-recheck"],
+  "cohorts": {
+    "baseline": {
+      "sourceRevision": "2b4da0930df3ccebc08c1e3197a8ec242df448ac",
+      "sourceState": "Dirty pre-preparation workflow snapshot plus only the identical new detailed harness",
+      "sourceManifest": {
+        "file": "dist/roadmap-loop-2026-10-10/detailed-baseline-package/baseline-provenance.json",
+        "sha256": "b3d2af9851e50d3717f42bc4b7bc73f3f517c55520006d5db68ae2abcc2c2f7a"
+      },
+      "originalSourceManifest": {
+        "file": "dist/roadmap-loop-2026-10-10/workflow-source-manifest.json",
+        "sha256": "8964a9336b3fe78c6dff6ca5464dbda336a39b7bb380d2d7351657c15bb38801"
+      },
+      "sourceArchive": {
+        "file": "dist/roadmap-loop-2026-10-10/workflow-validation-source.tar.gz",
+        "sha256": "b01712499a35c817c3a5f15ac7dd39526fd58049e9add3ee534de988378425b9"
+      },
+      "sourceArchiveContainsAddedHarness": false,
+      "sourceFiles": 372,
+      "originalFilesUnchanged": 371,
+      "addedHarnessSHA256": "76979c555fc3a681918a552bcda9166453cf8358b2815405e15c02282577a41f",
+      "compiledBinarySHA256": {
+        ".build/arm64-apple-macosx/release/FilmScanEnginePackageTests.xctest/Contents/MacOS/FilmScanEnginePackageTests": "6c595c09eef53e41fced09ba7281d800962091b7e27b49f042928853cf13c497",
+        ".build/arm64-apple-macosx/release/FilmScanConverterMac": "75ac4d527bbcc5265fde8d5310a91e73367af9193cf44a53ad701f65fa233d4a"
+      },
+      "compiledSourceSHA256": {
+        "appModel": "9c388a8019960ad6af40836edf837916bc24672c47740f0837ff3e9e2bc1f09c",
+        "cpuPreparation": "b560ea54f72bacedab8f80b8ec02245853ac69f9be8eeea4d5bb48bc85763cc4",
+        "previewSessionCache": "e401bbfffa1281076072d2b1acc8bc90b92a1d2b0d0454f09ef620a565a9eaf8",
+        "viewportDemand": "40fd2ac29a3ac8e6530ec3821bd2d4d133d9dc97d73dd65ac6fb1c43683d51cd",
+        "harness": "76979c555fc3a681918a552bcda9166453cf8358b2815405e15c02282577a41f"
+      },
+      "buildLog": {
+        "file": "dist/roadmap-loop-2026-10-10/detailed-baseline-build.log",
+        "sha256": "05aec1420d5e415fd1d5b8b55fe8cfd1c41aee9ce70fe5428fd8e28d9d1df9bb"
+      },
+      "binaryAvailability": {
+        "actualCompiledBundleRetained": false,
+        "discardedAfterIndependentDirectVerification": true,
+        "stagedSourceFilesRetained": 372,
+        "retentionReceipt": {
+          "file": "dist/roadmap-loop-2026-10-10/detailed-baseline-build-retention-receipt.json.gz",
+          "sha256": "e6dccadc82dd3f5a0c612292a382ce94ff494b58350b263e1fda5e83a952fe9b"
+        },
+        "limitation": "The isolated compiled baseline was retired after all three collections and direct/pre-post verification. Hashes cannot restore the binary; fresh collection requires rebuilding the retained exact source plus identical harness in the recorded environment."
+      }
+    },
+    "current": {
+      "sourceRevision": "2b4da0930df3ccebc08c1e3197a8ec242df448ac",
+      "sourceState": "Dirty current workflow-guards-5 snapshot including later workflow changes",
+      "sourceManifest": {
+        "file": "dist/roadmap-loop-2026-10-10/workflow-guards-5-manifest.json",
+        "sha256": "4972a4c25d34ac7e090051933158ece0601467988a7746b6d6a919355eac35e2"
+      },
+      "sourceArchive": {
+        "file": "dist/roadmap-loop-2026-10-10/workflow-guards-5-source.tar.gz",
+        "sha256": "689cfb8dd68d1ee57f92ff9f2cf69f1e95506825d6bbe696b2fe93abf8cb56f3"
+      },
+      "sourceArchiveContainsAddedHarness": true,
+      "sourceFiles": 376,
+      "compiledBinarySHA256": {
+        "native/FilmScanEngine/.build/arm64-apple-macosx/release/FilmScanEnginePackageTests.xctest/Contents/MacOS/FilmScanEnginePackageTests": "acde8e65748083792b0d5ffdadfadcf0366eea8f919e2cd2e8e88622f7d20663",
+        "native/FilmScanEngine/.build/arm64-apple-macosx/release/FilmScanConverterMac": "a662930d63bab1147b1d60355adc1347aa867af9fd351249aa0efca5248b78fb",
+        "native/FilmScanEngine/.build/arm64-apple-macosx/release/FilmScanPreviewComparator": "b8e3028d6913b215dfed4d2f4bb32be0b02fab4feb628c1d3b4b17baae6d04d5",
+        "native/FilmScanEngine/.build/arm64-apple-macosx/release/FilmScanLookbook": "f10cd1d6886423812c547de726656fc655c9b88bcae96e427e10533bab069e7d"
+      },
+      "compiledSourceSHA256": {
+        "appModel": "1a433d19996b758c00bbd8329dfd68e37b5488cb9cf13bb0bcb62f1920aa57c7",
+        "cpuPreparation": "08d6401af0eecbed592a30027e2457132be5ab8864699a04f619c5421f2852a8",
+        "previewSessionCache": "1182b67d30566713fef16e339f17c4e0ddc127efbfe9f16b742b88fcee6cc8d6",
+        "viewportDemand": "40fd2ac29a3ac8e6530ec3821bd2d4d133d9dc97d73dd65ac6fb1c43683d51cd",
+        "harness": "76979c555fc3a681918a552bcda9166453cf8358b2815405e15c02282577a41f"
+      },
+      "fullReleaseValidation": {
+        "exitCode": 0,
+        "reportedTests": 937,
+        "intentionalSkips": 22,
+        "issues": 0,
+        "durationSeconds": 165.268,
+        "log": "workflow-guards-full-release-6.log",
+        "logSHA256": "41bf558668041faf1c3ff54a2a3a509ecdcf1c7f1986a6648770312ab25411d8"
+      }
+    }
+  },
+  "workload": {
+    "framePaths": ["fuji400-fresh/DSCF2833.RAF", "fuji400-fresh/DSCF2851.RAF"],
+    "configuredParameters": {
+      "blueCurveControlPoints": [],
+      "blueCurveEnabled": false,
+      "borderCrop": 0,
+      "cropRectCoordinateSpace": "imageAxes",
+      "curveControlPoints": [],
+      "curveEnabled": false,
+      "darkThreshold": 25,
+      "densityC41Profile": {
+        "densityOffset": {
+          "blue": 0,
+          "green": 0,
+          "red": 0
+        },
+        "densitySlope": {
+          "blue": 1,
+          "green": 1,
+          "red": 1
+        }
+      },
+      "densityCorrection": {
+        "blueOutput": {
+          "blue": 1,
+          "green": 0,
+          "red": 0
+        },
+        "greenOutput": {
+          "blue": 0,
+          "green": 1,
+          "red": 0
+        },
+        "offset": {
+          "blue": 0,
+          "green": 0,
+          "red": 0
+        },
+        "redOutput": {
+          "blue": 0,
+          "green": 0,
+          "red": 1
+        }
+      },
+      "densityDisplayParams": {
+        "exposureEV": 0,
+        "maximumSceneGain": 16,
+        "toneMap": "linear",
+        "whiteBalance": {
+          "blue": 1,
+          "green": 1,
+          "red": 1
+        }
+      },
+      "densityPipelineEnabled": false,
+      "dustRepairs": [],
+      "filmBaseChosenByUser": true,
+      "filmDyeMixing": {
+        "blueFromGreen": 0,
+        "blueFromRed": 0,
+        "greenFromBlue": 0,
+        "greenFromRed": 0,
+        "redFromBlue": 0,
+        "redFromGreen": 0
+      },
+      "filmNegativeParams": {
+        "blueRatio": 0.86,
+        "calibratedColorProfile": "generic",
+        "calibratedMonochromeProfile": "generic",
+        "densityNeutralProtection": false,
+        "densityProfileID": "generic_c41",
+        "densityUnmixRGB": [1, -0.05, -0.02, -0.04, 1, -0.08, -0.01, -0.1, 1],
+        "densityUnmixStrength": 0.5,
+        "enabled": true,
+        "greenExp": 1.5,
+        "monochromeExposureEV": 0,
+        "redRatio": 1.36,
+        "rendering": "densityPrint"
+      },
+      "filmType": 1,
+      "flip": false,
+      "gamma": 0,
+      "greenCurveControlPoints": [],
+      "greenCurveEnabled": false,
+      "highlightWheel": {
+        "hue": 0,
+        "strength": 0
+      },
+      "highlights": 0,
+      "lightThreshold": 100,
+      "manualCropAspectRatio": "Free",
+      "midtoneWheel": {
+        "hue": 0,
+        "strength": 0
+      },
+      "perspectiveCrop": {
+        "bottomLeft": {
+          "x": 0.1,
+          "y": 0.9
+        },
+        "bottomRight": {
+          "x": 0.91,
+          "y": 0.92
+        },
+        "topLeft": {
+          "x": 0.08,
+          "y": 0.1
+        },
+        "topRight": {
+          "x": 0.93,
+          "y": 0.08
+        }
+      },
+      "photoAdjustments": {
+        "blacks": 0,
+        "brightness": 0,
+        "contrast": 0,
+        "exposureEV": 0,
+        "highlightCeiling": 0,
+        "highlights": 0,
+        "midtoneLevel": 0,
+        "saturation": 0,
+        "schemaVersion": 4,
+        "shadowFloor": 0,
+        "shadows": 0,
+        "temperatureShiftMired": 0,
+        "tint": 0,
+        "vibrance": 0,
+        "whites": 0
+      },
+      "redCurveControlPoints": [],
+      "redCurveEnabled": false,
+      "rotation": 0,
+      "saturation": 100,
+      "shadowWheel": {
+        "hue": 0,
+        "strength": 0
+      },
+      "shadows": 0,
+      "straightenAngle": 2,
+      "temperature": 0,
+      "tint": 0
+    },
+    "inputSHA256": {
+      "fuji400-fresh/DSCF2833.RAF": "c71a348038f397743360ca41a2ac099f51b81c1dd81e319b39e39a05711f2fe7",
+      "fuji400-fresh/DSCF2851.RAF": "834867cca5f2aca9511ca6d4335320b554b48af0f30a31b110f2a27a34320b9e"
+    },
+    "configuredCacheDepth": 2,
+    "pairedRepetitions": 3,
+    "visibleRegion": {
+      "height": 800,
+      "width": 1200,
+      "x": 512,
+      "y": 384
+    },
+    "backingScale": 2,
+    "magnification": 1,
+    "exposureStart": 0,
+    "exposureTarget": 0.25,
+    "sourceDimensions": {
+      "height": 5184,
+      "width": 7752
+    },
+    "sourcePixelSHA256": "2006fdc9a9662c0ceb255273d23f587accaf18058ccb739012ac0d1a6e19ff40",
+    "initialFullSHA256": "c907416bcba12357c4375748046cf2a3acbb3bf7b757c745fc01239715be4b5d",
+    "initialParameters": {
+      "blueCurveControlPoints": [],
+      "blueCurveEnabled": false,
+      "borderCrop": 0,
+      "cropRectCoordinateSpace": "imageAxes",
+      "curveControlPoints": [],
+      "curveEnabled": false,
+      "darkThreshold": 25,
+      "densityC41Profile": {
+        "densityOffset": {
+          "blue": 0,
+          "green": 0,
+          "red": 0
+        },
+        "densitySlope": {
+          "blue": 1,
+          "green": 1,
+          "red": 1
+        }
+      },
+      "densityCorrection": {
+        "blueOutput": {
+          "blue": 1,
+          "green": 0,
+          "red": 0
+        },
+        "greenOutput": {
+          "blue": 0,
+          "green": 1,
+          "red": 0
+        },
+        "offset": {
+          "blue": 0,
+          "green": 0,
+          "red": 0
+        },
+        "redOutput": {
+          "blue": 0,
+          "green": 0,
+          "red": 1
+        }
+      },
+      "densityDisplayParams": {
+        "exposureEV": 0,
+        "maximumSceneGain": 16,
+        "toneMap": "linear",
+        "whiteBalance": {
+          "blue": 1,
+          "green": 1,
+          "red": 1
+        }
+      },
+      "densityPipelineEnabled": false,
+      "dustRepairs": [],
+      "filmBaseChosenByUser": true,
+      "filmDyeMixing": {
+        "blueFromGreen": 0,
+        "blueFromRed": 0,
+        "greenFromBlue": 0,
+        "greenFromRed": 0,
+        "redFromBlue": 0,
+        "redFromGreen": 0
+      },
+      "filmNegativeParams": {
+        "blueRatio": 0.86,
+        "calibratedColorProfile": "generic",
+        "calibratedMonochromeProfile": "generic",
+        "densityNeutralProtection": false,
+        "densityProfileID": "generic_c41",
+        "densityUnmixRGB": [1, -0.05, -0.02, -0.04, 1, -0.08, -0.01, -0.1, 1],
+        "densityUnmixStrength": 0.5,
+        "enabled": true,
+        "greenExp": 1.5,
+        "monochromeExposureEV": 0,
+        "redRatio": 1.36,
+        "rendering": "densityPrint"
+      },
+      "filmType": 1,
+      "flip": false,
+      "gamma": 0,
+      "greenCurveControlPoints": [],
+      "greenCurveEnabled": false,
+      "highlightWheel": {
+        "hue": 0,
+        "strength": 0
+      },
+      "highlights": 0,
+      "lightThreshold": 100,
+      "manualCropAspectRatio": "Free",
+      "midtoneWheel": {
+        "hue": 0,
+        "strength": 0
+      },
+      "perspectiveCrop": {
+        "bottomLeft": {
+          "x": 0.1,
+          "y": 0.9
+        },
+        "bottomRight": {
+          "x": 0.91,
+          "y": 0.92
+        },
+        "topLeft": {
+          "x": 0.08,
+          "y": 0.1
+        },
+        "topRight": {
+          "x": 0.93,
+          "y": 0.08
+        }
+      },
+      "photoAdjustments": {
+        "blacks": 0,
+        "brightness": 0,
+        "contrast": 0,
+        "exposureEV": 0,
+        "highlightCeiling": 0,
+        "highlights": 0,
+        "midtoneLevel": 0,
+        "saturation": 0,
+        "schemaVersion": 4,
+        "shadowFloor": 0,
+        "shadows": 0,
+        "temperatureShiftMired": 0,
+        "tint": 0,
+        "vibrance": 0,
+        "whites": 0
+      },
+      "redCurveControlPoints": [],
+      "redCurveEnabled": false,
+      "rotation": 0,
+      "saturation": 100,
+      "shadowWheel": {
+        "hue": 0,
+        "strength": 0
+      },
+      "shadows": 0,
+      "straightenAngle": 2,
+      "temperature": 0,
+      "tint": 0
+    },
+    "secondaryFullSHA256": "e442391e01b75284d26411cd55db2e96c7d18ef7b1463cd58c1b8f0b174e8f8c",
+    "secondaryParameters": {
+      "blueCurveControlPoints": [],
+      "blueCurveEnabled": false,
+      "borderCrop": 0,
+      "cropRectCoordinateSpace": "imageAxes",
+      "curveControlPoints": [],
+      "curveEnabled": false,
+      "darkThreshold": 25,
+      "densityC41Profile": {
+        "densityOffset": {
+          "blue": 0,
+          "green": 0,
+          "red": 0
+        },
+        "densitySlope": {
+          "blue": 1,
+          "green": 1,
+          "red": 1
+        }
+      },
+      "densityCorrection": {
+        "blueOutput": {
+          "blue": 1,
+          "green": 0,
+          "red": 0
+        },
+        "greenOutput": {
+          "blue": 0,
+          "green": 1,
+          "red": 0
+        },
+        "offset": {
+          "blue": 0,
+          "green": 0,
+          "red": 0
+        },
+        "redOutput": {
+          "blue": 0,
+          "green": 0,
+          "red": 1
+        }
+      },
+      "densityDisplayParams": {
+        "exposureEV": 0,
+        "maximumSceneGain": 16,
+        "toneMap": "linear",
+        "whiteBalance": {
+          "blue": 1,
+          "green": 1,
+          "red": 1
+        }
+      },
+      "densityPipelineEnabled": false,
+      "dustRepairs": [],
+      "filmBaseChosenByUser": true,
+      "filmDyeMixing": {
+        "blueFromGreen": 0,
+        "blueFromRed": 0,
+        "greenFromBlue": 0,
+        "greenFromRed": 0,
+        "redFromBlue": 0,
+        "redFromGreen": 0
+      },
+      "filmNegativeParams": {
+        "blueRatio": 0.86,
+        "calibratedColorProfile": "generic",
+        "calibratedMonochromeProfile": "generic",
+        "densityNeutralProtection": false,
+        "densityProfileID": "generic_c41",
+        "densityUnmixRGB": [1, -0.05, -0.02, -0.04, 1, -0.08, -0.01, -0.1, 1],
+        "densityUnmixStrength": 0.5,
+        "enabled": true,
+        "greenExp": 1.5,
+        "monochromeExposureEV": 0,
+        "redRatio": 1.36,
+        "rendering": "densityPrint"
+      },
+      "filmType": 1,
+      "flip": false,
+      "gamma": 0,
+      "greenCurveControlPoints": [],
+      "greenCurveEnabled": false,
+      "highlightWheel": {
+        "hue": 0,
+        "strength": 0
+      },
+      "highlights": 0,
+      "lightThreshold": 100,
+      "manualCropAspectRatio": "Free",
+      "midtoneWheel": {
+        "hue": 0,
+        "strength": 0
+      },
+      "perspectiveCrop": {
+        "bottomLeft": {
+          "x": 0.1,
+          "y": 0.9
+        },
+        "bottomRight": {
+          "x": 0.91,
+          "y": 0.92
+        },
+        "topLeft": {
+          "x": 0.08,
+          "y": 0.1
+        },
+        "topRight": {
+          "x": 0.93,
+          "y": 0.08
+        }
+      },
+      "photoAdjustments": {
+        "blacks": 0,
+        "brightness": 0,
+        "contrast": 0,
+        "exposureEV": 0,
+        "highlightCeiling": 0,
+        "highlights": 0,
+        "midtoneLevel": 0,
+        "saturation": 0,
+        "schemaVersion": 4,
+        "shadowFloor": 0,
+        "shadows": 0,
+        "temperatureShiftMired": 0,
+        "tint": 0,
+        "vibrance": 0,
+        "whites": 0
+      },
+      "redCurveControlPoints": [],
+      "redCurveEnabled": false,
+      "rotation": 0,
+      "saturation": 100,
+      "shadowWheel": {
+        "hue": 0,
+        "strength": 0
+      },
+      "shadows": 0,
+      "straightenAngle": 2,
+      "temperature": 0,
+      "tint": 0
+    },
+    "overviewMaximumDimension": 1024,
+    "detailRegion": {
+      "height": 960,
+      "width": 1344,
+      "x": 448,
+      "y": 320
+    },
+    "targetParameters": {
+      "blueCurveControlPoints": [],
+      "blueCurveEnabled": false,
+      "borderCrop": 0,
+      "cropRectCoordinateSpace": "imageAxes",
+      "curveControlPoints": [],
+      "curveEnabled": false,
+      "darkThreshold": 25,
+      "densityC41Profile": {
+        "densityOffset": {
+          "blue": 0,
+          "green": 0,
+          "red": 0
+        },
+        "densitySlope": {
+          "blue": 1,
+          "green": 1,
+          "red": 1
+        }
+      },
+      "densityCorrection": {
+        "blueOutput": {
+          "blue": 1,
+          "green": 0,
+          "red": 0
+        },
+        "greenOutput": {
+          "blue": 0,
+          "green": 1,
+          "red": 0
+        },
+        "offset": {
+          "blue": 0,
+          "green": 0,
+          "red": 0
+        },
+        "redOutput": {
+          "blue": 0,
+          "green": 0,
+          "red": 1
+        }
+      },
+      "densityDisplayParams": {
+        "exposureEV": 0,
+        "maximumSceneGain": 16,
+        "toneMap": "linear",
+        "whiteBalance": {
+          "blue": 1,
+          "green": 1,
+          "red": 1
+        }
+      },
+      "densityPipelineEnabled": false,
+      "dustRepairs": [],
+      "filmBaseChosenByUser": true,
+      "filmDyeMixing": {
+        "blueFromGreen": 0,
+        "blueFromRed": 0,
+        "greenFromBlue": 0,
+        "greenFromRed": 0,
+        "redFromBlue": 0,
+        "redFromGreen": 0
+      },
+      "filmNegativeParams": {
+        "blueRatio": 0.86,
+        "calibratedColorProfile": "generic",
+        "calibratedMonochromeProfile": "generic",
+        "densityNeutralProtection": false,
+        "densityProfileID": "generic_c41",
+        "densityUnmixRGB": [1, -0.05, -0.02, -0.04, 1, -0.08, -0.01, -0.1, 1],
+        "densityUnmixStrength": 0.5,
+        "enabled": true,
+        "greenExp": 1.5,
+        "monochromeExposureEV": 0,
+        "redRatio": 1.36,
+        "rendering": "densityPrint"
+      },
+      "filmType": 1,
+      "flip": false,
+      "gamma": 0,
+      "greenCurveControlPoints": [],
+      "greenCurveEnabled": false,
+      "highlightWheel": {
+        "hue": 0,
+        "strength": 0
+      },
+      "highlights": 0,
+      "lightThreshold": 100,
+      "manualCropAspectRatio": "Free",
+      "midtoneWheel": {
+        "hue": 0,
+        "strength": 0
+      },
+      "perspectiveCrop": {
+        "bottomLeft": {
+          "x": 0.1,
+          "y": 0.9
+        },
+        "bottomRight": {
+          "x": 0.91,
+          "y": 0.92
+        },
+        "topLeft": {
+          "x": 0.08,
+          "y": 0.1
+        },
+        "topRight": {
+          "x": 0.93,
+          "y": 0.08
+        }
+      },
+      "photoAdjustments": {
+        "blacks": 0,
+        "brightness": 0,
+        "contrast": 0,
+        "exposureEV": 0.25,
+        "highlightCeiling": 0,
+        "highlights": 0,
+        "midtoneLevel": 0,
+        "saturation": 0,
+        "schemaVersion": 4,
+        "shadowFloor": 0,
+        "shadows": 0,
+        "temperatureShiftMired": 0,
+        "tint": 0,
+        "vibrance": 0,
+        "whites": 0
+      },
+      "redCurveControlPoints": [],
+      "redCurveEnabled": false,
+      "rotation": 0,
+      "saturation": 100,
+      "shadowWheel": {
+        "hue": 0,
+        "strength": 0
+      },
+      "shadows": 0,
+      "straightenAngle": 2,
+      "temperature": 0,
+      "tint": 0
+    },
+    "pairOrders": [
+      ["warm", "revisit"],
+      ["revisit", "warm"],
+      ["warm", "revisit"]
+    ],
+    "pollingMilliseconds": 10,
+    "untimedPreparationExposureEV": [0.125, 0],
+    "geometryOwnerMeasurement": "Source-backed inference; selected preparation internals not counted"
+  },
+  "columnDefinitions": {
+    "timingsMilliseconds": ["observedViewportPublicationMilliseconds", "modelViewportInteractionMilliseconds", "viewportRenderMilliseconds", "viewportWorkerMilliseconds", "releaseToFullPublicationMilliseconds", "refinementRenderMilliseconds"],
+    "workCounters": ["fullSourceDecodes", "corrections", "renderedCacheHits", "statisticsComputations", "submittedSnapshots", "displayedRenders", "droppedSnapshots"],
+    "processMemory": ["physicalFootprintBytes", "processLifetimePeakPhysicalFootprintBytes", "reusableBytes"],
+    "stateValues": ["chargedPreviewBytes", "previewBudgetBytes", "sessions", "retainedCanvases", "physicalFootprintBytes", "processLifetimePeakPhysicalFootprintBytes", "reusableBytes"],
+    "traceEvents": ["stage", "milliseconds", "revision", "interactionMilliseconds", "exposureEV", "contrast", "sourceWidth", "sourceHeight", "rasterWidth", "rasterHeight", "usesProxy", "usesProxyOverview", "hasDetail", "renderer"],
+    "traceNullMeaning": "An absent optional field in the original event"
+  },
+  "runs": [
+    {
+      "id": "baseline-1",
+      "compiledCohort": "baseline",
+      "generatedAt": "2026-10-11T08:56:58Z",
+      "originalReport": {
+        "file": "dist/roadmap-loop-2026-10-10/detailed-baseline-1.json",
+        "sha256": "78f858352740a4c452bf376a29663981dd75bbf003619aafdd274cdc94d5470d"
+      },
+      "fullLog": {
+        "file": "dist/roadmap-loop-2026-10-10/detailed-baseline-1.log",
+        "sha256": "d65b303137622d9fad453bc549ec478bbbd7e30b1d74880c1b53fda11bac3fb7"
+      },
+      "reportedTests": 1,
+      "reportedFailures": 0,
+      "testRuntimeSeconds": 29.072,
+      "beforeVerification": {
+        "file": "dist/roadmap-loop-2026-10-10/detailed-baseline-1-before.json",
+        "sha256": "23afd53c2d01a1684c6d435125e18dd2435e58b52877befd5653efbcee0fa04e",
+        "verifiedAtUTC": "2026-10-11T08:56:24.711727+00:00"
+      },
+      "afterVerification": {
+        "file": "dist/roadmap-loop-2026-10-10/detailed-baseline-1-after.json",
+        "sha256": "aca88e7d3418b4ac1da8c2c5bc6021250822ba09915564fb37300c0e25e78598",
+        "verifiedAtUTC": "2026-10-11T08:58:12.626370+00:00"
+      },
+      "executionTimeSourceSHA256": {
+        "appModel": "9c388a8019960ad6af40836edf837916bc24672c47740f0837ff3e9e2bc1f09c",
+        "cpuPreparation": "b560ea54f72bacedab8f80b8ec02245853ac69f9be8eeea4d5bb48bc85763cc4",
+        "harness": "76979c555fc3a681918a552bcda9166453cf8358b2815405e15c02282577a41f",
+        "previewSessionCache": "e401bbfffa1281076072d2b1acc8bc90b92a1d2b0d0454f09ef620a565a9eaf8",
+        "viewportDemand": "40fd2ac29a3ac8e6530ec3821bd2d4d133d9dc97d73dd65ac6fb1c43683d51cd"
+      },
+      "executionTimeSourceMatchesCompiledCohort": true,
+      "runtimeExecutableName": "swiftpm-testing-helper",
+      "runtimeExecutableRole": "runtime executable",
+      "runtimeExecutableSHA256": "c5fc2f081babd734b89c150874b34cb5bc2f2dbfa4a203bdafdd3b96087f78a7",
+      "thermalStateAtStart": 0,
+      "memoryBeforeModel": [7635448, 7635448, 442368],
+      "samples": [
+        {
+          "arm": "warm",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 1,
+          "timingsMilliseconds": [90.563125, 79.609375, 79.390666, 79.36099999999988, 1046.883041, 1037.431708],
+          "viewportWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "before": {
+            "label": "warm 1 before detailed edit",
+            "values": [992053920, 3221225472, 2, 2, 204770064, 855067192, 2050162688],
+            "cumulativeCounters": [2, 6, 2, 5, 8, 8, 0]
+          },
+          "viewportPublished": {
+            "label": "warm 1 detail published",
+            "values": [992053920, 3221225472, 2, 2, 204786448, 855067192, 2061074432],
+            "cumulativeCounters": [2, 7, 2, 6, 9, 9, 0]
+          },
+          "afterRefinement": {
+            "label": "warm 1 full refinement settled",
+            "values": [992053920, 3221225472, 2, 2, 322734936, 855067192, 2061090816],
+            "cumulativeCounters": [2, 8, 2, 7, 10, 10, 0]
+          },
+          "events": [
+            ["gestureBegan", 5201.036417, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 5201.03725, null, 5201.037208, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 5201.159333, 10, 5201.037208, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 5201.189958, 10, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 5201.1975, 10, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 5280.5585, 10, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 5280.58075, 10, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 5280.667208, 10, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 5294.055375, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 5294.139, 11, 5294.122833, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 5294.179542, 11, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 5294.185792, 11, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 6331.570667, 11, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 6331.61125, 11, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 6333.178167, 11, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        },
+        {
+          "arm": "revisit",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 1,
+          "timingsMilliseconds": [308.248625, 307.872833, 307.627417, 307.59916599999997, 1027.792708, 1013.48275],
+          "viewportWorkCounters": [0, 1, 0, 0, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 2, 1, 1, 0],
+          "before": {
+            "label": "revisit 1 before detailed edit",
+            "values": [811059072, 3221225472, 2, 2, 204720984, 855067192, 2216493056],
+            "cumulativeCounters": [2, 11, 4, 9, 15, 15, 0]
+          },
+          "viewportPublished": {
+            "label": "revisit 1 detail published",
+            "values": [992053920, 3221225472, 2, 2, 204786544, 855067192, 2224259072],
+            "cumulativeCounters": [2, 12, 4, 9, 16, 16, 0]
+          },
+          "afterRefinement": {
+            "label": "revisit 1 full refinement settled",
+            "values": [992053920, 3221225472, 2, 2, 234310536, 855067192, 2224259072],
+            "cumulativeCounters": [2, 13, 4, 11, 17, 17, 0]
+          },
+          "revisit": {
+            "beforeDeparture": {
+              "label": "A before departure",
+              "values": [992053920, 3221225472, 2, 2, 204688216, 855067192, 2216493056],
+              "cumulativeCounters": [2, 11, 2, 9, 13, 13, 0]
+            },
+            "beforeReturn": {
+              "label": "B before cached A return",
+              "values": [811059072, 3221225472, 2, 2, 204720984, 855067192, 2216493056],
+              "cumulativeCounters": [2, 11, 3, 9, 14, 14, 0]
+            },
+            "afterReturn": {
+              "label": "A cached return settled",
+              "values": [811059072, 3221225472, 2, 2, 204720984, 855067192, 2216493056],
+              "cumulativeCounters": [2, 11, 4, 9, 15, 15, 0]
+            },
+            "returnWorkCounters": [0, 0, 1, 0, 1, 1, 0]
+          },
+          "events": [
+            ["gestureBegan", 7718.3567920000005, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 7718.357667, null, 7718.357625, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 7718.5075, 19, 7718.357625, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 7718.535542, 19, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 7718.539042, 19, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 8026.138208, 19, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 8026.162958, 19, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 8026.261292, 19, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 8029.36525, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 8029.418375, 20, 8029.402083, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 8029.460625, 20, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 8029.465583, 20, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 9042.9245, 20, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 9042.943417, 20, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 9044.568583, 20, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        },
+        {
+          "arm": "revisit",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 2,
+          "timingsMilliseconds": [308.330333, 307.025334, 306.770208, 306.7430409999997, 1022.403667, 1018.498666],
+          "viewportWorkCounters": [0, 1, 0, 0, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 2, 1, 1, 0],
+          "before": {
+            "label": "revisit 2 before detailed edit",
+            "values": [811059072, 3221225472, 2, 2, 204835720, 855067192, 2263269376],
+            "cumulativeCounters": [2, 16, 6, 13, 22, 22, 0]
+          },
+          "viewportPublished": {
+            "label": "revisit 2 detail published",
+            "values": [992053920, 3221225472, 2, 2, 204786568, 855067192, 2263285760],
+            "cumulativeCounters": [2, 17, 6, 13, 23, 23, 0]
+          },
+          "afterRefinement": {
+            "label": "revisit 2 full refinement settled",
+            "values": [992053920, 3221225472, 2, 2, 204786568, 855067192, 2266316800],
+            "cumulativeCounters": [2, 18, 6, 15, 24, 24, 0]
+          },
+          "revisit": {
+            "beforeDeparture": {
+              "label": "A before departure",
+              "values": [992053920, 3221225472, 2, 2, 204835720, 855067192, 2263269376],
+              "cumulativeCounters": [2, 16, 4, 13, 20, 20, 0]
+            },
+            "beforeReturn": {
+              "label": "B before cached A return",
+              "values": [811059072, 3221225472, 2, 2, 204835720, 855067192, 2263269376],
+              "cumulativeCounters": [2, 16, 5, 13, 21, 21, 0]
+            },
+            "afterReturn": {
+              "label": "A cached return settled",
+              "values": [811059072, 3221225472, 2, 2, 204835720, 855067192, 2263269376],
+              "cumulativeCounters": [2, 16, 6, 13, 22, 22, 0]
+            },
+            "returnWorkCounters": [0, 0, 1, 0, 1, 1, 0]
+          },
+          "events": [
+            ["gestureBegan", 10462.426625, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 10462.4275, null, 10462.427458, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 10462.588458, 28, 10462.427458, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 10462.616417, 28, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 10462.625292, 28, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 10769.368333, 28, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 10769.386625, 28, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 10769.483833, 28, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 10773.390292, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 10773.443917, 29, 10773.426707999999, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 10773.490125, 29, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 10773.493875, 29, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 11791.954542, 29, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 11791.988875, 29, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 11793.608791999999, 29, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        },
+        {
+          "arm": "warm",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 2,
+          "timingsMilliseconds": [81.063459, 79.65375, 79.395958, 79.37304199999926, 1024.7047910000001, 1009.819041],
+          "viewportWorkCounters": [0, 1, 0, 0, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 2, 1, 1, 0],
+          "before": {
+            "label": "warm 2 before detailed edit",
+            "values": [992053920, 3221225472, 2, 2, 204786568, 855067192, 2280128512],
+            "cumulativeCounters": [2, 21, 6, 17, 27, 27, 0]
+          },
+          "viewportPublished": {
+            "label": "warm 2 detail published",
+            "values": [992053920, 3221225472, 2, 2, 204786568, 855067192, 2280128512],
+            "cumulativeCounters": [2, 22, 6, 17, 28, 28, 0]
+          },
+          "afterRefinement": {
+            "label": "warm 2 full refinement settled",
+            "values": [992053920, 3221225472, 2, 2, 204786568, 855067192, 2280128512],
+            "cumulativeCounters": [2, 23, 6, 19, 29, 29, 0]
+          },
+          "events": [
+            ["gestureBegan", 13091.034375, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 13091.035292, null, 13091.035292, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 13091.202292, 33, 13091.035292, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 13091.23225, 33, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 13091.23825, 33, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 13170.611292, 33, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 13170.628208, 33, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 13170.723208, 33, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 13174.765667, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 13174.818667, 34, 13174.801167, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 13174.853708, 34, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 13174.859125, 34, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 14184.657167, 34, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 14184.672875, 34, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 14186.332542, 34, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        },
+        {
+          "arm": "warm",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 3,
+          "timingsMilliseconds": [90.59825, 81.76275, 81.499375, 81.44558300000062, 1018.356833, 1006.636208],
+          "viewportWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "before": {
+            "label": "warm 3 before detailed edit",
+            "values": [992053920, 3221225472, 2, 2, 204786568, 855067192, 2280161280],
+            "cumulativeCounters": [2, 26, 6, 21, 32, 32, 0]
+          },
+          "viewportPublished": {
+            "label": "warm 3 detail published",
+            "values": [992053920, 3221225472, 2, 2, 204786568, 855067192, 2280161280],
+            "cumulativeCounters": [2, 27, 6, 22, 33, 33, 0]
+          },
+          "afterRefinement": {
+            "label": "warm 3 full refinement settled",
+            "values": [992053920, 3221225472, 2, 2, 204786568, 855067192, 2280177664],
+            "cumulativeCounters": [2, 28, 6, 23, 34, 34, 0]
+          },
+          "events": [
+            ["gestureBegan", 15496.867667, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 15496.868625, null, 15496.868583, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 15497.024917, 38, 15496.868583, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 15497.058292, 38, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 15497.064042, 38, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 15578.509625, 38, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 15578.557792, 38, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 15578.661583, 38, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 15589.925333, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 15589.983542, 39, 15589.963458, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 15590.017667, 39, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 15590.022417, 39, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 16596.629042, 39, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 16596.653958, 39, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 16598.334792, 39, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        },
+        {
+          "arm": "revisit",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 3,
+          "timingsMilliseconds": [310.264917, 307.281041, 307.04825, 307.02454099999886, 1021.051083, 1014.276625],
+          "viewportWorkCounters": [0, 1, 0, 0, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 2, 1, 1, 0],
+          "before": {
+            "label": "revisit 3 before detailed edit",
+            "values": [811059072, 3221225472, 2, 2, 204786568, 855067192, 2284470272],
+            "cumulativeCounters": [2, 31, 8, 25, 39, 39, 0]
+          },
+          "viewportPublished": {
+            "label": "revisit 3 detail published",
+            "values": [992053920, 3221225472, 2, 2, 211258248, 855067192, 2284503040],
+            "cumulativeCounters": [2, 32, 8, 25, 40, 40, 0]
+          },
+          "afterRefinement": {
+            "label": "revisit 3 full refinement settled",
+            "values": [992053920, 3221225472, 2, 2, 211258248, 855067192, 2284503040],
+            "cumulativeCounters": [2, 33, 8, 27, 41, 41, 0]
+          },
+          "revisit": {
+            "beforeDeparture": {
+              "label": "A before departure",
+              "values": [992053920, 3221225472, 2, 2, 204786568, 855067192, 2284470272],
+              "cumulativeCounters": [2, 31, 6, 25, 37, 37, 0]
+            },
+            "beforeReturn": {
+              "label": "B before cached A return",
+              "values": [811059072, 3221225472, 2, 2, 204786568, 855067192, 2284470272],
+              "cumulativeCounters": [2, 31, 7, 25, 38, 38, 0]
+            },
+            "afterReturn": {
+              "label": "A cached return settled",
+              "values": [811059072, 3221225472, 2, 2, 204786568, 855067192, 2284470272],
+              "cumulativeCounters": [2, 31, 8, 25, 39, 39, 0]
+            },
+            "returnWorkCounters": [0, 0, 1, 0, 1, 1, 0]
+          },
+          "events": [
+            ["gestureBegan", 17997.027875, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 17997.028583, null, 17997.028542, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 17997.186, 47, 17997.028542, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 17997.214792, 47, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 17997.219042, 47, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 18304.243583, 47, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 18304.263, 47, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 18304.334458, 47, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 18309.93875, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 18309.981125, 48, 18309.96675, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 18310.021125, 48, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 18310.027375, 48, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 19324.261625, 48, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 19324.29775, 48, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 19325.971875, 48, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        }
+      ],
+      "oracles": [
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        },
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        },
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        },
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        },
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        },
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        }
+      ],
+      "summary": {
+        "observedViewportPublicationMilliseconds": {
+          "warm": {
+            "minimum": 81.063459,
+            "median": 90.563125,
+            "maximum": 90.59825,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 308.248625,
+            "median": 308.330333,
+            "maximum": 310.264917,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": 217.6855,
+            "median": 219.66666700000002,
+            "maximum": 227.266874,
+            "samples": 3
+          }
+        },
+        "modelViewportInteractionMilliseconds": {
+          "warm": {
+            "minimum": 79.609375,
+            "median": 79.65375,
+            "maximum": 81.76275,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 307.025334,
+            "median": 307.281041,
+            "maximum": 307.872833,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": 225.51829100000003,
+            "median": 227.37158399999998,
+            "maximum": 228.263458,
+            "samples": 3
+          }
+        },
+        "viewportRenderMilliseconds": {
+          "warm": {
+            "minimum": 79.390666,
+            "median": 79.395958,
+            "maximum": 81.499375,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 306.770208,
+            "median": 307.04825,
+            "maximum": 307.627417,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": 225.548875,
+            "median": 227.37425000000002,
+            "maximum": 228.23675099999997,
+            "samples": 3
+          }
+        },
+        "viewportWorkerMilliseconds": {
+          "warm": {
+            "minimum": 79.36099999999988,
+            "median": 79.37304199999926,
+            "maximum": 81.44558300000062,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 306.7430409999997,
+            "median": 307.02454099999886,
+            "maximum": 307.59916599999997,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": 225.57895799999824,
+            "median": 227.36999900000046,
+            "maximum": 228.2381660000001,
+            "samples": 3
+          }
+        },
+        "releaseToFullPublicationMilliseconds": {
+          "warm": {
+            "minimum": 1018.356833,
+            "median": 1024.7047910000001,
+            "maximum": 1046.883041,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 1021.051083,
+            "median": 1022.403667,
+            "maximum": 1027.792708,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": -19.0903330000001,
+            "median": -2.3011240000000726,
+            "maximum": 2.6942499999998972,
+            "samples": 3
+          }
+        },
+        "refinementRenderMilliseconds": {
+          "warm": {
+            "minimum": 1006.636208,
+            "median": 1009.819041,
+            "maximum": 1037.431708,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 1013.48275,
+            "median": 1014.276625,
+            "maximum": 1018.498666,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": -23.94895800000006,
+            "median": 7.640416999999957,
+            "maximum": 8.679624999999987,
+            "samples": 3
+          }
+        }
+      },
+      "beforeOracle": {
+        "label": "all timed arms settled before CPU oracles",
+        "values": [992053920, 3221225472, 2, 2, 204802952, 855067192, 2290958336],
+        "cumulativeCounters": [2, 33, 8, 27, 41, 41, 0]
+      },
+      "afterCloseAll": {
+        "label": "Close All with test source guard still alive",
+        "values": [0, 3221225472, 0, 0, 87412384, 855067192, 3520675840],
+        "cumulativeCounters": [2, 33, 8, 27, 41, 41, 0]
+      },
+      "memoryAfterVerifiedModelRelease": [87412384, 855067192, 3520675840]
+    },
+    {
+      "id": "current-1",
+      "compiledCohort": "current",
+      "generatedAt": "2026-10-11T08:58:44Z",
+      "originalReport": {
+        "file": "dist/roadmap-loop-2026-10-10/detailed-current-1.json",
+        "sha256": "d4bab622767ba87c9c770acf93f3be6d4ce82e6c6ba848735a09164ccf749290"
+      },
+      "fullLog": {
+        "file": "dist/roadmap-loop-2026-10-10/detailed-current-1.log",
+        "sha256": "24919a8f56070a91d13f2f440dca446d33e0b7deb9809104af91dee2436d416e"
+      },
+      "reportedTests": 1,
+      "reportedFailures": 0,
+      "testRuntimeSeconds": 28.206,
+      "beforeVerification": {
+        "file": "dist/roadmap-loop-2026-10-10/detailed-current-1-before.json",
+        "sha256": "4a2f4d77c923cf90fb46edd54ac10b82b900a180209e60f9de33886a2d026668",
+        "verifiedAtUTC": "2026-10-11T08:58:12.686692+00:00"
+      },
+      "afterVerification": {
+        "file": "dist/roadmap-loop-2026-10-10/detailed-current-1-after.json",
+        "sha256": "d27a7778170204b280450077afe46537e523991960bc893b3d8ddc6af3980005",
+        "verifiedAtUTC": "2026-10-11T08:59:22.877212+00:00"
+      },
+      "executionTimeSourceSHA256": {
+        "appModel": "1a433d19996b758c00bbd8329dfd68e37b5488cb9cf13bb0bcb62f1920aa57c7",
+        "cpuPreparation": "08d6401af0eecbed592a30027e2457132be5ab8864699a04f619c5421f2852a8",
+        "harness": "76979c555fc3a681918a552bcda9166453cf8358b2815405e15c02282577a41f",
+        "previewSessionCache": "1182b67d30566713fef16e339f17c4e0ddc127efbfe9f16b742b88fcee6cc8d6",
+        "viewportDemand": "40fd2ac29a3ac8e6530ec3821bd2d4d133d9dc97d73dd65ac6fb1c43683d51cd"
+      },
+      "executionTimeSourceMatchesCompiledCohort": true,
+      "runtimeExecutableName": "swiftpm-testing-helper",
+      "runtimeExecutableRole": "runtime executable",
+      "runtimeExecutableSHA256": "c5fc2f081babd734b89c150874b34cb5bc2f2dbfa4a203bdafdd3b96087f78a7",
+      "thermalStateAtStart": 0,
+      "memoryBeforeModel": [7700984, 7700984, 524288],
+      "samples": [
+        {
+          "arm": "warm",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 1,
+          "timingsMilliseconds": [90.479458, 79.143083, 78.934958, 78.90891599999941, 1052.295958, 1040.452375],
+          "viewportWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "before": {
+            "label": "warm 1 before detailed edit",
+            "values": [1168766400, 3221225472, 2, 2, 559680536, 856607408, 1864433664],
+            "cumulativeCounters": [2, 6, 2, 5, 8, 8, 0]
+          },
+          "viewportPublished": {
+            "label": "warm 1 detail published",
+            "values": [1168766400, 3221225472, 2, 2, 559696920, 856607408, 1872216064],
+            "cumulativeCounters": [2, 7, 2, 6, 9, 9, 0]
+          },
+          "afterRefinement": {
+            "label": "warm 1 full refinement settled",
+            "values": [1168766400, 3221225472, 2, 2, 677661792, 856607408, 1872216064],
+            "cumulativeCounters": [2, 8, 2, 7, 10, 10, 0]
+          },
+          "events": [
+            ["gestureBegan", 4927.638333, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 4927.639, null, 4927.638958, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 4927.758, 10, 4927.638958, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 4927.782083, 10, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 4927.788875, 10, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 5006.697791, 10, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 5006.717, 10, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 5006.804, 10, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 5020.533708, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 5020.606583, 11, 5020.590458, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 5020.64825, 11, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 5020.654416, 11, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 6061.073666, 11, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 6061.100541, 11, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 6062.811458, 11, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        },
+        {
+          "arm": "revisit",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 1,
+          "timingsMilliseconds": [86.201, 80.447458, 80.157917, 80.13129200000003, 1018.337709, 1013.300292],
+          "viewportWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "before": {
+            "label": "revisit 1 before detailed edit",
+            "values": [1168766400, 3221225472, 2, 2, 559762528, 856607408, 2016149504],
+            "cumulativeCounters": [2, 11, 4, 9, 15, 15, 0]
+          },
+          "viewportPublished": {
+            "label": "revisit 1 detail published",
+            "values": [1168766400, 3221225472, 2, 2, 560598112, 856607408, 2023899136],
+            "cumulativeCounters": [2, 12, 4, 10, 16, 16, 0]
+          },
+          "afterRefinement": {
+            "label": "revisit 1 full refinement settled",
+            "values": [1168766400, 3221225472, 2, 2, 589319288, 856607408, 2027765760],
+            "cumulativeCounters": [2, 13, 4, 11, 17, 17, 0]
+          },
+          "revisit": {
+            "beforeDeparture": {
+              "label": "A before departure",
+              "values": [1168766400, 3221225472, 2, 2, 559762528, 856607408, 2016149504],
+              "cumulativeCounters": [2, 11, 2, 9, 13, 13, 0]
+            },
+            "beforeReturn": {
+              "label": "B before cached A return",
+              "values": [1168766400, 3221225472, 2, 2, 559762528, 856607408, 2016149504],
+              "cumulativeCounters": [2, 11, 3, 9, 14, 14, 0]
+            },
+            "afterReturn": {
+              "label": "A cached return settled",
+              "values": [1168766400, 3221225472, 2, 2, 559762528, 856607408, 2016149504],
+              "cumulativeCounters": [2, 11, 4, 9, 15, 15, 0]
+            },
+            "returnWorkCounters": [0, 0, 1, 0, 1, 1, 0]
+          },
+          "events": [
+            ["gestureBegan", 7469.753333, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 7469.754541, null, 7469.7545, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 7469.916125, 19, 7469.7545, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 7469.950208, 19, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 7469.956333, 19, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 7550.087625, 19, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 7550.108625, 19, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 7550.236416, 19, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 7558.357625, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 7558.40775, 20, 7558.388083, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 7558.4505, 20, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 7558.4598750000005, 20, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 8571.710958, 20, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 8571.750916, 20, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 8573.377416, 20, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        },
+        {
+          "arm": "revisit",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 2,
+          "timingsMilliseconds": [90.58525, 85.092958, 84.832708, 84.8119999999999, 1031.193583, 1026.30775],
+          "viewportWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "before": {
+            "label": "revisit 2 before detailed edit",
+            "values": [1168766400, 3221225472, 2, 2, 560008312, 856607408, 2086830080],
+            "cumulativeCounters": [2, 16, 6, 13, 22, 22, 0]
+          },
+          "viewportPublished": {
+            "label": "revisit 2 detail published",
+            "values": [1168766400, 3221225472, 2, 2, 559942776, 856607408, 2086830080],
+            "cumulativeCounters": [2, 17, 6, 14, 23, 23, 0]
+          },
+          "afterRefinement": {
+            "label": "revisit 2 full refinement settled",
+            "values": [1168766400, 3221225472, 2, 2, 559959160, 856607408, 2086830080],
+            "cumulativeCounters": [2, 18, 6, 15, 24, 24, 0]
+          },
+          "revisit": {
+            "beforeDeparture": {
+              "label": "A before departure",
+              "values": [1168766400, 3221225472, 2, 2, 560008312, 856607408, 2086830080],
+              "cumulativeCounters": [2, 16, 4, 13, 20, 20, 0]
+            },
+            "beforeReturn": {
+              "label": "B before cached A return",
+              "values": [1168766400, 3221225472, 2, 2, 560008312, 856607408, 2086830080],
+              "cumulativeCounters": [2, 16, 5, 13, 21, 21, 0]
+            },
+            "afterReturn": {
+              "label": "A cached return settled",
+              "values": [1168766400, 3221225472, 2, 2, 560008312, 856607408, 2086830080],
+              "cumulativeCounters": [2, 16, 6, 13, 22, 22, 0]
+            },
+            "returnWorkCounters": [0, 0, 1, 0, 1, 1, 0]
+          },
+          "events": [
+            ["gestureBegan", 9992.681875, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 9992.68275, null, 9992.682708, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 9992.830249999999, 28, 9992.682708, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 9992.858041, 28, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 9992.861583, 28, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 10077.673583, 28, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 10077.69075, 28, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 10077.807208, 28, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 10085.664, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 10085.71675, 29, 10085.697083, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 10085.751625, 29, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 10085.756375, 29, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 11112.025166, 29, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 11112.059375, 29, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 11113.803833, 29, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        },
+        {
+          "arm": "warm",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 2,
+          "timingsMilliseconds": [84.856916, 80.757084, 80.463458, 80.43895900000098, 1043.727458, 1031.59325],
+          "viewportWorkCounters": [0, 1, 0, 0, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 2, 1, 1, 0],
+          "before": {
+            "label": "warm 2 before detailed edit",
+            "values": [1168766400, 3221225472, 2, 2, 560008312, 856607408, 2097840128],
+            "cumulativeCounters": [2, 21, 6, 17, 27, 27, 0]
+          },
+          "viewportPublished": {
+            "label": "warm 2 detail published",
+            "values": [1168766400, 3221225472, 2, 2, 560008312, 856607408, 2104131584],
+            "cumulativeCounters": [2, 22, 6, 17, 28, 28, 0]
+          },
+          "afterRefinement": {
+            "label": "warm 2 full refinement settled",
+            "values": [1168766400, 3221225472, 2, 2, 560008312, 856607408, 2104131584],
+            "cumulativeCounters": [2, 23, 6, 19, 29, 29, 0]
+          },
+          "events": [
+            ["gestureBegan", 12417.105666, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 12417.106791, null, 12417.106791, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 12417.27325, 33, 12417.106791, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 12417.312916, 33, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 12417.320666, 33, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 12497.759625, 33, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 12497.776458, 33, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 12497.898083, 33, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 12504.519083, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 12504.587, 34, 12504.567833, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 12504.623958, 34, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 12504.630041, 34, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 13536.188708, 34, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 13536.217375, 34, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 13537.851583, 34, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        },
+        {
+          "arm": "warm",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 3,
+          "timingsMilliseconds": [86.276875, 81.357667, 81.053625, 81.01558300000033, 1013.619583, 1008.211042],
+          "viewportWorkCounters": [0, 1, 0, 0, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 2, 1, 1, 0],
+          "before": {
+            "label": "warm 3 before detailed edit",
+            "values": [1168766400, 3221225472, 2, 2, 560057464, 856607408, 2115076096],
+            "cumulativeCounters": [2, 26, 6, 21, 32, 32, 0]
+          },
+          "viewportPublished": {
+            "label": "warm 3 detail published",
+            "values": [1168766400, 3221225472, 2, 2, 560057464, 856607408, 2115092480],
+            "cumulativeCounters": [2, 27, 6, 21, 33, 33, 0]
+          },
+          "afterRefinement": {
+            "label": "warm 3 full refinement settled",
+            "values": [1168766400, 3221225472, 2, 2, 560073848, 856607408, 2115092480],
+            "cumulativeCounters": [2, 28, 6, 23, 34, 34, 0]
+          },
+          "events": [
+            ["gestureBegan", 14825.749875, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 14825.75175, null, 14825.751708, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 14825.915708, 38, 14825.751708, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 14825.964, 38, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 14825.972708, 38, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 14906.988291, 38, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 14907.017666, 38, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 14907.143041, 38, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 14914.460291, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 14914.526, 39, 14914.506708, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 14914.559583, 39, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 14914.565, 39, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 15922.73775, 39, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 15922.770916, 39, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 15924.548708, 39, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        },
+        {
+          "arm": "revisit",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 3,
+          "timingsMilliseconds": [90.58025, 81.720375, 81.46075, 81.43366700000115, 1023.903, 1019.826625],
+          "viewportWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "before": {
+            "label": "revisit 3 before detailed edit",
+            "values": [1168766400, 3221225472, 2, 2, 560106616, 856607408, 2115092480],
+            "cumulativeCounters": [2, 31, 8, 25, 39, 39, 0]
+          },
+          "viewportPublished": {
+            "label": "revisit 3 detail published",
+            "values": [1168766400, 3221225472, 2, 2, 560106616, 856607408, 2129149952],
+            "cumulativeCounters": [2, 32, 8, 26, 40, 40, 0]
+          },
+          "afterRefinement": {
+            "label": "revisit 3 full refinement settled",
+            "values": [1168766400, 3221225472, 2, 2, 560073848, 856607408, 2129199104],
+            "cumulativeCounters": [2, 33, 8, 27, 41, 41, 0]
+          },
+          "revisit": {
+            "beforeDeparture": {
+              "label": "A before departure",
+              "values": [1168766400, 3221225472, 2, 2, 560106616, 856607408, 2115092480],
+              "cumulativeCounters": [2, 31, 6, 25, 37, 37, 0]
+            },
+            "beforeReturn": {
+              "label": "B before cached A return",
+              "values": [1168766400, 3221225472, 2, 2, 560106616, 856607408, 2115092480],
+              "cumulativeCounters": [2, 31, 7, 25, 38, 38, 0]
+            },
+            "afterReturn": {
+              "label": "A cached return settled",
+              "values": [1168766400, 3221225472, 2, 2, 560106616, 856607408, 2115092480],
+              "cumulativeCounters": [2, 31, 8, 25, 39, 39, 0]
+            },
+            "returnWorkCounters": [0, 0, 1, 0, 1, 1, 0]
+          },
+          "events": [
+            ["gestureBegan", 17339.973083, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 17339.974333, null, 17339.974291, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 17340.129708, 47, 17339.974291, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 17340.166208, 47, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 17340.171333, 47, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 17421.605, 47, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 17421.627125, 47, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 17421.721666, 47, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 17433.000166, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 17433.062833, 48, 17433.04225, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 17433.106416, 48, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 17433.112583, 48, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 18452.902083, 48, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 18452.933083, 48, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 18454.592958, 48, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        }
+      ],
+      "oracles": [
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        },
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        },
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        },
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        },
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        },
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        }
+      ],
+      "summary": {
+        "observedViewportPublicationMilliseconds": {
+          "warm": {
+            "minimum": 84.856916,
+            "median": 86.276875,
+            "maximum": 90.479458,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 86.201,
+            "median": 90.58025,
+            "maximum": 90.58525,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": -4.2784580000000005,
+            "median": 4.303375000000003,
+            "maximum": 5.728334000000004,
+            "samples": 3
+          }
+        },
+        "modelViewportInteractionMilliseconds": {
+          "warm": {
+            "minimum": 79.143083,
+            "median": 80.757084,
+            "maximum": 81.357667,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 80.447458,
+            "median": 81.720375,
+            "maximum": 85.092958,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": 0.3627079999999978,
+            "median": 1.3043749999999932,
+            "maximum": 4.33587399999999,
+            "samples": 3
+          }
+        },
+        "viewportRenderMilliseconds": {
+          "warm": {
+            "minimum": 78.934958,
+            "median": 80.463458,
+            "maximum": 81.053625,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 80.157917,
+            "median": 81.46075,
+            "maximum": 84.832708,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": 0.40712500000000773,
+            "median": 1.222959000000003,
+            "maximum": 4.369249999999994,
+            "samples": 3
+          }
+        },
+        "viewportWorkerMilliseconds": {
+          "warm": {
+            "minimum": 78.90891599999941,
+            "median": 80.43895900000098,
+            "maximum": 81.01558300000033,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 80.13129200000003,
+            "median": 81.43366700000115,
+            "maximum": 84.8119999999999,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": 0.41808400000081747,
+            "median": 1.2223760000006223,
+            "maximum": 4.373040999998921,
+            "samples": 3
+          }
+        },
+        "releaseToFullPublicationMilliseconds": {
+          "warm": {
+            "minimum": 1013.619583,
+            "median": 1043.727458,
+            "maximum": 1052.295958,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 1018.337709,
+            "median": 1023.903,
+            "maximum": 1031.193583,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": -33.95824899999991,
+            "median": -12.53387500000008,
+            "maximum": 10.283416999999986,
+            "samples": 3
+          }
+        },
+        "refinementRenderMilliseconds": {
+          "warm": {
+            "minimum": 1008.211042,
+            "median": 1031.59325,
+            "maximum": 1040.452375,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 1013.300292,
+            "median": 1019.826625,
+            "maximum": 1026.30775,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": -27.15208300000006,
+            "median": -5.285499999999956,
+            "maximum": 11.615583000000015,
+            "samples": 3
+          }
+        }
+      },
+      "beforeOracle": {
+        "label": "all timed arms settled before CPU oracles",
+        "values": [1168766400, 3221225472, 2, 2, 560073848, 856607408, 2129199104],
+        "cumulativeCounters": [2, 33, 8, 27, 41, 41, 0]
+      },
+      "afterCloseAll": {
+        "label": "Close All with test source guard still alive",
+        "values": [0, 3221225472, 0, 0, 89264040, 856607408, 3699982336],
+        "cumulativeCounters": [2, 33, 8, 27, 41, 41, 0]
+      },
+      "memoryAfterVerifiedModelRelease": [89264040, 856607408, 3699982336]
+    },
+    {
+      "id": "baseline-recheck",
+      "compiledCohort": "baseline",
+      "generatedAt": "2026-10-11T08:59:55Z",
+      "originalReport": {
+        "file": "dist/roadmap-loop-2026-10-10/detailed-baseline-recheck.json",
+        "sha256": "4fa29c45ce54c8480542fac1aaacd56aa5af7bcd72e2e1ecaf3012dbd8eadee8"
+      },
+      "fullLog": {
+        "file": "dist/roadmap-loop-2026-10-10/detailed-baseline-recheck.log",
+        "sha256": "56a6483f8005a427a5270431b9e1e9b94ebe407c21dd7e829ce7664fbb8019e6"
+      },
+      "reportedTests": 1,
+      "reportedFailures": 0,
+      "testRuntimeSeconds": 29.179,
+      "beforeVerification": {
+        "file": "dist/roadmap-loop-2026-10-10/detailed-baseline-recheck-before.json",
+        "sha256": "8f3bc7390b71ff912a14457a19bf4720d8d6debd1b6e1698225125e15be42393",
+        "verifiedAtUTC": "2026-10-11T08:59:22.939375+00:00"
+      },
+      "afterVerification": {
+        "file": "dist/roadmap-loop-2026-10-10/detailed-baseline-recheck-after.json",
+        "sha256": "547fa16a90c2cad15af065018b584a7c6f32e5555a691e5fe7e7db0bc0205bb3",
+        "verifiedAtUTC": "2026-10-11T09:00:24.551381+00:00"
+      },
+      "executionTimeSourceSHA256": {
+        "appModel": "9c388a8019960ad6af40836edf837916bc24672c47740f0837ff3e9e2bc1f09c",
+        "cpuPreparation": "b560ea54f72bacedab8f80b8ec02245853ac69f9be8eeea4d5bb48bc85763cc4",
+        "harness": "76979c555fc3a681918a552bcda9166453cf8358b2815405e15c02282577a41f",
+        "previewSessionCache": "e401bbfffa1281076072d2b1acc8bc90b92a1d2b0d0454f09ef620a565a9eaf8",
+        "viewportDemand": "40fd2ac29a3ac8e6530ec3821bd2d4d133d9dc97d73dd65ac6fb1c43683d51cd"
+      },
+      "executionTimeSourceMatchesCompiledCohort": true,
+      "runtimeExecutableName": "swiftpm-testing-helper",
+      "runtimeExecutableRole": "runtime executable",
+      "runtimeExecutableSHA256": "c5fc2f081babd734b89c150874b34cb5bc2f2dbfa4a203bdafdd3b96087f78a7",
+      "thermalStateAtStart": 0,
+      "memoryBeforeModel": [7815720, 7815720, 442368],
+      "samples": [
+        {
+          "arm": "warm",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 1,
+          "timingsMilliseconds": [85.650458, 79.029792, 78.748208, 78.71374999999989, 1027.820125, 1025.962833],
+          "viewportWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "before": {
+            "label": "warm 1 before detailed edit",
+            "values": [992053920, 3221225472, 2, 2, 188009496, 838503208, 2086862848],
+            "cumulativeCounters": [2, 6, 2, 5, 8, 8, 0]
+          },
+          "viewportPublished": {
+            "label": "warm 1 detail published",
+            "values": [992053920, 3221225472, 2, 2, 194497560, 838503208, 2100871168],
+            "cumulativeCounters": [2, 7, 2, 6, 9, 9, 0]
+          },
+          "afterRefinement": {
+            "label": "warm 1 full refinement settled",
+            "values": [992053920, 3221225472, 2, 2, 312413280, 838503208, 2100887552],
+            "cumulativeCounters": [2, 8, 2, 7, 10, 10, 0]
+          },
+          "events": [
+            ["gestureBegan", 5296.764125, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 5296.766167, null, 5296.766125, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 5296.928458, 10, 5296.766125, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 5296.97125, 10, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 5296.980542, 10, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 5375.694292, 10, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 5375.719542, 10, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 5375.832958, 10, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 5385.092375, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 5385.174083, 11, 5385.154417, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 5385.209583, 11, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 5385.219958, 11, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 6411.135042, 11, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 6411.172542, 11, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 6412.864375, 11, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        },
+        {
+          "arm": "revisit",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 1,
+          "timingsMilliseconds": [309.790667, 305.638791, 305.375041, 305.3498330000002, 1007.73325, 997.359541],
+          "viewportWorkCounters": [0, 1, 0, 0, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 2, 1, 1, 0],
+          "before": {
+            "label": "revisit 1 before detailed edit",
+            "values": [811059072, 3221225472, 2, 2, 187976800, 838503208, 2252931072],
+            "cumulativeCounters": [2, 11, 4, 9, 15, 15, 0]
+          },
+          "viewportPublished": {
+            "label": "revisit 1 detail published",
+            "values": [992053920, 3221225472, 2, 2, 194432096, 838503208, 2256125952],
+            "cumulativeCounters": [2, 12, 4, 9, 16, 16, 0]
+          },
+          "afterRefinement": {
+            "label": "revisit 1 full refinement settled",
+            "values": [992053920, 3221225472, 2, 2, 223923320, 838503208, 2256125952],
+            "cumulativeCounters": [2, 13, 4, 11, 17, 17, 0]
+          },
+          "revisit": {
+            "beforeDeparture": {
+              "label": "A before departure",
+              "values": [992053920, 3221225472, 2, 2, 187976800, 838503208, 2252931072],
+              "cumulativeCounters": [2, 11, 2, 9, 13, 13, 0]
+            },
+            "beforeReturn": {
+              "label": "B before cached A return",
+              "values": [811059072, 3221225472, 2, 2, 187976800, 838503208, 2252931072],
+              "cumulativeCounters": [2, 11, 3, 9, 14, 14, 0]
+            },
+            "afterReturn": {
+              "label": "A cached return settled",
+              "values": [811059072, 3221225472, 2, 2, 187976800, 838503208, 2252931072],
+              "cumulativeCounters": [2, 11, 4, 9, 15, 15, 0]
+            },
+            "returnWorkCounters": [0, 0, 1, 0, 1, 1, 0]
+          },
+          "events": [
+            ["gestureBegan", 7814.572292, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 7814.573125, null, 7814.573042, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 7814.734625, 19, 7814.573042, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 7814.761458, 19, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 7814.765292, 19, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 8120.115125, 19, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 8120.1365, 19, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 8120.246167, 19, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 8127.063292, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 8127.116542, 20, 8127.09925, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 8127.16225, 20, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 8127.167208, 20, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 9124.492, 20, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 9124.521875, 20, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 9126.206917, 20, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        },
+        {
+          "arm": "revisit",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 2,
+          "timingsMilliseconds": [313.994292, 307.503459, 307.245, 307.22099999999955, 1014.285708, 1009.430042],
+          "viewportWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "before": {
+            "label": "revisit 2 before detailed edit",
+            "values": [811059072, 3221225472, 2, 2, 188026000, 838503208, 2324578304],
+            "cumulativeCounters": [2, 16, 6, 13, 22, 22, 0]
+          },
+          "viewportPublished": {
+            "label": "revisit 2 detail published",
+            "values": [992053920, 3221225472, 2, 2, 188812432, 838503208, 2327789568],
+            "cumulativeCounters": [2, 17, 6, 14, 23, 23, 0]
+          },
+          "afterRefinement": {
+            "label": "revisit 2 full refinement settled",
+            "values": [992053920, 3221225472, 2, 2, 188026000, 838503208, 2328592384],
+            "cumulativeCounters": [2, 18, 6, 15, 24, 24, 0]
+          },
+          "revisit": {
+            "beforeDeparture": {
+              "label": "A before departure",
+              "values": [992053920, 3221225472, 2, 2, 188026000, 838503208, 2324578304],
+              "cumulativeCounters": [2, 16, 4, 13, 20, 20, 0]
+            },
+            "beforeReturn": {
+              "label": "B before cached A return",
+              "values": [811059072, 3221225472, 2, 2, 188026000, 838503208, 2324578304],
+              "cumulativeCounters": [2, 16, 5, 13, 21, 21, 0]
+            },
+            "afterReturn": {
+              "label": "A cached return settled",
+              "values": [811059072, 3221225472, 2, 2, 188026000, 838503208, 2324578304],
+              "cumulativeCounters": [2, 16, 6, 13, 22, 22, 0]
+            },
+            "returnWorkCounters": [0, 0, 1, 0, 1, 1, 0]
+          },
+          "events": [
+            ["gestureBegan", 10514.898292, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 10514.899792, null, 10514.899708, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 10515.078458, 28, 10514.899708, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 10515.113375, 28, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 10515.117667, 28, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 10822.338667, 28, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 10822.3585, 28, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 10822.435583, 28, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 10831.551042, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 10831.594375, 29, 10831.579125, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 10831.626542, 29, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 10831.636375, 29, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 11841.021792, 29, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 11841.056583, 29, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 11842.782083, 29, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        },
+        {
+          "arm": "warm",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 2,
+          "timingsMilliseconds": [90.565708, 81.180542, 80.870709, 80.83633399999962, 1041.38875, 1031.39575],
+          "viewportWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "before": {
+            "label": "warm 2 before detailed edit",
+            "values": [992053920, 3221225472, 2, 2, 188026000, 838503208, 2353790976],
+            "cumulativeCounters": [2, 21, 6, 17, 27, 27, 0]
+          },
+          "viewportPublished": {
+            "label": "warm 2 detail published",
+            "values": [992053920, 3221225472, 2, 2, 188042384, 838503208, 2361262080],
+            "cumulativeCounters": [2, 22, 6, 18, 28, 28, 0]
+          },
+          "afterRefinement": {
+            "label": "warm 2 full refinement settled",
+            "values": [992053920, 3221225472, 2, 2, 188042384, 838503208, 2367307776],
+            "cumulativeCounters": [2, 23, 6, 19, 29, 29, 0]
+          },
+          "events": [
+            ["gestureBegan", 13136.754292, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 13136.755875, null, 13136.755833, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 13136.949292, 33, 13136.755833, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 13136.996875, 33, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 13137.006958, 33, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 13217.843292, 33, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 13217.86775, 33, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 13217.962917, 33, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 13229.995958, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 13230.062333, 34, 13230.041792, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 13230.100542, 34, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 13230.107583, 34, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 14261.46625, 34, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 14261.49625, 34, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 14263.189042, 34, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        },
+        {
+          "arm": "warm",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 3,
+          "timingsMilliseconds": [90.629458, 81.537833, 81.241125, 81.20954200000051, 1018.300417, 1010.63025],
+          "viewportWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 1, 1, 1, 0],
+          "before": {
+            "label": "warm 3 before detailed edit",
+            "values": [992053920, 3221225472, 2, 2, 188107920, 838503208, 2371616768],
+            "cumulativeCounters": [2, 26, 6, 21, 32, 32, 0]
+          },
+          "viewportPublished": {
+            "label": "warm 3 detail published",
+            "values": [992053920, 3221225472, 2, 2, 188107920, 838503208, 2371616768],
+            "cumulativeCounters": [2, 27, 6, 22, 33, 33, 0]
+          },
+          "afterRefinement": {
+            "label": "warm 3 full refinement settled",
+            "values": [992053920, 3221225472, 2, 2, 188173456, 838503208, 2371616768],
+            "cumulativeCounters": [2, 28, 6, 23, 34, 34, 0]
+          },
+          "events": [
+            ["gestureBegan", 15563.088917000001, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 15563.090542, null, 15563.0905, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 15563.267708, 38, 15563.0905, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 15563.306125, 38, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 15563.316875, 38, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 15644.526417000001, 38, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 15644.547292, 38, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 15644.664333, 38, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 15656.4125, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 15656.497792, 39, 15656.479375, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 15656.538667, 39, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 15656.544125, 39, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 16667.136667, 39, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 16667.168958, 39, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 16668.9055, 39, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        },
+        {
+          "arm": "revisit",
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9",
+          "pair": 3,
+          "timingsMilliseconds": [311.822458, 309.093709, 308.834292, 308.8085829999982, 1028.718333, 1019.872916],
+          "viewportWorkCounters": [0, 1, 0, 0, 1, 1, 0],
+          "refinementWorkCounters": [0, 1, 0, 2, 1, 1, 0],
+          "before": {
+            "label": "revisit 3 before detailed edit",
+            "values": [811059072, 3221225472, 2, 2, 188173456, 838503208, 2371649536],
+            "cumulativeCounters": [2, 31, 8, 25, 39, 39, 0]
+          },
+          "viewportPublished": {
+            "label": "revisit 3 detail published",
+            "values": [992053920, 3221225472, 2, 2, 188206224, 838503208, 2371665920],
+            "cumulativeCounters": [2, 32, 8, 25, 40, 40, 0]
+          },
+          "afterRefinement": {
+            "label": "revisit 3 full refinement settled",
+            "values": [992053920, 3221225472, 2, 2, 188238992, 838503208, 2371665920],
+            "cumulativeCounters": [2, 33, 8, 27, 41, 41, 0]
+          },
+          "revisit": {
+            "beforeDeparture": {
+              "label": "A before departure",
+              "values": [992053920, 3221225472, 2, 2, 188173456, 838503208, 2371649536],
+              "cumulativeCounters": [2, 31, 6, 25, 37, 37, 0]
+            },
+            "beforeReturn": {
+              "label": "B before cached A return",
+              "values": [811059072, 3221225472, 2, 2, 188173456, 838503208, 2371649536],
+              "cumulativeCounters": [2, 31, 7, 25, 38, 38, 0]
+            },
+            "afterReturn": {
+              "label": "A cached return settled",
+              "values": [811059072, 3221225472, 2, 2, 188173456, 838503208, 2371649536],
+              "cumulativeCounters": [2, 31, 8, 25, 39, 39, 0]
+            },
+            "returnWorkCounters": [0, 0, 1, 0, 1, 1, 0]
+          },
+          "events": [
+            ["gestureBegan", 18064.90875, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["setterBegan", 18064.910375, null, 18064.910333, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 18065.0765, 47, 18064.910333, 0.25, 0, 7752, 5184, null, null, false, true, true, null],
+            ["renderBegan", 18065.109958, 47, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 18065.114375, 47, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 18373.922958, 47, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 18373.944333, 47, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 18374.037708, 47, null, null, null, null, null, 1024, 697, false, null, true, "CPU viewport"],
+            ["gestureEnded", 18379.443792, null, null, null, null, null, null, null, null, null, null, null, null],
+            ["requestSubmitted", 18379.498417, 48, 18379.481208, 0.25, 0, 7752, 5184, null, null, false, false, false, null],
+            ["renderBegan", 18379.544958, 48, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerBegan", 18379.550083, 48, null, null, null, null, null, null, null, null, null, null, null],
+            ["workerFinished", 19399.383292, 48, null, null, null, null, null, null, null, null, null, null, null],
+            ["renderReturned", 19399.417917, 48, null, null, null, null, null, null, null, null, null, null, null],
+            ["modelPublished", 19401.135042, 48, null, null, null, null, null, 6580, 4476, false, null, false, "CPU"]
+          ],
+          "parametersRef": "workload.targetParameters"
+        }
+      ],
+      "oracles": [
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        },
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        },
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        },
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        },
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        },
+        {
+          "detailDimensions": {
+            "height": 960,
+            "width": 1344
+          },
+          "detailSHA256": "59587d08ed215a3377c811af1c7565c5d738dde41181b9c074e76b1990442529",
+          "fullDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "fullSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+          "overviewDimensions": {
+            "height": 697,
+            "width": 1024
+          },
+          "overviewSHA256": "3cc6f98c9970dcf1a9c57c4e9f989621bc68c3186398e2e14ba392f7ddbc3bc9"
+        }
+      ],
+      "summary": {
+        "observedViewportPublicationMilliseconds": {
+          "warm": {
+            "minimum": 85.650458,
+            "median": 90.565708,
+            "maximum": 90.629458,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 309.790667,
+            "median": 311.822458,
+            "maximum": 313.994292,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": 221.19299999999998,
+            "median": 223.42858399999997,
+            "maximum": 224.14020899999997,
+            "samples": 3
+          }
+        },
+        "modelViewportInteractionMilliseconds": {
+          "warm": {
+            "minimum": 79.029792,
+            "median": 81.180542,
+            "maximum": 81.537833,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 305.638791,
+            "median": 307.503459,
+            "maximum": 309.093709,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": 226.32291700000002,
+            "median": 226.60899900000004,
+            "maximum": 227.55587599999998,
+            "samples": 3
+          }
+        },
+        "viewportRenderMilliseconds": {
+          "warm": {
+            "minimum": 78.748208,
+            "median": 80.870709,
+            "maximum": 81.241125,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 305.375041,
+            "median": 307.245,
+            "maximum": 308.834292,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": 226.374291,
+            "median": 226.626833,
+            "maximum": 227.593167,
+            "samples": 3
+          }
+        },
+        "viewportWorkerMilliseconds": {
+          "warm": {
+            "minimum": 78.71374999999989,
+            "median": 80.83633399999962,
+            "maximum": 81.20954200000051,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 305.3498330000002,
+            "median": 307.22099999999955,
+            "maximum": 308.8085829999982,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": 226.38466599999992,
+            "median": 226.63608300000033,
+            "maximum": 227.59904099999767,
+            "samples": 3
+          }
+        },
+        "releaseToFullPublicationMilliseconds": {
+          "warm": {
+            "minimum": 1018.300417,
+            "median": 1027.820125,
+            "maximum": 1041.38875,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 1007.73325,
+            "median": 1014.285708,
+            "maximum": 1028.718333,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": -27.103042000000073,
+            "median": -20.086874999999964,
+            "maximum": 10.417915999999991,
+            "samples": 3
+          }
+        },
+        "refinementRenderMilliseconds": {
+          "warm": {
+            "minimum": 1010.63025,
+            "median": 1025.962833,
+            "maximum": 1031.39575,
+            "samples": 3
+          },
+          "revisit": {
+            "minimum": 997.359541,
+            "median": 1009.430042,
+            "maximum": 1019.872916,
+            "samples": 3
+          },
+          "pairedRevisitMinusWarm": {
+            "minimum": -28.60329200000001,
+            "median": -21.96570799999995,
+            "maximum": 9.242665999999986,
+            "samples": 3
+          }
+        }
+      },
+      "beforeOracle": {
+        "label": "all timed arms settled before CPU oracles",
+        "values": [992053920, 3221225472, 2, 2, 188222608, 838503208, 2371682304],
+        "cumulativeCounters": [2, 33, 8, 27, 41, 41, 0]
+      },
+      "afterCloseAll": {
+        "label": "Close All with test source guard still alive",
+        "values": [0, 3221225472, 0, 0, 70881264, 838503208, 3602743296],
+        "cumulativeCounters": [2, 33, 8, 27, 41, 41, 0]
+      },
+      "memoryAfterVerifiedModelRelease": [70881264, 838503208, 3602743296]
+    }
+  ],
+  "aggregate": {
+    "observedViewportPublicationMilliseconds": {
+      "baselineRevisitRunMedianRange": [308.330333, 311.822458],
+      "currentRevisitRunMedian": 90.58025,
+      "baselineMinusCurrentRunMedianRange": [217.750083, 221.24220799999998],
+      "relativeDecreasePercentRange": [70.62233575312877, 70.95133859794025],
+      "baselinePairedPenaltyMedianRange": [219.66666700000002, 223.42858399999997],
+      "currentPairedPenaltyMedian": 4.303375000000003
+    },
+    "modelViewportInteractionMilliseconds": {
+      "baselineRevisitRunMedianRange": [307.281041, 307.503459],
+      "currentRevisitRunMedian": 81.720375,
+      "baselineMinusCurrentRunMedianRange": [225.56066600000003, 225.78308400000003],
+      "relativeDecreasePercentRange": [73.40533124528174, 73.42456723389247],
+      "baselinePairedPenaltyMedianRange": [226.60899900000004, 227.37158399999998],
+      "currentPairedPenaltyMedian": 1.3043749999999932
+    },
+    "viewportRenderMilliseconds": {
+      "baselineRevisitRunMedianRange": [307.04825, 307.245],
+      "currentRevisitRunMedian": 81.46075,
+      "baselineMinusCurrentRunMedianRange": [225.58749999999998, 225.78425],
+      "relativeDecreasePercentRange": [73.46972340666328, 73.48671255838174],
+      "baselinePairedPenaltyMedianRange": [226.626833, 227.37425000000002],
+      "currentPairedPenaltyMedian": 1.222959000000003
+    },
+    "viewportWorkerMilliseconds": {
+      "baselineRevisitRunMedianRange": [307.02454099999886, 307.22099999999955],
+      "currentRevisitRunMedian": 81.43366700000115,
+      "baselineMinusCurrentRunMedianRange": [225.5908739999977, 225.7873329999984],
+      "relativeDecreasePercentRange": [73.47649580884759, 73.49345682749511],
+      "baselinePairedPenaltyMedianRange": [226.63608300000033, 227.36999900000046],
+      "currentPairedPenaltyMedian": 1.2223760000006223
+    },
+    "releaseToFullPublicationMilliseconds": {
+      "baselineRevisitRunMedianRange": [1014.285708, 1022.403667],
+      "currentRevisitRunMedian": 1023.903,
+      "baselineMinusCurrentRunMedianRange": [-9.61729200000002, -1.4993329999999787],
+      "relativeDecreasePercentRange": [-0.9481837241859293, -0.14664785039351572],
+      "baselinePairedPenaltyMedianRange": [-20.086874999999964, -2.3011240000000726],
+      "currentPairedPenaltyMedian": -12.53387500000008
+    },
+    "refinementRenderMilliseconds": {
+      "baselineRevisitRunMedianRange": [1009.430042, 1014.276625],
+      "currentRevisitRunMedian": 1019.826625,
+      "baselineMinusCurrentRunMedianRange": [-10.396583000000078, -5.550000000000068],
+      "relativeDecreasePercentRange": [-1.0299458672144493, -0.5471880020896733],
+      "baselinePairedPenaltyMedianRange": [-21.96570799999995, 7.640416999999957],
+      "currentPairedPenaltyMedian": -5.285499999999956
+    }
+  },
+  "footprintTradeoff": {
+    "beforeOracleChargedBaselineByteRange": [992053920, 992053920],
+    "beforeOracleChargedCurrentBytes": 1168766400,
+    "beforeOracleChargedCurrentMinusBaselineByteRange": [176712480, 176712480],
+    "beforeOraclePhysicalBaselineByteRange": [188222608, 204802952],
+    "beforeOraclePhysicalCurrentBytes": 560073848,
+    "beforeOraclePhysicalCurrentMinusBaselineByteRange": [355270896, 371851240],
+    "physicalCause": "Unattributed; charged preparation and physical footprint deltas must not be equated"
+  },
+  "guards": {
+    "timedViewportPublications": 18,
+    "fullRefinements": 18,
+    "cachedAReturns": 9,
+    "freshCPUOracleRows": 18,
+    "acceptedFullDecodesInAllTimedPhases": 0,
+    "eachViewportAndRefinementExactlyOneCorrection": true,
+    "eachCachedAReturnZeroCorrectionAndOneRasterCacheHit": true,
+    "allFullOverviewDetailHashesAndDimensionsMatchFreshCPU": true,
+    "allTargetParametersAndInputsIdentical": true,
+    "RAWBytesAndDecodedSourcePixelsUnchangedInPassingHarness": true,
+    "twoCachedFullSourceSessionsMaintainedByPassingHarness": true,
+    "CloseAllZeroSessionsCanvasesAndChargedBytes": true,
+    "weakModelReleaseAfterTestSourceGuardScopeEnds": true,
+    "externalPrePostCompleteSourceAndActualBinaryIdentityVerified": true
+  },
+  "limits": ["Programmatic AppModel detailed publication, not native input or screen-presentation latency.", "One exposure value is timed inside a gesture; full refinement on release is measured separately.", "Each arm has untimed viewport reset and full refinement; revisit then reuses the complete cached raster without a new edit before the measured setter.", "The overview is bounded to 1024 pixels; its logical canvas dimensions do not imply a full-detail overview bitmap.", "Detailed requests use the full-source CPU owner, distinct from the Fit continuous-edit proxy; no Fit timing claim is made.", "Preparation reuse is a source-backed explanation. Selected CPU owner internals are not exposed or directly counted by this real-RAW harness.", "Accepted full-source decode results exclude obsolete/cancelled results and can precede speculative cache admission; this is not a native-start/completion/cancellation count.", "Charged preview bytes, process physical footprint and process-lifetime peak footprint are separate measurements; no physical cause is attributed.", "The Close All sample still has a test source guard; verified weak-model release is sampled after that guard leaves scope.", "Exact fresh CPU full/overview/detail comparisons occur after all timed arms; they check reuse correctness, not photographic quality or CPU/Metal parity.", "Input/filesystem caches and other machine workloads are uncontrolled; three paired samples do not establish general performance improvement.", "Runtime source hashes describe the execution checkout; external compiled-bundle manifests and source archives are required to bind frozen binaries to their actual source cohort.", "The baseline/current compiled cohorts contain multiple workflow changes; this is not a single-change isolated causal experiment. CPU renderViewport is unchanged and source ownership explains the reuse hypothesis.", "The machine was not established quiescent; serial runs and baseline bracketing do not eliminate unrelated-load or filesystem-cache variability.", "The current process footprint before CPU oracles is much higher. Its cause is not isolated by these samples; model release does not imply complete physical return.", "Range comparisons use run medians with three pairs per process, not confidence intervals or population-tail estimates. Full-release refinement remains a distinct approximately one-second stage.", "The isolated compiled baseline was retired after all three collections and direct/pre-post verification. Hashes cannot restore the binary; fresh collection requires rebuilding the retained exact source plus identical harness in the recorded environment."]
+}

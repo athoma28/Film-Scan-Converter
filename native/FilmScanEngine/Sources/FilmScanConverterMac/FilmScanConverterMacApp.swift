@@ -38,6 +38,7 @@ struct FilmScanConverterMacApp: App {
     _model = State(
       initialValue: AppModel(
         settingsStore: PerFileSettingsStore(applicationName: "FilmScanConverter"),
+        openRollStore: OpenRollStore(applicationName: "FilmScanConverter"),
         presetStore: NamedCorrectionPresetStore(applicationName: "FilmScanConverter")
       )
     )
@@ -55,6 +56,7 @@ struct FilmScanConverterMacApp: App {
     .defaultSize(width: 1320, height: 860)
     .commands {
       PreviewViewCommands()
+      WorkspaceViewCommands()
 
       CommandGroup(after: .sidebar) {
         Button("Previous Scan") {
@@ -107,38 +109,47 @@ struct FilmScanConverterMacApp: App {
         }
         .keyboardShortcut("o")
 
+        Button("Close All Scans") {
+          model.closeAllScans()
+        }
+        .disabled(model.files.isEmpty || model.isExporting)
+
         Divider()
 
         Button("Choose Export Folder...") {
           model.showExportFolderPicker()
         }
 
+        Button("Use Original Folders") {
+          model.setExportDestinationDirectory(nil)
+        }
+        .disabled(model.exportParameters.destinationDirectory == nil)
+
         Button("Export Selected") {
           model.exportSelected()
         }
         .keyboardShortcut("e", modifiers: [.command])
         .disabled(
-          model.selection == nil || model.exportParameters.destinationDirectory == nil
-            || model.isExporting || model.isLoading)
+          model.selectedExportItemCount == 0 || model.isExporting || model.isLoading
+            || model.isBuildingScanStack)
 
         Button("Export All") {
           model.exportAll()
         }
         .keyboardShortcut("e", modifiers: [.command, .shift])
         .disabled(
-          model.files.isEmpty || model.exportParameters.destinationDirectory == nil
-            || model.isExporting || model.isLoading)
+          model.files.isEmpty || model.isExporting || model.isLoading || model.isBuildingScanStack)
 
         Divider()
 
         Button("Export Selected Contact Sheet") { model.exportContactSheet() }
           .disabled(
-            model.selectedExportItemCount == 0 || model.exportParameters.destinationDirectory == nil
-              || model.isExporting || model.isLoading || model.isBuildingScanStack)
+            model.selectedExportItemCount == 0 || model.isExporting || model.isLoading
+              || model.isBuildingScanStack)
         Button("Export All Contact Sheet") { model.exportContactSheet(allFiles: true) }
           .disabled(
-            model.files.isEmpty || model.exportParameters.destinationDirectory == nil
-              || model.isExporting || model.isLoading || model.isBuildingScanStack)
+            model.files.isEmpty || model.isExporting || model.isLoading || model.isBuildingScanStack
+          )
       }
 
       CommandMenu("Corrections") {
@@ -153,6 +164,54 @@ struct FilmScanConverterMacApp: App {
         }
         .keyboardShortcut("v", modifiers: [.command, .option])
         .disabled(model.selection == nil || !model.canPasteCorrectionSettings)
+
+        Menu("Selective Sync & Paste") {
+          ForEach(CorrectionAdjustmentGroup.allCases) { group in
+            Toggle(
+              group.title,
+              isOn: Binding(
+                get: { model.adjustmentTransferGroups.contains(group) },
+                set: { isIncluded in
+                  if isIncluded {
+                    model.adjustmentTransferGroups.insert(group)
+                  } else {
+                    model.adjustmentTransferGroups.remove(group)
+                  }
+                }))
+          }
+          Button("Select All Groups") {
+            model.adjustmentTransferGroups = CorrectionAdjustmentGroup.all
+          }
+          Button("Select No Groups") { model.adjustmentTransferGroups = [] }
+          Divider()
+          Button("Sync Selected Scans", action: model.syncSelectedAdjustmentsToSelectedFiles)
+            .disabled(
+              model.selection == nil || model.selectedFileCount < 2
+                || model.adjustmentTransferGroups.isEmpty)
+          Button("Sync All Open Scans", action: model.syncSelectedAdjustmentsToAllOpenFiles)
+            .disabled(
+              model.selection == nil || model.files.isEmpty
+                || model.adjustmentTransferGroups.isEmpty)
+          Divider()
+          Button("Paste Selected Groups", action: model.pasteSelectedCorrectionSettings)
+            .disabled(
+              model.selection == nil || !model.canPasteCorrectionSettings
+                || model.adjustmentTransferGroups.isEmpty)
+          Button(
+            "Paste Groups to Selected Scans",
+            action: model.pasteSelectedCorrectionSettingsToSelectedFiles
+          )
+          .disabled(
+            model.selectedFileCount == 0 || !model.canPasteCorrectionSettings
+              || model.adjustmentTransferGroups.isEmpty)
+          Button(
+            "Paste Groups to All Open Scans",
+            action: model.pasteSelectedCorrectionSettingsToAllOpenFiles
+          )
+          .disabled(
+            model.files.isEmpty || !model.canPasteCorrectionSettings
+              || model.adjustmentTransferGroups.isEmpty)
+        }
 
         Divider()
 

@@ -22,8 +22,12 @@ struct RasterImageTests {
     #expect(image.representations.count == 1)
     #expect(image.cacheMode == .never)
     #expect(image.size == NSSize(width: 12, height: 8))
-    #expect(PreviewBitmap.cgImage(from: image) != nil)
     #expect(image.representations.first is NSBitmapImageRep)
+    for _ in 0..<2 {
+      let backing = try #require(PreviewBitmap.cgImage(from: image))
+      try expectPreviewRGBPixelsMatch(backing, cgImage)
+      #expect(image.representations.count == 1)
+    }
   }
 
   @Test("Preview bitmaps can preserve document size with a smaller raster backing")
@@ -43,20 +47,6 @@ struct RasterImageTests {
     let backing = try #require(PreviewBitmap.cgImage(from: image))
     #expect(backing.width == 12)
     #expect(backing.height == 8)
-    #expect(image.representations.count == 1)
-  }
-
-  @Test("Asking for a CGImage does not cache extra representations")
-  func cgImageLookupDoesNotCacheExtraRepresentations() throws {
-    let source = UInt16Image(
-      width: 6,
-      height: 4,
-      channels: 3,
-      pixels: [UInt16](repeating: 40_000, count: 6 * 4 * 3)
-    )
-    let image = PreviewBitmap.nsImage(from: try #require(source.makePreviewCGImage()))
-    #expect(PreviewBitmap.cgImage(from: image) != nil)
-    #expect(PreviewBitmap.cgImage(from: image) != nil)
     #expect(image.representations.count == 1)
   }
 

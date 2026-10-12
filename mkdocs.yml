@@ -16,48 +16,61 @@ nav:
       - Overview: development/index.md
       - Current Status: development/native-macos.md
       - Product Roadmap: improvements/MacOS-Native-Roadmap.md
-      - Current Tone Controls: development/tone-range-separation-2026-09-24.md
-      - Slider Response and Native Interaction: development/slider-response-study-2026-09-24.md
       - Planning Guide: improvements/README.md
-      - Maintenance Scope: improvements/EVALUATION.md
       - Building and Testing: development/building.md
       - Release Runbook: development/native-release.md
       - Contributing: contributing.md
       - Current Preview Architecture: development/realtime-preview-plan.md
-      - Historical Retained Preview Measurement (September 19): performance/retained-preview-2026-09-19.md
-      - Historical Viewport Measurement (September 16): performance/viewport-and-work-reuse-2026-09-16.md
-      - Historical Performance Research: performance/research-directions-2026-09-12.md
-      - Historical B&W Tonality Research: performance/bw-tonality-2026-09-13.md
-      - Historical Second Research Pass: performance/research-pass-two-2026-09-13.md
-      - Historical Performance Implementation: performance/implementation-2026-09-13.md
-      - Settings Persistence: performance/settings-persistence-implementation.md
-      - Full-Resolution Edit Scaling: performance/preview-scale-2026-09-14.md
-      - Architecture Contracts: development/swift-port-evaluation.md
       - RAW Upgrade Compatibility: development/raw-decode-compatibility.md
       - X-Trans Mosaic Binning: development/xtrans-preview-mosaic-binning.md
-  - Benchmarks:
-      - Editing and Retained-Image Work Reuse: performance/edit-switch-work-reuse-2026-09-23.md
-      - RAW Draft Unpack: performance/raw-preview-unpack-2026-09-22.md
-      - C-41 Shared Output: performance/c41-shared-output-2026-09-22.md
-      - Preview Analysis: performance/preview-analysis.md
-      - 40 MP Export: performance/40mp-export.md
-      - RAW Compatibility: development/native-raw-benchmark.md
-  - Active Color Study:
-      - Runbook and Current Compatibility: development/color-evaluation.md
-      - Paired Controls (September 18): development/camera-raw-color-study-2026-09-18.md
-      - Pro Image Follow-Up (September 18): development/proimage-color-followup-2026-09-18.md
-      - Segmented Skin (September 18): development/skin-rgb-study-2026-09-18.md
-      - Lucky Reference History: development/lucky200-reference-study.md
-  - Calibration Reference:
-      - Scope (Parked): film-processing-research.md
-      - Density-Matrix Fitter: development/density-matrix-calibration.md
-      - Reference Curve Provenance: development/reference-negative-calibration.md
-      - Experiment Requirements: research-brief-film-inversion.md
+      - Documentation Maintenance: development/documentation-maintenance.md
+  - Research:
+      - Status and Evidence Index: research/index.md
+      - Active Color Study:
+          - Runbook and Current Compatibility: development/color-evaluation.md
+          - Paired Controls (September 18): development/camera-raw-color-study-2026-09-18.md
+          - Pro Image Follow-Up (September 18): development/proimage-color-followup-2026-09-18.md
+          - Segmented Skin (September 18): development/skin-rgb-study-2026-09-18.md
+      - Output Controls:
+          - Current Tone Ranges (Version 4): development/tone-range-separation-2026-09-24.md
+          - Slider Response and Native Interaction: development/slider-response-study-2026-09-24.md
+          - Historical Tone Implementation (Version 2): development/photographic-tone-controls-2026-09-22.md
+          - Historical Tone Audit (Version 1): development/tone-controls-audit-2026-09-22.md
+          - September 25 Validation Follow-Through: development/roadmap-follow-through-2026-09-25.md
+      - Parked Calibration:
+          - Scope and Engine Models: film-processing-research.md
+          - Density-Matrix Fitter: development/density-matrix-calibration.md
+          - Reference Curve Provenance: development/reference-negative-calibration.md
+          - Experiment Requirements: research-brief-film-inversion.md
+  - Performance:
+      - Evidence and Experiment Index: performance/index.md
+      - October 2 Implementation: performance/implementation-2026-10-02.md
+      - Remaining Opportunities (October 2): performance/opportunities-2026-10-02.md
+      - CPU Point Work (September 28): performance/cpu-point-work-2026-09-28.md
+      - September 27 Implementation: performance/implementation-2026-09-27.md
+      - Preview and Editing:
+          - Slider-to-Preview Latency: performance/slider-preview-latency-2026-09-24.md
+          - Editing and Retained-Image Work Reuse: performance/edit-switch-work-reuse-2026-09-23.md
+          - Retained Preview Measurement: performance/retained-preview-2026-09-19.md
+          - Full-Resolution Edit Scaling: performance/preview-scale-2026-09-14.md
+          - Preview Analysis: performance/preview-analysis.md
+          - Settings Persistence: performance/settings-persistence-implementation.md
+      - RAW and Export:
+          - Three-RAW JPEG Export (October 10): performance/jpeg-three-export-2026-10-10.md
+          - JPEG Export Correction (October 10): performance/jpeg-export-2026-10-10.md
+          - RAW Draft Unpack: performance/raw-preview-unpack-2026-09-22.md
+          - C-41 Shared Output: performance/c41-shared-output-2026-09-22.md
+          - C-41 Refinement Measurement: performance/c41-refinement-discovery-2026-09-22.md
+          - 40 MP Export: performance/40mp-export.md
+          - Historical RAW Compatibility: development/native-raw-benchmark.md
+      - Discovery and Investigation:
+          - Collection Runbook: development/data-collection-optimization-target-discovery.md
+          - September 22 Target Discovery: performance/optimization-target-discovery-2026-09-22.md
+          - Historical B&W Tonality Investigation: performance/bw-tonality-2026-09-13.md
   - Legacy Python:
       - Maintenance Policy: legacy-python.md
       - Usage: legacy-usage.md
       - ART Integration: how-to-add-to-ART.md
-  - Data Collection and Optimization Target Discovery: development/data-collection-optimization-target-discovery.md
 
 validation:
   links:

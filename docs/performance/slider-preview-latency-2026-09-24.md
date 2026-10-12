@@ -130,6 +130,6 @@ swift test --disable-sandbox -c release --package-path native/FilmScanEngine --n
 ```
 
 Run timing workloads sequentially and do not change native sources or rebuild
-another product during a recorded replay. The [test guide](../../tests/README.md)
-and [native contracts](../../native/README.md) include the independent real-RAW
+another product during a recorded replay. The [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md)
+and [native contracts](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/README.md) include the independent real-RAW
 preview-scale probe and the complete regression command.

@@ -4,6 +4,7 @@ import Foundation
 private let usage = """
   Usage: FilmScanLookbook [OUTPUT_DIRECTORY] [--lucky-study]
 
+  OUTPUT_DIRECTORY defaults to the ignored dist/lookbook directory.
   Renders factory LookRecipe snapshots against local sample scans. Invert-only
   is the film-base conversion with no look applied. Lucky C200 frames have no
   paired JPEG/XMP; those rows show inversion and recipe comparisons.
@@ -29,7 +30,7 @@ private let sampleRawRoot = repositoryRoot.appending(
   path: "sample-raw", directoryHint: .isDirectory)
 private let defaultOutput =
   repositoryRoot
-  .appending(path: "photo-inspo/lookbook", directoryHint: .isDirectory)
+  .appending(path: "dist/lookbook", directoryHint: .isDirectory)
 
 private let lookbookMaxDimension = 900
 private let exportParameters = ExportParameters(format: .jpeg, jpegQuality: 0.88)

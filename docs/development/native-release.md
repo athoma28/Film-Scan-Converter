@@ -17,13 +17,23 @@ are met:
   ad-hoc identity (`-`) and a clean worktree unless `ALLOW_DIRTY=1` is set for
   an explicitly non-published rehearsal.
 - `public` is the normal distribution path. It requires an exact Developer ID
-  Application identity and an existing `notarytool` keychain profile. It signs
+  Application identity as an operator prerequisite and an existing `notarytool`
+  keychain profile. The script rejects the ad-hoc identity and an empty profile;
+  it does not check the identity's name before invoking signing. It signs
   with the hardened runtime, submits to Apple, staples, validates the ticket,
   and runs Gatekeeper assessment before rebuilding the final ZIP.
 
-The Beta 3 download is an ad-hoc-signed technical beta. Each new artifact must
-have its own version/build and matching source commit. Successful local
+The 0.3.0 Beta 1 release recorded here is an ad-hoc-signed technical beta. Each new
+published artifact must have its own version/build and matching source commit. Successful local
 assembly is not evidence of notarization or an independent-Mac installation.
+
+Packaging validates assembly and archive contracts. It does not run regression,
+photographic, or performance gates, validate release-note freshness, check tag
+lineage or identifier uniqueness, or install on another Mac. Those are release
+acceptance responsibilities below. The manifest records `HEAD`; a dirty local
+rehearsal also needs a saved working-tree patch or content-hash manifest to identify
+its actual source. `ALLOW_DIRTY=1` bypasses the clean-tree gate in either non-local
+mode, so the operator must ensure that override is absent for publication.
 
 ## Build the unsigned beta
 
@@ -50,6 +60,11 @@ two-architecture build is automatically labeled `universal`. The archive
 contains the app plus copies of `LICENSE.txt`, `THIRD_PARTY_NOTICES.md`,
 `RELEASE_NOTES.md`, and `BUNDLED-LIBRARIES.txt`. The same files are embedded in
 the app's Resources directory, and the app exposes the notices from its menu.
+
+`DIST_DIR` can isolate a rehearsal from other artifacts. Without explicit
+version/build overrides, local packaging uses the script defaults (currently
+0.3.0/build 4). Set the release label explicitly for a published beta; local
+packages alone do not establish release acceptance.
 
 Test Launch Services rather than only the SwiftPM executable:
 
@@ -105,8 +120,13 @@ Before attaching artifacts to a GitHub prerelease:
 
 1. Update `RELEASE_NOTES.md` for the exact artifact and its validation, removing
    the unreleased label only for the version being published. Run native and
-   legacy test suites and require green GitHub Actions runs for the release commit.
-2. Confirm the source commit is the commit represented by the release tag.
+   legacy test suites, the production CPU/Metal comparator, and relevant opt-in
+   photographic/workflow gates from the [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md).
+   Require green GitHub Actions runs for the release commit; record unavailable
+   private inputs and any incomplete gates explicitly.
+2. Confirm the source commit is the commit represented by the release tag, the
+   tree is clean, and version/build identifiers are unused. Record the source,
+   binary, ZIP hashes, commands, environment, and outcomes together.
 3. In the directory containing the ZIP and checksum (normally `dist/`), verify
    with `shasum -a 256 -c <artifact>.sha256`. The checksum records the ZIP basename.
 4. Inspect the ZIP for unexpected `._`/AppleDouble files and confirm all four

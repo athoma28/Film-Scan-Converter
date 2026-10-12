@@ -74,23 +74,15 @@ public enum DustDetection {
     let threshold = (maximum - minimum) * parameters.thresholdPercent / 100 + minimum
 
     var binary = gray.map { Double($0) > threshold ? UInt8(0) : UInt8(255) }
-    let iterations = max(parameters.closingIterations, 0)
-    if kernelSize > 1, iterations > 0 {
-      for _ in 0..<iterations {
-        binary = squareMorphology(
-          binary, width: width, height: height, kernelSize: kernelSize, dilating: true)
-      }
-      for _ in 0..<iterations {
-        binary = squareMorphology(
-          binary, width: width, height: height, kernelSize: kernelSize, dilating: false)
-      }
-    }
+    binary = closingBinaryMask(
+      binary, width: width, height: height, kernelSize: kernelSize,
+      iterations: parameters.closingIterations)
 
     var mask = retainSmallComponents(
       binary, width: width, height: height, maximumArea: maximumArea)
     if kernelSize > 1 {
       mask = squareMorphology(
-        mask, width: width, height: height, kernelSize: kernelSize, dilating: true)
+        mask, width: width, height: height, radius: kernelSize / 2, dilating: true)
     }
     return UInt16Image(
       width: width,
@@ -136,12 +128,32 @@ public enum DustDetection {
     return Double(lowerValue) * (1 - weight) + Double(upperValue) * weight
   }
 
+  /// Repeated square dilations/erosions compose by adding their radii, including
+  /// the clipped neutral borders used here. The closing still has two distinct
+  /// operations; the final component-mask dilation keeps its original radius.
+  static func closingBinaryMask(
+    _ source: [UInt8], width: Int, height: Int, kernelSize: Int, iterations: Int
+  ) -> [UInt8] {
+    guard width > 0, height > 0, kernelSize > 1, iterations > 0 else { return source }
+    let maximumRadius = max(width, height) - 1
+    let radius = min(kernelSize / 2, maximumRadius)
+    guard radius > 0 else { return source }
+    // Once every pixel is reachable, larger radii have the same result. Test
+    // before multiplying so even an externally supplied Int.max count is safe.
+    let combinedRadius =
+      iterations > maximumRadius / radius ? maximumRadius : radius * iterations
+    let dilated = squareMorphology(
+      source, width: width, height: height, radius: combinedRadius, dilating: true)
+    return squareMorphology(
+      dilated, width: width, height: height, radius: combinedRadius, dilating: false)
+  }
+
   /// Square binary morphology using an integral image, keeping each pass O(pixels).
   private static func squareMorphology(
     _ source: [UInt8],
     width: Int,
     height: Int,
-    kernelSize: Int,
+    radius: Int,
     dilating: Bool
   ) -> [UInt8] {
     let stride = width + 1
@@ -154,7 +166,6 @@ public enum DustDetection {
       }
     }
 
-    let radius = kernelSize / 2
     var output = [UInt8](repeating: 0, count: source.count)
     for y in 0..<height {
       let y0 = max(y - radius, 0)
@@ -182,11 +193,9 @@ public enum DustDetection {
     var visited = [Bool](repeating: false, count: binary.count)
     var output = [UInt8](repeating: 0, count: binary.count)
     var queue = [Int]()
-    var component = [Int]()
 
     for start in binary.indices where binary[start] != 0 && !visited[start] {
       queue.removeAll(keepingCapacity: true)
-      component.removeAll(keepingCapacity: true)
       queue.append(start)
       visited[start] = true
       var cursor = 0
@@ -194,7 +203,6 @@ public enum DustDetection {
       while cursor < queue.count {
         let index = queue[cursor]
         cursor += 1
-        component.append(index)
         let x = index % width
         let y = index / width
         for dy in -1...1 {
@@ -211,8 +219,10 @@ public enum DustDetection {
         }
       }
 
-      if contourArea(of: component, in: binary, width: width, height: height) < maximumArea {
-        for index in component { output[index] = 255 }
+      // The completed queue already contains every component pixel in traversal
+      // order, so contour filtering and stamping can share that same storage.
+      if contourArea(of: queue, in: binary, width: width, height: height) < maximumArea {
+        for index in queue { output[index] = 255 }
       }
     }
     return output

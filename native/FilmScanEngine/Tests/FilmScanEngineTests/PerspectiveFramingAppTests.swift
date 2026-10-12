@@ -72,7 +72,7 @@ struct PerspectiveFramingAppTests {
     let preview = try #require(model.previewImage.flatMap(PreviewBitmap.cgImage))
     let cpu = try #require(expected.makePreviewCGImage())
     #expect(preview.width == cpu.width && preview.height == cpu.height)
-    #expect(preview.dataProvider?.data as Data? == cpu.dataProvider?.data as Data?)
+    try expectPreviewRGBPixelsMatch(preview, cpu)
     model.setExportDestinationDirectory(directory)
     model.setExportFormat(.tiff)
     model.exportSelected()

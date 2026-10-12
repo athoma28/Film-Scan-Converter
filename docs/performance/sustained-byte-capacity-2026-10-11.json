@@ -1,0 +1,4024 @@
+{
+  "aggregates": {
+    "allNavigationUsedImmediateRetainedCanvas": true,
+    "firstModelPublicationMilliseconds": {
+      "maximum": 0.1555,
+      "median": 0.13966650000000003,
+      "minimum": 0.121625,
+      "p95NearestRank": 0.151125,
+      "samples": 32
+    },
+    "fullSourceSettledMilliseconds": {
+      "maximum": 3398.385333,
+      "median": 2678.0485,
+      "minimum": 2455.584042,
+      "p95NearestRank": 3336.326291,
+      "samples": 32
+    },
+    "navigationChargedPreviewBytes": {
+      "maximum": 1921267104,
+      "median": 1894255008.0,
+      "minimum": 1894255008,
+      "p95NearestRank": 1921267104,
+      "samples": 32
+    },
+    "navigationFullSourceSessionCounts": [
+      3
+    ],
+    "navigationRetainedCanvasCounts": [
+      8
+    ],
+    "navigationSessionCounts": [
+      3,
+      4
+    ],
+    "navigationSettledPhysicalFootprintBytes": {
+      "maximum": 56513552,
+      "median": 56202256.0,
+      "minimum": 55038680,
+      "p95NearestRank": 56448016,
+      "samples": 32
+    },
+    "p95Method": "Nearest rank ceil(0.95*n); descriptive small-sample tail, not a population estimate.",
+    "perFrameNavigation": {
+      "fuji400-fresh/DSCF2833.RAF": {
+        "firstModelPublicationMilliseconds": {
+          "maximum": 0.1555,
+          "median": 0.1399165,
+          "minimum": 0.134583,
+          "p95NearestRank": 0.1555,
+          "samples": 4
+        },
+        "fullSourceSettledMilliseconds": {
+          "maximum": 3327.689209,
+          "median": 2823.3181875,
+          "minimum": 2624.8055409999997,
+          "p95NearestRank": 3327.689209,
+          "samples": 4
+        }
+      },
+      "fuji400-fresh/DSCF2851.RAF": {
+        "firstModelPublicationMilliseconds": {
+          "maximum": 0.1445,
+          "median": 0.135,
+          "minimum": 0.123375,
+          "p95NearestRank": 0.1445,
+          "samples": 4
+        },
+        "fullSourceSettledMilliseconds": {
+          "maximum": 2967.080791,
+          "median": 2660.563354,
+          "minimum": 2618.377916,
+          "p95NearestRank": 2967.080791,
+          "samples": 4
+        }
+      },
+      "fuji400-fresh/DSCF2856.RAF": {
+        "firstModelPublicationMilliseconds": {
+          "maximum": 0.145458,
+          "median": 0.13712449999999998,
+          "minimum": 0.12375,
+          "p95NearestRank": 0.145458,
+          "samples": 4
+        },
+        "fullSourceSettledMilliseconds": {
+          "maximum": 3398.385333,
+          "median": 2927.0758539999997,
+          "minimum": 2616.833541,
+          "p95NearestRank": 3398.385333,
+          "samples": 4
+        }
+      },
+      "fuji400-fresh/DSCF2865.RAF": {
+        "firstModelPublicationMilliseconds": {
+          "maximum": 0.151125,
+          "median": 0.1497915,
+          "minimum": 0.146333,
+          "p95NearestRank": 0.151125,
+          "samples": 4
+        },
+        "fullSourceSettledMilliseconds": {
+          "maximum": 3271.778042,
+          "median": 2804.2568334999996,
+          "minimum": 2613.359792,
+          "p95NearestRank": 3271.778042,
+          "samples": 4
+        }
+      },
+      "fuji400-fresh/DSCF2873.RAF": {
+        "firstModelPublicationMilliseconds": {
+          "maximum": 0.141167,
+          "median": 0.13022899999999998,
+          "minimum": 0.12375,
+          "p95NearestRank": 0.141167,
+          "samples": 4
+        },
+        "fullSourceSettledMilliseconds": {
+          "maximum": 3336.326291,
+          "median": 2605.247375,
+          "minimum": 2510.325875,
+          "p95NearestRank": 3336.326291,
+          "samples": 4
+        }
+      },
+      "fuji400-fresh/DSCF2881.RAF": {
+        "firstModelPublicationMilliseconds": {
+          "maximum": 0.147417,
+          "median": 0.1415205,
+          "minimum": 0.139292,
+          "p95NearestRank": 0.147417,
+          "samples": 4
+        },
+        "fullSourceSettledMilliseconds": {
+          "maximum": 3002.373833,
+          "median": 2588.3027085,
+          "minimum": 2558.887625,
+          "p95NearestRank": 3002.373833,
+          "samples": 4
+        }
+      },
+      "fuji400-fresh/DSCF2888.RAF": {
+        "firstModelPublicationMilliseconds": {
+          "maximum": 0.146959,
+          "median": 0.1327295,
+          "minimum": 0.121625,
+          "p95NearestRank": 0.146959,
+          "samples": 4
+        },
+        "fullSourceSettledMilliseconds": {
+          "maximum": 3320.079292,
+          "median": 2933.9448965,
+          "minimum": 2604.269459,
+          "p95NearestRank": 3320.079292,
+          "samples": 4
+        }
+      },
+      "fuji400-fresh/DSCF2892.RAF": {
+        "firstModelPublicationMilliseconds": {
+          "maximum": 0.1425,
+          "median": 0.1365625,
+          "minimum": 0.134208,
+          "p95NearestRank": 0.1425,
+          "samples": 4
+        },
+        "fullSourceSettledMilliseconds": {
+          "maximum": 3291.382792,
+          "median": 2940.990312,
+          "minimum": 2455.584042,
+          "p95NearestRank": 3291.382792,
+          "samples": 4
+        }
+      }
+    }
+  },
+  "collectedDate": "2026-10-11",
+  "columnDefinitions": {
+    "cachedSourceKindBeforeSelection": "Omitted when no decoded source was cached; retained canvas ownership is separate.",
+    "chargedPreviewBytes": "App ownership accounting, not physical footprint or aggregate admission reservations.",
+    "firstPublicationMilliseconds": "Selection/loadSelection start to current AppModel publication; synchronous retained canvas is observed at return, otherwise the current revision waits for loading/rendering to stop.",
+    "fullSettledMilliseconds": "Same start to current rawFull publication and aligned statistics, with rendering, loading, background work, retained snapshot work, and stack analysis drained.",
+    "memory.physicalFootprintBytes": "Mach TASK_VM_INFO phys_footprint, sampled after settling.",
+    "memory.processLifetimePeakPhysicalFootprintBytes": "Mach ledger_phys_footprint_peak; cumulative process lifetime peak, not each switch peak.",
+    "memory.reusableBytes": "Mach TASK_VM_INFO reusable, distinct from physical footprint.",
+    "memoryPressureHandlingCount": "Every true app drop-handler invocation; false release calls do not increment. Zero through the pre-simulation phases.",
+    "work.lookaheadSubmissions": "Scheduler submissions, including work canceled before native decoding; native completion, cancellation, admission skip, and rejection counts are not exposed.",
+    "work.publishedFullSourceDecodes": "Completed full-source results accepted after cancellation/generation guards, before speculative admission; not all native decodes or admitted sessions."
+  },
+  "correctnessGuards": {
+    "allNavigationBitmapHashesMatchedPreEditWarmup": true,
+    "closeAllClearedPreviewSessionsCanvasesAndChargedBytes": true,
+    "cpuMetalParityEvaluation": false,
+    "currentSettingsSourceKindSelectedCacheAndGeometryVerifiedAtEverySettledSelection": true,
+    "finalCorrectedHashPhase": "First frame after its post-navigation EV 0 to 0.25 edit; other seven frames at configured EV 0. The first-frame pre-edit warmup hash is checked inside the harness but not emitted.",
+    "independentRasterOracle": false,
+    "originalChangedBitmapDisabledOnDepartureAndRestoredEditedHash": true,
+    "photographicQualityEvaluation": false,
+    "result": "Completed passing compiled harness; independent publication verification validates reported rows and provenance, without independently decoding or hashing every navigation raster.",
+    "retainedEditReplacedByCurrentPublicationAndChangedBitmap": true,
+    "simulatedPressurePreservedSelectedHashAndLogicalDimensions": true,
+    "sourceHashesUnchangedBeforeAfterRun": true,
+    "threeRecoverySelectionsRestoredExpectedSettingsAndHashes": true,
+    "weakModelDeallocationVerifiedBeforeFinalMemorySample": true
+  },
+  "generatedAt": "2026-10-11T08:55:44Z",
+  "kind": "current-source descriptive byte/reservation eviction collection",
+  "limits": [
+    "Programmatic AppModel publication, not native-input or screen-presentation latency.",
+    "Immediate retained-canvas publication and settled full-source output are timed separately; no full-detail first-display claim is made.",
+    "Each named frame receives a settled full-source warmup; filesystem caches are uncontrolled.",
+    "Exactly eight unique sources use the default depth eight and normal 3 GiB budget. With zero pressure drop-handler calls asserted before deliberate simulation, loss of previously warmed full sessions below depth eight demonstrates byte/reservation eviction; charged bytes need not reach the admission reservation limit.",
+    "Selected full-source cache presence and charged bytes within budget are asserted. Aggregate admission reservation bytes are not directly exposed or measured.",
+    "Charged preview bytes are accounting, distinct from process physical footprint.",
+    "Peak footprint covers the process lifetime and is not a per-switch peak.",
+    "Pressure is simulated by the app handler, not induced system-wide memory pressure.",
+    "The pressure handling count observes every true drop-handler call, including OS notifications and deliberate simulation; false calls do not increment it. The default three-source mode reports this count without requiring zero.",
+    "Full-source decode count covers completed results accepted after cancellation/generation guards, before speculative admission; it is not a count of all native decodes or admitted sessions.",
+    "Lookahead count is scheduler submissions, including work cancelled before native decoding. Admission skips, rejected speculative results, native completions, and native cancellations are not separately counted.",
+    "This current-source cohort and descriptive samples do not establish general performance or memory gains or before/after capacity improvement.",
+    "Bitmap hashes and source hashes check reuse correctness, not photographic quality or independent CPU/Metal parity.",
+    "Close All and weak-model release establish ownership release, not return of all physical memory to the OS.",
+    "Source/toolchain binary-manifest evidence should accompany this report for comparisons.",
+    "Three settled full sessions do not establish an exact capacity ceiling: speculative admission reservations are not exposed and rawDetail sessions also occur.",
+    "The unusually low settled physical footprints are preserved exactly after source/field/provenance verification. Their cause and relationship to reusable pages are not established.",
+    "This publication verifier reads report/source/archive/binary bytes, not private input images. Input immutability and every-navigation pixel equality were asserted by the passing compiled harness.",
+    "The raw report status says baseline collection; there is no matched old-source capacity control or before/after capacity result."
+  ],
+  "measurement": {
+    "byteCapacityEvidence": {
+      "chargedPreviewBytesAtFirstEvidence": 1864749216,
+      "firstObservedState": "8-frame warmup settled",
+      "fullSourceSessionsAtFirstEvidence": 3,
+      "memoryPressureHandlingCountAtFirstEvidence": 0,
+      "previewBudgetBytes": 3221225472,
+      "previouslyWarmedFramesWithoutFullSession": [
+        "fuji400-fresh/DSCF2833.RAF",
+        "fuji400-fresh/DSCF2851.RAF",
+        "fuji400-fresh/DSCF2856.RAF",
+        "fuji400-fresh/DSCF2865.RAF",
+        "fuji400-fresh/DSCF2873.RAF"
+      ],
+      "sessionsAtFirstEvidence": 3
+    },
+    "correctedPreviewSHA256": {
+      "fuji400-fresh/DSCF2833.RAF": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+      "fuji400-fresh/DSCF2851.RAF": "e442391e01b75284d26411cd55db2e96c7d18ef7b1463cd58c1b8f0b174e8f8c",
+      "fuji400-fresh/DSCF2856.RAF": "ad9142cc2382065270464a65046b90ee53bf25e71f58c1e9925a15c41f3c6254",
+      "fuji400-fresh/DSCF2865.RAF": "997dfbdbba3b9e3d06d0a8dd1bbb74f0269220cb70c67d76011d088f54def09f",
+      "fuji400-fresh/DSCF2873.RAF": "56a0df9b50e8ea1d8d1cae8809322b0e22b2c3da82710012996b261d07dd67c3",
+      "fuji400-fresh/DSCF2881.RAF": "8c08f9282926cf927bd8a910aa72dd483580cd8e4574d9356b5a425356a9aaa9",
+      "fuji400-fresh/DSCF2888.RAF": "f14b7edfb972287008d56e8fb24f7d5ad4ce1e1611030417f88d55036cd72e4a",
+      "fuji400-fresh/DSCF2892.RAF": "571f3033ab258d39667d0b97ff4467a5d430607e0da28c6fd172ddae4b69ed58"
+    },
+    "editStartedWithRetainedCanvas": true,
+    "finalCounters": {
+      "corrections": 60,
+      "displayedRenders": 61,
+      "droppedSnapshots": 0,
+      "lookaheadSubmissions": 85,
+      "publishedFullSourceDecodes": 45,
+      "renderedCacheHits": 1,
+      "statisticsComputations": 60,
+      "submittedSnapshots": 61
+    },
+    "fullSourceDimensionsByFrame": {
+      "fuji400-fresh/DSCF2833.RAF": {
+        "height": 5184,
+        "width": 7752
+      },
+      "fuji400-fresh/DSCF2851.RAF": {
+        "height": 5184,
+        "width": 7752
+      },
+      "fuji400-fresh/DSCF2856.RAF": {
+        "height": 5184,
+        "width": 7752
+      },
+      "fuji400-fresh/DSCF2865.RAF": {
+        "height": 5184,
+        "width": 7752
+      },
+      "fuji400-fresh/DSCF2873.RAF": {
+        "height": 5184,
+        "width": 7752
+      },
+      "fuji400-fresh/DSCF2881.RAF": {
+        "height": 5184,
+        "width": 7752
+      },
+      "fuji400-fresh/DSCF2888.RAF": {
+        "height": 5184,
+        "width": 7752
+      },
+      "fuji400-fresh/DSCF2892.RAF": {
+        "height": 5184,
+        "width": 7752
+      }
+    },
+    "importToFullSettledMilliseconds": 4296.632625,
+    "importWork": {
+      "corrections": 3,
+      "displayedRenders": 3,
+      "droppedSnapshots": 0,
+      "lookaheadSubmissions": 3,
+      "publishedFullSourceDecodes": 3,
+      "renderedCacheHits": 0,
+      "statisticsComputations": 3,
+      "submittedSnapshots": 3
+    },
+    "memoryAfterVerifiedModelRelease": {
+      "physicalFootprintBytes": 55891152,
+      "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+      "reusableBytes": 3963895808
+    },
+    "memoryBeforeModel": {
+      "physicalFootprintBytes": 7520760,
+      "processLifetimePeakPhysicalFootprintBytes": 7520760,
+      "reusableBytes": 524288
+    },
+    "navigation": [
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.134583,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2833.RAF",
+        "fullSettledMilliseconds": 2624.8055409999997,
+        "immediateRetainedCanvas": true,
+        "iteration": 0,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawDetail",
+            "fuji400-fresh/DSCF2888.RAF": "rawFull",
+            "fuji400-fresh/DSCF2892.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1921267104,
+          "counters": {
+            "corrections": 20,
+            "displayedRenders": 20,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 14,
+            "publishedFullSourceDecodes": 9,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 20,
+            "submittedSnapshots": 20
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 0 fuji400-fresh/DSCF2833.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 55087832,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722444800
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2833.RAF",
+          "sessions": 4,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 3,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.123375,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2851.RAF",
+        "fullSettledMilliseconds": 2692.223,
+        "immediateRetainedCanvas": true,
+        "iteration": 0,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2892.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 21,
+            "displayedRenders": 21,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 16,
+            "publishedFullSourceDecodes": 10,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 21,
+            "submittedSnapshots": 21
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 0 fuji400-fresh/DSCF2851.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 55038680,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722526720
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2851.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 2,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.145458,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2856.RAF",
+        "fullSettledMilliseconds": 2616.833541,
+        "immediateRetainedCanvas": true,
+        "iteration": 0,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2881.RAF": "rawDetail"
+          },
+          "chargedPreviewBytes": 1921267104,
+          "counters": {
+            "corrections": 22,
+            "displayedRenders": 22,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 19,
+            "publishedFullSourceDecodes": 11,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 22,
+            "submittedSnapshots": 22
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 0 fuji400-fresh/DSCF2856.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 55268128,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722625024
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2856.RAF",
+          "sessions": 4,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 3,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.1495,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2865.RAF",
+        "fullSettledMilliseconds": 2644.927875,
+        "immediateRetainedCanvas": true,
+        "iteration": 0,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 23,
+            "displayedRenders": 23,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 21,
+            "publishedFullSourceDecodes": 12,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 23,
+            "submittedSnapshots": 23
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 0 fuji400-fresh/DSCF2865.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 55218976,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722723328
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2865.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 2,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.131375,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2873.RAF",
+        "fullSettledMilliseconds": 2546.62075,
+        "immediateRetainedCanvas": true,
+        "iteration": 0,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawFull",
+            "fuji400-fresh/DSCF2873.RAF": "rawFull",
+            "fuji400-fresh/DSCF2892.RAF": "rawDetail"
+          },
+          "chargedPreviewBytes": 1921267104,
+          "counters": {
+            "corrections": 24,
+            "displayedRenders": 24,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 24,
+            "publishedFullSourceDecodes": 13,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 24,
+            "submittedSnapshots": 24
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 0 fuji400-fresh/DSCF2873.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 55612264,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722772480
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2873.RAF",
+          "sessions": 4,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 3,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.142541,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2881.RAF",
+        "fullSettledMilliseconds": 2572.140125,
+        "immediateRetainedCanvas": true,
+        "iteration": 0,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2865.RAF": "rawFull",
+            "fuji400-fresh/DSCF2873.RAF": "rawFull",
+            "fuji400-fresh/DSCF2881.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 25,
+            "displayedRenders": 25,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 25,
+            "publishedFullSourceDecodes": 14,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 25,
+            "submittedSnapshots": 25
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 0 fuji400-fresh/DSCF2881.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 55612264,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722772480
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2881.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 1,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.121625,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2888.RAF",
+        "fullSettledMilliseconds": 2604.269459,
+        "immediateRetainedCanvas": true,
+        "iteration": 0,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2873.RAF": "rawFull",
+            "fuji400-fresh/DSCF2881.RAF": "rawFull",
+            "fuji400-fresh/DSCF2888.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 26,
+            "displayedRenders": 26,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 26,
+            "publishedFullSourceDecodes": 15,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 26,
+            "submittedSnapshots": 26
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 0 fuji400-fresh/DSCF2888.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 55694184,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722772480
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2888.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 1,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.137375,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2892.RAF",
+        "fullSettledMilliseconds": 2455.584042,
+        "immediateRetainedCanvas": true,
+        "iteration": 0,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2881.RAF": "rawFull",
+            "fuji400-fresh/DSCF2888.RAF": "rawFull",
+            "fuji400-fresh/DSCF2892.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 27,
+            "displayedRenders": 27,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 26,
+            "publishedFullSourceDecodes": 16,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 27,
+            "submittedSnapshots": 27
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 0 fuji400-fresh/DSCF2892.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 55595880,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722674176
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2892.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 0,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.139583,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2833.RAF",
+        "fullSettledMilliseconds": 2641.575125,
+        "immediateRetainedCanvas": true,
+        "iteration": 1,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawDetail",
+            "fuji400-fresh/DSCF2888.RAF": "rawFull",
+            "fuji400-fresh/DSCF2892.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1921267104,
+          "counters": {
+            "corrections": 28,
+            "displayedRenders": 28,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 29,
+            "publishedFullSourceDecodes": 17,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 28,
+            "submittedSnapshots": 28
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 1 fuji400-fresh/DSCF2833.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 55661416,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722674176
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2833.RAF",
+          "sessions": 4,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 3,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.13325,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2851.RAF",
+        "fullSettledMilliseconds": 2618.377916,
+        "immediateRetainedCanvas": true,
+        "iteration": 1,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2892.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 29,
+            "displayedRenders": 29,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 31,
+            "publishedFullSourceDecodes": 18,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 29,
+            "submittedSnapshots": 29
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 1 fuji400-fresh/DSCF2851.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 55677800,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722674176
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2851.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 2,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.12375,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2856.RAF",
+        "fullSettledMilliseconds": 2617.99925,
+        "immediateRetainedCanvas": true,
+        "iteration": 1,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2881.RAF": "rawDetail"
+          },
+          "chargedPreviewBytes": 1921267104,
+          "counters": {
+            "corrections": 30,
+            "displayedRenders": 30,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 34,
+            "publishedFullSourceDecodes": 19,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 30,
+            "submittedSnapshots": 30
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 1 fuji400-fresh/DSCF2856.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 55645032,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722739712
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2856.RAF",
+          "sessions": 4,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 3,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.151125,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2865.RAF",
+        "fullSettledMilliseconds": 2613.359792,
+        "immediateRetainedCanvas": true,
+        "iteration": 1,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawFull",
+            "fuji400-fresh/DSCF2888.RAF": "rawDetail"
+          },
+          "chargedPreviewBytes": 1921267104,
+          "counters": {
+            "corrections": 31,
+            "displayedRenders": 31,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 36,
+            "publishedFullSourceDecodes": 20,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 31,
+            "submittedSnapshots": 31
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 1 fuji400-fresh/DSCF2865.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 55481192,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722952704
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2865.RAF",
+          "sessions": 4,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 2,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.12375,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2873.RAF",
+        "fullSettledMilliseconds": 2510.325875,
+        "immediateRetainedCanvas": true,
+        "iteration": 1,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawFull",
+            "fuji400-fresh/DSCF2873.RAF": "rawFull",
+            "fuji400-fresh/DSCF2892.RAF": "rawDetail"
+          },
+          "chargedPreviewBytes": 1921267104,
+          "counters": {
+            "corrections": 32,
+            "displayedRenders": 32,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 38,
+            "publishedFullSourceDecodes": 21,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 32,
+            "submittedSnapshots": 32
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 1 fuji400-fresh/DSCF2873.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 55792560,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722952704
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2873.RAF",
+          "sessions": 4,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 2,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.139292,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2881.RAF",
+        "fullSettledMilliseconds": 3002.373833,
+        "immediateRetainedCanvas": true,
+        "iteration": 1,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2865.RAF": "rawFull",
+            "fuji400-fresh/DSCF2873.RAF": "rawFull",
+            "fuji400-fresh/DSCF2881.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 33,
+            "displayedRenders": 33,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 39,
+            "publishedFullSourceDecodes": 22,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 33,
+            "submittedSnapshots": 33
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 1 fuji400-fresh/DSCF2881.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56120336,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722952704
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2881.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 1,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.125709,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2888.RAF",
+        "fullSettledMilliseconds": 2997.395334,
+        "immediateRetainedCanvas": true,
+        "iteration": 1,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2873.RAF": "rawFull",
+            "fuji400-fresh/DSCF2881.RAF": "rawFull",
+            "fuji400-fresh/DSCF2888.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 34,
+            "displayedRenders": 34,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 40,
+            "publishedFullSourceDecodes": 23,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 34,
+            "submittedSnapshots": 34
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 1 fuji400-fresh/DSCF2888.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56218640,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722952704
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2888.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 1,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.134208,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2892.RAF",
+        "fullSettledMilliseconds": 2739.202708,
+        "immediateRetainedCanvas": true,
+        "iteration": 1,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2881.RAF": "rawFull",
+            "fuji400-fresh/DSCF2888.RAF": "rawFull",
+            "fuji400-fresh/DSCF2892.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 35,
+            "displayedRenders": 35,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 40,
+            "publishedFullSourceDecodes": 24,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 35,
+            "submittedSnapshots": 35
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 1 fuji400-fresh/DSCF2892.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56120336,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722821632
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2892.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 0,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.14025,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2833.RAF",
+        "fullSettledMilliseconds": 3005.06125,
+        "immediateRetainedCanvas": true,
+        "iteration": 2,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2888.RAF": "rawFull",
+            "fuji400-fresh/DSCF2892.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 36,
+            "displayedRenders": 36,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 43,
+            "publishedFullSourceDecodes": 25,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 36,
+            "submittedSnapshots": 36
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 2 fuji400-fresh/DSCF2833.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56185872,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722821632
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2833.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 3,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.1445,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2851.RAF",
+        "fullSettledMilliseconds": 2967.080791,
+        "immediateRetainedCanvas": true,
+        "iteration": 2,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawDetail",
+            "fuji400-fresh/DSCF2892.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1921267104,
+          "counters": {
+            "corrections": 37,
+            "displayedRenders": 37,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 46,
+            "publishedFullSourceDecodes": 26,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 37,
+            "submittedSnapshots": 37
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 2 fuji400-fresh/DSCF2851.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56218640,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722870784
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2851.RAF",
+          "sessions": 4,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 3,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.140958,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2856.RAF",
+        "fullSettledMilliseconds": 3236.152458,
+        "immediateRetainedCanvas": true,
+        "iteration": 2,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 38,
+            "displayedRenders": 38,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 48,
+            "publishedFullSourceDecodes": 27,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 38,
+            "submittedSnapshots": 38
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 2 fuji400-fresh/DSCF2856.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56235024,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722887168
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2856.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 2,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.146333,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2865.RAF",
+        "fullSettledMilliseconds": 3271.778042,
+        "immediateRetainedCanvas": true,
+        "iteration": 2,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 39,
+            "displayedRenders": 39,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 51,
+            "publishedFullSourceDecodes": 28,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 39,
+            "submittedSnapshots": 39
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 2 fuji400-fresh/DSCF2865.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56267792,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722936320
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2865.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 3,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.129083,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2873.RAF",
+        "fullSettledMilliseconds": 3336.326291,
+        "immediateRetainedCanvas": true,
+        "iteration": 2,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawFull",
+            "fuji400-fresh/DSCF2873.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 40,
+            "displayedRenders": 40,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 54,
+            "publishedFullSourceDecodes": 29,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 40,
+            "submittedSnapshots": 40
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 2 fuji400-fresh/DSCF2873.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56300560,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722936320
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2873.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 3,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.147417,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2881.RAF",
+        "fullSettledMilliseconds": 2558.887625,
+        "immediateRetainedCanvas": true,
+        "iteration": 2,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2865.RAF": "rawFull",
+            "fuji400-fresh/DSCF2873.RAF": "rawFull",
+            "fuji400-fresh/DSCF2881.RAF": "rawFull",
+            "fuji400-fresh/DSCF2892.RAF": "rawDetail"
+          },
+          "chargedPreviewBytes": 1921267104,
+          "counters": {
+            "corrections": 41,
+            "displayedRenders": 41,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 56,
+            "publishedFullSourceDecodes": 30,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 41,
+            "submittedSnapshots": 41
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 2 fuji400-fresh/DSCF2881.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56300560,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722936320
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2881.RAF",
+          "sessions": 4,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 2,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.13975,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2888.RAF",
+        "fullSettledMilliseconds": 3320.079292,
+        "immediateRetainedCanvas": true,
+        "iteration": 2,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2873.RAF": "rawFull",
+            "fuji400-fresh/DSCF2881.RAF": "rawFull",
+            "fuji400-fresh/DSCF2888.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 42,
+            "displayedRenders": 42,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 56,
+            "publishedFullSourceDecodes": 31,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 42,
+            "submittedSnapshots": 42
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 2 fuji400-fresh/DSCF2888.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56251408,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722838016
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2888.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 0,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.13575,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2892.RAF",
+        "fullSettledMilliseconds": 3291.382792,
+        "immediateRetainedCanvas": true,
+        "iteration": 2,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2881.RAF": "rawFull",
+            "fuji400-fresh/DSCF2888.RAF": "rawFull",
+            "fuji400-fresh/DSCF2892.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 43,
+            "displayedRenders": 43,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 56,
+            "publishedFullSourceDecodes": 32,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 43,
+            "submittedSnapshots": 43
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 2 fuji400-fresh/DSCF2892.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56267792,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722838016
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2892.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 0,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.1555,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2833.RAF",
+        "fullSettledMilliseconds": 3327.689209,
+        "immediateRetainedCanvas": true,
+        "iteration": 3,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2888.RAF": "rawFull",
+            "fuji400-fresh/DSCF2892.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 44,
+            "displayedRenders": 44,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 59,
+            "publishedFullSourceDecodes": 33,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 44,
+            "submittedSnapshots": 44
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 3 fuji400-fresh/DSCF2833.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56333328,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722838016
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2833.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 3,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.13675,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2851.RAF",
+        "fullSettledMilliseconds": 2628.903708,
+        "immediateRetainedCanvas": true,
+        "iteration": 3,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2873.RAF": "rawDetail",
+            "fuji400-fresh/DSCF2892.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1921267104,
+          "counters": {
+            "corrections": 45,
+            "displayedRenders": 45,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 62,
+            "publishedFullSourceDecodes": 34,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 45,
+            "submittedSnapshots": 45
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 3 fuji400-fresh/DSCF2851.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56349712,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722854400
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2851.RAF",
+          "sessions": 4,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 3,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.133291,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2856.RAF",
+        "fullSettledMilliseconds": 3398.385333,
+        "immediateRetainedCanvas": true,
+        "iteration": 3,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 46,
+            "displayedRenders": 46,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 64,
+            "publishedFullSourceDecodes": 35,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 46,
+            "submittedSnapshots": 46
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 3 fuji400-fresh/DSCF2856.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56366096,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722854400
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2856.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 2,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.150083,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2865.RAF",
+        "fullSettledMilliseconds": 2963.585792,
+        "immediateRetainedCanvas": true,
+        "iteration": 3,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawFull",
+            "fuji400-fresh/DSCF2881.RAF": "rawDetail"
+          },
+          "chargedPreviewBytes": 1921267104,
+          "counters": {
+            "corrections": 47,
+            "displayedRenders": 47,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 67,
+            "publishedFullSourceDecodes": 36,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 47,
+            "submittedSnapshots": 47
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 3 fuji400-fresh/DSCF2865.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56349712,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722870784
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2865.RAF",
+          "sessions": 4,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 3,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.141167,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2873.RAF",
+        "fullSettledMilliseconds": 2663.874,
+        "immediateRetainedCanvas": true,
+        "iteration": 3,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawFull",
+            "fuji400-fresh/DSCF2873.RAF": "rawFull",
+            "fuji400-fresh/DSCF2892.RAF": "rawDetail"
+          },
+          "chargedPreviewBytes": 1921267104,
+          "counters": {
+            "corrections": 48,
+            "displayedRenders": 48,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 69,
+            "publishedFullSourceDecodes": 37,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 48,
+            "submittedSnapshots": 48
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 3 fuji400-fresh/DSCF2873.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56382480,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722870784
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2873.RAF",
+          "sessions": 4,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 2,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.1405,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2881.RAF",
+        "fullSettledMilliseconds": 2604.465292,
+        "immediateRetainedCanvas": true,
+        "iteration": 3,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2865.RAF": "rawFull",
+            "fuji400-fresh/DSCF2873.RAF": "rawFull",
+            "fuji400-fresh/DSCF2881.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 49,
+            "displayedRenders": 49,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 70,
+            "publishedFullSourceDecodes": 38,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 49,
+            "submittedSnapshots": 49
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 3 fuji400-fresh/DSCF2881.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56398864,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722870784
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2881.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 1,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.146959,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2888.RAF",
+        "fullSettledMilliseconds": 2870.494459,
+        "immediateRetainedCanvas": true,
+        "iteration": 3,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2873.RAF": "rawFull",
+            "fuji400-fresh/DSCF2881.RAF": "rawFull",
+            "fuji400-fresh/DSCF2888.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 50,
+            "displayedRenders": 50,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 71,
+            "publishedFullSourceDecodes": 39,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 50,
+            "submittedSnapshots": 50
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 3 fuji400-fresh/DSCF2888.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56513552,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722870784
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2888.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 1,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.1425,
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2892.RAF",
+        "fullSettledMilliseconds": 3142.777916,
+        "immediateRetainedCanvas": true,
+        "iteration": 3,
+        "phase": "navigation",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2881.RAF": "rawFull",
+            "fuji400-fresh/DSCF2888.RAF": "rawFull",
+            "fuji400-fresh/DSCF2892.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1894255008,
+          "counters": {
+            "corrections": 51,
+            "displayedRenders": 51,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 71,
+            "publishedFullSourceDecodes": 40,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 51,
+            "submittedSnapshots": 51
+          },
+          "fullSourceSessions": 3,
+          "label": "navigation 3 fuji400-fresh/DSCF2892.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56448016,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3722772480
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 8,
+          "selection": "DSCF2892.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 0,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      }
+    ],
+    "navigationWork": {
+      "corrections": 32,
+      "displayedRenders": 32,
+      "droppedSnapshots": 0,
+      "lookaheadSubmissions": 60,
+      "publishedFullSourceDecodes": 32,
+      "renderedCacheHits": 0,
+      "statisticsComputations": 32,
+      "submittedSnapshots": 32
+    },
+    "recovery": [
+      {
+        "cachedSourceKindBeforeSelection": "rawFull",
+        "firstPublicationBitmapDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 1343.791917,
+        "firstPublicationSourceKind": "rawFull",
+        "firstPublicationUsedRetainedCanvas": false,
+        "frame": "fuji400-fresh/DSCF2851.RAF",
+        "fullSettledMilliseconds": 1343.831667,
+        "immediateRetainedCanvas": false,
+        "iteration": 0,
+        "phase": "pressure recovery",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawDetail",
+            "fuji400-fresh/DSCF2873.RAF": "rawDetail"
+          },
+          "chargedPreviewBytes": 1447217856,
+          "counters": {
+            "corrections": 59,
+            "displayedRenders": 59,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 84,
+            "publishedFullSourceDecodes": 45,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 59,
+            "submittedSnapshots": 59
+          },
+          "fullSourceSessions": 3,
+          "label": "pressure recovery 0 fuji400-fresh/DSCF2851.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56595640,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3963895808
+          },
+          "memoryPressureHandlingCount": 1,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 1,
+          "selection": "DSCF2851.RAF",
+          "sessions": 5,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 1,
+          "publishedFullSourceDecodes": 0,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "cachedSourceKindBeforeSelection": "rawFull",
+        "firstPublicationBitmapDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 1349.557083,
+        "firstPublicationSourceKind": "rawFull",
+        "firstPublicationUsedRetainedCanvas": false,
+        "frame": "fuji400-fresh/DSCF2856.RAF",
+        "fullSettledMilliseconds": 1361.517583,
+        "immediateRetainedCanvas": false,
+        "iteration": 0,
+        "phase": "pressure recovery",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawDetail",
+            "fuji400-fresh/DSCF2873.RAF": "rawDetail",
+            "fuji400-fresh/DSCF2881.RAF": "rawDetail"
+          },
+          "chargedPreviewBytes": 1798256544,
+          "counters": {
+            "corrections": 60,
+            "displayedRenders": 60,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 85,
+            "publishedFullSourceDecodes": 45,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 60,
+            "submittedSnapshots": 60
+          },
+          "fullSourceSessions": 3,
+          "label": "pressure recovery 0 fuji400-fresh/DSCF2856.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56743120,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3963895808
+          },
+          "memoryPressureHandlingCount": 1,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 2,
+          "selection": "DSCF2856.RAF",
+          "sessions": 6,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 1,
+          "publishedFullSourceDecodes": 0,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "cachedSourceKindBeforeSelection": "rawFull",
+        "firstPublicationBitmapDimensions": {
+          "height": 2238,
+          "width": 3290
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 0.546125,
+        "firstPublicationSourceKind": "rawFull",
+        "firstPublicationUsedRetainedCanvas": true,
+        "frame": "fuji400-fresh/DSCF2833.RAF",
+        "fullSettledMilliseconds": 56.766083,
+        "immediateRetainedCanvas": true,
+        "iteration": 0,
+        "phase": "pressure recovery",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawDetail",
+            "fuji400-fresh/DSCF2873.RAF": "rawDetail"
+          },
+          "chargedPreviewBytes": 1800750240,
+          "counters": {
+            "corrections": 60,
+            "displayedRenders": 61,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 85,
+            "publishedFullSourceDecodes": 45,
+            "renderedCacheHits": 1,
+            "statisticsComputations": 60,
+            "submittedSnapshots": 61
+          },
+          "fullSourceSessions": 3,
+          "label": "pressure recovery 0 fuji400-fresh/DSCF2833.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 56775888,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3963895808
+          },
+          "memoryPressureHandlingCount": 1,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 3,
+          "selection": "DSCF2833.RAF",
+          "sessions": 5,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 0,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 0,
+          "publishedFullSourceDecodes": 0,
+          "renderedCacheHits": 1,
+          "statisticsComputations": 0,
+          "submittedSnapshots": 1
+        }
+      }
+    ],
+    "states": [
+      {
+        "bitmapDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "cachedSourceKinds": {
+          "fuji400-fresh/DSCF2833.RAF": "rawFull",
+          "fuji400-fresh/DSCF2851.RAF": "rawFull",
+          "fuji400-fresh/DSCF2856.RAF": "rawFull",
+          "fuji400-fresh/DSCF2865.RAF": "rawDetail"
+        },
+        "chargedPreviewBytes": 1096179168,
+        "counters": {
+          "corrections": 3,
+          "displayedRenders": 3,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 3,
+          "publishedFullSourceDecodes": 3,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 3,
+          "submittedSnapshots": 3
+        },
+        "fullSourceSessions": 3,
+        "label": "first full-source import",
+        "logicalPreviewDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "memory": {
+          "physicalFootprintBytes": 285117464,
+          "processLifetimePeakPhysicalFootprintBytes": 886622944,
+          "reusableBytes": 2168160256
+        },
+        "memoryPressureHandlingCount": 0,
+        "previewBudgetBytes": 3221225472,
+        "retainedCanvasVisible": false,
+        "retainedCanvases": 0,
+        "selection": "DSCF2833.RAF",
+        "sessions": 4,
+        "sourceDimensions": {
+          "height": 5184,
+          "width": 7752
+        },
+        "sourceKind": "rawFull"
+      },
+      {
+        "bitmapDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "cachedSourceKinds": {
+          "fuji400-fresh/DSCF2881.RAF": "rawFull",
+          "fuji400-fresh/DSCF2888.RAF": "rawFull",
+          "fuji400-fresh/DSCF2892.RAF": "rawFull"
+        },
+        "chargedPreviewBytes": 1864749216,
+        "counters": {
+          "corrections": 19,
+          "displayedRenders": 19,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 11,
+          "publishedFullSourceDecodes": 8,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 19,
+          "submittedSnapshots": 19
+        },
+        "fullSourceSessions": 3,
+        "label": "8-frame warmup settled",
+        "logicalPreviewDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "memory": {
+          "physicalFootprintBytes": 84529856,
+          "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+          "reusableBytes": 3692904448
+        },
+        "memoryPressureHandlingCount": 0,
+        "previewBudgetBytes": 3221225472,
+        "retainedCanvasVisible": false,
+        "retainedCanvases": 7,
+        "selection": "DSCF2892.RAF",
+        "sessions": 3,
+        "sourceDimensions": {
+          "height": 5184,
+          "width": 7752
+        },
+        "sourceKind": "rawFull"
+      },
+      {
+        "bitmapDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "cachedSourceKinds": {
+          "fuji400-fresh/DSCF2881.RAF": "rawFull",
+          "fuji400-fresh/DSCF2888.RAF": "rawFull",
+          "fuji400-fresh/DSCF2892.RAF": "rawFull"
+        },
+        "chargedPreviewBytes": 1894255008,
+        "counters": {
+          "corrections": 51,
+          "displayedRenders": 51,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 71,
+          "publishedFullSourceDecodes": 40,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 51,
+          "submittedSnapshots": 51
+        },
+        "fullSourceSessions": 3,
+        "label": "navigation settled",
+        "logicalPreviewDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "memory": {
+          "physicalFootprintBytes": 56448016,
+          "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+          "reusableBytes": 3722772480
+        },
+        "memoryPressureHandlingCount": 0,
+        "previewBudgetBytes": 3221225472,
+        "retainedCanvasVisible": false,
+        "retainedCanvases": 8,
+        "selection": "DSCF2892.RAF",
+        "sessions": 3,
+        "sourceDimensions": {
+          "height": 5184,
+          "width": 7752
+        },
+        "sourceKind": "rawFull"
+      },
+      {
+        "bitmapDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "cachedSourceKinds": {
+          "fuji400-fresh/DSCF2833.RAF": "rawFull",
+          "fuji400-fresh/DSCF2851.RAF": "rawDetail",
+          "fuji400-fresh/DSCF2888.RAF": "rawFull",
+          "fuji400-fresh/DSCF2892.RAF": "rawFull"
+        },
+        "chargedPreviewBytes": 1921267104,
+        "counters": {
+          "corrections": 54,
+          "displayedRenders": 54,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 74,
+          "publishedFullSourceDecodes": 41,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 54,
+          "submittedSnapshots": 54
+        },
+        "fullSourceSessions": 3,
+        "label": "retained revisit after edit",
+        "logicalPreviewDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "memory": {
+          "physicalFootprintBytes": 56579088,
+          "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+          "reusableBytes": 3722821632
+        },
+        "memoryPressureHandlingCount": 0,
+        "previewBudgetBytes": 3221225472,
+        "retainedCanvasVisible": false,
+        "retainedCanvases": 8,
+        "selection": "DSCF2833.RAF",
+        "sessions": 4,
+        "sourceDimensions": {
+          "height": 5184,
+          "width": 7752
+        },
+        "sourceKind": "rawFull"
+      },
+      {
+        "bitmapDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "cachedSourceKinds": {
+          "fuji400-fresh/DSCF2833.RAF": "rawFull",
+          "fuji400-fresh/DSCF2851.RAF": "rawDetail",
+          "fuji400-fresh/DSCF2888.RAF": "rawFull",
+          "fuji400-fresh/DSCF2892.RAF": "rawFull"
+        },
+        "chargedPreviewBytes": 1921267104,
+        "counters": {
+          "corrections": 55,
+          "displayedRenders": 55,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 74,
+          "publishedFullSourceDecodes": 41,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 55,
+          "submittedSnapshots": 55
+        },
+        "fullSourceSessions": 3,
+        "label": "Original comparison",
+        "logicalPreviewDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "memory": {
+          "physicalFootprintBytes": 56579088,
+          "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+          "reusableBytes": 3722821632
+        },
+        "memoryPressureHandlingCount": 0,
+        "previewBudgetBytes": 3221225472,
+        "retainedCanvasVisible": false,
+        "retainedCanvases": 8,
+        "selection": "DSCF2833.RAF",
+        "sessions": 4,
+        "sourceDimensions": {
+          "height": 5184,
+          "width": 7752
+        },
+        "sourceKind": "rawFull"
+      },
+      {
+        "bitmapDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "cachedSourceKinds": {
+          "fuji400-fresh/DSCF2833.RAF": "rawFull",
+          "fuji400-fresh/DSCF2851.RAF": "rawFull",
+          "fuji400-fresh/DSCF2856.RAF": "rawFull",
+          "fuji400-fresh/DSCF2881.RAF": "rawDetail"
+        },
+        "chargedPreviewBytes": 1921267104,
+        "counters": {
+          "corrections": 58,
+          "displayedRenders": 58,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 80,
+          "publishedFullSourceDecodes": 43,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 58,
+          "submittedSnapshots": 58
+        },
+        "fullSourceSessions": 3,
+        "label": "before simulated app pressure",
+        "logicalPreviewDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "memory": {
+          "physicalFootprintBytes": 56726712,
+          "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+          "reusableBytes": 3963944960
+        },
+        "memoryPressureHandlingCount": 0,
+        "previewBudgetBytes": 3221225472,
+        "retainedCanvasVisible": false,
+        "retainedCanvases": 8,
+        "selection": "DSCF2833.RAF",
+        "sessions": 4,
+        "sourceDimensions": {
+          "height": 5184,
+          "width": 7752
+        },
+        "sourceKind": "rawFull"
+      },
+      {
+        "bitmapDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "cachedSourceKinds": {
+          "fuji400-fresh/DSCF2833.RAF": "rawFull"
+        },
+        "chargedPreviewBytes": 552736224,
+        "counters": {
+          "corrections": 58,
+          "displayedRenders": 58,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 80,
+          "publishedFullSourceDecodes": 43,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 58,
+          "submittedSnapshots": 58
+        },
+        "fullSourceSessions": 1,
+        "label": "simulated app pressure settled",
+        "logicalPreviewDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "memory": {
+          "physicalFootprintBytes": 56448160,
+          "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+          "reusableBytes": 3963944960
+        },
+        "memoryPressureHandlingCount": 1,
+        "previewBudgetBytes": 3221225472,
+        "retainedCanvasVisible": false,
+        "retainedCanvases": 0,
+        "selection": "DSCF2833.RAF",
+        "sessions": 1,
+        "sourceDimensions": {
+          "height": 5184,
+          "width": 7752
+        },
+        "sourceKind": "rawFull"
+      },
+      {
+        "bitmapDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "cachedSourceKinds": {
+          "fuji400-fresh/DSCF2833.RAF": "rawFull",
+          "fuji400-fresh/DSCF2851.RAF": "rawFull",
+          "fuji400-fresh/DSCF2856.RAF": "rawFull",
+          "fuji400-fresh/DSCF2865.RAF": "rawDetail"
+        },
+        "chargedPreviewBytes": 1096179168,
+        "counters": {
+          "corrections": 58,
+          "displayedRenders": 58,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 83,
+          "publishedFullSourceDecodes": 45,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 58,
+          "submittedSnapshots": 58
+        },
+        "fullSourceSessions": 3,
+        "label": "pressure released and background settled",
+        "logicalPreviewDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "memory": {
+          "physicalFootprintBytes": 56399008,
+          "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+          "reusableBytes": 3963895808
+        },
+        "memoryPressureHandlingCount": 1,
+        "previewBudgetBytes": 3221225472,
+        "retainedCanvasVisible": false,
+        "retainedCanvases": 0,
+        "selection": "DSCF2833.RAF",
+        "sessions": 4,
+        "sourceDimensions": {
+          "height": 5184,
+          "width": 7752
+        },
+        "sourceKind": "rawFull"
+      },
+      {
+        "cachedSourceKinds": {},
+        "chargedPreviewBytes": 0,
+        "counters": {
+          "corrections": 60,
+          "displayedRenders": 61,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 85,
+          "publishedFullSourceDecodes": 45,
+          "renderedCacheHits": 1,
+          "statisticsComputations": 60,
+          "submittedSnapshots": 61
+        },
+        "fullSourceSessions": 0,
+        "label": "Close All settled",
+        "memory": {
+          "physicalFootprintBytes": 55891152,
+          "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+          "reusableBytes": 3963895808
+        },
+        "memoryPressureHandlingCount": 1,
+        "previewBudgetBytes": 3221225472,
+        "retainedCanvasVisible": false,
+        "retainedCanvases": 0,
+        "sessions": 0
+      }
+    ],
+    "warmup": [
+      {
+        "cachedSourceKindBeforeSelection": "rawFull",
+        "firstPublicationBitmapDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 1341.529583,
+        "firstPublicationSourceKind": "rawFull",
+        "firstPublicationUsedRetainedCanvas": false,
+        "frame": "fuji400-fresh/DSCF2851.RAF",
+        "fullSettledMilliseconds": 1356.634583,
+        "immediateRetainedCanvas": false,
+        "iteration": 0,
+        "phase": "warmup",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawDetail",
+            "fuji400-fresh/DSCF2873.RAF": "rawDetail"
+          },
+          "chargedPreviewBytes": 1447217856,
+          "counters": {
+            "corrections": 4,
+            "displayedRenders": 4,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 4,
+            "publishedFullSourceDecodes": 3,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 4,
+            "submittedSnapshots": 4
+          },
+          "fullSourceSessions": 3,
+          "label": "warmup 0 fuji400-fresh/DSCF2851.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 579865960,
+            "processLifetimePeakPhysicalFootprintBytes": 886622944,
+            "reusableBytes": 2172223488
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 1,
+          "selection": "DSCF2851.RAF",
+          "sessions": 5,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 1,
+          "publishedFullSourceDecodes": 0,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "cachedSourceKindBeforeSelection": "rawFull",
+        "firstPublicationBitmapDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 4476,
+          "width": 6580
+        },
+        "firstPublicationMilliseconds": 1347.879958,
+        "firstPublicationSourceKind": "rawFull",
+        "firstPublicationUsedRetainedCanvas": false,
+        "frame": "fuji400-fresh/DSCF2856.RAF",
+        "fullSettledMilliseconds": 1362.994125,
+        "immediateRetainedCanvas": false,
+        "iteration": 0,
+        "phase": "warmup",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2833.RAF": "rawFull",
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawDetail",
+            "fuji400-fresh/DSCF2873.RAF": "rawDetail",
+            "fuji400-fresh/DSCF2881.RAF": "rawDetail"
+          },
+          "chargedPreviewBytes": 1798256544,
+          "counters": {
+            "corrections": 5,
+            "displayedRenders": 5,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 5,
+            "publishedFullSourceDecodes": 3,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 5,
+            "submittedSnapshots": 5
+          },
+          "fullSourceSessions": 3,
+          "label": "warmup 0 fuji400-fresh/DSCF2856.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 874794608,
+            "processLifetimePeakPhysicalFootprintBytes": 886622944,
+            "reusableBytes": 2181644288
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 2,
+          "selection": "DSCF2856.RAF",
+          "sessions": 6,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 1,
+          "displayedRenders": 1,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 1,
+          "publishedFullSourceDecodes": 0,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 1,
+          "submittedSnapshots": 1
+        }
+      },
+      {
+        "cachedSourceKindBeforeSelection": "rawDetail",
+        "firstPublicationBitmapDimensions": {
+          "height": 1492,
+          "width": 2191
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 1492,
+          "width": 2191
+        },
+        "firstPublicationMilliseconds": 242.518875,
+        "firstPublicationSourceKind": "rawDetail",
+        "firstPublicationUsedRetainedCanvas": false,
+        "frame": "fuji400-fresh/DSCF2865.RAF",
+        "fullSettledMilliseconds": 2327.600625,
+        "immediateRetainedCanvas": false,
+        "iteration": 0,
+        "phase": "warmup",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2851.RAF": "rawFull",
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1746726048,
+          "counters": {
+            "corrections": 7,
+            "displayedRenders": 7,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 5,
+            "publishedFullSourceDecodes": 4,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 7,
+            "submittedSnapshots": 7
+          },
+          "fullSourceSessions": 3,
+          "label": "warmup 0 fuji400-fresh/DSCF2865.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 698896392,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 2718810112
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 3,
+          "selection": "DSCF2865.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 2,
+          "displayedRenders": 2,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 0,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 2,
+          "submittedSnapshots": 2
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 342,
+          "width": 505
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 342,
+          "width": 505
+        },
+        "firstPublicationMilliseconds": 226.832333,
+        "firstPublicationSourceKind": "rawDraft",
+        "firstPublicationUsedRetainedCanvas": false,
+        "frame": "fuji400-fresh/DSCF2873.RAF",
+        "fullSettledMilliseconds": 3172.917458,
+        "immediateRetainedCanvas": false,
+        "iteration": 0,
+        "phase": "warmup",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2856.RAF": "rawFull",
+            "fuji400-fresh/DSCF2865.RAF": "rawFull",
+            "fuji400-fresh/DSCF2873.RAF": "rawFull",
+            "fuji400-fresh/DSCF2892.RAF": "rawDetail"
+          },
+          "chargedPreviewBytes": 1803243936,
+          "counters": {
+            "corrections": 10,
+            "displayedRenders": 10,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 8,
+            "publishedFullSourceDecodes": 5,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 10,
+            "submittedSnapshots": 10
+          },
+          "fullSourceSessions": 3,
+          "label": "warmup 0 fuji400-fresh/DSCF2873.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 420565384,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3320070144
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 4,
+          "selection": "DSCF2873.RAF",
+          "sessions": 4,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 3,
+          "displayedRenders": 3,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 3,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 3,
+          "submittedSnapshots": 3
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 342,
+          "width": 505
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 342,
+          "width": 505
+        },
+        "firstPublicationMilliseconds": 236.649667,
+        "firstPublicationSourceKind": "rawDraft",
+        "firstPublicationUsedRetainedCanvas": false,
+        "frame": "fuji400-fresh/DSCF2881.RAF",
+        "fullSettledMilliseconds": 3207.074917,
+        "immediateRetainedCanvas": false,
+        "iteration": 0,
+        "phase": "warmup",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2865.RAF": "rawFull",
+            "fuji400-fresh/DSCF2873.RAF": "rawFull",
+            "fuji400-fresh/DSCF2881.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1805737632,
+          "counters": {
+            "corrections": 13,
+            "displayedRenders": 13,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 10,
+            "publishedFullSourceDecodes": 6,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 13,
+            "submittedSnapshots": 13
+          },
+          "fullSourceSessions": 3,
+          "label": "warmup 0 fuji400-fresh/DSCF2881.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 113545800,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3661414400
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 5,
+          "selection": "DSCF2881.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 3,
+          "displayedRenders": 3,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 2,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 3,
+          "submittedSnapshots": 3
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 342,
+          "width": 505
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 342,
+          "width": 505
+        },
+        "firstPublicationMilliseconds": 223.73725,
+        "firstPublicationSourceKind": "rawDraft",
+        "firstPublicationUsedRetainedCanvas": false,
+        "frame": "fuji400-fresh/DSCF2888.RAF",
+        "fullSettledMilliseconds": 3211.294542,
+        "immediateRetainedCanvas": false,
+        "iteration": 0,
+        "phase": "warmup",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2873.RAF": "rawFull",
+            "fuji400-fresh/DSCF2881.RAF": "rawFull",
+            "fuji400-fresh/DSCF2888.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1835243424,
+          "counters": {
+            "corrections": 16,
+            "displayedRenders": 16,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 11,
+            "publishedFullSourceDecodes": 7,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 16,
+            "submittedSnapshots": 16
+          },
+          "fullSourceSessions": 3,
+          "label": "warmup 0 fuji400-fresh/DSCF2888.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 113824400,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3662823424
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 6,
+          "selection": "DSCF2888.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 3,
+          "displayedRenders": 3,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 1,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 3,
+          "submittedSnapshots": 3
+        }
+      },
+      {
+        "firstPublicationBitmapDimensions": {
+          "height": 342,
+          "width": 505
+        },
+        "firstPublicationLogicalDimensions": {
+          "height": 342,
+          "width": 505
+        },
+        "firstPublicationMilliseconds": 241.319708,
+        "firstPublicationSourceKind": "rawDraft",
+        "firstPublicationUsedRetainedCanvas": false,
+        "frame": "fuji400-fresh/DSCF2892.RAF",
+        "fullSettledMilliseconds": 3070.890375,
+        "immediateRetainedCanvas": false,
+        "iteration": 0,
+        "phase": "warmup",
+        "settled": {
+          "bitmapDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "cachedSourceKinds": {
+            "fuji400-fresh/DSCF2881.RAF": "rawFull",
+            "fuji400-fresh/DSCF2888.RAF": "rawFull",
+            "fuji400-fresh/DSCF2892.RAF": "rawFull"
+          },
+          "chargedPreviewBytes": 1864749216,
+          "counters": {
+            "corrections": 19,
+            "displayedRenders": 19,
+            "droppedSnapshots": 0,
+            "lookaheadSubmissions": 11,
+            "publishedFullSourceDecodes": 8,
+            "renderedCacheHits": 0,
+            "statisticsComputations": 19,
+            "submittedSnapshots": 19
+          },
+          "fullSourceSessions": 3,
+          "label": "warmup 0 fuji400-fresh/DSCF2892.RAF",
+          "logicalPreviewDimensions": {
+            "height": 4476,
+            "width": 6580
+          },
+          "memory": {
+            "physicalFootprintBytes": 84529856,
+            "processLifetimePeakPhysicalFootprintBytes": 1229737992,
+            "reusableBytes": 3692904448
+          },
+          "memoryPressureHandlingCount": 0,
+          "previewBudgetBytes": 3221225472,
+          "retainedCanvasVisible": false,
+          "retainedCanvases": 7,
+          "selection": "DSCF2892.RAF",
+          "sessions": 3,
+          "sourceDimensions": {
+            "height": 5184,
+            "width": 7752
+          },
+          "sourceKind": "rawFull"
+        },
+        "work": {
+          "corrections": 3,
+          "displayedRenders": 3,
+          "droppedSnapshots": 0,
+          "lookaheadSubmissions": 0,
+          "publishedFullSourceDecodes": 1,
+          "renderedCacheHits": 0,
+          "statisticsComputations": 3,
+          "submittedSnapshots": 3
+        }
+      }
+    ]
+  },
+  "provenance": {
+    "actualCompiledBinariesSHA256": {
+      "native/FilmScanEngine/.build/arm64-apple-macosx/release/FilmScanConverterMac": "a662930d63bab1147b1d60355adc1347aa867af9fd351249aa0efca5248b78fb",
+      "native/FilmScanEngine/.build/arm64-apple-macosx/release/FilmScanEnginePackageTests.xctest/Contents/MacOS/FilmScanEnginePackageTests": "acde8e65748083792b0d5ffdadfadcf0366eea8f919e2cd2e8e88622f7d20663",
+      "native/FilmScanEngine/.build/arm64-apple-macosx/release/FilmScanLookbook": "f10cd1d6886423812c547de726656fc655c9b88bcae96e427e10533bab069e7d",
+      "native/FilmScanEngine/.build/arm64-apple-macosx/release/FilmScanPreviewComparator": "b8e3028d6913b215dfed4d2f4bb32be0b02fab4feb628c1d3b4b17baae6d04d5"
+    },
+    "environment": {
+      "hardware": "Apple M4 Pro, Mac16,7, 48 GiB RAM",
+      "libraw": "0.22.2",
+      "swift": "Apple Swift version 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)\nTarget: arm64-apple-macosx15.0\n",
+      "system": "ProductName:\t\tmacOS\nProductVersion:\t\t15.7.9\nBuildVersion:\t\t24G830\n"
+    },
+    "environmentManifest": {
+      "path": "dist/roadmap-loop-2026-10-10/workflow-source-manifest.json",
+      "sha256": "8964a9336b3fe78c6dff6ca5464dbda336a39b7bb380d2d7351657c15bb38801"
+    },
+    "exitCode": 0,
+    "fullLog": {
+      "path": "dist/roadmap-loop-2026-10-10/sustained-byte-capacity-32-switches.log",
+      "sha256": "09a837835becb75d12f5f6d42443be8e353267217adf70c93c387ac5b2e9dd0f"
+    },
+    "independentArchiveCurrentSourceAndBinaryVerification": true,
+    "originalReport": {
+      "path": "dist/roadmap-loop-2026-10-10/sustained-byte-capacity-32-switches.json",
+      "sha256": "748e4f090902ee23e2321b44f2af968486e57eedd472b493420d9d13999f0533"
+    },
+    "postRunVerification": {
+      "path": "dist/roadmap-loop-2026-10-10/byte-capacity-after.json",
+      "sha256": "a532305c3b8059af6f391db6291994c5e3dc2fe47df0c666f3ca9ba939f6f6e2",
+      "verifiedAtUTC": "2026-10-11T08:56:24.653644+00:00"
+    },
+    "preRunVerification": {
+      "path": "dist/roadmap-loop-2026-10-10/byte-capacity-before.json",
+      "sha256": "36bb1d4cb4cbaa9e091abc53446c6a6afe8de57fc59721d213713e56886191c9",
+      "verifiedAtUTC": "2026-10-11T08:53:25.463218+00:00"
+    },
+    "relevantCompiledSourceSHA256": {
+      "native/FilmScanEngine/Sources/FilmScanConverterMac/AppModel.swift": "1a433d19996b758c00bbd8329dfd68e37b5488cb9cf13bb0bcb62f1920aa57c7",
+      "native/FilmScanEngine/Sources/FilmScanConverterMac/PreviewSessionCache.swift": "1182b67d30566713fef16e339f17c4e0ddc127efbfe9f16b742b88fcee6cc8d6",
+      "native/FilmScanEngine/Sources/FilmScanConverterMac/RetainedCanvasPreviewCache.swift": "dbeaa26f5a82b842f757e5c5d6ae9dcb32b91a8fb903d9b2bd1f0c1298a179d1",
+      "native/FilmScanEngine/Sources/FilmScanEngine/CPUPreviewPreparationCache.swift": "08d6401af0eecbed592a30027e2457132be5ab8864699a04f619c5421f2852a8",
+      "native/FilmScanEngine/Sources/FilmScanEngine/ProcessingParameters.swift": "718e182078e2ddf7c5bc1723385ba73f2d44a484a8308936f1e926da55f7d9c8",
+      "native/FilmScanEngine/Tests/FilmScanEngineTests/SampleRawCorpus.swift": "060bb48ad51998dd7cc5cdb5659edf0b1ef1ba828837dcab9500697c1a215129",
+      "native/FilmScanEngine/Tests/FilmScanEngineTests/SustainedPreviewPerformanceTests.swift": "941803f51f45e989c86e042d39ae222586bd8c59dc78a8fa0b642d5825a28b07"
+    },
+    "reportedFailures": 0,
+    "reportedTests": 1,
+    "runtime": {
+      "appModelSHA256": "1a433d19996b758c00bbd8329dfd68e37b5488cb9cf13bb0bcb62f1920aa57c7",
+      "dirtyStatusLines": 216,
+      "dirtyStatusSHA256": "f89ea146c924b7f341841f07cca309c088525ea99ecd2ad52abd12850f06ef1f",
+      "hardware": "Mac16,7",
+      "harnessSHA256": "941803f51f45e989c86e042d39ae222586bd8c59dc78a8fa0b642d5825a28b07",
+      "operatingSystem": "Version 15.7.9 (Build 24G830)",
+      "physicalMemoryBytes": 51539607552,
+      "processorCount": 14,
+      "sourceRevision": "2b4da0930df3ccebc08c1e3197a8ec242df448ac",
+      "thermalStateAtStart": 0
+    },
+    "sameCompiledCohortFullRelease": {
+      "durationSeconds": 165.268,
+      "exitCode": 0,
+      "intentionalSkips": 22,
+      "issues": 0,
+      "log": "workflow-guards-full-release-6.log",
+      "logSHA256": "41bf558668041faf1c3ff54a2a3a509ecdcf1c7f1986a6648770312ab25411d8",
+      "reportedTests": 937
+    },
+    "sourceArchive": {
+      "path": "dist/roadmap-loop-2026-10-10/workflow-guards-5-source.tar.gz",
+      "sha256": "689cfb8dd68d1ee57f92ff9f2cf69f1e95506825d6bbe696b2fe93abf8cb56f3"
+    },
+    "sourceManifest": {
+      "path": "dist/roadmap-loop-2026-10-10/workflow-guards-5-manifest.json",
+      "sha256": "4972a4c25d34ac7e090051933158ece0601467988a7746b6d6a919355eac35e2"
+    },
+    "sourceRevision": "2b4da0930df3ccebc08c1e3197a8ec242df448ac",
+    "sourceState": "Dirty working-tree cohort frozen before compilation; not represented by the revision alone.",
+    "testRuntimeSeconds": 133.22,
+    "verifiedSourceFiles": 376
+  },
+  "schemaVersion": 1,
+  "workload": {
+    "cacheDepth": 8,
+    "cohort": "fuji-eight-cpu",
+    "configuredParametersSharedByAllFrames": {
+      "blueCurveControlPoints": [],
+      "blueCurveEnabled": false,
+      "borderCrop": 0,
+      "cropRectCoordinateSpace": "imageAxes",
+      "curveControlPoints": [],
+      "curveEnabled": false,
+      "darkThreshold": 25,
+      "densityC41Profile": {
+        "densityOffset": {
+          "blue": 0,
+          "green": 0,
+          "red": 0
+        },
+        "densitySlope": {
+          "blue": 1,
+          "green": 1,
+          "red": 1
+        }
+      },
+      "densityCorrection": {
+        "blueOutput": {
+          "blue": 1,
+          "green": 0,
+          "red": 0
+        },
+        "greenOutput": {
+          "blue": 0,
+          "green": 1,
+          "red": 0
+        },
+        "offset": {
+          "blue": 0,
+          "green": 0,
+          "red": 0
+        },
+        "redOutput": {
+          "blue": 0,
+          "green": 0,
+          "red": 1
+        }
+      },
+      "densityDisplayParams": {
+        "exposureEV": 0,
+        "maximumSceneGain": 16,
+        "toneMap": "linear",
+        "whiteBalance": {
+          "blue": 1,
+          "green": 1,
+          "red": 1
+        }
+      },
+      "densityPipelineEnabled": false,
+      "dustRepairs": [],
+      "filmBaseChosenByUser": true,
+      "filmDyeMixing": {
+        "blueFromGreen": 0,
+        "blueFromRed": 0,
+        "greenFromBlue": 0,
+        "greenFromRed": 0,
+        "redFromBlue": 0,
+        "redFromGreen": 0
+      },
+      "filmNegativeParams": {
+        "blueRatio": 0.86,
+        "calibratedColorProfile": "generic",
+        "calibratedMonochromeProfile": "generic",
+        "densityNeutralProtection": false,
+        "densityProfileID": "generic_c41",
+        "densityUnmixRGB": [
+          1,
+          -0.05,
+          -0.02,
+          -0.04,
+          1,
+          -0.08,
+          -0.01,
+          -0.1,
+          1
+        ],
+        "densityUnmixStrength": 0.5,
+        "enabled": true,
+        "greenExp": 1.5,
+        "monochromeExposureEV": 0,
+        "redRatio": 1.36,
+        "rendering": "densityPrint"
+      },
+      "filmType": 1,
+      "flip": false,
+      "gamma": 0,
+      "greenCurveControlPoints": [],
+      "greenCurveEnabled": false,
+      "highlightWheel": {
+        "hue": 0,
+        "strength": 0
+      },
+      "highlights": 0,
+      "lightThreshold": 100,
+      "manualCropAspectRatio": "Free",
+      "midtoneWheel": {
+        "hue": 0,
+        "strength": 0
+      },
+      "perspectiveCrop": {
+        "bottomLeft": {
+          "x": 0.1,
+          "y": 0.9
+        },
+        "bottomRight": {
+          "x": 0.91,
+          "y": 0.92
+        },
+        "topLeft": {
+          "x": 0.08,
+          "y": 0.1
+        },
+        "topRight": {
+          "x": 0.93,
+          "y": 0.08
+        }
+      },
+      "photoAdjustments": {
+        "blacks": 0,
+        "brightness": 0,
+        "contrast": 0,
+        "exposureEV": 0,
+        "highlightCeiling": 0,
+        "highlights": 0,
+        "midtoneLevel": 0,
+        "saturation": 0,
+        "schemaVersion": 4,
+        "shadowFloor": 0,
+        "shadows": 0,
+        "temperatureShiftMired": 0,
+        "tint": 0,
+        "vibrance": 0,
+        "whites": 0
+      },
+      "redCurveControlPoints": [],
+      "redCurveEnabled": false,
+      "rotation": 0,
+      "saturation": 100,
+      "shadowWheel": {
+        "hue": 0,
+        "strength": 0
+      },
+      "shadows": 0,
+      "straightenAngle": 2,
+      "temperature": 0,
+      "tint": 0
+    },
+    "filesystemCacheState": "Uncontrolled; all eight named sources warmed before navigation.",
+    "finalParameterOverridesByFrame": {
+      "fuji400-fresh/DSCF2833.RAF": {
+        "photoAdjustments.exposureEV": 0.25
+      },
+      "fuji400-fresh/DSCF2851.RAF": {},
+      "fuji400-fresh/DSCF2856.RAF": {},
+      "fuji400-fresh/DSCF2865.RAF": {},
+      "fuji400-fresh/DSCF2873.RAF": {},
+      "fuji400-fresh/DSCF2881.RAF": {},
+      "fuji400-fresh/DSCF2888.RAF": {},
+      "fuji400-fresh/DSCF2892.RAF": {}
+    },
+    "finalParameterReconstruction": "Deep copy configuredParametersSharedByAllFrames, then replace each dotted property in finalParameterOverridesByFrame. This exactly reproduces all eight emitted final parameter documents.",
+    "frameCount": 8,
+    "frames": [
+      "fuji400-fresh/DSCF2833.RAF",
+      "fuji400-fresh/DSCF2851.RAF",
+      "fuji400-fresh/DSCF2856.RAF",
+      "fuji400-fresh/DSCF2865.RAF",
+      "fuji400-fresh/DSCF2873.RAF",
+      "fuji400-fresh/DSCF2881.RAF",
+      "fuji400-fresh/DSCF2888.RAF",
+      "fuji400-fresh/DSCF2892.RAF"
+    ],
+    "geometry": "C-41 schema 4, fixed perspective corners, 2 degree straighten, EV 0",
+    "individualWaitLimitSeconds": 180,
+    "inputRoot": "sample-raw",
+    "inputSHA256": {
+      "fuji400-fresh/DSCF2833.RAF": "c71a348038f397743360ca41a2ac099f51b81c1dd81e319b39e39a05711f2fe7",
+      "fuji400-fresh/DSCF2851.RAF": "834867cca5f2aca9511ca6d4335320b554b48af0f30a31b110f2a27a34320b9e",
+      "fuji400-fresh/DSCF2856.RAF": "134e0e419cfa58c0c20d4702eef777fc40567956241d6f17aaa424efd0e57767",
+      "fuji400-fresh/DSCF2865.RAF": "88752d9bd65e29a31a2fc9daff6aac9e3940dc47a39f06c8a5c3c4e3cf39a4a0",
+      "fuji400-fresh/DSCF2873.RAF": "e39440215248f985553a4d3abf06d6aef2ca2e7de14f016875dd6e9b92e601fc",
+      "fuji400-fresh/DSCF2881.RAF": "0f06545c3da98758c69f6a20760a119a81d70959c9ef901a925e46435ced22e1",
+      "fuji400-fresh/DSCF2888.RAF": "3e474049001b0730fefd370dbf36c19c4758fae452f0281147e7ecaa84f054c2",
+      "fuji400-fresh/DSCF2892.RAF": "b0c850ba8a1627935f05dc8a7d185ce453753c53c742d745407e4f86e1f7d593"
+    },
+    "loops": 4,
+    "measuredNavigationSwitches": 32,
+    "normalPreviewByteBudget": 3221225472,
+    "overallDeadlineSeconds": 1200,
+    "productionCPUPathRequired": true,
+    "settingsIsolation": "Temporary per-file/profile stores and UUID UserDefaults suite.",
+    "settlePollingMilliseconds": 10
+  }
+}

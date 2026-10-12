@@ -50,6 +50,7 @@ def preference_parameters(parameters):
     # setting or recorded hash is replaced to make a changed look pass.
     value = copy.deepcopy(parameters)
     value.setdefault('filmBaseChosenByUser', False)
+    value.setdefault('dustRepairs', [])
     for key in ['whites', 'blacks', 'shadowFloor', 'midtoneLevel', 'highlightCeiling']:
         value['photoAdjustments'].setdefault(key, 0)
     return value

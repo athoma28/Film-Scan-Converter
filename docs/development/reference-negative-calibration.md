@@ -8,6 +8,8 @@ The earlier stock-calibration scope remains recorded in the
 [roadmap](../improvements/MacOS-Native-Roadmap.md#parked-stock-and-capture-look-calibration).
 The sample counts and fit scores below are historical measurements, not a live
 inventory of the untracked corpus.
+Use the [research registry](../research/index.md) to locate current evidence and
+the [color runbook](color-evaluation.md) for active public-control experiments.
 
 `sample-raw/` is an untracked, recursively organized development corpus. Each
 film-stock directory may contain paired Camera Raw reference triplets:
@@ -54,6 +56,33 @@ The tool:
     smaller stock folders still emit explicitly unvalidated fitted curves and
     base medians for experimental alternate looks.
 
+## Validation and report limits
+
+The normalization grid uses cross-validation error to choose exposure/channel
+anchor strengths. The reported selected validation scores therefore also serve
+as model-selection evidence; they are not an untouched final evaluation of the
+entire selection process. A reusable-profile promotion needs an additional
+independent frame/roll cohort or nested validation. Fewer than three stock frames
+produce null held-out scores even though `validationMethod` is present; inspect
+the actual counts and optional score fields rather than treating that label as
+proof of validation.
+
+The schema-5 report records decode profile, stride, discovered/loaded triplets,
+`skippedFrames`, normalization strengths, BGR curves/medians and per-frame scores.
+Unpaired files do not enter `discoveredTriplets`, so that count is not a complete
+RAW inventory. Its alignment uses XMP geometry and its scoring contract differs
+from the SIFT-registered September 18 paired study; do not pool their MAEs as one
+measurement series.
+
+This tool does not create the guarded `color-study-run.json` provenance manifest.
+When the parked track is authorized to resume, retain source revision/working-tree
+changes, source/input hashes, exact selected pairs, tool versions, command and
+upstream alignment/extraction evidence with the output. Report failed/skipped
+frames and per-stock regressions. Follow the
+[experiment requirements](../research-brief-film-inversion.md) before collecting
+or fitting a new corpus. The command writes a candidate report; it does not
+install curves or enforce a product-promotion threshold.
+
 ## Recorded Profile Provenance
 
 The UI names and default-selection decisions in this section describe the
@@ -71,8 +100,10 @@ both Fuji 400 Fresh and Fuji 200 Expired. The generic profile was therefore
 retained at that checkpoint.
 
 A stock directory is not enough evidence to replace the generic default or
-drive automatic stock selection. Require at least three varied frames and a
-material held-out improvement (currently 5% relative) for that.
+drive automatic stock selection. The calibration-era review required at least
+three varied frames and a 5% relative held-out improvement. This was a review
+criterion, not a gate implemented by the executable, and it does not authorize
+changes to today's factory looks or automatic Film Base/recommended-look workflow.
 
 - The Harman Phoenix II fit used 12 varied references. Its Camera Raw LUT fit
   reaches `0.090` leave-one-frame-out MAE versus `0.159` for the current generic

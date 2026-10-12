@@ -161,24 +161,24 @@ larger tiers; this report does not establish a safe implementation for it.
 The ignored local root is `dist/raw-preview-optimization-2026-09-22/`. Private
 inputs and generated images remain in `sample-raw/` and `dist/`.
 
-- [Initial tree](../../dist/raw-preview-optimization-2026-09-22/initial-state.json),
-  [environment](../../dist/raw-preview-optimization-2026-09-22/environment.json),
-  [baseline build](../../dist/raw-preview-optimization-2026-09-22/baseline/manifest.json)
-  and [final build](../../dist/raw-preview-optimization-2026-09-22/bounded-candidate/manifest.json).
-- [Final RAW manifest](../../dist/raw-preview-optimization-2026-09-22/bounded-comparison/manifest.json)
-  and [every timed sample and summary](../../dist/raw-preview-optimization-2026-09-22/bounded-comparison/summary.json).
+- Initial tree (`dist/raw-preview-optimization-2026-09-22/initial-state.json`),
+  environment (`dist/raw-preview-optimization-2026-09-22/environment.json`),
+  baseline build (`dist/raw-preview-optimization-2026-09-22/baseline/manifest.json`)
+  and final build (`dist/raw-preview-optimization-2026-09-22/bounded-candidate/manifest.json`).
+- Final RAW manifest (`dist/raw-preview-optimization-2026-09-22/bounded-comparison/manifest.json`)
+  and every timed sample and summary (`dist/raw-preview-optimization-2026-09-22/bounded-comparison/summary.json`).
   Individual reports also retain warmups, all stage timings and thermal states.
-- [Final app manifest](../../dist/raw-preview-optimization-2026-09-22/bounded-app-comparison/manifest.json)
-  and [samples and memory](../../dist/raw-preview-optimization-2026-09-22/bounded-app-comparison/summary.json);
-  [rejected unrestricted app comparison](../../dist/raw-preview-optimization-2026-09-22/app-comparison/summary.json).
-- [Final 13 tests](../../dist/raw-preview-optimization-2026-09-22/bounded-regressions.log),
-  [earlier broader tests](../../dist/raw-preview-optimization-2026-09-22/raw-regressions-final.log),
-  [comparator](../../dist/raw-preview-optimization-2026-09-22/comparator-final.log),
-  [preferred-look checks](../../dist/raw-preview-optimization-2026-09-22/preferences-final/checks.json)
-  and [final provenance](../../dist/raw-preview-optimization-2026-09-22/final-verification.json).
+- Final app manifest (`dist/raw-preview-optimization-2026-09-22/bounded-app-comparison/manifest.json`)
+  and samples and memory (`dist/raw-preview-optimization-2026-09-22/bounded-app-comparison/summary.json`);
+  rejected unrestricted app comparison (`dist/raw-preview-optimization-2026-09-22/app-comparison/summary.json`).
+- Final 13 tests (`dist/raw-preview-optimization-2026-09-22/bounded-regressions.log`),
+  earlier broader tests (`dist/raw-preview-optimization-2026-09-22/raw-regressions-final.log`),
+  comparator (`dist/raw-preview-optimization-2026-09-22/comparator-final.log`),
+  preferred-look checks (`dist/raw-preview-optimization-2026-09-22/preferences-final/checks.json`)
+  and final provenance (`dist/raw-preview-optimization-2026-09-22/final-verification.json`).
 
-The saved [RAW comparison script](../../dist/raw-preview-optimization-2026-09-22/compare-bounded-raw.py)
-and [app comparison script](../../dist/raw-preview-optimization-2026-09-22/compare-bounded-app.py)
+The saved RAW comparison script (`dist/raw-preview-optimization-2026-09-22/compare-bounded-raw.py`)
+and app comparison script (`dist/raw-preview-optimization-2026-09-22/compare-bounded-app.py`)
 record their exact commands. Use a fresh output path for a repeat; neither
 overwrites completed evidence. Focused correctness can be rerun with:
 

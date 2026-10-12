@@ -1,11 +1,20 @@
 # Segmented skin RGB and film-specific correction revisions
 
 **September 18 evidence; status checked September 19.** The saved measurements
-predate the Film Base / LookRecipe migration. Current study publication still
-writes schema 1, while the named-preset probe requires schema 2. Migrating an old
-correction in the app also omits its source inversion/calibration and dye mixing.
-The [runbook](color-evaluation.md#current-compatibility) records these
-open gaps; the historical validation below does not certify the current workflow.
+predate the Film Base / LookRecipe migration. At that check, named-preset
+publication used schema 1 while the probe required schema 2. Migrating an old
+correction in the app also omitted its source inversion/calibration and dye mixing.
+The [runbook](color-evaluation.md#current-compatibility) records the repaired
+schema-2 workflow and its verification; the validation below remains historical.
+
+The [September 25 follow-through](roadmap-follow-through-2026-09-25.md#reproducible-color-workflow)
+records a separate completed public-control rerun: 13 schema-2 named presets,
+254 exact app-applied recipe/pixel checks and five selected full-resolution skin
+recipes. The selected Pro Image families and some accepted/retained frames changed;
+the scores and 12-preset count below remain the original checkpoint. The
+[research registry](../research/index.md#color-evidence-map) maps the artifact
+roots, and development status records later verification. Whole-profile and
+independent-roll accuracy remain unestablished.
 
 The latest Pro Image outputs still lacked red relative to green in skin. Measuring
 the same anatomical regions in the registered Camera Raw and FSC images confirms
@@ -25,15 +34,16 @@ are reference-conditioned recipes for this scan setup, not new stock calibration
 - `dist/camera-raw-study/skin-review.html`: Camera Raw / previous FSC / refined FSC /
   annotated regions; mean RGB, signed R−G bias, absolute errors and per-region tables.
 - `skin-presets.json`: the historical schema-1 named document with 12 presets.
-  Downloading it alone does not install it. Its schema currently disagrees with the
-  probe, and app migration does not preserve every fitted study parameter.
+  Downloading it alone does not install it. Its schema differs from the current
+  schema-2 output, and migration does not preserve every fitted study parameter.
 - `skin-color-results.json`: all candidates, including unsuccessful experiments.
 - `skin-review-results.json`: selected recipes and all underlying measurements.
 - `skin-full-checks.json`: five full-resolution validation renders.
-- [skin-profile-revisions.json](skin-profile-revisions.json): tracked parameter
-  patches, named base recipes, base-parameter hashes and before/after skin metrics.
-  Each patch belongs to its stated base recipe; it is not an interchangeable stock
-  profile. The complete compatible correction documents are generated in `dist/`.
+- `skin-profile-revisions.json`: per-run diagnostic patches, named base recipes,
+  base-parameter hashes and before/after skin metrics. Each patch belongs to its
+  stated base recipe; it is not an interchangeable stock profile. The former
+  tracked schema-1 capture remains in Git history; compatible correction
+  documents are generated in `dist/`.
 
 Framing is retained by Paste Corrections. Existing crop-dependent density analysis
 can still change a match when applying it to a cropped image.
@@ -205,12 +215,13 @@ All 12 named presets also decoded through `NamedCorrectionPresetStore.Document`
 and round-tripped their settings through the clipboard parser. Destination framing
 was preserved. The probe uses an in-memory pasteboard. All five saved preference
 snapshots retained their original image hashes and exact settings. These archived
-checks have not been repeated against the current engine/app contracts. Source syntax,
+counts and measured recipes do not describe the later schema-2 rerun or certify
+subsequent engine changes. Source syntax,
 gallery links and embedded JavaScript are checked separately; browser UI interaction
 has not been exercised.
 
 Use the [color evaluation runbook](color-evaluation.md) for maintained setup,
-ordered stages, guarded execution and the current integration gaps. Inspect the
+ordered stages, guarded execution and current verification. Inspect the
 complete sequence without running it:
 
 ```sh
@@ -220,15 +231,14 @@ complete sequence without running it:
 
 The cumulative workflow includes paired and Pro Image stages, every skin trial,
 publication, the five full exports, gallery cross-links and the app-parser probe.
-Resolve the missing Balanced baseline and publication/probe schema mismatch before
-claiming a fresh complete run. Existing `dist/camera-raw-study` outputs are
-historical and cannot be adopted by `--resume`.
+The former Balanced-baseline and publication/probe schema gaps were resolved in
+the current workflow. Existing `dist/camera-raw-study` outputs are historical
+and cannot be adopted by `--resume`.
 
 The Python dependencies are NumPy, OpenCV and Pillow. The small bounded quadratic
 mixing-only and red-only problems enumerate active constraint faces; joint fits use
-bounded coordinate descent. SciPy is not required. `publish` now writes the
-parameter-patch document inside the output directory. Recording it in
-`docs/development/skin-profile-revisions.json` requires the explicit
-`--revisions-output docs/development/skin-profile-revisions.json` option.
+bounded coordinate descent. SciPy is not required. `publish` writes the
+parameter-patch document inside the output directory. `--revisions-output` can
+choose another location for a reviewed local copy.
 Private images remain in ignored
 `dist/`; all pixel renderings come from FSC rather than an external color editor.

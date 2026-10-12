@@ -20,9 +20,15 @@ private final class PreviewMemoryPressureSourceHandle: @unchecked Sendable {
 @MainActor
 @Observable
 final class AppModel {
-  private(set) var files: [URL] = []
-  var selection: URL?
-  var selectedFiles: Set<URL> = []
+  private(set) var files: [URL] = [] {
+    didSet { persistOpenRoll() }
+  }
+  var selection: URL? {
+    didSet { persistOpenRoll() }
+  }
+  var selectedFiles: Set<URL> = [] {
+    didSet { persistOpenRoll() }
+  }
   private(set) var hasPreviewImage = false
   private(set) var previewImage: NSImage? {
     didSet {
@@ -60,7 +66,11 @@ final class AppModel {
   private(set) var isUpgradingRawPreview = false
   var showOriginal = false {
     didSet {
-      resetDustState(cancelTask: true)
+      if isDustEditing {
+        refreshDustMaskDisplay()
+      } else {
+        resetDustState(cancelTask: true)
+      }
       scheduleRender()
     }
   }
@@ -88,6 +98,7 @@ final class AppModel {
     didSet {
       previewSourceGeneration += 1
       previewCache.invalidateRenderedPreviews()
+      clearRetainedCanvasPreviews()
     }
   }
   private(set) var flatFieldURL: URL?
@@ -100,7 +111,16 @@ final class AppModel {
   private(set) var isCropDetectionRunning = false
   private(set) var cropStatus: String = ""
   private(set) var dustMaskImage: NSImage?
+  private(set) var dustSourceMask: UInt16Image?
+  private(set) var isDustEditing = false
+  var showDustMask = true {
+    didSet { refreshDustMaskDisplay() }
+  }
+  var showDustRepairs = true {
+    didSet { scheduleRender(immediate: true) }
+  }
   private(set) var isDustDetectionRunning = false
+  private(set) var isDustRepairRunning = false
   private(set) var dustStatus: String = ""
   private(set) var namedCorrectionPresets: [NamedCorrectionPreset] = []
   var appliedPresetName: String? {
@@ -109,7 +129,28 @@ final class AppModel {
     }
     return namedCorrectionPresets.first { $0.settings.recipe.matches(parameters) }?.name
   }
+
+  /// Reuse the selected decoded source. The optional look strip prepares and
+  /// renders its small images off the main actor without requesting another RAW.
+  var presetPreviewRequest: PresetPreviewRequest? {
+    guard let selection, let previewSource, hasPreviewImage,
+      previewSourceKind != .embeddedRAW, !isLoading, !isExporting,
+      !isBuildingScanStack, !isDustEditing,
+      !isPreviewingSourceGeometry, !isPreviewingUncroppedCanvas,
+      FilmBase.resolved(from: parameters).supportsLooks
+    else { return nil }
+    var previewParameters = parameters
+    if !showDustRepairs { previewParameters.dustRepairs = [] }
+    return PresetPreviewRequest(
+      key: PresetPreviewKey(
+        sourceURL: selection, sourceGeneration: previewSourceGeneration,
+        parameters: previewParameters),
+      source: previewSource, parameters: previewParameters,
+      flatField: compatibleFlatField(for: previewSource))
+  }
+
   private(set) var settingsStatus: String = ""
+  private(set) var openRollStatus: String = ""
   private(set) var previewCacheLimit: Int
   private(set) var availableCaptureProfiles: [CaptureProfile] = []
   private(set) var availableFilmStockProfiles: [FilmStockProfile] = []
@@ -125,6 +166,10 @@ final class AppModel {
   private var settingsPersistence: PerFileSettingsPersistence?
   private var latestSettingsCompletionRevision: UInt64 = 0
   private var latestSavedSettingsRevision: UInt64 = 0
+  private var openRollPersistence: OpenRollPersistence?
+  private var lastSubmittedOpenRoll: OpenRollStore.State?
+  private var latestOpenRollCompletionRevision: UInt64 = 0
+  private var latestSavedOpenRollRevision: UInt64 = 0
   private let presetStore: NamedCorrectionPresetStore?
   private let settingsClipboard: CorrectionSettingsClipboard
   private let preferences: UserDefaults
@@ -133,6 +178,7 @@ final class AppModel {
   init(
     profileStore: ProfileStore? = nil,
     settingsStore: PerFileSettingsStore? = nil,
+    openRollStore: OpenRollStore? = nil,
     presetStore: NamedCorrectionPresetStore? = nil,
     settingsClipboard: CorrectionSettingsClipboard = CorrectionSettingsClipboard(),
     preferences: UserDefaults = .standard,
@@ -171,13 +217,7 @@ final class AppModel {
       }
       settingsPersistence = PerFileSettingsPersistence(
         initialState: .init(settingsByPath: settingsByPath, editedPaths: editedKeys),
-        save: { state in
-          if requiresSettingsRecovery {
-            try settingsStore.saveMergingWithExisting(state)
-          } else {
-            try settingsStore.save(state)
-          }
-        },
+        save: settingsStore.makeSessionSaveOperation(requiresRecovery: requiresSettingsRecovery),
         onCompletion: { [weak self] revision, result in
           Task { @MainActor [weak self] in
             self?.handleSettingsPersistenceCompletion(revision: revision, result: result)
@@ -204,6 +244,29 @@ final class AppModel {
     pressure.resume()
     Task.detached(priority: .medium) {
       StillPreviewRenderer.warmUp()
+    }
+    if let openRollStore {
+      do {
+        if let saved = try openRollStore.load() {
+          files = saved.paths.map { URL(fileURLWithPath: $0) }
+          selection = saved.selection.map { URL(fileURLWithPath: $0) }
+          selectedFiles = Set(saved.selectedPaths.map { URL(fileURLWithPath: $0) })
+        }
+      } catch {
+        openRollStatus = "The previous roll could not be restored. Its saved file has been kept."
+      }
+      lastSubmittedOpenRoll = openRollState
+      openRollPersistence = OpenRollPersistence(
+        save: { try openRollStore.save($0) },
+        onCompletion: { [weak self] revision, result in
+          Task { @MainActor [weak self] in
+            self?.handleOpenRollPersistenceCompletion(revision: revision, result: result)
+          }
+        })
+      if !files.isEmpty {
+        scheduleScanStackAnalysis()
+        loadSelection()
+      }
     }
   }
 
@@ -247,8 +310,22 @@ final class AppModel {
   private var editedKeys: Set<String> = []
   private var sameRollFilmTypeHint: FilmType?
   private var previewCache = PreviewSessionCache()
+  private var retainedCanvasCache = RetainedCanvasPreviewCache()
+  private var loadedPreviewKey: String?
+  private var displayedRetainedCanvas: RetainedCanvasPreview?
+  private var canvasSnapshotGeneration = 0
+  private var pendingCanvasSnapshot: CanvasSnapshotRequest?
+  private var canvasSnapshotTask: Task<Void, Never>?
+  private var canvasSnapshotWorkerBytes = 0
+  var isShowingRetainedCanvas: Bool { displayedRetainedCanvas != nil }
+  var retainedCanvasPreviewCount: Int { retainedCanvasCache.count }
+  var canvasSnapshotWorkIsActive: Bool { canvasSnapshotTask != nil }
+  /// Synthetic tier injection for navigation tests; production uses LibRaw.
+  var rawPreviewSessionDecoder: (@Sendable (URL, PreviewSourceKind) throws -> CachedPreviewSession)?
   let previewMemoryByteLimit: Int
   @ObservationIgnored private var previewMemoryPressureSource: PreviewMemoryPressureSourceHandle?
+  /// Counts cache-drop handler calls from every origin, including OS notifications.
+  @ObservationIgnored private(set) var previewMemoryPressureHandlingCount = 0
   private var isUnderPreviewMemoryPressure = false
   private(set) var previewCorrectionCount = 0
   private(set) var previewRenderCacheHits = 0
@@ -257,12 +334,16 @@ final class AppModel {
   private(set) var lookaheadPreviewRequestCount = 0
   var previewBackgroundWorkIsActive: Bool { predecodeTask != nil }
   private var previewSource: UInt16Image? {
-    didSet { previewSourceGeneration += 1 }
+    didSet {
+      previewSourceGeneration += 1
+      cpuPreviewPreparation = previewSource.map { CPUPreviewPreparationCache(image: $0) }
+    }
   }
   private var cpuPreviewPreparation: CPUPreviewPreparationCache?
   private var previewSourceGeneration = 0 {
     didSet {
-      cpuPreviewPreparation = previewSource.map { CPUPreviewPreparationCache(image: $0) }
+      cancelCropDetection(status: "The scan preview changed. Run Auto Frame again.")
+      renderCancellation.cancel()
       previewDetail = nil
     }
   }
@@ -289,6 +370,7 @@ final class AppModel {
   private var predecodeTask: Task<Void, Never>?
   private var previewWorkRevision = 0
   private var thumbnailTasks: [String: Task<Void, Never>] = [:]
+  private var thumbnailGeneration = 0
   private var thumbnailCacheOrder: [String] = []
   private var thumbnailCacheBytes = 0
   private var thumbnailByteCounts: [String: Int] = [:]
@@ -301,12 +383,30 @@ final class AppModel {
   private var stackedPreviewMembers: StackPreviewMemberCache?
   private var lastStackedPreviewMode: ScanStackMode?
   private var rebateTask: Task<Void, Never>?
+  private var flatFieldLoadTask: Task<Void, Never>?
+  private var flatFieldLoadGeneration = 0
+  var flatFieldDecoder: (@Sendable (URL) throws -> UInt16Image)?
+  typealias CropDetectionResult = (
+    threshold: UInt16Image, rect: RotatedRect, contourPoints: [SIMD2<Double>]
+  )
+  /// Holds native frame detection at a deterministic boundary in integration tests.
+  var cropDetectionWorker: (@Sendable (UInt16Image, Int, Int, Int) -> CropDetectionResult?)?
   private var cropDetectionTask: Task<Void, Never>?
+  private var cropDetectionGeneration = 0
   private var dustDetectionTask: Task<Void, Never>?
+  private var dustDetectionGeneration = 0
+  private var dustRepairTask: Task<Void, Never>?
+  private var dustRepairGeneration = 0
   private var renderTask: Task<Void, Never>?
   private var pendingRender: PreviewRenderRequest?
   private var renderRevision = 0
-  private var renderContextGeneration = 0
+  private var renderCancellation = PreviewRenderCancellation()
+  private var renderContextGeneration = 0 {
+    didSet {
+      renderCancellation.cancel()
+      renderCancellation = PreviewRenderCancellation()
+    }
+  }
   private var lastRenderContext: PreviewRenderContext?
   private var pendingInteractionStart: ContinuousClock.Instant?
   private var lastPublicationTime: ContinuousClock.Instant?
@@ -315,6 +415,8 @@ final class AppModel {
   /// Allows integration tests to hold a completed frame while newer edits arrive.
   var previewRenderCompletionHook: (@MainActor (ProcessingParameters) async -> Void)?
   var previewRenderWorkerHook: (@Sendable () async -> Void)?
+  var previewRenderCheckpointHook: (@Sendable (PreviewRenderCheckpoint) -> Void)?
+  var thumbnailPreparationHook: (@Sendable () -> Void)?
   var rawInspectDecodeHook: (@Sendable () throws -> Void)?
   /// Attached only by explicit diagnostics; ordinary editing retains no trace.
   var previewInteractionTrace: PreviewInteractionTrace?
@@ -335,6 +437,8 @@ final class AppModel {
   private var retainedExportDecode = SelectedFileExportDecodeCache()
   /// Test seam that replaces LibRaw for selected-file export-cache tests.
   var fullResolutionExportDecoder: (@Sendable (URL) throws -> UInt16Image)?
+  /// Test seam for standard-image export stage and cancellation regressions.
+  var standardImageExportDecoder: (@Sendable (URL) throws -> UInt16Image)?
   var scanStackPreviewDecoder: (@Sendable (URL, ScanStackPreviewTier) throws -> UInt16Image)?
   var contactSheetPreviewDecoder: (@Sendable (URL) throws -> UInt16Image)?
   private(set) var fullResolutionExportDecodeCount = 0
@@ -387,7 +491,9 @@ final class AppModel {
 
   var previewCachePhysicalBytes: Int {
     previewCache.physicalByteCount
-      + (continuousEditCPUPreparation?.retainedGeometryByteCount ?? 0)
+      + retainedCanvasCache.physicalByteCount
+      + uncachedDisplayedCanvasBytes
+      + uncachedCPUPreparationGeometryBytes
   }
 
   var selectedImageDimensions: (width: Int, height: Int, provisional: Bool)? {
@@ -532,7 +638,8 @@ final class AppModel {
 
   /// Starts one small, independent thumbnail decode for a visible sidebar row.
   /// These images do not retain the much larger interactive preview sessions.
-  func requestThumbnail(for url: URL) {
+  @discardableResult
+  func requestThumbnail(for url: URL) -> Task<Void, Never>? {
     let key = settingsKey(url)
     guard thumbnailImages[key] == nil,
       thumbnailTasks[key] == nil,
@@ -540,22 +647,25 @@ final class AppModel {
       !failedThumbnailPaths.contains(key)
     else {
       if thumbnailImages[key] != nil { touchThumbnailCache(key) }
-      return
+      return thumbnailTasks[key]
     }
 
     thumbnailLoadingPaths.insert(key)
+    let generation = thumbnailGeneration
+    let preparationHook = thumbnailPreparationHook
     let task = Task { [weak self] in
       let worker = Task.detached(priority: .utility) {
-        try? Self.makeSidebarScanAnalysis(for: url)
+        try? Self.makeSidebarScanAnalysis(for: url, preparationHook: preparationHook)
       }
       let analysis = await withTaskCancellationHandler {
         await worker.value
       } onCancel: {
         worker.cancel()
       }
-      guard let self else { return }
+      guard let self, generation == self.thumbnailGeneration else { return }
       self.thumbnailTasks[key] = nil
       self.thumbnailLoadingPaths.remove(key)
+      guard !Task.isCancelled else { return }
       guard let analysis else {
         self.failedThumbnailPaths.insert(key)
         return
@@ -563,6 +673,7 @@ final class AppModel {
       self.publishSidebarScanAnalysis(analysis, for: url)
     }
     thumbnailTasks[key] = task
+    return task
   }
 
   var selectedDetectedScanStack: DetectedScanStack? {
@@ -720,8 +831,6 @@ final class AppModel {
     if let selection { schedulePreviewWork(after: selection) }
   }
 
-  private static let renderLog = OSLog(
-    subsystem: "film.scan.converter", category: "StillPreview")
   private static let signpostLog = OSLog(
     subsystem: "film.scan.converter", category: "Signpost")
 
@@ -730,7 +839,7 @@ final class AppModel {
       setStatus("Wait for the active export to finish before importing more scans.", kind: .error)
       return
     }
-    let supported = FileDropPolicy.supportedFiles(from: urls)
+    let supported = FileDropPolicy.supportedFiles(from: urls).map(\.standardizedFileURL)
     guard !supported.isEmpty else {
       ImportLog.error("No supported files in import batch")
       setStatus("No supported image or RAW files were dropped.", kind: .error)
@@ -746,6 +855,76 @@ final class AppModel {
     selection = supported.first
     selectedFiles = selection.map { Set([$0]) } ?? []
     loadSelection()
+  }
+
+  /// Ends this browsing session without deleting source files or saved edits.
+  func closeAllScans() {
+    guard !isExporting else {
+      setStatus("Wait for the active export to finish before closing scans.", kind: .error)
+      return
+    }
+    endEditingGesture()
+    files = []
+    selection = nil
+    selectedFiles = []
+    loadSelection()
+    loadTask = nil
+    lastRenderContext = nil
+    publishedPreviewParameters = nil
+    scanAnalysisGeneration += 1
+    scanAnalysisTask?.cancel()
+    scanAnalysisTask = nil
+    isAnalyzingScanStacks = false
+    thumbnailGeneration += 1
+    for task in thumbnailTasks.values { task.cancel() }
+    thumbnailTasks.removeAll()
+    thumbnailLoadingPaths.removeAll()
+    thumbnailImages.removeAll()
+    thumbnailCacheOrder.removeAll()
+    thumbnailByteCounts.removeAll()
+    thumbnailCacheBytes = 0
+    failedThumbnailPaths.removeAll()
+    scanAnalysisRecords.removeAll()
+    detectedScanStacks = []
+    enabledScanStackIDs = []
+    scanStackModes = [:]
+    scanStackStatus = ""
+    scanStackStatusID = nil
+    previewCache.removeAll(except: nil)
+    editHistories.removeAll()
+    refreshHistoryAvailability()
+    sameRollFilmTypeHint = nil
+    cancelFlatFieldLoad()
+    flatFieldImage = nil
+    flatFieldURL = nil
+  }
+
+  private var openRollState: OpenRollStore.State {
+    .init(
+      paths: files.map { settingsKey($0) },
+      selection: selection.map { settingsKey($0) },
+      selectedPaths: Set(selectedFiles.map { settingsKey($0) }))
+  }
+
+  private func persistOpenRoll() {
+    guard let openRollPersistence else { return }
+    let snapshot = openRollState
+    guard snapshot != lastSubmittedOpenRoll else { return }
+    lastSubmittedOpenRoll = snapshot
+    openRollPersistence.submit(snapshot)
+  }
+
+  private func handleOpenRollPersistenceCompletion(revision: UInt64, result: Result<Void, Error>) {
+    guard revision >= latestOpenRollCompletionRevision else { return }
+    latestOpenRollCompletionRevision = revision
+    switch result {
+    case .success:
+      latestSavedOpenRollRevision = max(latestSavedOpenRollRevision, revision)
+      openRollStatus = ""
+    case .failure:
+      guard revision > latestSavedOpenRollRevision else { return }
+      openRollStatus = "The open roll could not be saved for the next launch."
+    }
   }
 
   func moveSidebarFiles(fromOffsets source: IndexSet, toOffset destination: Int) {
@@ -823,10 +1002,14 @@ final class AppModel {
   private var loadGeneration = 0
   private var rebateGeneration = 0
 
-  func loadSelection() {
+  private func prepareForSelectionLoad() -> Int {
+    retainDepartingCanvas()
+    displayedRetainedCanvas = nil
+    loadedPreviewKey = nil
     endEditingGesture()
     isPreviewingUncroppedCanvas = false
     isPreviewingSourceGeometry = false
+    isDustEditing = false
     retainedExportDecode.dropIfNotSelected(selection.map(settingsKey))
     refreshHistoryAvailability()
     scanStackPreviewGeneration += 1
@@ -853,23 +1036,35 @@ final class AppModel {
     resetRebateState(cancelTask: true)
     resetCropState(cancelTask: true)
     resetDustState(cancelTask: true)
+    return gen
+  }
 
+  private func clearPreviewForEmptySelection() {
+    previewImage = nil
+    clearActivePreviewSources()
+    previewStatistics = .empty
+    previewSourceKind = nil
+    isLoading = false
+    isUpgradingRawPreview = false
+    sourcePixelDimensions = nil
+    cancelPredecode()
+    setStatus("Drop film scans into the window to begin.")
+    refreshHistoryAvailability()
+  }
+
+  private func clearActivePreviewSources() {
+    decodedImage = nil
+    previewSource = nil
+    previewRenderer = nil
+    continuousEditPreviewSource = nil
+    continuousEditPreviewRenderer = nil
+    continuousEditPreviewNeedsRefinement = false
+  }
+
+  func loadSelection() {
+    let gen = prepareForSelectionLoad()
     guard let selection else {
-      previewImage = nil
-      decodedImage = nil
-      previewSource = nil
-      previewRenderer = nil
-      continuousEditPreviewSource = nil
-      continuousEditPreviewRenderer = nil
-      continuousEditPreviewNeedsRefinement = false
-      previewStatistics = .empty
-      previewSourceKind = nil
-      isLoading = false
-      isUpgradingRawPreview = false
-      sourcePixelDimensions = nil
-      cancelPredecode()
-      setStatus("Drop film scans into the window to begin.")
-      refreshHistoryAvailability()
+      clearPreviewForEmptySelection()
       return
     }
 
@@ -890,12 +1085,7 @@ final class AppModel {
     cancelPredecode()
     ImportLog.loadSelectionStarted(path: selection.lastPathComponent)
 
-    decodedImage = nil
-    previewSource = nil
-    previewRenderer = nil
-    continuousEditPreviewSource = nil
-    continuousEditPreviewRenderer = nil
-    continuousEditPreviewNeedsRefinement = false
+    clearActivePreviewSources()
     previewSourceKind = nil
     let key = settingsKey(selection)
     parameters = settingsByPath[key] ?? ProcessingParameters(photoAdjustments: .init())
@@ -905,6 +1095,8 @@ final class AppModel {
     straightenAngle = parameters.straightenAngle
     showOriginal = false
     refreshHistoryAvailability()
+
+    restoreRetainedCanvas(for: selection)
 
     // A merged session is only valid while its stack is enabled. Disabling or
     // reordering captures must reload the source rather than reuse merged pixels.
@@ -936,12 +1128,14 @@ final class AppModel {
     let supportsStandardPreview = StandardImageDecoder.supportedExtensions.contains(
       selection.pathExtension.lowercased())
     if isRaw || supportsStandardPreview {
+      let sessionDecoder = rawPreviewSessionDecoder
       loadTask = Task { [weak self] in
         guard let self else { return }
         let conversionInterval = AppPerformanceSignposts.begin(
           .previewConversion, correlationID: loadCorrelationID,
           filename: selection.lastPathComponent)
         let session = try? await self.rawDecodeScheduler.run { () -> CachedPreviewSession? in
+          if isRaw, let sessionDecoder { return try sessionDecoder(selection, .rawDraft) }
           let display: UInt16Image
           let kind: PreviewSourceKind
           do {
@@ -1630,6 +1824,8 @@ final class AppModel {
     (try? settingsClipboard.read()) != nil
   }
 
+  var adjustmentTransferGroups = CorrectionAdjustmentGroup.defaultForSync
+
   func copyCorrectionSettings() {
     do {
       try settingsClipboard.write(CorrectionSettings(capturing: parameters))
@@ -1645,10 +1841,110 @@ final class AppModel {
         settingsStatus = "The clipboard does not contain correction settings."
         return
       }
+      endEditingGesture()
       applyCorrectionSettings(settings, actionName: "Paste Corrections")
       settingsStatus = "Correction settings pasted."
     } catch {
       settingsStatus = "Clipboard correction settings are not valid."
+    }
+  }
+
+  func pasteSelectedCorrectionSettings() {
+    guard !adjustmentTransferGroups.isEmpty else {
+      settingsStatus = "Choose adjustments to paste."
+      return
+    }
+    do {
+      guard let settings = try settingsClipboard.read() else {
+        settingsStatus = "The clipboard does not contain correction settings."
+        return
+      }
+      if let selection {
+        let changed = try applyCorrectionSettings(
+          settings, to: [selection], groups: adjustmentTransferGroups,
+          actionName: "Paste Selected Adjustments")
+        settingsStatus =
+          changed == 0
+          ? "Selected adjustments already match." : "Pasted selected adjustments."
+        return
+      }
+      let next = try settings.applying(to: parameters, groups: adjustmentTransferGroups)
+      guard next != parameters else {
+        settingsStatus = "Selected adjustments already match."
+        return
+      }
+      endEditingGesture()
+      updateParameters(actionName: "Paste Selected Adjustments", immediate: true) { $0 = next }
+      settingsStatus = "Pasted selected adjustments."
+    } catch {
+      settingsStatus =
+        (error as? CorrectionSettings.TransferError)?.localizedDescription
+        ?? "Clipboard correction settings are not valid."
+    }
+  }
+
+  func pasteSelectedCorrectionSettingsToSelectedFiles() {
+    pasteSelectedCorrectionSettings(to: orderedSelectedFiles)
+  }
+
+  func pasteSelectedCorrectionSettingsToAllOpenFiles() {
+    pasteSelectedCorrectionSettings(to: files)
+  }
+
+  private func pasteSelectedCorrectionSettings(to targets: [URL]) {
+    guard !adjustmentTransferGroups.isEmpty else {
+      settingsStatus = "Choose adjustments to paste."
+      return
+    }
+    guard !targets.isEmpty else { return }
+    do {
+      guard let settings = try settingsClipboard.read() else {
+        settingsStatus = "The clipboard does not contain correction settings."
+        return
+      }
+      let changed = try applyCorrectionSettings(
+        settings, to: targets, groups: adjustmentTransferGroups,
+        actionName: "Paste Selected Adjustments")
+      settingsStatus =
+        changed == 0
+        ? "Selected adjustments already match."
+        : "Pasted selected adjustments to \(changed) scan\(changed == 1 ? "" : "s")."
+    } catch {
+      settingsStatus =
+        (error as? CorrectionSettings.TransferError)?.localizedDescription
+        ?? "Clipboard correction settings are not valid."
+    }
+  }
+
+  func syncSelectedAdjustmentsToSelectedFiles() {
+    let targets = orderedSelectedFiles
+    guard targets.count > 1 else {
+      settingsStatus = "Select two or more scans to sync adjustments."
+      return
+    }
+    syncSelectedAdjustments(to: targets)
+  }
+
+  func syncSelectedAdjustmentsToAllOpenFiles() {
+    syncSelectedAdjustments(to: files)
+  }
+
+  private func syncSelectedAdjustments(to targets: [URL]) {
+    guard selection != nil, !targets.isEmpty else { return }
+    guard !adjustmentTransferGroups.isEmpty else {
+      settingsStatus = "Choose adjustments to sync."
+      return
+    }
+    do {
+      let changed = try applyCorrectionSettings(
+        CorrectionSettings(capturing: parameters), to: targets, groups: adjustmentTransferGroups,
+        actionName: "Sync Selected Adjustments")
+      settingsStatus =
+        changed == 0
+        ? "Selected adjustments already match."
+        : "Synced selected adjustments to \(changed) scan\(changed == 1 ? "" : "s")."
+    } catch {
+      settingsStatus = error.localizedDescription
     }
   }
 
@@ -1727,16 +2023,58 @@ final class AppModel {
     to targets: [URL],
     actionName: String
   ) {
-    endEditingGesture()
     let settings = CorrectionSettings(capturing: parameters)
+    // Complete transfers cannot encounter a partial legacy-tone mismatch.
+    _ = try? applyCorrectionSettings(
+      settings, to: targets, groups: CorrectionAdjustmentGroup.all, actionName: actionName,
+      marksMatchingTargetsEdited: true)
+  }
+
+  @discardableResult
+  private func applyCorrectionSettings(
+    _ settings: CorrectionSettings,
+    to targets: [URL],
+    groups: Set<CorrectionAdjustmentGroup>,
+    actionName: String,
+    marksMatchingTargetsEdited: Bool = false
+  ) throws -> Int {
+    guard !groups.isEmpty else { return 0 }
+    // Validate the entire batch first so an incompatible legacy scan does not
+    // leave the preceding scans changed and the remaining scans untouched.
+    var changes: [(url: URL, parameters: ProcessingParameters)] = []
     for url in targets {
       let key = settingsKey(url)
-      let historyBefore = editingSnapshot(for: key)
-      var destination = settingsByPath[key] ?? ProcessingParameters(photoAdjustments: .init())
+      let destination = editingSnapshot(for: key).parameters
+      var transferDestination = destination
       if settingsByPath[key] == nil || destination.pendingFilmBaseInitialization != nil {
-        destination.pendingFilmBaseInitialization = .preservingLook
+        transferDestination.pendingFilmBaseInitialization = .preservingLook
       }
-      let applied = settings.applying(to: destination)
+      let applied: ProcessingParameters
+      if marksMatchingTargetsEdited {
+        applied = settings.applying(to: transferDestination)
+      } else {
+        applied = try settings.applying(to: transferDestination, groups: groups)
+      }
+      var comparable = applied
+      comparable.pendingFilmBaseInitialization = destination.pendingFilmBaseInitialization
+      guard marksMatchingTargetsEdited || comparable != destination else { continue }
+      changes.append((url, applied))
+    }
+    guard !changes.isEmpty else { return 0 }
+    endEditingGesture()
+    for change in changes {
+      let key = settingsKey(change.url)
+      if selection == change.url,
+        change.parameters != parameters || !marksMatchingTargetsEdited
+      {
+        updateParameters(actionName: actionName, immediate: true) { $0 = change.parameters }
+        continue
+      }
+      // The original full batch action deliberately marks every target edited,
+      // including a matching anchor, and records that intent in its history.
+      // Selective transfers (even All groups) leave matching scans untouched.
+      let historyBefore = editingSnapshot(for: key)
+      let applied = change.parameters
       settingsByPath[key] = applied
       automaticallyClassifiedKeys.remove(key)
       editedKeys.insert(key)
@@ -1750,6 +2088,7 @@ final class AppModel {
     }
     settingsPersistence?.requestFlush()
     refreshHistoryAvailability()
+    return changes.count
   }
 
   func showImportPanel() {
@@ -1770,6 +2109,8 @@ final class AppModel {
     panel.canChooseFiles = false
     panel.canCreateDirectories = true
     panel.prompt = "Select Export Folder"
+    panel.directoryURL =
+      exportParameters.destinationDirectory ?? selection?.deletingLastPathComponent()
     guard panel.runModal() == .OK, let url = panel.url else {
       return
     }
@@ -1777,7 +2118,7 @@ final class AppModel {
   }
 
   func setExportDestinationDirectory(_ url: URL?) {
-    exportParameters.destinationDirectory = url
+    exportParameters.destinationDirectory = url?.standardizedFileURL
   }
 
   func setExportFormat(_ format: ExportFormat) {
@@ -1822,6 +2163,10 @@ final class AppModel {
   }
 
   func exportContactSheet(allFiles: Bool = false) {
+    guard flatFieldLoadTask == nil else {
+      setStatus("Wait for flat-field loading to finish before exporting.")
+      return
+    }
     guard !isExporting else { return }
     guard !isLoading, !isBuildingScanStack else {
       setStatus("Wait for the current preview to finish before exporting.", kind: .error)
@@ -1832,10 +2177,9 @@ final class AppModel {
       setStatus("Select at least one scan for the contact sheet.", kind: .error)
       return
     }
-    guard let directory = exportParameters.destinationDirectory else {
-      setStatus("Select an export destination folder first.", kind: .error)
-      return
-    }
+    let activeSource = selection.map { enabledScanStack(containing: $0)?.anchor ?? $0 } ?? urls[0]
+    let directory =
+      exportParameters.destinationDirectory ?? activeSource.deletingLastPathComponent()
     let items = urls.map { url in
       let stack = enabledScanStack(containing: url)
       return ContactSheetItem(
@@ -1896,7 +2240,9 @@ final class AppModel {
             await self?.updateContactSheetProgress(completed: completed, filename: filename)
           })
         self.lastContactSheetURL = output
-        self.setStatus("Saved \(items.count)-scan contact sheet to \(output.lastPathComponent).")
+        self.setStatus(
+          "Saved \(items.count)-scan contact sheet to \(directory.lastPathComponent)/\(output.lastPathComponent)."
+        )
       } catch is CancellationError {
         self.exportErrors = []
         self.setStatus("Contact sheet cancelled; no PDF was saved.")
@@ -1916,9 +2262,7 @@ final class AppModel {
 
   func addSelectedToExportQueue() {
     let urls = consolidatedExportURLs(orderedSelectedFiles)
-    guard isExporting, !isExportingContactSheet, !urls.isEmpty,
-      let destinationDirectory = exportParameters.destinationDirectory
-    else {
+    guard isExporting, !isExportingContactSheet, !urls.isEmpty else {
       return
     }
 
@@ -1927,7 +2271,7 @@ final class AppModel {
     do {
       destinations = try reserveDestinationURLs(
         for: urls,
-        destinationDirectory: destinationDirectory,
+        destinationDirectory: itemParameters.destinationDirectory,
         format: itemParameters.format,
         alreadyReserved: activeExportDestinations
       )
@@ -1940,7 +2284,9 @@ final class AppModel {
     for (url, destination) in zip(urls, destinations) {
       activeExportQueue.append(url)
       activeExportDestinations.append(destination)
-      activeExportItemParameters.append(itemParameters)
+      var resolvedParameters = itemParameters
+      resolvedParameters.destinationDirectory = destination.deletingLastPathComponent()
+      activeExportItemParameters.append(resolvedParameters)
       let correlationID = UUID().uuidString
       activeExportCorrelationIDs.append(correlationID)
       activeExportQueueWaitIntervals.append(
@@ -1973,7 +2319,8 @@ final class AppModel {
     rebateGeneration += 1
     let generation = rebateGeneration
     let selectedURL = selection
-    let flatField = preparedFlatField(for: source)
+    let sourceGeneration = previewSourceGeneration
+    let compatibleField = compatibleFlatField(for: source)
     isRebateDetectionRunning = true
     rebateStatus = "Searching for unexposed film edges..."
     rebateCandidates = []
@@ -1984,14 +2331,28 @@ final class AppModel {
       guard let self else { return }
       let result: [AutomaticRebateCandidate]
       if Task.isCancelled { return }
-      result = await Task.detached(priority: .userInitiated) {
+      let worker = Task.detached(priority: .userInitiated) { () -> [AutomaticRebateCandidate] in
+        guard !Task.isCancelled else { return [] }
+        let flatField = Self.preparedFlatField(for: source, compatibleField: compatibleField)
+        guard !Task.isCancelled else { return [] }
         return FilmNegativeProcessing.automaticRebateCandidates(
           image: source,
           flatField: flatField
         )
-      }.value
+      }
+      result = await withTaskCancellationHandler {
+        await worker.value
+      } onCancel: {
+        worker.cancel()
+      }
       guard !Task.isCancelled else { return }
       guard generation == rebateGeneration, selection == selectedURL else { return }
+      guard sourceGeneration == previewSourceGeneration else {
+        isRebateDetectionRunning = false
+        rebateTask = nil
+        return
+      }
+      rebateTask = nil
       rebateCandidates = result
       isRebateDetectionRunning = false
       if result.isEmpty {
@@ -2012,22 +2373,36 @@ final class AppModel {
     rebateGeneration += 1
     let generation = rebateGeneration
     let selectedURL = selection
-    let flatField = preparedFlatField(for: source)
+    let sourceGeneration = previewSourceGeneration
+    let compatibleField = compatibleFlatField(for: source)
     rebateStatus = "Measuring base density..."
     rebateTask = Task { [weak self] in
       guard let self else { return }
       let result: Result<FilmBaseMeasurement, Error>
-      result = await Task.detached(priority: .userInitiated) {
+      let worker = Task.detached(priority: .userInitiated) {
         return Result {
-          try FilmNegativeProcessing.measureBaseDensity(
+          try Task.checkCancellation()
+          let flatField = Self.preparedFlatField(for: source, compatibleField: compatibleField)
+          try Task.checkCancellation()
+          return try FilmNegativeProcessing.measureBaseDensity(
             image: source,
             flatField: flatField,
             region: region
           )
         }
-      }.value
+      }
+      result = await withTaskCancellationHandler {
+        await worker.value
+      } onCancel: {
+        worker.cancel()
+      }
       guard !Task.isCancelled else { return }
       guard generation == rebateGeneration, selection == selectedURL else { return }
+      guard sourceGeneration == previewSourceGeneration else {
+        rebateTask = nil
+        return
+      }
+      rebateTask = nil
       switch result {
       case .success(let measurement):
         selectedRebateMeasurement = measurement
@@ -2176,12 +2551,50 @@ final class AppModel {
     guard panel.runModal() == .OK, let url = panel.url else {
       return
     }
-    do {
-      let decoded = try Self.decodeImage(url)
-      setFlatField(decoded, url: url)
-    } catch {
-      rebateStatus = "Failed to load flat-field: \(error.localizedDescription)"
+    loadFlatField(from: url)
+  }
+
+  @discardableResult
+  func loadFlatField(from url: URL) -> Task<Void, Never>? {
+    guard !isExporting else {
+      rebateStatus = "Wait for the active export to finish before changing the flat field."
+      return nil
     }
+    cancelFlatFieldLoad()
+    let generation = flatFieldLoadGeneration
+    let scheduler = rawDecodeScheduler
+    let decoder = flatFieldDecoder
+    rebateStatus = "Loading flat-field: \(url.lastPathComponent)..."
+    let task = Task { [weak self] in
+      defer {
+        if let self, generation == self.flatFieldLoadGeneration {
+          self.flatFieldLoadTask = nil
+        }
+      }
+      do {
+        let image = try await scheduler.run {
+          try decoder?(url) ?? Self.decodeImage(url)
+        }
+        guard let self, !Task.isCancelled, generation == self.flatFieldLoadGeneration else {
+          return
+        }
+        self.setFlatField(image, url: url)
+      } catch is CancellationError {
+        guard let self, generation == self.flatFieldLoadGeneration else { return }
+        self.rebateStatus = "Flat-field loading cancelled."
+      } catch {
+        guard let self, generation == self.flatFieldLoadGeneration else { return }
+        self.rebateStatus = "Failed to load flat-field: \(error.localizedDescription)"
+      }
+    }
+    flatFieldLoadTask = task
+    return task
+  }
+
+  private func cancelFlatFieldLoad() {
+    flatFieldLoadGeneration += 1
+    flatFieldLoadTask?.cancel()
+    flatFieldLoadTask = nil
   }
 
   func clearFlatField() {
@@ -2193,6 +2606,7 @@ final class AppModel {
       rebateStatus = "Wait for the active export to finish before changing the flat field."
       return
     }
+    cancelFlatFieldLoad()
     guard let image else {
       flatFieldImage = nil
       flatFieldURL = nil
@@ -2234,43 +2648,73 @@ final class AppModel {
     }
   }
 
-  func detectCrop() {
+  @discardableResult
+  func detectCrop() -> Task<Void, Never>? {
     guard let source = previewSource, source.channels == 3 else {
       cropStatus = "Load an image with 3 channels first."
-      return
+      return nil
     }
-    cropDetectionTask?.cancel()
-    cropDetectionTask = nil
+    cancelCropDetection()
+    let generation = cropDetectionGeneration
     cropThresholdPreview = nil
     isCropDetectionRunning = true
     cropStatus = "Finding film frame..."
 
-    let proxy = source
     let dark = parameters.darkThreshold
     let light = parameters.lightThreshold
     let maxDim = 2000
     let selectedURL = selection
+    let sourceGeneration = previewSourceGeneration
+    let detectionWorker = cropDetectionWorker
 
     cropDetectionTask = Task { [weak self] in
       guard let self else { return }
-
-      let result: (threshold: UInt16Image, rect: RotatedRect, contourPoints: [SIMD2<Double>])? =
-        await Task.detached(priority: .userInitiated) {
-          let thresh = proxy.getThreshold(darkThreshold: dark, lightThreshold: light)
-          return ContourDetection.findOptimalCrop(threshold: thresh, maxDimension: maxDim)
-        }.value
-
-      guard !Task.isCancelled else { return }
-      guard self.selection == selectedURL else { return }
-
-      isCropDetectionRunning = false
-      guard let result else {
-        cropStatus = "No crop frame detected."
+      guard !Task.isCancelled else {
+        self.finishCancelledCropDetection(generation: generation)
         return
       }
-      setCropRect(result.rect)
-      cropThresholdPreview = result.threshold
-      cropStatus = String(
+      let worker = Task.detached(priority: .userInitiated) { () -> CropDetectionResult? in
+        guard !Task.isCancelled else { return nil }
+        let result: CropDetectionResult?
+        if let detectionWorker {
+          result = detectionWorker(source, dark, light, maxDim)
+        } else {
+          let threshold = source.getThreshold(darkThreshold: dark, lightThreshold: light)
+          guard !Task.isCancelled else { return nil }
+          result = ContourDetection.findOptimalCrop(threshold: threshold, maxDimension: maxDim)
+        }
+        guard !Task.isCancelled else { return nil }
+        return result
+      }
+      // Synchronous threshold/contour work drains before this task completes.
+      let result = await withTaskCancellationHandler {
+        await worker.value
+      } onCancel: {
+        worker.cancel()
+      }
+      guard generation == self.cropDetectionGeneration else { return }
+      guard !Task.isCancelled else {
+        self.finishCancelledCropDetection(generation: generation)
+        return
+      }
+      guard self.selection == selectedURL,
+        self.previewSourceGeneration == sourceGeneration
+      else {
+        self.finishCancelledCropDetection(generation: generation)
+        return
+      }
+
+      self.cropDetectionTask = nil
+      self.isCropDetectionRunning = false
+      guard let result else {
+        self.cropStatus = "No crop frame detected."
+        return
+      }
+      self.performDiscreteEditingCompletion {
+        self.setCropRect(result.rect)
+      }
+      self.cropThresholdPreview = result.threshold
+      self.cropStatus = String(
         format: "Crop: %.1f°  w:%.3f  h:%.3f  at (%.3f, %.3f)",
         result.rect.angle,
         result.rect.width,
@@ -2279,79 +2723,420 @@ final class AppModel {
         result.rect.centerY
       )
     }
+    return cropDetectionTask
   }
 
-  func detectDustMask() {
+  @discardableResult
+  func detectDustMask() -> Task<Void, Never>? {
     guard let source = previewSource, source.channels == 3 else {
       dustStatus = "Load a three-channel scan first."
-      return
+      return nil
     }
-    dustDetectionTask?.cancel()
+    cancelDustMaskRepair()
+    cancelDustDetection()
+    let generation = dustDetectionGeneration
     isDustDetectionRunning = true
     dustStatus = "Detecting dust…"
     let selectedURL = selection
+    let sourceGeneration = previewSourceGeneration
     let displayParameters = previewDisplayParameters
+    // Identification is bounded; saved repair coordinates remain sensor-relative.
+    let detectionSource = source.resizedToFit(maxDimension: 2_048)
     dustDetectionTask = Task { [weak self] in
       guard let self else { return }
-      let mask = await Task.detached(priority: .userInitiated) {
-        DustDetection.findMask(in: source)
-      }.value
-      guard !Task.isCancelled, self.selection == selectedURL else { return }
-      let croppedMask =
-        displayParameters.perspectiveCrop.flatMap {
-          PerspectiveTransform.crop(
-            mask,
-            perspectiveCrop: $0,
-            borderPercent: displayParameters.borderCrop
-          )
-        } ?? displayParameters.cropRect.flatMap {
-          PerspectiveTransform.crop(
-            mask,
-            normalizedRect: $0,
-            coordinateSpace: displayParameters.cropRectCoordinateSpace,
-            borderPercent: displayParameters.borderCrop
-          )
-        } ?? mask
-      let orientedMask = croppedMask.rotated(
-        quarterTurns: displayParameters.rotation,
-        flipHorizontally: displayParameters.flip
-      )
-      let straightenedMask = PerspectiveTransform.rotate(
-        orientedMask, clockwiseDegrees: -displayParameters.straightenAngle)
-      let finalMask =
-        displayParameters.manualCrop.flatMap {
-          PerspectiveTransform.crop(straightenedMask, canvasRect: $0)
-        } ?? straightenedMask
-      let displayMask = UInt16Image(
-        width: finalMask.width,
-        height: finalMask.height,
-        channels: mask.channels,
-        pixels: finalMask.pixels.map { $0 == 0 ? 0 : UInt16.max }
-      )
-      guard let cgImage = displayMask.makePreviewCGImage() else {
+      guard !Task.isCancelled else {
+        self.finishCancelledDustDetection(generation: generation)
+        return
+      }
+      let worker = Task.detached(priority: .userInitiated) {
+        let mask = DustDetection.findMask(in: detectionSource)
+        let preview = Self.makeDustMaskPreview(mask: mask, parameters: displayParameters)
+        return (mask: mask, image: preview.image, detected: preview.detected)
+      }
+      let result = await withTaskCancellationHandler {
+        await worker.value
+      } onCancel: {
+        worker.cancel()
+      }
+      guard generation == self.dustDetectionGeneration else { return }
+      guard !Task.isCancelled else {
+        self.finishCancelledDustDetection(generation: generation)
+        return
+      }
+      guard self.selection == selectedURL else { return }
+      guard sourceGeneration == self.previewSourceGeneration else {
         self.isDustDetectionRunning = false
+        self.dustDetectionTask = nil
+        self.dustStatus = "Scan changed; run dust detection again."
+        return
+      }
+      self.isDustDetectionRunning = false
+      self.dustDetectionTask = nil
+      guard let cgImage = result.image else {
         self.dustStatus = "Dust mask could not be displayed."
         return
       }
-      self.dustMaskImage = PreviewBitmap.nsImage(from: cgImage)
-      self.isDustDetectionRunning = false
-      let detected = mask.pixels.reduce(into: 0) { count, value in
-        if value != 0 { count += 1 }
-      }
+      self.dustSourceMask = result.mask
+      self.dustMaskImage = self.showDustMask ? PreviewBitmap.nsImage(from: cgImage) : nil
       self.dustStatus =
-        detected == 0
+        result.detected == 0
         ? "No dust candidates found."
-        : "Showing \(detected) dust-mask pixels."
+        : "Showing \(result.detected) dust-mask pixels."
     }
+    return dustDetectionTask
+  }
+
+  nonisolated private static func makeDustMaskPreview(
+    mask: UInt16Image, parameters: ProcessingParameters
+  ) -> (image: CGImage?, detected: Int) {
+    guard !Task.isCancelled else { return (nil, 0) }
+    let croppedMask =
+      parameters.perspectiveCrop.flatMap {
+        PerspectiveTransform.crop(
+          mask,
+          perspectiveCrop: $0,
+          borderPercent: parameters.borderCrop
+        )
+      } ?? parameters.cropRect.flatMap {
+        PerspectiveTransform.crop(
+          mask,
+          normalizedRect: $0,
+          coordinateSpace: parameters.cropRectCoordinateSpace,
+          borderPercent: parameters.borderCrop
+        )
+      } ?? mask
+    let orientedMask = croppedMask.rotated(
+      quarterTurns: parameters.rotation,
+      flipHorizontally: parameters.flip
+    )
+    let straightenedMask = PerspectiveTransform.rotate(
+      orientedMask, clockwiseDegrees: -parameters.straightenAngle)
+    let finalMask =
+      parameters.manualCrop.flatMap {
+        PerspectiveTransform.crop(straightenedMask, canvasRect: $0)
+      } ?? straightenedMask
+    let displayMask = UInt16Image(
+      width: finalMask.width,
+      height: finalMask.height,
+      channels: mask.channels,
+      pixels: finalMask.pixels.map { $0 == 0 ? 0 : UInt16.max }
+    )
+    guard !Task.isCancelled else { return (nil, 0) }
+    let cgImage = displayMask.makePreviewCGImage()
+    let detected = mask.pixels.reduce(into: 0) { count, value in
+      if value != 0 { count += 1 }
+    }
+    return (cgImage, detected)
   }
 
   func clearDustMask() {
     resetDustState(cancelTask: true)
   }
 
+  var dustBrushSourceWidth: Int {
+    sourcePixelDimensions?.width ?? previewSource?.width ?? 1
+  }
+
+  /// The overlay must wait for the unframed source raster when opening from a
+  /// cropped or oriented view. Subsequent color/repair renders keep it usable.
+  var isDustCanvasReady: Bool {
+    guard isDustEditing, !isDustRepairRunning, let source = previewSource,
+      let published = publishedPreviewParameters,
+      previewImage?.size == NSSize(width: source.width, height: source.height)
+    else { return false }
+    return published.cropRect == nil && published.perspectiveCrop == nil
+      && published.manualCrop == nil && published.rotation == 0 && !published.flip
+      && published.borderCrop == 0 && abs(published.straightenAngle) < 0.000_001
+  }
+
+  func beginDustEditing() {
+    guard previewSource != nil, !isDustEditing else { return }
+    endEditingGesture()
+    isDustEditing = true
+    showDustRepairs = true
+    showOriginal = false
+    resetDustState(cancelTask: true)
+    scheduleRender(immediate: true)
+  }
+
+  func endDustEditing() {
+    guard isDustEditing else { return }
+    endEditingGesture()
+    isDustEditing = false
+    showDustRepairs = true
+    resetDustState(cancelTask: true)
+    scheduleRender(immediate: true)
+  }
+
+  func paintDustMask(points: [SIMD2<Double>], radius: Double, erasing: Bool) {
+    guard isDustEditing, let source = previewSource else { return }
+    cancelDustMaskRepair()
+    cancelDustDetection()
+    let bound = source.resizedToFit(maxDimension: 2_048)
+    let mask =
+      dustSourceMask
+      ?? UInt16Image(
+        width: bound.width, height: bound.height, channels: 1,
+        pixels: [UInt16](repeating: 0, count: bound.width * bound.height))
+    dustSourceMask = DustMaskEditing.painting(
+      mask, points: points, radius: radius, erasing: erasing)
+    refreshDustMaskDisplay()
+    dustStatus = "Mask edited. Repair Mask applies only the marked areas."
+  }
+
+  private func refreshDustMaskDisplay() {
+    guard showDustMask, let mask = dustSourceMask else {
+      dustMaskImage = nil
+      return
+    }
+    let result = Self.makeDustMaskPreview(mask: mask, parameters: previewDisplayParameters)
+    dustMaskImage = result.image.map { PreviewBitmap.nsImage(from: $0) }
+  }
+
+  @discardableResult
+  func addDustRepair(
+    points: [SIMD2<Double>], radius: Double, sourcePoint: SIMD2<Double>? = nil
+  ) -> Task<Void, Never>? {
+    guard isDustEditing, !points.isEmpty, points.count <= DustRepair.maximumPointsPerStroke,
+      radius.isFinite, radius > 0, radius <= DustRepair.maximumNormalizedRadius,
+      points.allSatisfy({
+        $0.x.isFinite && $0.y.isFinite && (0...1).contains($0.x) && (0...1).contains($0.y)
+      })
+    else { return nil }
+    guard parameters.dustRepairs.count < DustRepair.maximumStrokeCount else {
+      dustStatus = "The repair limit has been reached. Clear unwanted repairs before adding more."
+      return nil
+    }
+    if let sourcePoint {
+      guard sourcePoint.x.isFinite, sourcePoint.y.isFinite,
+        (0...1).contains(sourcePoint.x), (0...1).contains(sourcePoint.y)
+      else { return nil }
+      guard let source = previewSource else { return nil }
+      let dimensions = [
+        PixelDimensions(width: source.width, height: source.height),
+        sourcePixelDimensions ?? PixelDimensions(width: source.width, height: source.height),
+      ]
+      let offset = sourcePoint - points[0]
+      guard
+        dimensions.allSatisfy({ size in
+          let r = max(0.75, radius * Double(size.width))
+          let marginX = (r + 0.5) / Double(size.width)
+          let marginY = (r + 0.5) / Double(size.height)
+          return hypot(offset.x * Double(size.width), offset.y * Double(size.height)) >= r * 2
+            && points.allSatisfy { point in
+              let donor = point + offset
+              return donor.x >= marginX && donor.x <= 1 - marginX
+                && donor.y >= marginY && donor.y <= 1 - marginY
+            }
+        })
+      else {
+        dustStatus = "Choose a texture source farther from the repair and away from the scan edge."
+        return nil
+      }
+    }
+    let stroke = DustRepairStroke(points: points, radius: radius, sourcePoint: sourcePoint)
+    guard let source = previewSource,
+      DustRepair.canApply(
+        strokes: parameters.dustRepairs + [stroke],
+        imageWidth: sourcePixelDimensions?.width ?? source.width,
+        imageHeight: sourcePixelDimensions?.height ?? source.height)
+    else {
+      dustStatus =
+        "This stroke exceeds the repair budget. Use a smaller brush or clear unwanted repairs."
+      return nil
+    }
+    cancelDustMaskRepair()
+    cancelDustDetection()
+    let generation = dustRepairGeneration
+    let selectedURL = selection
+    let sourceGeneration = previewSourceGeneration
+    let savedParameters = parameters
+    let existingMask = dustSourceMask
+    let targetIndex = savedParameters.dustRepairs.count
+    let allStrokes = savedParameters.dustRepairs + [stroke]
+    isDustRepairRunning = true
+    dustStatus = "Checking texture sources…"
+    dustRepairTask = Task { [weak self] in
+      guard !Task.isCancelled else {
+        guard let self, generation == self.dustRepairGeneration else { return }
+        self.isDustRepairRunning = false
+        self.dustRepairTask = nil
+        self.dustStatus = "Repair cancelled. Candidates remain marked."
+        return
+      }
+      let worker = Task.detached(priority: .userInitiated) {
+        () -> (stroke: DustRepairStroke?, mask: UInt16Image?) in
+        let plannedStroke: DustRepairStroke?
+        if stroke.points.count == 1 {
+          plannedStroke =
+            DustRepair.plannedSinglePointRepairs(
+              in: source, strokes: allStrokes, excludingMask: existingMask,
+              planningStrokeIndices: [targetIndex]
+            ).first?.stroke
+        } else {
+          // The saved format keeps the existing per-dab automatic policy for
+          // paths. Require every dab to render before consuming the whole path.
+          guard
+            DustRepair.applicableStrokeIndices(
+              in: source, strokes: allStrokes, checkingStrokeIndices: [targetIndex]
+            ) == [targetIndex]
+          else { return (nil, nil) }
+          plannedStroke = stroke
+        }
+        guard let plannedStroke else { return (nil, nil) }
+        let remainingMask = existingMask.map {
+          DustMaskEditing.consumingRepairFootprints(
+            $0, repairs: [plannedStroke], sourceWidth: source.width, sourceHeight: source.height)
+        }
+        return (plannedStroke, remainingMask)
+      }
+      let result = await withTaskCancellationHandler {
+        await worker.value
+      } onCancel: {
+        worker.cancel()
+      }
+      guard let self, generation == self.dustRepairGeneration else { return }
+      self.isDustRepairRunning = false
+      self.dustRepairTask = nil
+      guard !Task.isCancelled else {
+        self.dustStatus = "Repair cancelled. Candidates remain marked."
+        return
+      }
+      guard self.isDustEditing, self.selection == selectedURL else { return }
+      guard self.previewSourceGeneration == sourceGeneration else {
+        self.dustStatus = "The scan preview changed. Paint the healing stroke again."
+        return
+      }
+      guard self.parameters == savedParameters, self.dustSourceMask == existingMask else { return }
+      guard let plannedStroke = result.stroke else {
+        self.dustStatus =
+          "No usable texture source found. Candidates remain marked; paint farther from the scan edge or choose another source."
+        return
+      }
+      self.performDiscreteEditingCompletion {
+        self.showDustRepairs = true
+        self.updateParameters(actionName: "Healing Brush", immediate: true) {
+          $0.dustRepairs.append(plannedStroke)
+        }
+      }
+      if let remainingMask = result.mask {
+        self.dustSourceMask = remainingMask
+        self.refreshDustMaskDisplay()
+      }
+      self.dustStatus = "Healing stroke saved. Option-click chooses a texture source."
+    }
+    return dustRepairTask
+  }
+
+  @discardableResult
+  func repairDustMask() -> Task<Void, Never>? {
+    guard isDustEditing, !isDustDetectionRunning, !isDustRepairRunning,
+      let mask = dustSourceMask, let source = previewSource
+    else { return nil }
+    let remaining = DustRepair.maximumStrokeCount - parameters.dustRepairs.count
+    guard remaining > 0 else {
+      dustStatus = "The repair limit has been reached. Clear unwanted repairs before adding more."
+      return nil
+    }
+    let generation = dustRepairGeneration
+    let selectedURL = selection
+    let sourceGeneration = previewSourceGeneration
+    let savedParameters = parameters
+    let existingCount = savedParameters.dustRepairs.count
+    let dimensions = sourcePixelDimensions ?? .init(width: source.width, height: source.height)
+    isDustRepairRunning = true
+    dustStatus = "Checking texture sources…"
+    dustRepairTask = Task { [weak self] in
+      guard !Task.isCancelled else {
+        guard let self, generation == self.dustRepairGeneration else { return }
+        self.isDustRepairRunning = false
+        self.dustRepairTask = nil
+        self.dustStatus = "Repair cancelled. Candidates remain marked."
+        return
+      }
+      let worker = Task.detached(priority: .userInitiated) {
+        () -> (repairs: [DustRepairStroke], mask: UInt16Image?, status: String) in
+        let candidates = DustRepair.automaticRepairCandidates(
+          from: mask, maximumCount: min(250, remaining))
+        guard !candidates.isEmpty else {
+          return ([], nil, "No small isolated spots to repair. Use Healing Brush for larger areas.")
+        }
+        let allRepairs = savedParameters.dustRepairs + candidates.map(\.stroke)
+        guard
+          DustRepair.canApply(
+            strokes: allRepairs, imageWidth: dimensions.width, imageHeight: dimensions.height)
+        else {
+          return (
+            [], nil,
+            "These spots exceed the repair budget. Erase unwanted candidates or clear old repairs."
+          )
+        }
+        let plans = DustRepair.plannedSinglePointRepairs(
+          in: source, strokes: allRepairs, excludingMask: mask)
+        let accepted = plans.filter { $0.strokeIndex >= existingCount }.map { plan in
+          MaskRepairCandidate(
+            stroke: plan.stroke, maskSeed: candidates[plan.strokeIndex - existingCount].maskSeed)
+        }
+        guard !accepted.isEmpty else {
+          return (
+            [], nil,
+            "No usable texture sources found. Candidates remain marked; use Healing Brush to choose a source."
+          )
+        }
+        return (
+          accepted.map(\.stroke),
+          DustMaskEditing.consumingComponents(mask, candidates: accepted),
+          "Saved \(accepted.count) masked spot repairs. Unprocessed candidates remain marked; check the result at 100%."
+        )
+      }
+      let result = await withTaskCancellationHandler {
+        await worker.value
+      } onCancel: {
+        worker.cancel()
+      }
+      guard let self, generation == self.dustRepairGeneration else { return }
+      self.isDustRepairRunning = false
+      self.dustRepairTask = nil
+      guard !Task.isCancelled else {
+        self.dustStatus = "Repair cancelled. Candidates remain marked."
+        return
+      }
+      guard self.isDustEditing, self.selection == selectedURL else { return }
+      guard self.previewSourceGeneration == sourceGeneration else {
+        self.dustStatus = "The scan preview changed. Run Auto Repair Mask again."
+        return
+      }
+      guard self.parameters == savedParameters else { return }
+      guard !result.repairs.isEmpty, let remainingMask = result.mask else {
+        self.dustStatus = result.status
+        return
+      }
+      self.performDiscreteEditingCompletion {
+        self.showDustRepairs = true
+        self.updateParameters(actionName: "Repair Dust Mask", immediate: true) {
+          $0.dustRepairs.append(contentsOf: result.repairs)
+        }
+      }
+      self.dustSourceMask = remainingMask
+      self.refreshDustMaskDisplay()
+      self.dustStatus = result.status
+    }
+    return dustRepairTask
+  }
+
+  func clearDustRepairs() {
+    guard !parameters.dustRepairs.isEmpty else { return }
+    updateParameters(actionName: "Clear Dust Repairs", immediate: true) { $0.dustRepairs = [] }
+  }
+
+  func dustStrokeLimitReached() {
+    dustStatus = "The stroke is too long. Paint shorter strokes; this stroke was not saved."
+  }
+
   func clearCrop() {
     let historyBefore = currentEditingSnapshot()
     resetCropState(cancelTask: true)
+    resetDustState(cancelTask: true)
     parameters.cropRect = nil
     parameters.perspectiveCrop = nil
     parameters.manualCrop = nil
@@ -2407,6 +3192,7 @@ final class AppModel {
     }
     if crop == perspectiveCrop { return }
     let historyBefore = currentEditingSnapshot()
+    cancelCropDetection()
     resetDustState(cancelTask: true)
     cropRect = nil
     perspectiveCrop = crop
@@ -2426,6 +3212,7 @@ final class AppModel {
   func clearPerspectiveCrop() {
     guard perspectiveCrop != nil || parameters.perspectiveCrop != nil else { return }
     let historyBefore = currentEditingSnapshot()
+    cancelCropDetection()
     resetDustState(cancelTask: true)
     perspectiveCrop = nil
     parameters.perspectiveCrop = nil
@@ -2447,6 +3234,7 @@ final class AppModel {
       let canvas = selectedUncroppedCanvasDimensions
     else { return }
     let historyBefore = currentEditingSnapshot()
+    cancelCropDetection()
     parameters.manualCropAspectRatio = ratio
     if let normalizedRatio = ratio.normalizedRatio(in: canvas) {
       let crop = (manualCrop ?? .fullFrame).fitted(toAspectRatio: normalizedRatio)
@@ -2473,6 +3261,7 @@ final class AppModel {
     if let ratio = normalizedManualCropAspectRatio { crop = crop.fitted(toAspectRatio: ratio) }
     if crop == manualCrop { return }
     let historyBefore = currentEditingSnapshot()
+    cancelCropDetection()
     resetDustState(cancelTask: true)
     manualCrop = crop
     parameters.manualCrop = crop
@@ -2533,6 +3322,7 @@ final class AppModel {
   func clearManualCrop() {
     guard manualCrop != nil || parameters.manualCrop != nil else { return }
     let historyBefore = currentEditingSnapshot()
+    cancelCropDetection()
     resetDustState(cancelTask: true)
     manualCrop = nil
     parameters.manualCrop = nil
@@ -2550,6 +3340,7 @@ final class AppModel {
     let clamped = min(max(angle, -45), 45)
     guard abs(parameters.straightenAngle - clamped) > 0.000_001 else { return }
     let historyBefore = currentEditingSnapshot()
+    cancelCropDetection()
     resetDustState(cancelTask: true)
     manualCrop = nil
     parameters.manualCrop = nil
@@ -2592,11 +3383,38 @@ final class AppModel {
     rebateStatus = ""
   }
 
-  private func resetCropState(cancelTask: Bool) {
-    if cancelTask {
-      cropDetectionTask?.cancel()
-      cropDetectionTask = nil
+  private func cancelCropDetection(status: String = "") {
+    cropDetectionGeneration += 1
+    cropDetectionTask?.cancel()
+    cropDetectionTask = nil
+    if isCropDetectionRunning {
+      cropThresholdPreview = nil
+      cropStatus = status
     }
+    isCropDetectionRunning = false
+  }
+
+  private func finishCancelledCropDetection(generation: Int) {
+    guard generation == cropDetectionGeneration else { return }
+    cropDetectionTask = nil
+    isCropDetectionRunning = false
+    cropStatus = "Frame detection cancelled."
+  }
+
+  nonisolated private static func cropDetectionInputsChanged(
+    from previous: ProcessingParameters, to next: ProcessingParameters
+  ) -> Bool {
+    previous.darkThreshold != next.darkThreshold || previous.lightThreshold != next.lightThreshold
+      || previous.cropRect != next.cropRect
+      || previous.cropRectCoordinateSpace != next.cropRectCoordinateSpace
+      || previous.perspectiveCrop != next.perspectiveCrop || previous.manualCrop != next.manualCrop
+      || previous.manualCropAspectRatio != next.manualCropAspectRatio
+      || previous.straightenAngle != next.straightenAngle
+      || previous.rotation != next.rotation || previous.flip != next.flip
+  }
+
+  private func resetCropState(cancelTask: Bool) {
+    if cancelTask { cancelCropDetection() }
     cropRect = nil
     perspectiveCrop = nil
     manualCrop = nil
@@ -2607,16 +3425,39 @@ final class AppModel {
 
   private func resetDustState(cancelTask: Bool) {
     if cancelTask {
-      dustDetectionTask?.cancel()
-      dustDetectionTask = nil
+      cancelDustMaskRepair()
+      cancelDustDetection()
     }
     dustMaskImage = nil
+    dustSourceMask = nil
     isDustDetectionRunning = false
     dustStatus = ""
   }
 
+  private func cancelDustDetection() {
+    dustDetectionGeneration += 1
+    dustDetectionTask?.cancel()
+    dustDetectionTask = nil
+    isDustDetectionRunning = false
+  }
+
+  private func finishCancelledDustDetection(generation: Int) {
+    guard generation == dustDetectionGeneration else { return }
+    dustDetectionTask = nil
+    isDustDetectionRunning = false
+    dustStatus = "Dust detection cancelled."
+  }
+
+  private func cancelDustMaskRepair() {
+    dustRepairGeneration += 1
+    dustRepairTask?.cancel()
+    dustRepairTask = nil
+    isDustRepairRunning = false
+  }
+
   private func applyCrop(_ rect: RotatedRect, render: Bool) {
     let historyBefore = currentEditingSnapshot()
+    cancelCropDetection()
     resetDustState(cancelTask: true)
     cropRect = rect
     perspectiveCrop = nil
@@ -2642,6 +3483,10 @@ final class AppModel {
   }
 
   private func exportFiles(_ urls: [URL]) {
+    guard flatFieldLoadTask == nil else {
+      setStatus("Wait for flat-field loading to finish before exporting.")
+      return
+    }
     guard !isExporting, !urls.isEmpty else { return }
     guard !isBuildingScanStack else {
       setStatus(
@@ -2655,26 +3500,24 @@ final class AppModel {
         kind: .error)
       return
     }
-    guard let destDir = exportParameters.destinationDirectory else {
-      setStatus("Select an export destination folder first.", kind: .error)
-      return
-    }
-
     // Export has priority over speculative lookahead work. The decoder may
     // finish its current synchronous call, but cancellation prevents it from
     // advancing through the rest of the lookahead queue.
     cancelPredecode()
     cancelScanStackUpgradePreservingPreview()
 
-    var params = exportParameters
-    params.destinationDirectory = destDir
-    let exportParams = params
+    let exportParams = exportParameters
     activeExportQueue = urls
-    activeExportItemParameters = Array(repeating: exportParams, count: urls.count)
     exportQueueCount = max(0, urls.count - 1)
     do {
       activeExportDestinations = try reserveDestinationURLs(
-        for: urls, destinationDirectory: destDir, format: exportParams.format)
+        for: urls, destinationDirectory: exportParams.destinationDirectory,
+        format: exportParams.format)
+      activeExportItemParameters = activeExportDestinations.map { destination in
+        var resolvedParameters = exportParams
+        resolvedParameters.destinationDirectory = destination.deletingLastPathComponent()
+        return resolvedParameters
+      }
     } catch {
       setStatus(
         "Unable to inspect export destination: \(error.localizedDescription)",
@@ -2704,126 +3547,153 @@ final class AppModel {
 
     exportTask = Task { [weak self] in
       guard let self else { return }
+      await self.processExportQueue(initialCapacity: urls.count)
+    }
+  }
 
-      let manager = ExportManager()
-      var results: [ExportManager.ExportResult] = []
-      results.reserveCapacity(urls.count)
+  private func processExportQueue(initialCapacity: Int) async {
+    let manager = ExportManager()
+    var results: [ExportManager.ExportResult] = []
+    results.reserveCapacity(initialCapacity)
 
-      var index = 0
-      while index < self.activeExportQueue.count {
-        if Task.isCancelled {
-          for remainingIndex in index..<self.activeExportQueue.count {
-            results.append(
-              ExportManager.ExportResult(
-                sourceURL: self.activeExportQueue[remainingIndex],
-                destinationURL: self.activeExportDestinations[remainingIndex],
-                error: ExportManager.ExportManagerError.cancelled
-              ))
-          }
-          index = self.activeExportQueue.count
-          break
+    var index = 0
+    while index < activeExportQueue.count {
+      if Task.isCancelled {
+        for remainingIndex in index..<activeExportQueue.count {
+          results.append(
+            ExportManager.ExportResult(
+              sourceURL: activeExportQueue[remainingIndex],
+              destinationURL: activeExportDestinations[remainingIndex],
+              error: ExportManager.ExportManagerError.cancelled
+            ))
         }
-
-        let firstURL = self.activeExportQueue[index]
-        await MainActor.run {
-          self.activeExportFilename = firstURL.lastPathComponent
-          self.exportQueueCount = max(0, self.activeExportQueue.count - index - 1)
-        }
-        let nextIsFullResolutionRAW =
-          index + 1 < self.activeExportQueue.count
-          && Self.requiresFullResolutionExportDecode(self.activeExportQueue[index + 1])
-        let currentIsStack = self.enabledScanStack(containing: firstURL) != nil
-        let nextIsStack =
-          index + 1 < self.activeExportQueue.count
-          && self.enabledScanStack(containing: self.activeExportQueue[index + 1]) != nil
-        let batchSize =
-          Self.requiresFullResolutionExportDecode(firstURL) || nextIsFullResolutionRAW
-            || currentIsStack || nextIsStack
-          ? 1 : 2
-        let endIndex = min(index + batchSize, self.activeExportQueue.count)
-        var requests: [ExportManager.ExportRequest] = []
-        for requestIndex in index..<endIndex {
-          let url = self.activeExportQueue[requestIndex]
-          let destinationURL = self.activeExportDestinations[requestIndex]
-          let itemParameters = self.activeExportItemParameters[requestIndex]
-          let correlationID = self.activeExportCorrelationIDs[requestIndex]
-          AppPerformanceSignposts.end(self.activeExportQueueWaitIntervals[requestIndex])
-          do {
-            requests.append(
-              try await self.makeExportRequest(
-                for: url,
-                exportParams: itemParameters,
-                destinationURL: destinationURL,
-                correlationID: correlationID
-              ))
-          } catch {
-            results.append(
-              ExportManager.ExportResult(
-                sourceURL: url,
-                destinationURL: destinationURL,
-                error: error
-              ))
-          }
-        }
-        if !requests.isEmpty {
-          let batchResults = await manager.exportBatch(
-            requests: requests,
-            maxConcurrent: min(2, requests.count)
-          )
-          results.append(contentsOf: batchResults)
-          let cleanupIntervals = requests.map {
-            AppPerformanceSignposts.begin(
-              .cleanup,
-              correlationID: $0.correlationID,
-              filename: $0.sourceURL.lastPathComponent)
-          }
-          requests.removeAll(keepingCapacity: false)
-          cleanupIntervals.forEach(AppPerformanceSignposts.end)
-        }
-
-        index = endIndex
-        await MainActor.run {
-          self.exportProgressCurrent = index
-          self.exportProgressTotal = self.activeExportQueue.count
-          self.exportQueueCount = max(0, self.activeExportQueue.count - index - 1)
-        }
+        break
       }
 
+      let firstURL = activeExportQueue[index]
       await MainActor.run {
-        let wasCancelled = self.exportWasCancelled || Task.isCancelled
-        for interval in self.activeExportQueueWaitIntervals.dropFirst(
-          self.exportProgressCurrent)
-        {
-          AppPerformanceSignposts.end(interval)
-        }
-        self.isExporting = false
-        self.activeExportFilename = nil
-        self.activeExportQueue = []
-        self.activeExportDestinations = []
-        self.activeExportItemParameters = []
-        self.activeExportCorrelationIDs = []
-        self.activeExportQueueWaitIntervals = []
-        self.exportTask = nil
-        self.exportQueueCount = 0
-        let failures = results.filter { !$0.isSuccess }
-        if wasCancelled {
-          self.exportErrors = []
-          self.setStatus(
-            "Export cancelled after \(self.exportProgressCurrent) of \(self.exportProgressTotal) images."
-          )
-        } else if failures.isEmpty {
-          self.setStatus(
-            "Exported \(results.count) image\(results.count == 1 ? "" : "s") to \(destDir.lastPathComponent)."
-          )
-        } else {
-          self.exportErrors = failures.compactMap { result in
-            result.error.map { "\(result.sourceURL.lastPathComponent): \($0.localizedDescription)" }
-          }
-          self.setStatus(
-            "Export complete with \(failures.count) error\(failures.count == 1 ? "" : "s").",
-            kind: .error)
-        }
+        activeExportFilename = firstURL.lastPathComponent
+        exportQueueCount = max(0, activeExportQueue.count - index - 1)
       }
+      let endIndex = exportBatchEndIndex(startingAt: index)
+      let batchResults = await exportBatch(index..<endIndex, using: manager)
+      results.append(contentsOf: batchResults)
+
+      index = endIndex
+      await MainActor.run {
+        exportProgressCurrent = index
+        exportProgressTotal = activeExportQueue.count
+        exportQueueCount = max(0, activeExportQueue.count - index - 1)
+      }
+    }
+    await MainActor.run {
+      self.finishExportQueue(with: results)
+    }
+  }
+
+  private func exportBatchEndIndex(startingAt startIndex: Int) -> Int {
+    let url = activeExportQueue[startIndex]
+    let nextIsFullResolutionRAW =
+      startIndex + 1 < activeExportQueue.count
+      && Self.requiresFullResolutionExportDecode(activeExportQueue[startIndex + 1])
+    let currentIsStack = enabledScanStack(containing: url) != nil
+    let nextIsStack =
+      startIndex + 1 < activeExportQueue.count
+      && enabledScanStack(containing: activeExportQueue[startIndex + 1]) != nil
+    let batchSize =
+      Self.requiresFullResolutionExportDecode(url) || nextIsFullResolutionRAW
+        || currentIsStack || nextIsStack
+      ? 1 : 2
+    return min(startIndex + batchSize, activeExportQueue.count)
+  }
+
+  private func exportBatch(
+    _ range: Range<Int>, using manager: ExportManager
+  ) async -> [ExportManager.ExportResult] {
+    var requests: [ExportManager.ExportRequest] = []
+    var results: [ExportManager.ExportResult] = []
+    for requestIndex in range {
+      let url = activeExportQueue[requestIndex]
+      let destinationURL = activeExportDestinations[requestIndex]
+      let itemParameters = activeExportItemParameters[requestIndex]
+      let correlationID = activeExportCorrelationIDs[requestIndex]
+      AppPerformanceSignposts.end(activeExportQueueWaitIntervals[requestIndex])
+      do {
+        requests.append(
+          try await makeExportRequest(
+            for: url,
+            exportParams: itemParameters,
+            destinationURL: destinationURL,
+            correlationID: correlationID
+          ))
+      } catch {
+        results.append(
+          ExportManager.ExportResult(
+            sourceURL: url,
+            destinationURL: destinationURL,
+            error: error
+          ))
+      }
+    }
+    if !requests.isEmpty {
+      let batchResults = await manager.exportBatch(
+        requests: requests,
+        maxConcurrent: min(2, requests.count)
+      )
+      results.append(contentsOf: batchResults)
+      let cleanupIntervals = requests.map {
+        AppPerformanceSignposts.begin(
+          .cleanup,
+          correlationID: $0.correlationID,
+          filename: $0.sourceURL.lastPathComponent)
+      }
+      requests.removeAll(keepingCapacity: false)
+      cleanupIntervals.forEach(AppPerformanceSignposts.end)
+    }
+    return results
+  }
+
+  private func finishExportQueue(with results: [ExportManager.ExportResult]) {
+    let wasCancelled = exportWasCancelled || Task.isCancelled
+    for interval in activeExportQueueWaitIntervals.dropFirst(
+      exportProgressCurrent)
+    {
+      AppPerformanceSignposts.end(interval)
+    }
+    isExporting = false
+    activeExportFilename = nil
+    activeExportQueue = []
+    activeExportDestinations = []
+    activeExportItemParameters = []
+    activeExportCorrelationIDs = []
+    activeExportQueueWaitIntervals = []
+    exportTask = nil
+    exportQueueCount = 0
+    let failures = results.filter { !$0.isSuccess }
+    if wasCancelled {
+      exportErrors = []
+      let savedCount = results.filter(\.isSuccess).count
+      setStatus(
+        "Export cancelled. Saved \(savedCount) of \(exportProgressTotal) images."
+      )
+    } else if failures.isEmpty {
+      let directories = Set(results.map { $0.destinationURL.deletingLastPathComponent() })
+      let destinationDescription: String
+      if directories.count == 1, let directory = directories.first {
+        destinationDescription = "to \(directory.lastPathComponent)"
+      } else {
+        destinationDescription = "across \(directories.count) folders"
+      }
+      setStatus(
+        "Exported \(results.count) image\(results.count == 1 ? "" : "s") \(destinationDescription)."
+      )
+    } else {
+      exportErrors = failures.compactMap { result in
+        result.error.map { "\(result.sourceURL.lastPathComponent): \($0.localizedDescription)" }
+      }
+      setStatus(
+        "Export complete with \(failures.count) error\(failures.count == 1 ? "" : "s").",
+        kind: .error)
     }
   }
 
@@ -2862,6 +3732,7 @@ final class AppModel {
     destinationURL: URL,
     correlationID: String
   ) async throws -> ExportManager.ExportRequest {
+    try Task.checkCancellation()
     let key = settingsKey(url)
     let decodeInterval = AppPerformanceSignposts.begin(
       .decode, correlationID: correlationID, filename: url.lastPathComponent)
@@ -2969,8 +3840,9 @@ final class AppModel {
       )
       return image
     }
+    let decoder = standardImageExportDecoder
     return try await Task.detached(priority: .userInitiated) {
-      return try Self.decodeImage(url)
+      try decoder?(url) ?? Self.decodeImage(url)
     }.value
   }
 
@@ -3014,34 +3886,42 @@ final class AppModel {
 
   private func reserveDestinationURLs(
     for urls: [URL],
-    destinationDirectory: URL,
+    destinationDirectory: URL?,
     format: ExportFormat,
     alreadyReserved: [URL] = []
   ) throws -> [URL] {
-    let existingNames = try FileManager.default.contentsOfDirectory(
-      at: destinationDirectory,
-      includingPropertiesForKeys: nil
-    ).map { $0.lastPathComponent.lowercased() }
-    var reservedNames = Set(existingNames)
-    reservedNames.formUnion(
-      alreadyReserved
-        .filter {
-          $0.deletingLastPathComponent().standardizedFileURL
-            == destinationDirectory.standardizedFileURL
-        }
-        .map { $0.lastPathComponent.lowercased() })
-
-    return urls.map { sourceURL in
+    var reservedNamesByDirectory: [URL: Set<String>] = [:]
+    return try urls.map { sourceURL in
+      let directory = (destinationDirectory ?? sourceURL.deletingLastPathComponent())
+        .standardizedFileURL
+      let directoryKey = directory.resolvingSymlinksInPath()
+      if reservedNamesByDirectory[directoryKey] == nil {
+        // Foundation's URL enumerator can reject a directory symlink itself.
+        // Inspect the same physical folder used to share name reservations.
+        let existingNames = try FileManager.default.contentsOfDirectory(
+          at: directoryKey,
+          includingPropertiesForKeys: nil
+        ).map { $0.lastPathComponent.lowercased() }
+        var reservedNames = Set(existingNames)
+        reservedNames.formUnion(
+          alreadyReserved
+            .filter {
+              $0.deletingLastPathComponent().standardizedFileURL.resolvingSymlinksInPath()
+                == directoryKey
+            }
+            .map { $0.lastPathComponent.lowercased() })
+        reservedNamesByDirectory[directoryKey] = reservedNames
+      }
       let stem = sourceURL.deletingPathExtension().lastPathComponent
       let ext = format.fileExtension
       var suffix = 1
       var filename = "\(stem).\(ext)"
-      while reservedNames.contains(filename.lowercased()) {
+      while reservedNamesByDirectory[directoryKey, default: []].contains(filename.lowercased()) {
         suffix += 1
         filename = "\(stem)-\(suffix).\(ext)"
       }
-      reservedNames.insert(filename.lowercased())
-      return destinationDirectory.appendingPathComponent(filename)
+      reservedNamesByDirectory[directoryKey, default: []].insert(filename.lowercased())
+      return directory.appendingPathComponent(filename)
     }
   }
 
@@ -3077,6 +3957,10 @@ final class AppModel {
   }
 
   func endEditingGesture() {
+    finishEditingGesture(refiningPreview: true)
+  }
+
+  private func finishEditingGesture(refiningPreview: Bool) {
     // This also flushes keyboard/text edits when selection or editor changes.
     settingsPersistence?.requestFlush()
     guard let transaction = editTransaction else { return }
@@ -3089,6 +3973,7 @@ final class AppModel {
       after: editingSnapshot(for: transaction.key)
     )
     refreshHistoryAvailability()
+    guard refiningPreview else { return }
     if continuousEditPreviewNeedsRefinement {
       continuousEditPreviewNeedsRefinement = false
       scheduleRender(immediate: true)
@@ -3100,6 +3985,18 @@ final class AppModel {
       enqueuePreviewStatistics(publishedStatisticsRequest)
     }
     if let selection, !isLoading { schedulePreviewWork(after: selection) }
+  }
+
+  /// Keep a completed worker's discrete edit separate from an ongoing drag.
+  /// Rebase the drag afterward so its remaining samples still coalesce, while
+  /// the completion's own render replaces the intermediate refinement work.
+  private func performDiscreteEditingCompletion(_ completion: () -> Void) {
+    let continuingGesture = editTransaction
+    if continuingGesture != nil { finishEditingGesture(refiningPreview: false) }
+    completion()
+    if let continuingGesture, selection.map(settingsKey) == continuingGesture.key {
+      beginEditingGesture(named: continuingGesture.actionName)
+    }
   }
 
   func undo() {
@@ -3140,7 +4037,13 @@ final class AppModel {
   private func editingSnapshot(for key: String) -> EditingSnapshot {
     let snapshotParameters: ProcessingParameters
     if selection.map(settingsKey) == key {
-      snapshotParameters = parameters
+      var selectedParameters = parameters
+      if settingsByPath[key] == nil, isLoading {
+        // Before the first decode, Original is only a canvas placeholder. Undo
+        // must restore automatic classification once source pixels are available.
+        selectedParameters.pendingFilmBaseInitialization = .automatic
+      }
+      snapshotParameters = selectedParameters
     } else {
       snapshotParameters =
         settingsByPath[key]
@@ -3189,6 +4092,7 @@ final class AppModel {
     restoresOutputFraming: Bool
   ) {
     guard selection.map(settingsKey) == key else { return }
+    cancelCropDetection()
     resetDustState(cancelTask: true)
     // History restores edits, not editor lifetime. Crop and Straighten keep
     // their overlays open, so their canvas must stay uncropped until Done.
@@ -3251,6 +4155,9 @@ final class AppModel {
       return
     }
     let historyBefore = currentEditingSnapshot()
+    if Self.cropDetectionInputsChanged(from: parameters, to: next) {
+      cancelCropDetection()
+    }
     resetDustState(cancelTask: true)
     if let selection {
       automaticallyClassifiedKeys.remove(settingsKey(selection))
@@ -3316,10 +4223,11 @@ final class AppModel {
   /// while a write was in flight before letting the app close.
   func flushSettings() async throws {
     endEditingGesture()
-    guard let settingsPersistence else { return }
     repeat {
-      try await settingsPersistence.flush()
-    } while settingsPersistence.hasUnsavedChanges
+      try await settingsPersistence?.flush()
+      try await openRollPersistence?.flush()
+    } while settingsPersistence?.hasUnsavedChanges == true
+      || openRollPersistence?.hasUnsavedChanges == true
   }
 
   private func applyCachedSession(_ session: CachedPreviewSession, selection: URL) {
@@ -3346,11 +4254,14 @@ final class AppModel {
     // requirements. This is never consulted by export.
     decodedImage = session.displaySource
     previewSource = session.displaySource
+    cpuPreviewPreparation = session.cpuPreviewPreparation
     previewRenderer = session.previewRenderer
     continuousEditPreviewSource = session.continuousEditSource
+    continuousEditCPUPreparation = session.continuousEditCPUPreparation
     continuousEditPreviewRenderer = session.continuousEditRenderer
     continuousEditPreviewNeedsRefinement = false
     previewSourceKind = session.sourceKind
+    loadedPreviewKey = settingsKey(selection)
     sourcePixelDimensions = session.sourcePixelDimensions
     isLoading = false
     if session.sourceKind == .rawFull {
@@ -3358,7 +4269,7 @@ final class AppModel {
     }
     if let current = settingsByPath[settingsKey(selection)] { parameters = current }
     if hasStoredSettings, parameters.pendingFilmBaseInitialization == nil {
-      if recalibrateFromSource {
+      if recalibrateFromSource, displayedRetainedCanvas == nil {
         populateFilmNegativeMedians(from: session.analysisSource)
         // Keep the saved settings in step with the displayed tier. Otherwise a
         // cache hit restores draft medians and unnecessarily changes the image.
@@ -3387,6 +4298,7 @@ final class AppModel {
     // decode so the selected-file full-res pass can start immediately.
     let needsSelectedInspect =
       isRaw && !blockedByStack && !skipInspect
+      && displayedRetainedCanvas == nil
       && currentRank < PreviewSourceKind.rawDetail.qualityRank
     let needsSelectedFullRes =
       isRaw && !blockedByStack && currentRank < PreviewSourceKind.rawFull.qualityRank
@@ -3473,9 +4385,11 @@ final class AppModel {
     if selection == url, enabledScanStack(containing: url) != nil { return }
 
     let decodeHook = rawInspectDecodeHook
+    let sessionDecoder = rawPreviewSessionDecoder
     do {
       let session = try await rawDecodeScheduler.run {
         try decodeHook?()
+        if let sessionDecoder { return try sessionDecoder(url, .rawInspect) }
         return try Self.makeRawPreviewSession(
           for: url,
           maxDimension: Self.rawInspectPreviewMaxDimension,
@@ -3514,9 +4428,11 @@ final class AppModel {
     if previewCache[settingsKey(url)]?.sourceKind == .rawFull { return }
     if selection == url, enabledScanStack(containing: url) != nil { return }
     let gate = rawDecodeScheduler
+    let sessionDecoder = rawPreviewSessionDecoder
     do {
       let session = try await gate.run(priority: speculative ? .lookahead : .selected) {
-        try Self.makeRawFullPreviewSession(for: url)
+        if let sessionDecoder { return try sessionDecoder(url, .rawFull) }
+        return try Self.makeRawFullPreviewSession(for: url)
       }
       guard !Task.isCancelled, generation == loadGeneration,
         enabledScanStack(containing: url) == nil
@@ -3566,11 +4482,13 @@ final class AppModel {
       else { return }
     }
 
+    let sessionDecoder = rawPreviewSessionDecoder
     do {
       lookaheadPreviewRequestCount += 1
       let session = try await rawDecodeScheduler.run(priority: .lookahead) {
         () -> CachedPreviewSession in
         if isRaw {
+          if let sessionDecoder { return try sessionDecoder(url, desiredKind) }
           return try Self.makeRawPreviewSession(
             for: url,
             maxDimension: Self.rawDetailPreviewMaxDimension,
@@ -3658,14 +4576,20 @@ final class AppModel {
     guard let previewSource, let previewRenderer else {
       return
     }
+    let analysisSource =
+      previewCache[settingsKey(selection)].flatMap {
+        $0.previewRenderer === previewRenderer ? $0.analysisSource : nil
+      } ?? previewSource.resizedToFit(maxDimension: Self.analysisPreviewMaxDimension)
     cacheSession(
       CachedPreviewSession(
         sourceKind: previewSourceKind ?? .rawDetail,
         displaySource: previewSource,
-        analysisSource: previewSource.resizedToFit(maxDimension: Self.analysisPreviewMaxDimension),
+        analysisSource: analysisSource,
         previewRenderer: previewRenderer,
+        cpuPreviewPreparation: cpuPreviewPreparation,
         continuousEditSource: continuousEditPreviewSource,
         continuousEditRenderer: continuousEditPreviewRenderer,
+        continuousEditCPUPreparation: continuousEditCPUPreparation,
         sourcePixelDimensions: sourcePixelDimensions
       ),
       for: selection
@@ -3682,22 +4606,150 @@ final class AppModel {
       session, forKey: settingsKey(url), limits: previewCacheLimits,
       preserving: selection.map { settingsKey($0) },
       allowDowngrade: allowDowngrade, speculative: speculative)
+    trimPreviewCache()
   }
 
   private func trimPreviewCache() {
     previewCache.trim(to: previewCacheLimits, preserving: selection.map { settingsKey($0) })
+    // If only an oversized selected session remains, evict unselected display
+    // snapshots too. The selected canvas itself may still exceed the budget.
+    let occupiedBytes =
+      previewCache.reservedByteCount
+      + previewCacheLimits.additionalReservedBytes - retainedCanvasCache.physicalByteCount
+    let availableBytes = max(0, previewMemoryByteLimit - occupiedBytes)
+    retainedCanvasCache.trim(
+      to: .init(
+        count: retainedCanvasLimits.count, bytes: min(retainedCanvasLimits.bytes, availableBytes)))
+  }
+
+  private var retainedCanvasLimits: RetainedCanvasPreviewCache.Limits {
+    .init(count: 24, bytes: min(256 * 1_024 * 1_024, previewMemoryByteLimit / 8))
+  }
+
+  private var uncachedDisplayedCanvasBytes: Int {
+    guard let canvas = displayedRetainedCanvas,
+      selection.map({ retainedCanvasCache[settingsKey($0)] == nil }) == true
+    else { return 0 }
+    return canvas.byteCount
+  }
+
+  /// Selection has already moved. Use the loaded key for the outgoing canvas,
+  /// and retain only completed pixels that match its latest saved correction.
+  private func retainDepartingCanvas() {
+    guard !isUnderPreviewMemoryPressure, let key = loadedPreviewKey,
+      key != selection.map(settingsKey), previewSourceKind == .rawFull,
+      !isPreviewingSourceGeometry, !isPreviewingUncroppedCanvas, !isDustEditing,
+      let rendered = previewCache.renderedPreview(forKey: key),
+      !rendered.showOriginal, rendered.result.detail == nil,
+      rendered.parameters == settingsByPath[key],
+      retainedCanvasCache[key]?.parameters != rendered.parameters
+    else { return }
+    let image = rendered.result.cgImage
+    guard
+      max(1, image.width / 2) * max(1, image.height / 2) * 4
+        <= retainedCanvasLimits.bytes
+    else { return }
+    pendingCanvasSnapshot = CanvasSnapshotRequest(
+      key: key, image: image, parameters: rendered.parameters,
+      logicalDimensions: .init(width: image.width, height: image.height),
+      sourcePixelDimensions: sourcePixelDimensions, generation: canvasSnapshotGeneration)
+    guard canvasSnapshotTask == nil else { return }
+    canvasSnapshotTask = Task { [weak self] in
+      while let request = self?.pendingCanvasSnapshot {
+        self?.pendingCanvasSnapshot = nil
+        self?.canvasSnapshotWorkerBytes = request.byteCount
+        let canvas = await Task.detached(priority: .utility) {
+          RetainedCanvasPreview.make(
+            cgImage: request.image, parameters: request.parameters,
+            logicalDimensions: request.logicalDimensions,
+            sourcePixelDimensions: request.sourcePixelDimensions)
+        }.value
+        guard let self else { return }
+        self.canvasSnapshotWorkerBytes = 0
+        guard request.generation == self.canvasSnapshotGeneration,
+          !self.isUnderPreviewMemoryPressure,
+          self.settingsByPath[request.key] == request.parameters,
+          let canvas
+        else { continue }
+        self.retainedCanvasCache.insert(
+          canvas, forKey: request.key, limits: self.retainedCanvasLimits)
+        self.trimPreviewCache()
+        // Fast A→B→A navigation can return before downsampling finishes.
+        if let selected = self.selection, self.settingsKey(selected) == request.key,
+          self.previewSourceKind != .rawFull,
+          self.previewDisplayParameters == request.parameters,
+          !self.showOriginal, !self.isPreviewingUncroppedCanvas,
+          !self.isPreviewingSourceGeometry, !self.isDustEditing
+        {
+          self.restoreRetainedCanvas(for: selected)
+        }
+      }
+      self?.canvasSnapshotTask = nil
+    }
+  }
+
+  private func restoreRetainedCanvas(for url: URL) {
+    let key = settingsKey(url)
+    guard enabledScanStack(containing: url) == nil,
+      let canvas = retainedCanvasCache[key], canvas.parameters == previewDisplayParameters
+    else { return }
+    retainedCanvasCache.touch(key)
+    displayedRetainedCanvas = canvas
+    previewImage = PreviewBitmap.nsImage(
+      from: canvas.cgImage,
+      logicalSize: NSSize(
+        width: canvas.logicalDimensions.width, height: canvas.logicalDimensions.height))
+    previewDetail = nil
+    sourcePixelDimensions = canvas.sourcePixelDimensions
+    publishedPreviewParameters = canvas.parameters
+    renderRevision += 1
+    publishedRenderRevision = renderRevision
+    previewStatistics = .empty
+    previewStatisticsRevision = renderRevision
+    if let interval = pendingFirstPreviewInterval, interval.filename == url.lastPathComponent {
+      AppPerformanceSignposts.end(interval)
+      pendingFirstPreviewInterval = nil
+    }
+  }
+
+  private func clearRetainedCanvasPreviews(preservingDisplay: Bool = false) {
+    canvasSnapshotGeneration += 1
+    pendingCanvasSnapshot = nil
+    retainedCanvasCache.removeAll()
+    if !preservingDisplay { displayedRetainedCanvas = nil }
   }
 
   private var previewCacheLimits: PreviewSessionCache.Limits {
-    .init(
+    let proxyBytes = (continuousEditPreviewSource?.pixels.count ?? 0) * MemoryLayout<UInt16>.stride
+    let canvasBytes = retainedCanvasCache.physicalByteCount + uncachedDisplayedCanvasBytes
+    let workerBytes = canvasSnapshotWorkerBytes + (pendingCanvasSnapshot?.byteCount ?? 0)
+    return .init(
       count: previewCacheLimit, bytes: previewMemoryByteLimit,
-      additionalReservedBytes: (continuousEditPreviewSource?.pixels.count ?? 0)
-        * MemoryLayout<UInt16>.stride)
+      additionalReservedBytes: proxyBytes + canvasBytes + workerBytes
+        + uncachedCPUPreparationGeometryBytes)
+  }
+
+  /// Cached sessions already charge these owners. During replacement or eviction
+  /// an active source may still own preparation outside the cache.
+  private var uncachedCPUPreparationGeometryBytes: Int {
+    let session = loadedPreviewKey.flatMap { previewCache[$0] }
+    let cachedOwners = [session?.cpuPreviewPreparation, session?.continuousEditCPUPreparation]
+      .compactMap { $0 }
+    var countedOwners = Set<ObjectIdentifier>()
+    return [cpuPreviewPreparation, continuousEditCPUPreparation].compactMap { $0 }.reduce(into: 0) {
+      bytes, owner in
+      guard !cachedOwners.contains(where: { $0 === owner }),
+        countedOwners.insert(ObjectIdentifier(owner)).inserted
+      else { return }
+      bytes += owner.retainedGeometryByteCount
+    }
   }
 
   func handlePreviewMemoryPressure(isUnderPressure: Bool) {
     isUnderPreviewMemoryPressure = isUnderPressure
     if isUnderPressure {
+      previewMemoryPressureHandlingCount += 1
+      clearRetainedCanvasPreviews(preservingDisplay: true)
       cancelPredecode()
       let selectedKey = selection.map { settingsKey($0) }
       previewCache.removeAll(except: selectedKey)
@@ -3727,15 +4779,9 @@ final class AppModel {
     scanAnalysisRecords[key] = analysis.detectionRecord
     failedThumbnailPaths.remove(key)
 
-    // Invert the embedded JPEG / ImageIO thumbnail with CIColorInvert into
-    // named sRGB. A 16-bit DeviceRGB complement looked uninverted in the
-    // sidebar because SwiftUI swapped red/blue on that bitmap.
-    if thumbnailImages[key] == nil,
-      let cgImage = analysis.thumbnailSource.makePreviewCGImage(),
-      let thumbnail = PreviewBitmap.invertedNSImage(from: cgImage)
-    {
-      let byteCount = analysis.thumbnailSource.width * analysis.thumbnailSource.height * 4
-      thumbnailImages[key] = thumbnail
+    if thumbnailImages[key] == nil, let thumbnail = analysis.thumbnail {
+      let byteCount = thumbnail.bytesPerRow * thumbnail.height
+      thumbnailImages[key] = PreviewBitmap.nsImage(from: thumbnail)
       thumbnailByteCounts[key] = byteCount
       thumbnailCacheBytes += byteCount
     }
@@ -4210,7 +5256,15 @@ final class AppModel {
 
   private var previewDisplayParameters: ProcessingParameters {
     var displayParameters = parameters
-    if isPreviewingSourceGeometry {
+    if isDustEditing {
+      displayParameters.cropRect = nil
+      displayParameters.perspectiveCrop = nil
+      displayParameters.straightenAngle = 0
+      displayParameters.manualCrop = nil
+      displayParameters.borderCrop = 0
+      displayParameters.rotation = 0
+      displayParameters.flip = false
+    } else if isPreviewingSourceGeometry {
       displayParameters.cropRect = nil
       displayParameters.perspectiveCrop = nil
       displayParameters.straightenAngle = 0
@@ -4218,6 +5272,7 @@ final class AppModel {
     } else if isPreviewingUncroppedCanvas {
       displayParameters.manualCrop = nil
     }
+    if !showDustRepairs || showOriginal { displayParameters.dustRepairs = [] }
     return displayParameters
   }
 
@@ -4283,6 +5338,14 @@ final class AppModel {
   private func scheduleRender(immediate: Bool = false) {
     let interactionStart = pendingInteractionStart ?? ContinuousClock.now
     pendingInteractionStart = nil
+    if let canvas = displayedRetainedCanvas {
+      let matches =
+        canvas.parameters == previewDisplayParameters && !showOriginal
+        && !isPreviewingSourceGeometry && !isPreviewingUncroppedCanvas && !isDustEditing
+        && selection.flatMap { enabledScanStack(containing: $0) } == nil
+      if matches, previewSourceKind != .rawFull { return }
+      if !matches { displayedRetainedCanvas = nil }
+    }
     guard let selection, let previewSource, let cpuPreviewPreparation else {
       return
     }
@@ -4342,6 +5405,7 @@ final class AppModel {
     pendingRender = PreviewRenderRequest(
       revision: renderRevision,
       contextGeneration: renderContextGeneration,
+      cancellation: renderCancellation,
       sourceGeneration: previewSourceGeneration,
       selection: selection,
       source: renderSource,
@@ -4357,6 +5421,8 @@ final class AppModel {
       // here allocated an image on the main actor for every slider event,
       // even when the GPU renderer never consumed it.
       cpuPreparation: renderCPUPreparation,
+      otherCPUPreparation: renderCPUPreparation === cpuPreviewPreparation
+        ? continuousEditCPUPreparation : cpuPreviewPreparation,
       viewportRevision: viewportRevision,
       demand: demand,
       cachedResult: editTransaction == nil
@@ -4416,8 +5482,10 @@ final class AppModel {
     }
   }
 
-  private func preparedFlatField(for image: UInt16Image) -> UInt16Image {
-    guard let flatField = compatibleFlatField(for: image) else {
+  nonisolated private static func preparedFlatField(
+    for image: UInt16Image, compatibleField: UInt16Image?
+  ) -> UInt16Image {
+    guard let flatField = compatibleField else {
       return Self.unityFlatField(for: image)
     }
     return flatField.resized(width: image.width, height: image.height)
@@ -4455,61 +5523,11 @@ final class AppModel {
       } else {
         let traceWorker = previewInteractionTrace != nil
         let workerHook = previewRenderWorkerHook
+        let checkpointHook = previewRenderCheckpointHook
         let worker = await Task.detached(priority: .userInitiated) {
           await workerHook?()
           let began = traceWorker ? ContinuousClock.now : nil
-          let rendered: RenderedPreview? = {
-            let useGPU =
-              request.renderer != nil
-              && StillPreviewRenderer.supports(
-                parameters: request.parameters, showOriginal: request.showOriginal)
-            if useGPU,
-              let rendered = (request.overviewRenderer ?? request.renderer)?.render(
-                parameters: request.parameters,
-                showOriginal: request.showOriginal,
-                maximumDimension: request.demand?.overviewMaximumDimension
-              )
-            {
-              let detail = request.demand?.normalizedDetailRect.flatMap { region in
-                request.renderer?.render(
-                  parameters: request.parameters, showOriginal: request.showOriginal,
-                  normalizedRegion: region)
-              }
-              if request.demand?.detailRect == nil || detail != nil {
-                return RenderedPreview(
-                  cgImage: rendered,
-                  rendererName: request.usesContinuousEditPreview ? "GPU edit preview" : "GPU",
-                  detail: detail,
-                  statistics: RenderedPreviewStatistics {
-                    StillPreviewRenderer.statistics(for: rendered) ?? .empty
-                  }
-                )
-              }
-            }
-            var renderParameters = request.parameters
-            if request.showOriginal {
-              renderParameters.filmType = .cropOnly
-            }
-            // Preserve the density path's sensor-space flat-field geometry, but
-            // defer its allocation/resizing until a CPU render actually needs it.
-            let flatField: UInt16Image? =
-              renderParameters.densityPipelineEnabled
-              ? request.flatField?.resized(
-                width: request.source.width, height: request.source.height)
-                ?? Self.unityFlatField(for: request.source)
-              : nil
-            let rendered = request.cpuPreparation.render(
-              parameters: renderParameters,
-              flatField: flatField
-            )
-            guard let preview = rendered.makePreviewCGImage() else {
-              return nil
-            }
-            let sample = rendered.previewStatisticsSample()
-            return RenderedPreview(
-              cgImage: preview, rendererName: "CPU", detail: nil,
-              statistics: RenderedPreviewStatistics { sample.statistics() ?? .empty })
-          }()
+          let rendered = Self.renderPreview(request, checkpointHook: checkpointHook)
           return PreviewRenderWorkerResult(
             rendered: rendered, began: began,
             finished: traceWorker ? ContinuousClock.now : nil)
@@ -4525,6 +5543,9 @@ final class AppModel {
 
       let renderDuration = Self.milliseconds(renderStart.duration(to: .now))
       previewInteractionTrace?.record(.renderReturned, revision: request.revision)
+      // A discarded worker can still grow a retained session's CPU geometry.
+      // Account for that memory before any cancellation guard or suspended hook.
+      trimPreviewCache()
       await previewRenderCompletionHook?(request.parameters)
 
       guard !Task.isCancelled else {
@@ -4557,6 +5578,10 @@ final class AppModel {
             showOriginal: request.showOriginal, result: result),
           forKey: settingsKey(request.selection), limits: previewCacheLimits,
           preserving: selection.map { settingsKey($0) })
+      } else {
+        // A selected-source CPU viewport can retain geometry plus an overview.
+        // Account for it before admitting more speculative sessions.
+        trimPreviewCache()
       }
 
       let publicationTime = ContinuousClock.now
@@ -4594,6 +5619,7 @@ final class AppModel {
         logicalSize: NSSize(
           width: request.logicalDimensions.width,
           height: request.logicalDimensions.height))
+      displayedRetainedCanvas = nil
       if let detail = result.detail, let rect = request.demand?.detailRect {
         previewDetail = PreviewDetail(image: PreviewBitmap.nsImage(from: detail), rect: rect)
       } else {
@@ -4639,15 +5665,125 @@ final class AppModel {
     isRendering = false
   }
 
+  nonisolated private static func renderPreview(
+    _ request: PreviewRenderRequest,
+    checkpointHook: (@Sendable (PreviewRenderCheckpoint) -> Void)?
+  ) -> RenderedPreview? {
+    func remainsCurrent(at checkpoint: PreviewRenderCheckpoint) -> Bool {
+      checkpointHook?(checkpoint)
+      return !request.cancellation.isCancelled
+    }
+    guard remainsCurrent(at: .started) else { return nil }
+    if let rendered = renderGPUPreview(request, remainsCurrent: remainsCurrent) {
+      return rendered
+    }
+    guard !request.cancellation.isCancelled else { return nil }
+    var renderParameters = request.parameters
+    if request.showOriginal {
+      renderParameters.filmType = .cropOnly
+    }
+    if let rendered = renderCPUViewport(
+      request, parameters: renderParameters, remainsCurrent: remainsCurrent)
+    {
+      return rendered
+    }
+    guard !request.cancellation.isCancelled else { return nil }
+    return renderCPUPreview(
+      request, parameters: renderParameters, remainsCurrent: remainsCurrent)
+  }
+
+  nonisolated private static func renderGPUPreview(
+    _ request: PreviewRenderRequest,
+    remainsCurrent: (PreviewRenderCheckpoint) -> Bool
+  ) -> RenderedPreview? {
+    let renderer = request.overviewRenderer ?? request.renderer
+    guard
+      renderer?.supports(
+        parameters: request.parameters, showOriginal: request.showOriginal) == true
+    else { return nil }
+    request.cpuPreparation.discardGeometry(ifIncompatibleWith: request.parameters)
+    if let other = request.otherCPUPreparation, other !== request.cpuPreparation {
+      other.discardGeometry(ifIncompatibleWith: request.parameters)
+    }
+    guard
+      let overview = renderer?.render(
+        parameters: request.parameters,
+        showOriginal: request.showOriginal,
+        maximumDimension: request.demand?.overviewMaximumDimension)
+    else { return nil }
+    guard remainsCurrent(.gpuOverviewComplete) else { return nil }
+    let detail = request.demand?.normalizedDetailRect.flatMap { region in
+      request.renderer?.render(
+        parameters: request.parameters, showOriginal: request.showOriginal,
+        normalizedRegion: region)
+    }
+    guard remainsCurrent(.gpuDetailComplete),
+      request.demand?.detailRect == nil || detail != nil
+    else { return nil }
+    return RenderedPreview(
+      cgImage: overview,
+      rendererName: request.usesContinuousEditPreview ? "GPU edit preview" : "GPU",
+      detail: detail,
+      statistics: RenderedPreviewStatistics {
+        StillPreviewRenderer.statistics(for: overview) ?? .empty
+      })
+  }
+
+  nonisolated private static func renderCPUViewport(
+    _ request: PreviewRenderRequest,
+    parameters: ProcessingParameters,
+    remainsCurrent: (PreviewRenderCheckpoint) -> Bool
+  ) -> RenderedPreview? {
+    guard let demand = request.demand, let rect = demand.detailRect,
+      let viewport = request.cpuPreparation.renderViewport(
+        parameters: parameters,
+        region: ImageRegion(
+          x: Int(rect.minX), y: Int(rect.minY),
+          width: Int(rect.width), height: Int(rect.height)),
+        overviewMaximumDimension: demand.overviewMaximumDimension)
+    else { return nil }
+    guard remainsCurrent(.cpuViewportComplete) else { return nil }
+    let overview = viewport.overview.makePreviewCGImage()
+    guard remainsCurrent(.cpuOverviewPacked) else { return nil }
+    let detail = viewport.detail.makePreviewCGImage()
+    guard remainsCurrent(.cpuDetailPacked), let overview, let detail else { return nil }
+    let sample = viewport.overview.previewStatisticsSample()
+    return RenderedPreview(
+      cgImage: overview, rendererName: "CPU viewport", detail: detail,
+      statistics: RenderedPreviewStatistics { sample.statistics() ?? .empty })
+  }
+
+  nonisolated private static func renderCPUPreview(
+    _ request: PreviewRenderRequest,
+    parameters: ProcessingParameters,
+    remainsCurrent: (PreviewRenderCheckpoint) -> Bool
+  ) -> RenderedPreview? {
+    // Preserve the density path's sensor-space flat-field geometry, but
+    // defer its allocation/resizing until a CPU render actually needs it.
+    let flatField: UInt16Image? =
+      parameters.densityPipelineEnabled
+      ? request.flatField?.resized(width: request.source.width, height: request.source.height)
+        ?? unityFlatField(for: request.source)
+      : nil
+    guard remainsCurrent(.flatFieldPrepared) else { return nil }
+    let rendered = request.cpuPreparation.render(parameters: parameters, flatField: flatField)
+    guard remainsCurrent(.cpuCorrectionComplete) else { return nil }
+    guard let preview = rendered.makePreviewCGImage() else { return nil }
+    guard remainsCurrent(.cpuPacked) else { return nil }
+    let sample = rendered.previewStatisticsSample()
+    return RenderedPreview(
+      cgImage: preview, rendererName: "CPU", detail: nil,
+      statistics: RenderedPreviewStatistics { sample.statistics() ?? .empty })
+  }
+
   private static func milliseconds(_ duration: Duration) -> Double {
     Double(duration.components.seconds) * 1_000
       + Double(duration.components.attoseconds) / 1e15
   }
 
   private func cancelRenderLoop() {
-    // The detached renderer is synchronous. Keep its single drain alive until
-    // it returns; a new selection replaces pending work rather than spawning
-    // another detached worker alongside it.
+    // Synchronous engine calls drain before the next context starts. Invalidate
+    // their token so the worker can skip later stages, keeping only one worker.
     renderContextGeneration += 1
     pendingRender = nil
     pendingStatistics = nil
@@ -4756,24 +5892,30 @@ final class AppModel {
       sourcePixelDimensions: fullResolutionDimensions(of: url))
   }
 
-  nonisolated private static func makeThumbnailSource(for url: URL) throws -> UInt16Image {
-    if FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased()) {
-      return try RawImageDecoder.extractThumbnail(
-        url, maxDimension: thumbnailMaxDimension
-      ).image
-    }
-    return try StandardImageDecoder.decodePreview(
-      url, maxDimension: thumbnailMaxDimension)
-  }
-
   nonisolated private static func makeSidebarScanAnalysis(
-    for url: URL
+    for url: URL, preparationHook: (@Sendable () -> Void)? = nil
   ) throws -> SidebarScanAnalysis {
-    let source = try makeThumbnailSource(for: url)
+    try Task.checkCancellation()
+    let source: UInt16Image
+    let dimensions: PixelDimensions?
+    if FileDropPolicy.rawExtensions.contains(url.pathExtension.lowercased()) {
+      let decoded = try RawImageDecoder.extractThumbnail(url, maxDimension: thumbnailMaxDimension)
+      source = decoded.image
+      dimensions = decoded.fullResolutionDimensions
+    } else {
+      source = try StandardImageDecoder.decodePreview(url, maxDimension: thumbnailMaxDimension)
+      dimensions = fullResolutionDimensions(of: url)
+    }
+    try Task.checkCancellation()
+    let fingerprint = try ScanFingerprint(image: source)
+    preparationHook?()
+    try Task.checkCancellation()
+    let thumbnail = source.makePreviewCGImage().flatMap(PreviewBitmap.invertedCGImage)
+    try Task.checkCancellation()
     return SidebarScanAnalysis(
-      thumbnailSource: source,
-      fingerprint: try ScanFingerprint(image: source),
-      fullResolutionDimensions: fullResolutionDimensions(of: url),
+      thumbnail: thumbnail,
+      fingerprint: fingerprint,
+      fullResolutionDimensions: dimensions,
       exposureEV: approximateExposureEV(source))
   }
 
@@ -4910,16 +6052,41 @@ private struct PreviewRenderContext: Equatable {
       cropRect: parameters.cropRect,
       cropRectCoordinateSpace: parameters.cropRectCoordinateSpace,
       perspectiveCrop: parameters.perspectiveCrop,
-      manualCrop: parameters.manualCrop)
+      manualCrop: parameters.manualCrop,
+      dustRepairs: parameters.dustRepairs)
     geometry.filmNegativeParams.enabled = parameters.filmNegativeParams.enabled
     geometry.filmNegativeParams.rendering = parameters.filmNegativeParams.rendering
     self.geometry = geometry
   }
 }
 
+/// Checkpoints sit between synchronous stages. A generation change never
+/// interrupts a live engine call or starts an overlapping rendering worker.
+enum PreviewRenderCheckpoint: Equatable, Sendable {
+  case started
+  case gpuOverviewComplete
+  case gpuDetailComplete
+  case cpuViewportComplete
+  case cpuOverviewPacked
+  case cpuDetailPacked
+  case flatFieldPrepared
+  case cpuCorrectionComplete
+  case cpuPacked
+}
+
+private final class PreviewRenderCancellation: @unchecked Sendable {
+  private let lock = NSLock()
+  private var cancelled = false
+
+  var isCancelled: Bool { lock.withLock { cancelled } }
+
+  func cancel() { lock.withLock { cancelled = true } }
+}
+
 private struct PreviewRenderRequest: Sendable {
   let revision: Int
   let contextGeneration: Int
+  let cancellation: PreviewRenderCancellation
   let sourceGeneration: Int
   let selection: URL
   let source: UInt16Image
@@ -4932,6 +6099,7 @@ private struct PreviewRenderRequest: Sendable {
   let interactionStart: ContinuousClock.Instant
   let submitTime: ContinuousClock.Instant
   let cpuPreparation: CPUPreviewPreparationCache
+  let otherCPUPreparation: CPUPreviewPreparationCache?
   let viewportRevision: Int
   let demand: PreviewRenderDemand?
   let cachedResult: RenderedPreview?
@@ -4939,7 +6107,7 @@ private struct PreviewRenderRequest: Sendable {
 }
 
 private struct SidebarScanAnalysis: Sendable {
-  let thumbnailSource: UInt16Image
+  let thumbnail: CGImage?
   let fingerprint: ScanFingerprint
   let fullResolutionDimensions: PixelDimensions?
   let exposureEV: Double
@@ -4993,4 +6161,14 @@ private struct PreviewStatisticsRequest: Sendable {
   let revision: Int
   let sourceGeneration: Int
   let sample: RenderedPreviewStatistics
+}
+
+private struct CanvasSnapshotRequest: Sendable {
+  let key: String
+  let image: CGImage
+  let parameters: ProcessingParameters
+  let logicalDimensions: PixelDimensions
+  let sourcePixelDimensions: PixelDimensions?
+  let generation: Int
+  var byteCount: Int { image.bytesPerRow * image.height }
 }

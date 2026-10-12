@@ -31,7 +31,11 @@ RGB diagnostics were 20.8× faster in this run, with about 967 MB less peak
 physical footprint. The flat-input Darkroom case was 81.3× faster. Textured
 Darkroom timing was effectively unchanged; sorting and other analysis work
 still dominate that input. Memory units above are decimal MB and include the
-input image and test process. See the [raw samples](preview-analysis-2026-09-04.json).
+input image and test process. The table retains the measured medians and p95s;
+the individual sample capture is available as
+`docs/performance/preview-analysis-2026-09-04.json` in Git history. The
+[performance index](index.md#evidence-availability-and-provenance) gives its
+retained revision and retrieval command.
 
 ## Changes
 
@@ -152,9 +156,10 @@ input image and are not per-stage allocation counts. MB is decimal.
 Hardware was Apple M4 Pro / Mac16,7, 48 GiB RAM, 14 CPU cores, macOS 15.7.9
 (24G830), Swift 6.1.2. Baseline was `42c1943` plus all pre-existing working-tree
 changes, including the September 4 analysis repairs. Candidate adds the sort
-reuse and focused tests. The [raw report](darkroom-sort-reuse-2026-09-08.json)
-contains every timed sample, initial `git status --short`, and SHA-256 for the
-baseline and candidate processing source.
+reuse and focused tests. The table retains the measured medians and p95s; the
+individual sample capture and source hashes are available as
+`docs/performance/darkroom-sort-reuse-2026-09-08.json` in Git history, at the
+revision recorded in the [performance index](index.md#evidence-availability-and-provenance).
 
 The harness and inputs are unchanged: one warm-up and five repetitions per
 case, 1000 × 667 deterministic BGR images, Phoenix II / Crystal Archive, 20%

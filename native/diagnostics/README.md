@@ -14,6 +14,12 @@ preference renders preserve the historical looks. See the
 and [current verification](../../docs/development/native-macos.md#verification-summary).
 The September 18 galleries remain historical evidence.
 
+Use the [research index](../../docs/research/index.md) to choose the investigation
+and the [performance index](../../docs/performance/index.md) to find comparable
+measurements. Read the [documentation maintenance guide](../../docs/development/documentation-maintenance.md)
+before retiring a capture or claiming a new result. Ignored `dist/` paths below
+are local evidence, not files distributed with the repository or documentation site.
+
 ```sh
 .venv/bin/python native/diagnostics/color-study.py doctor --workflow skin --output dist/skin-study-next
 .venv/bin/python native/diagnostics/color-study.py plan --workflow skin --full --output dist/skin-study-next
@@ -25,6 +31,30 @@ stage logs. It rejects source/input changes at completion as well as on resume.
 `--resume` requires identical inputs, sources, tools and options. Use a fresh
 directory for a changed experiment; legacy output directories cannot be adopted.
 The Python dependencies are pinned in `requirements-color-study.txt`.
+
+## Bounded CPU point-correction probe
+
+`run-cpu-point-work-probe.py` builds the ordinary production release app, links
+`CPUPointWorkProbe.swift` to its engine/shim objects, freezes the executable and
+records source/input/object/module/binary hashes. It requires a new ignored
+`dist/` output and rejects changes during build, link or execution.
+
+```sh
+python3 native/diagnostics/run-cpu-point-work-probe.py \
+  --raw sample-raw/fuji400-fresh/DSCF2833.RAF \
+  --output dist/cpu-point-work-next --mode full
+```
+
+Add `--preflight-only` to check paths/tools without a build, render or output.
+`--mode proxy` measures the same source bounded to 2048px; `--cases` accepts
+comma-separated timed-case names shown by `--help`. All runs also hash 72
+untimed synthetic branches. The probe reports three exposure observations per
+case after complete geometry/analysis warmup, with full/detail and overview
+hashes outside timing. It excludes decoding, first full warp, bitmap packing,
+export, app publication and screen latency. Run without concurrent native
+builds/tests and record background contention. Use the
+[September 28 study](../../docs/performance/cpu-point-work-2026-09-28.md) for
+workload definitions and the limits of observed gains.
 
 ## Paired Camera Raw color study
 
@@ -61,6 +91,28 @@ Runner and recipe-contract checks need no RAW decoding or native compilation:
 These cover discovery, content-hash provenance, pinned renderer integrity,
 resume, native schema capture, preference decode defaults, public-control bounds,
 and exclusion of held-out metrics from recipe selection.
+
+## X-T5 upstream camera-color A/B
+
+`run-xt5-matrix-study.py` snapshots current working sources and builds baseline
+and upstream-camera-color arms without changing the app's decoder. It keeps the
+X-T5 geometry helper in both arms, validates the exact known camera state with
+`xt5-matrix-state.cpp`, and renders through `XT5MatrixProbe.swift` linked to the
+production engine, Metal renderer and real app correction parser.
+
+Run `prepare`, `build`, `matrix-state`, `render`, then `score`, each with the same
+fresh `--output dist/xt5-matrix-next`. The
+[dated protocol and results](../../docs/research/xt5-matrix-study-2026-10-03.md)
+contains complete commands, fixed-recipe/cohort definitions and validation limits.
+`score-xt5-matrix.py` writes `analysis/index.html`, per-region metrics, regressions,
+registration/mask artifacts and preference comparisons. It never fits recipes.
+
+The declared cohort includes both decode tiers and full-resolution Clean Invert
+JPEGs for every complete pair, plus five historical preferred looks. Public
+parser replay and actual Metal comparisons use 900px sources; full-resolution
+CPU exports are checked separately. Normal macOS graphics access is required.
+Completed render artifacts are content-hashed and verified on resume; keep all
+sources/inputs fixed and use one process per output directory.
 
 ## Ordinary slider response and native interaction
 
@@ -134,10 +186,10 @@ It never starts an implicit package rebuild. It
 cannot certify that existing objects match the source: rerun the appropriate
 release build after engine changes before interpreting the results.
 
-If no current release build exists, the focused test command in the
-[performance research note](../../docs/performance/research-directions-2026-09-12.md)
-creates one. That compilation is substantially more expensive than this probe;
-do it when power/compute are available.
+If no current release build exists, follow the
+[build guide](../../docs/development/building.md) before running the probe.
+That compilation is substantially more expensive than this probe; do it when
+power/compute are available.
 
 The HDR fixture supplies perfect registration and exact exposure offsets to
 isolate merge range handling. It does not test automatic registration or exposure
@@ -147,7 +199,26 @@ fixture predicts the improvement in a real photograph.
 See the [B&W tonality investigation](../../docs/performance/bw-tonality-2026-09-13.md)
 for the results, caveats, and proposed experiments.
 
-## Follow-up experiments
+## Unpaired Lucky/Foliage review
+
+`lucky200-reference-study.py` assembles a local qualitative gallery after a
+production `FilmScanLookbook --lucky-study` render. It expects the five named
+scan outputs and nearby digital RAF references under
+`sample-raw/luckyc200/tahoe test digital photos/`; it needs NumPy, Pillow and
+RawPy in addition to the native build. See the
+[September 25 follow-through](../../docs/development/roadmap-follow-through-2026-09-25.md)
+for the cohort and the [color runbook](../../docs/development/color-evaluation.md)
+for current Clean Invert/Foliage compatibility.
+
+The script has fixed frame, crop and patch selections, creates its output
+directory, and can overwrite existing files. Choose a fresh ignored output,
+record the native render inputs and source state, and adapt all selections before
+using a different corpus. It has no runner manifest or resume freshness guard.
+The digital references are different scenes: descriptive patch statistics and
+visual review do not establish registration, pixel error, held-out performance,
+or measured emulsion color.
+
+## Historical synthetic follow-up probe
 
 ```sh
 python3 native/diagnostics/run-tonality-probe.py --pass-two > /tmp/fsc-pass-two.json
@@ -160,6 +231,5 @@ prototype with the current engine, and evaluates curve/transfer/merge-noise
 fixtures. It does not read or write the user's real settings file. The 640-path
 synthetic case corresponds to the history count observed during the investigation.
 
-The [second-pass report](../../docs/performance/research-pass-two-2026-09-13.md)
-separates measured results from implementation proposals. The prototype is not
-used by the app and does not replace its profiles or merge algorithm.
+This is a historical synthetic prototype, not a measurement of the current app.
+It does not replace the app's profiles or merge algorithm.

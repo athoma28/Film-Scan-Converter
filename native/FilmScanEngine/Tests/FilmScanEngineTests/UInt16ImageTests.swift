@@ -89,18 +89,20 @@ struct UInt16ImageTests {
     #expect(resized.pixels == [0, 2])
   }
 
-  @Test("Exact resize produces requested geometry")
-  func exactResize() {
-    let image = UInt16Image(
-      width: 4, height: 2, channels: 1,
-      pixels: [0, 1, 2, 3, 4, 5, 6, 7]
-    )
+  @Test("Exact resize preserves nearest source samples in every channel", arguments: [1, 3])
+  func exactResize(channels: Int) {
+    let pixels = (0..<8).flatMap { pixel in
+      (0..<channels).map { UInt16(pixel * 10 + $0) }
+    }
+    let image = UInt16Image(width: 4, height: 2, channels: channels, pixels: pixels)
 
     let resized = image.resized(width: 2, height: 4)
 
-    #expect(resized.width == 2)
-    #expect(resized.height == 4)
-    #expect(resized.pixels.count == 8)
+    let expectedPixels = [0, 2, 0, 2, 4, 6, 4, 6].flatMap { pixel in
+      (0..<channels).map { UInt16(pixel * 10 + $0) }
+    }
+    #expect(
+      resized == UInt16Image(width: 2, height: 4, channels: channels, pixels: expectedPixels))
   }
 
   @Test("Simple invert complements every channel")

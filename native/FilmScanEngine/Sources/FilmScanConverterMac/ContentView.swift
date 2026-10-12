@@ -21,18 +21,40 @@ struct ContentView: View {
   @State private var previewZoomPercent = 100
   @State private var previewMagnification: CGFloat = 1
   @State private var previewIsFit = true
+  @State private var dustBrushMode: DustBrushMode = .heal
+  @State private var dustBrushDiameter: Double = 40
+  @State private var dustDonorPoint: SIMD2<Double>?
+  @State private var workspace = WorkspaceLayout()
+  @State private var presetPreviews = PresetPreviewStore()
+
+  init(model: AppModel, camera: CameraController, workspace: WorkspaceLayout = WorkspaceLayout()) {
+    self.model = model
+    self.camera = camera
+    self._workspace = State(initialValue: workspace)
+  }
+
+  private var canInspect: Bool { !showLivePreview && model.hasPreviewImage }
+
+  private var inspectorPresented: Binding<Bool> {
+    Binding(
+      get: { workspace.inspectorVisible && canInspect },
+      set: { if canInspect { workspace.inspectorVisible = $0 } }
+    )
+  }
 
   private enum PreviewOverlay {
     case rebate
     case perspective
     case straighten
     case crop
+    case dust
   }
 
   private var isPickingRebateRegion: Bool { activeOverlay == .rebate }
   private var isPerspectiveEditing: Bool { activeOverlay == .perspective }
   private var isStraightening: Bool { activeOverlay == .straighten }
   private var isCropping: Bool { activeOverlay == .crop }
+  private var isRepairingDust: Bool { activeOverlay == .dust }
   private var isAligningStack: Bool {
     !showLivePreview && (model.isBuildingScanStack || model.isUpgradingScanStack)
   }
@@ -43,7 +65,8 @@ struct ContentView: View {
     return showLivePreview ? camera.status : model.status
   }
   private var previewNeedsDraftSoftening: Bool {
-    switch model.previewSourceKind {
+    if model.isShowingRetainedCanvas { return false }
+    return switch model.previewSourceKind {
     case .rawDraft: true
     case .alignedStack:
       model.selectedImageDimensions?.provisional == true
@@ -72,7 +95,7 @@ struct ContentView: View {
   }
 
   var body: some View {
-    NavigationSplitView {
+    NavigationSplitView(columnVisibility: $workspace.sidebarVisibility) {
       ViewUpdateScope {
         List(selection: $model.selectedFiles) {
           ForEach(model.files, id: \.self) { url in
@@ -137,23 +160,15 @@ struct ContentView: View {
       }
     } detail: {
       VStack(spacing: 0) {
-        ViewUpdateScope { toolbar }
-        Divider()
-        HStack(spacing: 0) {
-          ViewUpdateScope {
-            preview
-              .frame(maxWidth: .infinity, maxHeight: .infinity)
-          }
-          ViewUpdateScope {
-            if !showLivePreview, model.hasPreviewImage {
-              Divider()
-              inspector
-                .frame(width: 390)
-                .frame(maxHeight: .infinity)
-            }
-          }
+        ViewUpdateScope {
+          preview
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .inspector(isPresented: inspectorPresented) {
+          ViewUpdateScope { inspector }
+            .inspectorColumnWidth(min: 340, ideal: 390, max: 520)
+        }
         Divider()
         ViewUpdateScope {
           HStack(spacing: 8) {
@@ -168,6 +183,12 @@ struct ContentView: View {
                   ? Color.red : Color.secondary
               )
               .lineLimit(1)
+            if !model.openRollStatus.isEmpty {
+              Text(model.openRollStatus)
+                .foregroundStyle(Color.red)
+                .lineLimit(2)
+                .help(model.openRollStatus)
+            }
             if isAligningStack {
               ProgressView()
                 .progressViewStyle(.linear)
@@ -180,7 +201,8 @@ struct ContentView: View {
           .padding(.vertical, 8)
           .font(.caption)
           .accessibilityElement(children: .combine)
-          .accessibilityLabel(statusBarMessage)
+          .accessibilityLabel(
+            [statusBarMessage, model.openRollStatus].filter { !$0.isEmpty }.joined(separator: ". "))
         }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -193,6 +215,17 @@ struct ContentView: View {
       }
     }
     .navigationSplitViewStyle(.balanced)
+    .onChange(of: showLivePreview) { camera.toggle() }
+    .toolbar { toolbar }
+    .focusedSceneValue(
+      \.workspaceCommands,
+      WorkspaceCommands(
+        isFocused: workspace.isFocused,
+        inspectorVisible: workspace.inspectorVisible && canInspect,
+        canInspect: canInspect,
+        toggleFocus: workspace.toggleFocus,
+        toggleInspector: workspace.toggleInspector)
+    )
     .focusedSceneValue(
       \.previewZoomCommands,
       showLivePreview || !model.hasPreviewImage
@@ -206,6 +239,7 @@ struct ContentView: View {
     .environment(\.editingGestureAction) { actionName, isEditing in
       model.editingGestureChanged(actionName, isEditing: isEditing)
     }
+    .environment(\.adjustmentEditingSource) { model.selection?.standardizedFileURL.path }
   }
 
   private func scanStackBadge(for url: URL) -> ScanSidebarRow.StackBadgeData? {
@@ -345,139 +379,157 @@ struct ContentView: View {
     return "Export Selected"
   }
 
-  private var toolbar: some View {
-    HStack(spacing: 10) {
-      Button(action: model.showImportPanel) {
-        Label("Import", systemImage: "plus")
-      }
-      .keyboardShortcut("o")
-      .disabled(model.isExporting)
-
-      Button {
-        model.selectAdjacentScan(offset: -1)
-      } label: {
-        Image(systemName: "chevron.up")
-          .frame(width: 18)
-      }
-      .disabled(!model.canSelectPreviousScan)
-      .help("Previous scan (Option-Command-Up)")
-      .accessibilityLabel("Previous scan")
-
-      Button {
-        model.selectAdjacentScan(offset: 1)
-      } label: {
-        Image(systemName: "chevron.down")
-          .frame(width: 18)
-      }
-      .disabled(!model.canSelectNextScan)
-      .help("Next scan (Option-Command-Down)")
-      .accessibilityLabel("Next scan")
-
-      Divider()
-        .frame(height: 18)
-
-      Button(action: { model.moveSelectedSidebarFile(by: -1) }) {
-        Image(systemName: "arrow.up.to.line")
-          .frame(width: 18)
-      }
-      .disabled(!model.canMoveSelectedSidebarFileUp)
-      .help("Move selected scan up")
-      .accessibilityLabel("Move selected scan up")
-
-      Button(action: { model.moveSelectedSidebarFile(by: 1) }) {
-        Image(systemName: "arrow.down.to.line")
-          .frame(width: 18)
-      }
-      .disabled(!model.canMoveSelectedSidebarFileDown)
-      .help("Move selected scan down")
-      .accessibilityLabel("Move selected scan down")
-
-      Toggle("Live Camera", isOn: $showLivePreview)
-        .toggleStyle(.button)
-        .labelStyle(.titleAndIcon)
-        .onChange(of: showLivePreview) {
-          camera.toggle()
+  @ToolbarContentBuilder
+  private var toolbar: some ToolbarContent {
+    ToolbarItemGroup(placement: .navigation) {
+      ViewUpdateScope {
+        Button(action: model.showImportPanel) {
+          Label("Import", systemImage: "plus")
         }
-
-      if showLivePreview {
-        Toggle(
-          "Invert Negative",
-          isOn: Binding(
-            get: { camera.invertNegative },
-            set: camera.setInvertNegative
-          )
-        )
-        .toggleStyle(.switch)
-
-        ToolbarSlider(
-          "Exposure",
-          value: Binding(
-            get: { Double(camera.exposure) },
-            set: { camera.setExposure(Float($0)) }
-          ),
-          range: -3...3
-        )
-        ToolbarSlider(
-          "Saturation",
-          value: Binding(
-            get: { Double(camera.saturation) },
-            set: { camera.setSaturation(Float($0)) }
-          ),
-          range: 0...2
-        )
+        .help("Import scans (Command-O)")
+        .disabled(model.isExporting)
       }
-      Spacer()
+      ViewUpdateScope {
+        Button {
+          model.selectAdjacentScan(offset: -1)
+        } label: {
+          Label("Previous Scan", systemImage: "chevron.up")
+        }
+        .disabled(!model.canSelectPreviousScan)
+        .help("Previous scan (Option-Command-Up)")
+      }
+      ViewUpdateScope {
+        Button {
+          model.selectAdjacentScan(offset: 1)
+        } label: {
+          Label("Next Scan", systemImage: "chevron.down")
+        }
+        .disabled(!model.canSelectNextScan)
+        .help("Next scan (Option-Command-Down)")
+      }
+    }
 
-      if !showLivePreview, model.hasPreviewImage {
-        if model.canLoadRawDetailPreview {
-          Button(action: model.loadRawDetailPreview) {
-            Label("Load RAW Preview", systemImage: "sparkles.rectangle.stack")
+    ToolbarItemGroup(placement: .automatic) {
+      ViewUpdateScope {
+        if canInspect {
+          Toggle(isOn: Binding(get: { isCropping }, set: { _ in toggleCropping() })) {
+            Label("Crop", systemImage: "crop")
           }
-          .help("Continue loading the inspect and full-resolution RAW previews")
+          .toggleStyle(.button)
+          .help("Crop the photo")
+          .disabled(model.isLoading)
         }
-
-        Toggle(isOn: $model.showOriginal) {
-          Label("Original", systemImage: "rectangle.on.rectangle")
-        }
-        .toggleStyle(.button)
-        .disabled(isPickingRebateRegion || isPerspectiveEditing)
-        .help("Press and hold the comparison visually by toggling the original")
-
-        HStack(spacing: 4) {
-          Button {
-            requestPreviewZoom(.zoomOut)
-          } label: {
-            Image(systemName: "minus.magnifyingglass")
-              .frame(width: 18)
+      }
+      ViewUpdateScope {
+        if canInspect {
+          Toggle(isOn: Binding(get: { isStraightening }, set: { _ in toggleStraightening() })) {
+            Label("Straighten", systemImage: "level")
           }
-          .help("Zoom out (Command-minus)")
+          .toggleStyle(.button)
+          .help("Draw a line to straighten the photo")
+          .disabled(model.isLoading)
+        }
+      }
+      ViewUpdateScope {
+        if canInspect {
+          Toggle(
+            isOn: Binding(
+              get: { isRepairingDust },
+              set: { _ in
+                if isRepairingDust { endActiveOverlay() } else { startDustEditing() }
+              })
+          ) {
+            Label("Healing Brush", systemImage: "bandage")
+          }
+          .toggleStyle(.button)
+          .help("Heal dust and small marks")
+          .disabled(model.isLoading || model.decodedImage == nil)
+        }
+      }
+      ViewUpdateScope {
+        Menu {
+          Button("Move Selected Scan Up", systemImage: "arrow.up.to.line") {
+            model.moveSelectedSidebarFile(by: -1)
+          }
+          .disabled(!model.canMoveSelectedSidebarFileUp)
+          Button("Move Selected Scan Down", systemImage: "arrow.down.to.line") {
+            model.moveSelectedSidebarFile(by: 1)
+          }
+          .disabled(!model.canMoveSelectedSidebarFileDown)
+          Divider()
+          Toggle("Live Camera", isOn: $showLivePreview)
+          if model.canLoadRawDetailPreview && !showLivePreview {
+            Button("Load RAW Preview", action: model.loadRawDetailPreview)
+          }
+        } label: {
+          Label("More", systemImage: "ellipsis.circle")
+        }
+        .help("Scan order, live camera, and RAW preview")
+      }
+      ViewUpdateScope {
+        if showLivePreview {
+          Toggle(
+            "Invert Negative",
+            isOn: Binding(
+              get: { camera.invertNegative }, set: camera.setInvertNegative))
+          ToolbarSlider(
+            "Exposure",
+            value: Binding(
+              get: { Double(camera.exposure) }, set: { camera.setExposure(Float($0)) }),
+            range: -3...3)
+          ToolbarSlider(
+            "Saturation",
+            value: Binding(
+              get: { Double(camera.saturation) }, set: { camera.setSaturation(Float($0)) }),
+            range: 0...2)
+        }
+      }
+    }
 
+    ToolbarItemGroup(placement: .primaryAction) {
+      ViewUpdateScope {
+        if canInspect {
+          Toggle(isOn: $model.showOriginal) {
+            Label("Original", systemImage: "rectangle.on.rectangle")
+          }
+          .disabled(isPickingRebateRegion || isPerspectiveEditing)
+          .toggleStyle(.button)
+          .help("Compare with the original scan")
+        }
+      }
+      ViewUpdateScope {
+        if canInspect {
           Menu {
             Button("Fit in Window") { requestPreviewZoom(.fit) }
             Button("100% Preview Pixels") { requestPreviewZoom(.actualSize) }
+            Divider()
+            Button("Zoom In") { requestPreviewZoom(.zoomIn) }
+            Button("Zoom Out") { requestPreviewZoom(.zoomOut) }
           } label: {
             Text(previewIsFit ? "Fit" : "\(previewZoomPercent)%")
               .monospacedDigit()
               .frame(minWidth: 38)
           }
-          .menuStyle(.borderlessButton)
-          .fixedSize()
-          .help("Choose Fit or inspect preview pixels at 100%")
-
-          Button {
-            requestPreviewZoom(.zoomIn)
-          } label: {
-            Image(systemName: "plus.magnifyingglass")
-              .frame(width: 18)
-          }
-          .help("Zoom in (Command-plus)")
+          .help("Preview zoom (Command-0 for Fit, Command-1 for 100%)")
         }
       }
+      ViewUpdateScope {
+        Button(action: workspace.toggleInspector) {
+          Label(
+            workspace.inspectorVisible && canInspect ? "Hide Inspector" : "Show Inspector",
+            systemImage: "sidebar.right")
+        }
+        .disabled(!canInspect)
+        .help("Show or hide inspector (Option-Command-I)")
+      }
+      Button(action: workspace.toggleFocus) {
+        Label(
+          workspace.isFocused ? "Restore Side Panels" : "Hide Side Panels",
+          systemImage: workspace.isFocused
+            ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+      }
+      .help("Hide or restore side panels (Shift-Command-F)")
     }
-    .controlSize(.small)
-    .buttonStyle(.bordered)
-    .padding(.horizontal, 12)
-    .padding(.vertical, 9)
   }
 
   private var inspector: some View {
@@ -573,6 +625,68 @@ struct ContentView: View {
       .controlSize(.small)
       .buttonStyle(.bordered)
       .padding(.horizontal, 2)
+
+      DisclosureGroup("Selective Sync & Paste") {
+        VStack(alignment: .leading, spacing: 6) {
+          HStack {
+            Button("All") { model.adjustmentTransferGroups = CorrectionAdjustmentGroup.all }
+            Button("None") { model.adjustmentTransferGroups = [] }
+            Spacer()
+          }
+          .controlSize(.small)
+          ForEach(CorrectionAdjustmentGroup.allCases) { group in
+            Toggle(
+              group.title,
+              isOn: Binding(
+                get: { model.adjustmentTransferGroups.contains(group) },
+                set: { isIncluded in
+                  if isIncluded {
+                    model.adjustmentTransferGroups.insert(group)
+                  } else {
+                    model.adjustmentTransferGroups.remove(group)
+                  }
+                }
+              )
+            )
+            .toggleStyle(.checkbox)
+          }
+          Text("Partial transfers keep each scan’s tone response. Exposure is excluded initially.")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+          HStack(spacing: 6) {
+            Button("Sync Selected (\(model.selectedFileCount))") {
+              model.syncSelectedAdjustmentsToSelectedFiles()
+            }
+            .disabled(model.selectedFileCount < 2)
+            Menu("More") {
+              Button("Sync All Open Scans", action: model.syncSelectedAdjustmentsToAllOpenFiles)
+            }
+          }
+          .disabled(model.adjustmentTransferGroups.isEmpty || model.selection == nil)
+          HStack(spacing: 6) {
+            Button("Paste Selected Groups", action: model.pasteSelectedCorrectionSettings)
+            Menu("More") {
+              Button(
+                "Paste to Selected Scans (\(model.selectedFileCount))",
+                action: model.pasteSelectedCorrectionSettingsToSelectedFiles
+              )
+              .disabled(model.selectedFileCount == 0)
+              Button(
+                "Paste to All Open Scans",
+                action: model.pasteSelectedCorrectionSettingsToAllOpenFiles
+              )
+              .disabled(model.files.isEmpty)
+            }
+          }
+          .disabled(
+            model.adjustmentTransferGroups.isEmpty || !model.canPasteCorrectionSettings
+              || model.selection == nil)
+        }
+        .controlSize(.small)
+        .padding(.top, 4)
+      }
+      .font(.caption)
 
       if !model.settingsStatus.isEmpty {
         Text(model.settingsStatus)
@@ -673,6 +787,8 @@ struct ContentView: View {
           .accessibilityLabel("Choose a preset")
           .accessibilityValue(appliedName ?? "Custom")
           .help("Apply a look, then refine it with the tone and color controls below.")
+
+          PresetPreviewStrip(model: model, store: presetPreviews)
 
           if isSavingPreset {
             VStack(alignment: .leading, spacing: 6) {
@@ -1122,257 +1238,326 @@ struct ContentView: View {
   private var geometryInspector: some View {
     VStack(spacing: 10) {
       InspectorSection("Orientation", systemImage: "arrow.triangle.2.circlepath") {
-        VStack(alignment: .leading, spacing: 8) {
-          HStack(spacing: 8) {
-            Button(action: model.rotateCounterclockwise) {
-              Label("Rotate Left", systemImage: "rotate.left")
-                .frame(maxWidth: .infinity)
-            }
-            .help("Rotate 90° counterclockwise")
-
-            Button(action: model.rotateClockwise) {
-              Label("Rotate Right", systemImage: "rotate.right")
-                .frame(maxWidth: .infinity)
-            }
-            .help("Rotate 90° clockwise")
-
-            Button(action: model.toggleFlip) {
-              Label(
-                "Flip", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right")
-            }
-            .help("Flip horizontally")
-          }
-          .controlSize(.small)
-
-          HStack(spacing: 8) {
-            Button(action: toggleStraightening) {
-              Label(
-                isStraightening ? "Cancel Straighten" : "Straighten Edge…",
-                systemImage: isStraightening ? "xmark" : "line.diagonal"
-              )
-              .frame(maxWidth: .infinity)
-            }
-            .controlSize(.small)
-
-            if abs(model.straightenAngle) > 0.000_001 {
-              HStack(spacing: 4) {
-                Text("\(String(format: "%+.1f", model.straightenAngle))°")
-                  .font(.caption2.monospacedDigit())
-                Button("Clear", action: model.clearStraightening)
-                  .controlSize(.mini)
-              }
-            }
-          }
-
-          if isStraightening {
-            Text("Click two points along an edge that should be vertical or horizontal.")
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-          }
-        }
+        orientationControls
       }
-
       InspectorSection("Crop & Framing", systemImage: "crop") {
-        VStack(alignment: .leading, spacing: 8) {
-          HStack(spacing: 8) {
-            Button(action: model.detectCrop) {
-              if model.isCropDetectionRunning {
-                ProgressView()
-                  .controlSize(.small)
-              } else {
-                Label("Auto Frame", systemImage: "sparkles")
-              }
-            }
-            .disabled(
-              model.decodedImage == nil || model.isCropDetectionRunning || isPerspectiveEditing)
+        framingControls
+      }
+      InspectorSection("Dust & Repair", systemImage: "sparkles") {
+        dustRepairControls
+      }
+    }
+  }
 
-            Button(action: toggleCropping) {
-              Label(
-                isCropping ? "Done" : "Manual Crop",
-                systemImage: isCropping ? "checkmark" : "crop"
-              )
-            }
-            .disabled(model.decodedImage == nil || isPerspectiveEditing)
+  private var orientationControls: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack(spacing: 8) {
+        Button(action: model.rotateCounterclockwise) {
+          Label("Rotate Left", systemImage: "rotate.left")
+            .frame(maxWidth: .infinity)
+        }
+        .help("Rotate 90° counterclockwise")
 
-            Button(action: togglePerspectiveEditing) {
-              Label(
-                isPerspectiveEditing ? "Done" : "Perspective",
-                systemImage: isPerspectiveEditing ? "checkmark" : "square.on.square.dashed"
-              )
-            }
-            .disabled(model.decodedImage == nil)
-          }
-          .controlSize(.small)
+        Button(action: model.rotateClockwise) {
+          Label("Rotate Right", systemImage: "rotate.right")
+            .frame(maxWidth: .infinity)
+        }
+        .help("Rotate 90° clockwise")
 
-          if isCropping {
-            Picker(
-              "Crop Ratio",
-              selection: Binding(
-                get: { model.parameters.manualCropAspectRatio },
-                set: { model.setManualCropAspectRatio($0) })
-            ) {
-              ForEach(CropAspectRatio.allCases, id: \.self) { ratio in
-                Text(ratio.rawValue).tag(ratio)
-              }
-            }
-            .controlSize(.small)
-            .help("Fit the current crop to a ratio and keep it fixed while adjusting the handles.")
-            Text(
-              "Drag a rectangle to crop, then adjust the handles. Drag inside the box to move it, or outside to replace it."
-            )
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-          }
+        Button(action: model.toggleFlip) {
+          Label(
+            "Flip", systemImage: "arrow.left.and.right.righttriangle.left.righttriangle.right")
+        }
+        .help("Flip horizontally")
+      }
+      .controlSize(.small)
 
-          if isPerspectiveEditing {
-            VStack(alignment: .leading, spacing: 6) {
-              Picker(
-                "Frame Ratio",
-                selection: Binding(
-                  get: { model.perspectiveOutputAspectRatio },
-                  set: { model.setPerspectiveOutputAspectRatio($0) }
-                )
-              ) {
-                ForEach(CropAspectRatio.allCases, id: \.self) { ratio in
-                  Text(ratio == .free ? "Automatic" : ratio.rawValue).tag(ratio)
-                }
-              }
-              .controlSize(.small)
-              .help(
-                "Choose the film frame’s known proportions to correct foreshortening. Automatic estimates from its edges."
-              )
-              Text(
-                "Drag corners to film edges. Arrow keys move the selected corner one pixel; Shift moves ten. Option disables assist."
-              )
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-              Toggle("Parallel-edge assist", isOn: $usesPerspectiveParallelAssist)
-                .controlSize(.small)
-              Button("Reset Corners") {
-                model.resetPerspectiveCorners()
-              }
-              .controlSize(.small)
-            }
-          }
+      HStack(spacing: 8) {
+        Button(action: toggleStraightening) {
+          Label(
+            isStraightening ? "Cancel Straighten" : "Straighten Edge…",
+            systemImage: isStraightening ? "xmark" : "line.diagonal"
+          )
+          .frame(maxWidth: .infinity)
+        }
+        .controlSize(.small)
 
-          if model.perspectiveCrop != nil {
-            Divider()
-            HStack {
-              Text("Perspective Crop Applied")
-                .font(.caption2.weight(.medium))
-              Spacer()
-              Button("Clear") {
-                endPerspectiveEditing()
-                model.clearPerspectiveCrop()
-              }
-              .controlSize(.small)
-            }
-          } else if let cropRect = model.cropRect {
-            Divider()
-            HStack {
-              VStack(alignment: .leading, spacing: 2) {
-                Text("Detected Frame (\(String(format: "%.1f", cropRect.angle))°)")
-                  .font(.caption2.weight(.medium))
-                if let dimensions = model.selectedDetectedFrameDimensions {
-                  Text("\(dimensions.width) × \(dimensions.height) px")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                }
-              }
-              Spacer()
-              Button("Clear", action: model.clearCrop)
-                .controlSize(.small)
-            }
+        if abs(model.straightenAngle) > 0.000_001 {
+          HStack(spacing: 4) {
+            Text("\(String(format: "%+.1f", model.straightenAngle))°")
+              .font(.caption2.monospacedDigit())
+            Button("Clear", action: model.clearStraightening)
+              .controlSize(.mini)
           }
-          if model.manualCrop != nil {
-            Divider()
-            HStack {
-              VStack(alignment: .leading, spacing: 2) {
-                Text("Manual Crop")
-                  .font(.caption2.weight(.medium))
-                if let dimensions = model.selectedCanvasDimensions {
-                  Text("\(dimensions.width) × \(dimensions.height) px")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                }
-              }
-              Spacer()
-              Button("Clear", action: model.clearManualCrop)
-                .controlSize(.small)
-            }
-          }
-
-          if let output = model.selectedCanvasDimensions {
-            HStack {
-              Text("Canvas")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-              Spacer()
-              Text("\(output.width) × \(output.height) px")
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-            }
-          }
-
-          if !model.cropStatus.isEmpty, !model.isCropDetectionRunning {
-            Text(model.cropStatus)
-              .font(.caption2)
-              .foregroundStyle(.secondary)
-              .fixedSize(horizontal: false, vertical: true)
-          }
-
-          DisclosureGroup("Detection Thresholds") {
-            VStack(alignment: .leading, spacing: 6) {
-              AdjustmentSlider(
-                "Dark",
-                value: Binding(
-                  get: { Double(model.parameters.darkThreshold) },
-                  set: { model.setDarkThreshold(Int($0.rounded())) }
-                ),
-                range: 0...100, neutral: 25, valueFormat: "%.0f", unitSuffix: "%", step: 1
-              )
-              AdjustmentSlider(
-                "Light",
-                value: Binding(
-                  get: { Double(model.parameters.lightThreshold) },
-                  set: { model.setLightThreshold(Int($0.rounded())) }
-                ),
-                range: 0...100, neutral: 100, valueFormat: "%.0f", unitSuffix: "%", step: 1
-              )
-            }
-            .padding(.top, 4)
-          }
-          .font(.caption)
         }
       }
 
-      InspectorSection("Dust Mask", systemImage: "sparkles") {
-        VStack(alignment: .leading, spacing: 6) {
-          HStack {
-            Button(action: model.detectDustMask) {
-              if model.isDustDetectionRunning {
-                ProgressView()
-                  .controlSize(.small)
-              } else {
-                Label("Detect Dust", systemImage: "wand.and.stars")
-              }
-            }
-            .disabled(model.decodedImage == nil || model.isDustDetectionRunning)
-
-            if model.dustMaskImage != nil {
-              Button("Clear", action: model.clearDustMask)
-            }
-          }
-          .controlSize(.small)
-
-          Text(
-            model.dustStatus.isEmpty
-              ? "Non-destructive overlay for dust particle removal."
-              : model.dustStatus
-          )
+      if isStraightening {
+        Text("Click two points along an edge that should be vertical or horizontal.")
           .font(.caption2)
           .foregroundStyle(.secondary)
+      }
+    }
+  }
+
+  private var framingControls: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack(spacing: 8) {
+        Button(action: { model.detectCrop() }) {
+          if model.isCropDetectionRunning {
+            ProgressView()
+              .controlSize(.small)
+          } else {
+            Label("Auto Frame", systemImage: "sparkles")
+          }
         }
+        .disabled(
+          model.decodedImage == nil || model.isCropDetectionRunning || isPerspectiveEditing)
+
+        Button(action: toggleCropping) {
+          Label(
+            isCropping ? "Done" : "Manual Crop",
+            systemImage: isCropping ? "checkmark" : "crop"
+          )
+        }
+        .disabled(model.decodedImage == nil || isPerspectiveEditing)
+
+        Button(action: togglePerspectiveEditing) {
+          Label(
+            isPerspectiveEditing ? "Done" : "Perspective",
+            systemImage: isPerspectiveEditing ? "checkmark" : "square.on.square.dashed"
+          )
+        }
+        .disabled(model.decodedImage == nil)
+      }
+      .controlSize(.small)
+
+      if isCropping {
+        Picker(
+          "Crop Ratio",
+          selection: Binding(
+            get: { model.parameters.manualCropAspectRatio },
+            set: { model.setManualCropAspectRatio($0) })
+        ) {
+          ForEach(CropAspectRatio.allCases, id: \.self) { ratio in
+            Text(ratio.rawValue).tag(ratio)
+          }
+        }
+        .controlSize(.small)
+        .help("Fit the current crop to a ratio and keep it fixed while adjusting the handles.")
+        Text(
+          "Drag a rectangle to crop, then adjust the handles. Drag inside the box to move it, or outside to replace it."
+        )
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+      }
+
+      if isPerspectiveEditing {
+        perspectiveEditingControls
+      }
+
+      if model.perspectiveCrop != nil {
+        Divider()
+        HStack {
+          Text("Perspective Crop Applied")
+            .font(.caption2.weight(.medium))
+          Spacer()
+          Button("Clear") {
+            endPerspectiveEditing()
+            model.clearPerspectiveCrop()
+          }
+          .controlSize(.small)
+        }
+      } else if let cropRect = model.cropRect {
+        Divider()
+        HStack {
+          VStack(alignment: .leading, spacing: 2) {
+            Text("Detected Frame (\(String(format: "%.1f", cropRect.angle))°)")
+              .font(.caption2.weight(.medium))
+            if let dimensions = model.selectedDetectedFrameDimensions {
+              Text("\(dimensions.width) × \(dimensions.height) px")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+          }
+          Spacer()
+          Button("Clear", action: model.clearCrop)
+            .controlSize(.small)
+        }
+      }
+      if model.manualCrop != nil {
+        Divider()
+        HStack {
+          VStack(alignment: .leading, spacing: 2) {
+            Text("Manual Crop")
+              .font(.caption2.weight(.medium))
+            if let dimensions = model.selectedCanvasDimensions {
+              Text("\(dimensions.width) × \(dimensions.height) px")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+          }
+          Spacer()
+          Button("Clear", action: model.clearManualCrop)
+            .controlSize(.small)
+        }
+      }
+
+      if let output = model.selectedCanvasDimensions {
+        HStack {
+          Text("Canvas")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+          Spacer()
+          Text("\(output.width) × \(output.height) px")
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(.secondary)
+        }
+      }
+
+      if !model.cropStatus.isEmpty, !model.isCropDetectionRunning {
+        Text(model.cropStatus)
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+
+      DisclosureGroup("Detection Thresholds") {
+        VStack(alignment: .leading, spacing: 6) {
+          AdjustmentSlider(
+            "Dark",
+            value: Binding(
+              get: { Double(model.parameters.darkThreshold) },
+              set: { model.setDarkThreshold(Int($0.rounded())) }
+            ),
+            range: 0...100, neutral: 25, valueFormat: "%.0f", unitSuffix: "%", step: 1
+          )
+          AdjustmentSlider(
+            "Light",
+            value: Binding(
+              get: { Double(model.parameters.lightThreshold) },
+              set: { model.setLightThreshold(Int($0.rounded())) }
+            ),
+            range: 0...100, neutral: 100, valueFormat: "%.0f", unitSuffix: "%", step: 1
+          )
+        }
+        .padding(.top, 4)
+      }
+      .font(.caption)
+    }
+  }
+
+  private var perspectiveEditingControls: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Picker(
+        "Frame Ratio",
+        selection: Binding(
+          get: { model.perspectiveOutputAspectRatio },
+          set: { model.setPerspectiveOutputAspectRatio($0) }
+        )
+      ) {
+        ForEach(CropAspectRatio.allCases, id: \.self) { ratio in
+          Text(ratio == .free ? "Automatic" : ratio.rawValue).tag(ratio)
+        }
+      }
+      .controlSize(.small)
+      .help(
+        "Choose the film frame’s known proportions to correct foreshortening. Automatic estimates from its edges."
+      )
+      Text(
+        "Drag corners to film edges. Arrow keys move the selected corner one pixel; Shift moves ten. Option disables assist."
+      )
+      .font(.caption2)
+      .foregroundStyle(.secondary)
+      Toggle("Parallel-edge assist", isOn: $usesPerspectiveParallelAssist)
+        .controlSize(.small)
+      Button("Reset Corners") {
+        model.resetPerspectiveCorners()
+      }
+      .controlSize(.small)
+    }
+  }
+
+  private var dustRepairControls: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      HStack {
+        Button {
+          startDustEditing()
+          model.detectDustMask()
+        } label: {
+          if model.isDustDetectionRunning {
+            ProgressView().controlSize(.small)
+          } else {
+            Label("Detect Dust", systemImage: "wand.and.stars")
+          }
+        }
+        .disabled(
+          model.decodedImage == nil || model.isLoading || model.isDustDetectionRunning
+            || model.isDustRepairRunning)
+        Button(isRepairingDust ? "Done" : "Healing Brush") {
+          if isRepairingDust { endActiveOverlay() } else { startDustEditing() }
+        }
+        .disabled(model.decodedImage == nil || model.isLoading)
+      }
+      .controlSize(.small)
+
+      if isRepairingDust {
+        Picker("Brush", selection: $dustBrushMode) {
+          ForEach(DustBrushMode.allCases) { mode in Text(mode.rawValue).tag(mode) }
+        }
+        .pickerStyle(.segmented)
+        AdjustmentSlider(
+          "Brush Size", value: $dustBrushDiameter,
+          range: 2...max(2, min(300, Double(model.dustBrushSourceWidth) * 0.1)),
+          neutral: 40, valueFormat: "%.0f", unitSuffix: " px", step: 1)
+        HStack {
+          Toggle("Show mask", isOn: $model.showDustMask)
+          Toggle("Show repairs", isOn: $model.showDustRepairs)
+        }
+        .font(.caption)
+        HStack {
+          Button {
+            model.repairDustMask()
+          } label: {
+            if model.isDustRepairRunning {
+              ProgressView().controlSize(.small)
+            } else {
+              Text("Auto Repair Mask")
+            }
+          }
+          .disabled(
+            model.dustSourceMask == nil || model.isDustDetectionRunning
+              || model.isDustRepairRunning)
+          Button("Clear Mask", action: model.clearDustMask)
+            .disabled(model.dustSourceMask == nil)
+        }
+        .controlSize(.small)
+        if dustDonorPoint != nil {
+          Button("Use Automatic Texture Source") { dustDonorPoint = nil }
+            .controlSize(.small)
+        }
+        Text(
+          "Mark or erase candidates, then choose Auto Repair Mask. Heal paints repairs directly; Option-click chooses a texture source. Done restores framing."
+        )
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .fixedSize(horizontal: false, vertical: true)
+      }
+
+      if !model.parameters.dustRepairs.isEmpty {
+        HStack {
+          Text("\(model.parameters.dustRepairs.count) saved repairs")
+            .font(.caption)
+          Spacer()
+          Button("Clear Repairs", action: model.clearDustRepairs)
+            .controlSize(.small)
+        }
+      }
+      if !model.dustStatus.isEmpty {
+        Text(model.dustStatus)
+          .font(.caption2)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
       }
     }
   }
@@ -1677,14 +1862,29 @@ struct ContentView: View {
       }
 
       InspectorSection("Destination", systemImage: "folder") {
-        Button(action: model.showExportFolderPicker) {
-          HStack {
-            Image(systemName: "folder")
-            Text(model.exportParameters.destinationDirectory?.lastPathComponent ?? "Choose Folder…")
-              .lineLimit(1)
-            Spacer()
+        if let directory = model.exportParameters.destinationDirectory {
+          Text(directory.path)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
+            .truncationMode(.middle)
+            .help(directory.path)
+        } else {
+          Text("Original folders")
+            .font(.callout.weight(.medium))
+          Text("Save each image beside its original scan.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        HStack {
+          Button("Choose Folder…", action: model.showExportFolderPicker)
+          if model.exportParameters.destinationDirectory != nil {
+            Button("Use Original Folders") {
+              model.setExportDestinationDirectory(nil)
+            }
           }
         }
+        .controlSize(.small)
 
         if model.isExporting {
           ProgressView(
@@ -1707,13 +1907,14 @@ struct ContentView: View {
           Button(exportSelectionButtonTitle, action: model.exportSelected)
             .buttonStyle(.borderedProminent)
             .frame(maxWidth: .infinity)
+            .disabled(model.selectedExportItemCount == 0)
           Button("Export All", action: model.exportAll)
             .buttonStyle(.bordered)
             .frame(maxWidth: .infinity)
+            .disabled(model.files.isEmpty)
         }
         .disabled(
-          model.exportParameters.destinationDirectory == nil || model.isExporting || model.isLoading
-            || model.isBuildingScanStack
+          model.isExporting || model.isLoading || model.isBuildingScanStack
         )
 
         if model.isExporting {
@@ -1756,6 +1957,11 @@ struct ContentView: View {
         .font(.caption)
         .foregroundStyle(.secondary)
         .fixedSize(horizontal: false, vertical: true)
+        if model.exportParameters.destinationDirectory == nil {
+          Text("The PDF is saved beside the active scan.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
         HStack {
           Button("Save Selected PDF") { model.exportContactSheet() }
             .disabled(model.selectedExportItemCount == 0)
@@ -1763,8 +1969,7 @@ struct ContentView: View {
             .disabled(model.files.isEmpty)
         }
         .disabled(
-          model.exportParameters.destinationDirectory == nil || model.isExporting || model.isLoading
-            || model.isBuildingScanStack)
+          model.isExporting || model.isLoading || model.isBuildingScanStack)
         if let url = model.lastContactSheetURL {
           Button("Open Contact Sheet") { NSWorkspace.shared.open(url) }
         }
@@ -1848,6 +2053,27 @@ struct ContentView: View {
           .blendMode(.screen)
           .opacity(0.85)
           .allowsHitTesting(false)
+      }
+
+      if isRepairingDust {
+        DustRepairOverlay(
+          imageSize: image.size,
+          magnification: magnification,
+          radius: min(
+            DustRepair.maximumNormalizedRadius,
+            dustBrushDiameter / (2 * Double(model.dustBrushSourceWidth))),
+          mode: dustBrushMode,
+          sourcePoint: $dustDonorPoint,
+          onStroke: { points, radius, source in
+            switch dustBrushMode {
+            case .heal: model.addDustRepair(points: points, radius: radius, sourcePoint: source)
+            case .mark: model.paintDustMask(points: points, radius: radius, erasing: false)
+            case .erase: model.paintDustMask(points: points, radius: radius, erasing: true)
+            }
+          },
+          onLimitExceeded: model.dustStrokeLimitReached
+        )
+        .allowsHitTesting(model.isDustCanvasReady)
       }
 
       if isPickingRebateRegion {
@@ -2131,7 +2357,21 @@ struct ContentView: View {
       restoreShowOriginalAfterOverlay()
     case .straighten, .crop:
       model.endManualCropEditing()
+    case .dust:
+      dustDonorPoint = nil
+      model.endDustEditing()
     }
+  }
+
+  private func startDustEditing() {
+    guard !isRepairingDust else { return }
+    endActiveOverlay()
+    dustDonorPoint = nil
+    dustBrushMode = .heal
+    dustBrushDiameter = min(40, max(2, Double(model.dustBrushSourceWidth) * 0.1))
+    model.beginDustEditing()
+    activeOverlay = .dust
+    requestPreviewZoom(.fit)
   }
 
   private func restoreShowOriginalAfterOverlay() {
@@ -2289,11 +2529,11 @@ private struct GradingPointSlider: View {
       .onTapGesture(count: 2) { value = 0 }
       .accessibilityLabel(title)
       .accessibilityValue(String(format: "%+.2f", value))
-      Text(String(format: "%+.2f", value))
-        .font(.caption2)
-        .monospacedDigit()
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity, alignment: .trailing)
+      AdjustmentValueField(
+        title: title, value: $value, range: PhotoAdjustmentParameters.gradingPointRange,
+        valueFormat: "%+.2f", width: 56, font: .caption2
+      )
+      .frame(maxWidth: .infinity, alignment: .trailing)
     }
     .frame(maxWidth: .infinity, alignment: .leading)
     .help(help)
@@ -2317,17 +2557,6 @@ private struct ToolbarSlider: View {
         .font(.caption)
       Slider(value: $value, in: range)
         .frame(width: 104)
-    }
-  }
-}
-
-extension FilmType {
-  fileprivate var compactDisplayName: String {
-    switch self {
-    case .blackAndWhiteNegative: "B&W Neg."
-    case .colourNegative: "Color Neg."
-    case .slide: "Slide"
-    case .cropOnly: "Original"
     }
   }
 }

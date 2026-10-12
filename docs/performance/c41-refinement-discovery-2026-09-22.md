@@ -66,13 +66,13 @@ outside ignored `dist/` is rejected.
 
 Evidence:
 
-- Run A: [manifest](../../dist/optimization-target-discovery-2026-09-22-stage2-final/manifest.json),
-  [raw timings, memory, hashes](../../dist/optimization-target-discovery-2026-09-22-stage2-final/performance.json),
-  [exact parameters](../../dist/optimization-target-discovery-2026-09-22-stage2-final/parameters.json).
-- Run B: [manifest](../../dist/optimization-target-discovery-2026-09-22-stage2-repeat/manifest.json),
-  [raw timings, memory, hashes](../../dist/optimization-target-discovery-2026-09-22-stage2-repeat/performance.json).
-- [Collection validation and comparison](../../dist/optimization-target-discovery-2026-09-22-stage2-final/collection-validation.json)
-  and [fresh comparator log](../../dist/optimization-target-discovery-2026-09-22-stage2-final/comparator.log).
+- Run A: manifest (`dist/optimization-target-discovery-2026-09-22-stage2-final/manifest.json`),
+  raw timings, memory, hashes (`dist/optimization-target-discovery-2026-09-22-stage2-final/performance.json`),
+  exact parameters (`dist/optimization-target-discovery-2026-09-22-stage2-final/parameters.json`).
+- Run B: manifest (`dist/optimization-target-discovery-2026-09-22-stage2-repeat/manifest.json`),
+  raw timings, memory, hashes (`dist/optimization-target-discovery-2026-09-22-stage2-repeat/performance.json`).
+- Collection validation and comparison (`dist/optimization-target-discovery-2026-09-22-stage2-final/collection-validation.json`)
+  and fresh comparator log (`dist/optimization-target-discovery-2026-09-22-stage2-final/comparator.log`).
 
 An initial exploratory run remains in
 `dist/optimization-target-discovery-2026-09-22-stage2/`; it completed with zero

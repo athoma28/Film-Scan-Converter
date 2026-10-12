@@ -85,12 +85,14 @@ struct StandardImageDecoderTests {
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
     let url = directory.appendingPathComponent("oriented.tiff")
+    // Distinct binary colors expose wrong turn direction or mirroring without
+    // introducing quantization differences in ImageIO's bounded preview.
+    let colors: [[UInt16]] = [
+      [0, 0, 0], [.max, 0, 0], [0, .max, 0], [.max, .max, 0],
+      [0, 0, .max], [.max, 0, .max], [0, .max, .max], [.max, .max, .max],
+    ]
     let source = UInt16Image(
-      width: 4,
-      height: 2,
-      channels: 3,
-      pixels: [UInt16](repeating: 24_000, count: 4 * 2 * 3)
-    )
+      width: 4, height: 2, channels: 3, pixels: colors.flatMap { $0 })
     let cgImage = try #require(source.makeExportCGImage16())
     let destination = try #require(
       CGImageDestinationCreateWithURL(url as CFURL, "public.tiff" as CFString, 1, nil)
@@ -109,7 +111,13 @@ struct StandardImageDecoderTests {
     #expect(preview.height == 4)
     #expect(full.width == preview.width)
     #expect(full.height == preview.height)
-    #expect(full.pixels.allSatisfy { $0 == 24_000 })
+    // EXIF 6 is a clockwise quarter turn: each source column becomes a row,
+    // with the bottom source pixel on the left.
+    let expected = UInt16Image(
+      width: 2, height: 4, channels: 3,
+      pixels: [4, 0, 5, 1, 6, 2, 7, 3].flatMap { colors[$0] })
+    #expect(full == expected)
+    #expect(preview == expected)
   }
 
   @Test("8-bit grayscale PNG decode matches Python cv2 loading and scaling")

@@ -7,6 +7,8 @@ final class StoredScanStack {
   private let directory: URL
   private var reference: UInt16Image?
   private var referencePlanes: StackAnalysis.Pyramid?
+  // Capture zero remains resident for registration and merging; handles store
+  // only captures 1... so the reference never needs a redundant disk copy.
   private var handles: [FileHandle] = []
   private var alignments: [ScanStackAlignment] = []
   private var exposureOffsetsEV: [Double] = []
@@ -26,17 +28,18 @@ final class StoredScanStack {
     let registration: (alignment: ScanStackAlignment, exposureEV: Double)
     if let reference, let referencePlanes {
       registration = try StackAnalysis.registration(
-        reference: reference, candidate: image, index: handles.count,
+        reference: reference, candidate: image, index: alignments.count,
         referencePlanes: referencePlanes)
     } else {
       referencePlanes = try StackAnalysis.prepareReference(image)
       reference = image
-      registration = (
-        ScanStackAlignment(translationX: 0, translationY: 0, confidence: 1, overlap: 1), 0
-      )
+      alignments.append(
+        ScanStackAlignment(translationX: 0, translationY: 0, confidence: 1, overlap: 1))
+      exposureOffsetsEV.append(0)
+      return
     }
 
-    let url = directory.appendingPathComponent("\(handles.count).pixels")
+    let url = directory.appendingPathComponent("\(alignments.count).pixels")
     guard FileManager.default.createFile(atPath: url.path, contents: nil) else {
       throw CocoaError(.fileWriteUnknown)
     }
@@ -61,26 +64,30 @@ final class StoredScanStack {
   func finish(mode: ScanStackMode, bandComponentLimit: Int = 8_388_608) throws
     -> MultiScanStackResult
   {
-    guard handles.count >= 2, let reference else { throw ScanStackError.insufficientImages }
+    guard alignments.count >= 2, let reference else { throw ScanStackError.insufficientImages }
     try Task.checkCancellation()
     let width = reference.width
     let height = reference.height
     let channels = reference.channels
     let componentsPerRow = width * channels
     let bytesPerRow = componentsPerRow * MemoryLayout<UInt16>.stride
-    let rowsPerBand = max(1, bandComponentLimit / componentsPerRow / handles.count)
+    let rowsPerBand = max(1, bandComponentLimit / componentsPerRow / alignments.count)
     let effectiveMode = StackAnalysis.effectiveMode(mode, exposureOffsetsEV: exposureOffsetsEV)
     var pixels = [UInt16](repeating: 0, count: reference.pixels.count)
 
     for start in stride(from: 0, to: height, by: rowsPerBand) {
       try Task.checkCancellation()
       let rows = start..<min(start + rowsPerBand, height)
-      var sources: [StackAnalysis.MergeSource] = []
-      for index in handles.indices {
+      var sources = [
+        StackAnalysis.MergeSource(
+          pixels: reference.pixels, rowOffset: 0,
+          translationX: 0, translationY: 0, inverseExposureScale: 1)
+      ]
+      for (storedIndex, handle) in handles.enumerated() {
+        let index = storedIndex + 1
         let alignment = alignments[index]
         let firstRow = min(height, max(0, rows.lowerBound + alignment.translationY))
         let lastRow = min(height, max(0, rows.upperBound + alignment.translationY))
-        let handle = handles[index]
         try handle.seek(toOffset: UInt64(firstRow * bytesPerRow))
         let data = try readExactly((lastRow - firstRow) * bytesPerRow, from: handle)
         var samples = [UInt16](repeating: 0, count: (lastRow - firstRow) * componentsPerRow)

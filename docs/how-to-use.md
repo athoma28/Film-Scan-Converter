@@ -1,7 +1,10 @@
 # How To Use
 
-This guide describes the current native application, including
-[0.2.0 Beta 3](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.2.0-beta.3).
+This guide describes the native 0.3.0 Beta 1 workflow, released October 12, 2026.
+[0.3.0 Beta 1](https://github.com/athoma28/Film-Scan-Converter/releases/tag/v0.3.0-beta.1)
+is the latest release recorded here, including Selective Sync & Paste,
+Original Folders export defaults, Dust & Repair, and open-roll recovery.
+Its release notes describe the exact binary and validation.
 See [Installation](installation.md) for
 download and source-build paths. Python instructions are in
 [Legacy Usage](legacy-usage.md).
@@ -13,10 +16,17 @@ window. Choose a scan in the Scans sidebar. Command-click or Shift-click selects
 multiple files; Previous/Next Scan moves through sidebar order and fits the new
 selection.
 
-The **Move selected scan up/down** toolbar
-buttons move the primary scan one row while preserving selection. Reordering is
-session-local and unavailable during export. Changing capture order within a
-stack disables that stack and restores the selected original; enable the new
+The app restores your open scans, sidebar order, active scan, and multiselection
+on relaunch. Scans on disconnected drives stay in the roll. Use **File > Close
+All Scans** to start a new roll; source files and saved corrections are retained,
+and transient previews and undo history are cleared. Closing scans is unavailable
+during export. Stack proposals need enabling again after relaunch, and export
+jobs do not resume automatically.
+
+The **More > Move Selected Scan Up/Down** toolbar
+commands move the primary scan one row while preserving selection. The order saves
+for the next launch; reordering is unavailable during export. Changing capture
+order within a stack disables that stack and restores the selected original; enable the new
 proposal explicitly if desired. Navigation and newly queued exports follow the
 resulting sidebar order.
 
@@ -36,8 +46,9 @@ corrections reuses its finished display image too.
 After full-sensor detail arrives, a supported adjustment gesture at whole-image
 zoom can temporarily use a sharp 2048px source while keeping the same canvas
 size. This can apply to GPU and CPU preview processing. At closer zoom, GPU
-previews render the visible region from the full source, while CPU fallbacks
-process the full source. Releasing the control replaces
+previews and eligible photographic CPU fallbacks render exact visible pixels
+over a smaller overview; other CPU paths process the complete image. Releasing
+the control replaces
 the temporary preview with the exact full-source result. Original comparison
 does not use the gesture proxy.
 
@@ -47,6 +58,12 @@ pixels without rebuilding the correction. **100% Preview Pixels** means one curr
 it corresponds to sensor pixels after the full-resolution upgrade. **Original**
 compares the uncorrected image with matching geometry, pan, and magnification.
 Perspective and film-base editors temporarily reveal the oriented source.
+
+Drag the inspector divider to resize it. **View > Hide Inspector** (Command-Option-I)
+collapses it; **View > Hide Side Panels** (Command-Shift-F) gives the photograph
+more room. Use the same shortcut to restore the previous panel arrangement.
+Crop, Straighten, and Healing Brush are available in the native toolbar;
+scan reordering, Live Camera, and Load RAW Preview are in **More**.
 
 The inspector header reports **Full output** dimensions, including geometry and
 export framing, rather than the current preview size.
@@ -67,6 +84,12 @@ those values. If you then move any of those controls, the header shows
 same snapshot under a name you choose. An existing name shows **Replace** before
 saving; a failed save keeps the name available to retry. Use **Manage Saved
 Presets** to remove a saved look.
+
+The factory thumbnail strip previews looks on the current scan. Scroll horizontally
+and click a thumbnail to apply it; the named menu still includes saved presets.
+The strip appears only when the complete set calculates within 500 ms. If a
+calculation exceeds that limit, the window keeps the named menu for the rest of
+its session. Thumbnails use the loaded scan and do not start another RAW decode.
 
 The first save or deletion that upgrades an older preset library also keeps a
 `CorrectionPresets-v1-<id>.json` backup beside the library. It retains the original
@@ -99,7 +122,11 @@ paper picker.
 **Tone & Light** and **Color & Balance** stay visible. Slider zero is the global
 neutral, so applying a look is visible on the controls. Color negatives also
 show foliage recovery, cast cleanup, and color separation. Double-click a
-slider to restore zero. B&W uses an overall Tone curve; color-channel curves
+slider to restore zero. Click an adjustment number to type an exact value.
+Return or leaving the field applies a valid number; Escape cancels. Values stay
+within the control's range. Arrow keys on a focused slider, or Up/Down while
+entering a number, make fine adjustments; Shift increases the step tenfold.
+The grading level numbers also accept direct entry. B&W uses an overall Tone curve; color-channel curves
 are for color film types.
 
 Highlights and Shadows adjust broad bright and dark regions. Whites and Blacks
@@ -120,11 +147,22 @@ migrated to public adjustments; their inversion/calibration settings are not
 transferred. The ellipsis menu contains **Apply Look
 to Selected** and **Apply Settings to All Open Files**.
 
+Expand **Selective Sync & Paste** to choose Exposure, Tone, Color & Balance,
+Curves, and Grading. Exposure starts unchecked so each frame can keep its own
+exposure correction. **Sync Selected** uses the current image as the source;
+the More menus include all-open targets and selective clipboard paste. All/None
+quickly checks or clears the groups. Partial transfers keep each destination's
+tone response, framing, calibration, and repairs. For incompatible version-one
+Tone/Grading transfers, use **Update Tone Controls** first.
+
 Edits save automatically in the background for the source path. Finishing a
 gesture requests a save, and normal application quit waits for pending saves.
-Command-Z and Command-Shift-Z undo/redo per file; each continuous slider,
-curve, wheel, or perspective gesture forms one step. Relaunch restores saved
-settings and starts fresh undo history.
+Command-Z and Command-Shift-Z undo/redo per file. An ordinary continuous slider,
+curve, wheel, or perspective gesture forms one step. If Auto Frame or a dust
+repair succeeds while you hold a drag, it records a separate action; continuing
+the drag starts another step. A valid full-settings paste also ends the current
+gesture and records its own action; an empty or invalid paste leaves the gesture
+intact. Relaunch restores saved settings and starts fresh undo history.
 
 
 ## Geometry
@@ -135,7 +173,9 @@ points on an edge and aligns it to the nearest horizontal or vertical axis.
 In **Crop & Framing**:
 
 - **Auto Frame** detects a film frame using the threshold controls. Read the
-  status below the controls if no frame is found.
+  status below the controls if no frame is found. Changing thresholds or framing,
+  or receiving a newer scan preview, cancels pending detection; run it again for
+  the current image.
 - **Perspective** exposes four corner reticles, a grid, and a magnified loupe.
   Drag to the film edges; hold Option to bypass parallel-edge assistance.
 - **Manual Crop** reveals the full straightened canvas. Drag a rectangle, adjust
@@ -164,8 +204,25 @@ manual crop. Clearing perspective also clears its dependent manual crop.
 Finish those geometry choices before applying the final crop; Undo restores
 an earlier edit when needed.
 
-**Dust Mask** detects and displays candidates. It does not remove dust or export
-the overlay. Applied removal is available in the legacy Python workflow.
+**Dust & Repair** opens an unframed editing view. **Detect Dust** proposes a mask
+and leaves the image pixels unchanged. Use **Mark** to add missed areas and
+**Erase** to remove false positives, then explicitly choose **Auto Repair Mask**.
+Large or complex components may be skipped; the Healing Brush handles deliberate
+manual repairs. Spots without a usable automatic texture source remain marked;
+choose a source with the Healing Brush for those areas. Detection and masks are
+temporary; applied repairs are saved.
+
+Select **Heal** and drag across a spot. Option-click chooses a texture source;
+**Use Automatic Texture Source** returns to nearby automatic sampling. Adjust
+Brush Size in source pixels. The brush checks texture sources before saving;
+while it checks, painting pauses. A stroke that cannot heal its whole path leaves
+the marks intact. Marks at the feather boundary or in a partly covered mask
+cell can remain; inspect the image before enlarging the brush. A saved stroke
+is one undo step. **Show Repairs**
+compares the result with the unrepaired image; **Clear Repairs** is undoable.
+Check grain and edges at 100%, then press **Done** to restore your framing.
+Repairs retain their locations after crop, perspective, or rotation changes and
+appear in exports. Older apps cannot open repair-bearing settings documents.
 
 ## Calibrate
 
@@ -198,15 +255,20 @@ Invert Negative, Exposure, and Saturation controls affect live preview.
 
 ## Export
 
-Choose **File** format, **Frame** border/aspect ratio, and **Destination** folder
-on the Export page. TIFF and PNG are 16-bit sRGB; JPEG is 8-bit sRGB. TIFF defaults
+Choose **File** format and **Frame** border/aspect ratio on the Export page.
+**Destination: Original Folders** saves each image beside its source, including
+mixed-folder batches; stacks use the anchor capture's folder. **Choose Folder…**
+sets a common destination and **Use Original Folders** restores the default.
+TIFF and PNG are 16-bit sRGB; JPEG is 8-bit sRGB. TIFF defaults
 to no compression and optionally supports LZW. DNG contains processed 16-bit RGB
 in output-referred linear sRGB; TIFF has broader viewer compatibility.
 
 **Export Selected** follows sidebar order; **Export All** queues every import.
 During export, **Add Selected** appends independent jobs using the currently
 shown format, destination, compression, and framing settings. Duplicate jobs
-are allowed and receive collision-safe names. The sidebar marks active and
+are allowed and receive collision-safe names. Changing the export controls does
+not reroute or change jobs already queued. Each Original Folders job saves beside
+its own source. The sidebar marks active and
 pending exports. **Cancel** stops at safe processing boundaries. RAW decoding
 observes cancellation at native checkpoints; synchronous ImageIO/writer calls
 must return before the queue can finish cancelling.
@@ -218,8 +280,10 @@ errors are shown on the Export page.
 
 ### Contact Sheets
 
-Choose a Destination folder, then use **Contact Sheet → Save Selected PDF** or
+Use **Contact Sheet → Save Selected PDF** or
 **Save All PDF** on the Export page. The File menu also offers both actions.
+The PDF defaults to the active image or stack anchor's folder; a chosen common
+destination overrides it.
 The PDF contains 12 scans per Letter-size page, in sidebar order, with filenames
 and current crops/corrections. Each enabled stack appears once under the first
 capture's name. **Open Contact Sheet** opens the completed PDF.

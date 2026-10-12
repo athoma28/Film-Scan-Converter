@@ -3,6 +3,136 @@ import Foundation
 /// Versioned photographic tone contract. Rec.2020 linear values remain floating
 /// until the final display writer. Keep the matching Metal functions in parity.
 public enum PhotographicTone {
+  /// Settings-only work for the CPU pixel loop. The scalar methods below remain
+  /// the compatibility reference; preparation does not change their operation order.
+  struct Prepared: Sendable {
+    private let schemaVersion: Int
+    private let gain: Double
+    private let shoulderGain: Double
+    private let brightnessAmount: Double
+    private let contrast: Double
+    private let contrastPivot: Double
+    private let contrastPower: Double
+    private let shadows: Double
+    private let highlights: Double
+    private let blacks: Double
+    private let whites: Double
+    private let shadowsActive: Bool
+    private let highlightsActive: Bool
+    private let blacksActive: Bool
+    private let whitesActive: Bool
+    private let midtoneActive: Bool
+    private let usesVersionFourControls: Bool
+    private let shadowAmount: Double
+    private let highlightAmount: Double
+    private let midtoneAmount: Double
+    private let levelBlack: Double
+    private let levelWhite: Double
+    private let legacyBlack: Double
+    private let legacyWhiteGain: Double
+
+    init(_ p: PhotoAdjustmentParameters) {
+      schemaVersion = p.schemaVersion
+      gain = exp2(min(max(p.exposureEV, -4), 4))
+      shoulderGain = max(gain - 1, 0)
+      brightnessAmount = 4 * min(max(p.brightness, -1), 1)
+      contrast = min(max(p.contrast, -1), 1)
+      contrastPivot = PhotographicTone.encode(0.18)
+      contrastPower = exp2(contrast * 0.8)
+      shadows = min(max(p.shadows, -1), 1)
+      highlights = min(max(p.highlights, -1), 1)
+      blacks = min(max(p.blacks, -1), 1)
+      whites = min(max(p.whites, -1), 1)
+      shadowsActive = p.shadows != 0
+      highlightsActive = p.highlights != 0
+      blacksActive = p.blacks != 0
+      whitesActive = p.whites != 0
+      midtoneActive = p.midtoneLevel != 0
+      usesVersionFourControls =
+        p.schemaVersion >= 4
+        && (p.highlights != 0 || p.shadows != 0 || p.whites != 0
+          || p.blacks != 0 || p.shadowFloor != 0 || p.midtoneLevel != 0
+          || p.highlightCeiling != 0)
+      shadowAmount = 4 * shadows
+      highlightAmount = 4 * highlights
+      midtoneAmount = 4 * min(max(p.midtoneLevel, -1), 1)
+      let shadowFloor = min(max(p.shadowFloor, -1), 1)
+      let highlightCeiling = min(max(p.highlightCeiling, -1), 1)
+      levelBlack = shadowFloor >= 0 ? 0.12 * shadowFloor : 0.08 * shadowFloor
+      levelWhite =
+        highlightCeiling >= 0
+        ? 1 + 0.10 * highlightCeiling : 1 + 0.16 * highlightCeiling
+      legacyBlack = blacks * 0.12
+      legacyWhiteGain = exp2(whites * 0.5)
+    }
+
+    func luminance(_ input: Double) -> Double {
+      let positive = max(input, 0)
+      let exposed = positive * gain / (1 + positive * shoulderGain)
+      var x = PhotographicTone.encode(exposed)
+      if x < 1 { x = PhotographicTone.bend(x, brightnessAmount) }
+      if contrast != 0, x > 0, x < 1 {
+        if x < contrastPivot {
+          x = contrastPivot * pow(x / contrastPivot, contrastPower)
+        } else {
+          x = 1 - (1 - contrastPivot) * pow((1 - x) / (1 - contrastPivot), contrastPower)
+        }
+      }
+      if usesVersionFourControls {
+        if shadowsActive, x < 0.72 {
+          x = 0.72 * PhotographicTone.bend(x / 0.72, shadowAmount)
+        }
+        if highlightsActive, x > 0.28, x < 1 {
+          x = 0.28 + 0.72 * PhotographicTone.bend((x - 0.28) / 0.72, highlightAmount)
+        }
+        if blacksActive, x < 0.28 {
+          x = 0.28 * PhotographicTone.focusedBend(x / 0.28, blacks, highlights: false)
+        }
+        if whitesActive, x > 0.5, x < 1 {
+          x =
+            0.5 + 0.5
+            * PhotographicTone.tailBend((x - 0.5) / 0.5, whites, highlights: true)
+        }
+        x = PhotographicTone.encode(PhotographicTone.shoulder(PhotographicTone.decode(x)))
+        if midtoneActive, x > 0.18, x < 0.82 {
+          x = 0.18 + 0.64 * PhotographicTone.bend((x - 0.18) / 0.64, midtoneAmount)
+        }
+        x = levelBlack + (levelWhite - levelBlack) * x
+      } else {
+        if x < 0.65 {
+          x =
+            0.65
+            * (schemaVersion >= 3 && shadows != 0
+              ? PhotographicTone.focusedBend(x / 0.65, shadows, highlights: false)
+              : PhotographicTone.bend(x / 0.65, shadowAmount))
+        }
+        if x > 0.4, x < 1 {
+          x =
+            0.4 + 0.6
+            * (schemaVersion >= 3 && highlights != 0
+              ? PhotographicTone.focusedBend((x - 0.4) / 0.6, highlights, highlights: true)
+              : PhotographicTone.bend((x - 0.4) / 0.6, highlightAmount))
+        }
+        x = PhotographicTone.encode(PhotographicTone.shoulder(PhotographicTone.decode(x)))
+        x = (x + legacyBlack) / (1 + legacyBlack)
+        x *= legacyWhiteGain
+      }
+      return PhotographicTone.decode(x)
+    }
+
+    func apply(red: Double, green: Double, blue: Double)
+      -> (red: Double, green: Double, blue: Double)
+    {
+      let y = 0.2626983 * red + 0.678 * green + 0.0593017 * blue
+      let target = luminance(y)
+      if y > 1e-12 {
+        let scale = target / y
+        return (red * scale, green * scale, blue * scale)
+      }
+      return (target, target, target)
+    }
+  }
+
   public static func encode(_ x: Double) -> Double {
     x <= 0.0031308 ? 12.92 * x : 1.055 * pow(x, 1 / 2.4) - 0.055
   }

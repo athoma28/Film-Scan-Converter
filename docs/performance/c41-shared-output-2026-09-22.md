@@ -159,17 +159,17 @@ export, screen-latency or cross-hardware performance claim.
 All private inputs and generated images remain in ignored `sample-raw/` and
 `dist/`. The local evidence root is `dist/c41-render-optimization-2026-09-22/`:
 
-- [Final comparison manifest](../../dist/c41-render-optimization-2026-09-22/comparison/manifest.json)
-  and [all samples, summaries, hashes and memory](../../dist/c41-render-optimization-2026-09-22/comparison/summary.json).
-- [Candidate build/input/source/object provenance](../../dist/c41-render-optimization-2026-09-22/final-candidate/manifest.json),
-  [baseline provenance](../../dist/c41-render-optimization-2026-09-22/baseline-provenance.json),
-  [initial working-tree inventory](../../dist/c41-render-optimization-2026-09-22/initial-state.json)
-  and [comparison script](../../dist/c41-render-optimization-2026-09-22/compare.py).
-- [Final focused tests](../../dist/c41-render-optimization-2026-09-22/regression-final.log),
-  [comparator](../../dist/c41-render-optimization-2026-09-22/comparator-final.log),
-  [preference checks](../../dist/c41-render-optimization-2026-09-22/preferences-final/checks.json),
-  [app-path report](../../dist/c41-render-optimization-2026-09-22/app-path.json)
-  and [verification provenance](../../dist/c41-render-optimization-2026-09-22/verification-provenance.json).
+- Final comparison manifest (`dist/c41-render-optimization-2026-09-22/comparison/manifest.json`)
+  and all samples, summaries, hashes and memory (`dist/c41-render-optimization-2026-09-22/comparison/summary.json`).
+- Candidate build/input/source/object provenance (`dist/c41-render-optimization-2026-09-22/final-candidate/manifest.json`),
+  baseline provenance (`dist/c41-render-optimization-2026-09-22/baseline-provenance.json`),
+  initial working-tree inventory (`dist/c41-render-optimization-2026-09-22/initial-state.json`)
+  and comparison script (`dist/c41-render-optimization-2026-09-22/compare.py`).
+- Final focused tests (`dist/c41-render-optimization-2026-09-22/regression-final.log`),
+  comparator (`dist/c41-render-optimization-2026-09-22/comparator-final.log`),
+  preference checks (`dist/c41-render-optimization-2026-09-22/preferences-final/checks.json`),
+  app-path report (`dist/c41-render-optimization-2026-09-22/app-path.json`)
+  and verification provenance (`dist/c41-render-optimization-2026-09-22/verification-provenance.json`).
 
 To collect the current implementation, use a new output directory:
 

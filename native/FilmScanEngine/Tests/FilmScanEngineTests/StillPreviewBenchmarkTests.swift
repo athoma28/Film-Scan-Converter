@@ -132,12 +132,9 @@ struct StillPreviewBenchmarkTests {
   }
 
   @Test("Production renderer handles curves and wheels across all film types")
-  func productionRendererAllFilmTypes() {
-    let image = Self.createRandomImage(width: 256, height: 256)
-    guard let renderer = StillPreviewRenderer(image: image) else {
-      #expect(Bool(false), "Could not create production still preview renderer")
-      return
-    }
+  func productionRendererAllFilmTypes() throws {
+    let image = Self.createDeterministicImage(width: 73, height: 47)
+    let renderer = try #require(StillPreviewRenderer(image: image))
 
     for filmType in FilmType.allCases {
       let parameters = ProcessingParameters(
@@ -154,22 +151,18 @@ struct StillPreviewBenchmarkTests {
         midtoneWheel: ColorWheel(hue: 190, strength: 0.25),
         shadowWheel: ColorWheel(hue: 285, strength: 0.5)
       )
-      let rendered = renderer.render(parameters: parameters, showOriginal: false)
-      #expect(rendered != nil, "Production renderer failed for film type \(filmType)")
-      if let rendered {
-        #expect(rendered.width > 0)
-        #expect(rendered.height > 0)
-      }
+      let rendered = try #require(
+        renderer.render(parameters: parameters, showOriginal: false),
+        "Production renderer failed for film type \(filmType)")
+      #expect(rendered.width == image.width)
+      #expect(rendered.height == image.height)
     }
   }
 
   @Test("Production renderer stays visually equivalent to authoritative CPU pipeline")
-  func productionRendererMatchesAuthoritativePipeline() {
+  func productionRendererMatchesAuthoritativePipeline() throws {
     let image = Self.createDeterministicImage(width: 128, height: 96)
-    guard let renderer = StillPreviewRenderer(image: image) else {
-      #expect(Bool(false), "Could not create production still preview renderer")
-      return
-    }
+    let renderer = try #require(StillPreviewRenderer(image: image))
     let redCurve = [
       CurvePoint(input: 0, output: 0.05),
       CurvePoint(input: 0.45, output: 0.7),
@@ -208,37 +201,17 @@ struct StillPreviewBenchmarkTests {
       shadowWheel: ColorWheel(hue: 285, strength: 0.5)
     )
 
-    guard
-      let gpu = renderer.render(parameters: parameters, showOriginal: false),
-      let cpu = FilmProcessing.correctedPreview(image: image, parameters: parameters)
-        .makePreviewCGImage(),
-      let gpuPixels = rgbaPixels(gpu),
-      let cpuPixels = rgbaPixels(cpu)
-    else {
-      #expect(Bool(false), "Could not render or extract comparison pixels")
-      return
-    }
-
-    #expect(gpu.width == cpu.width)
-    #expect(gpu.height == cpu.height)
-    #expect(gpuPixels.count == cpuPixels.count)
-    var maxDifference = 0
-    for index in gpuPixels.indices {
-      maxDifference = max(maxDifference, abs(Int(gpuPixels[index]) - Int(cpuPixels[index])))
-    }
-    #expect(maxDifference <= 2, "Production renderer differs from CPU by \(maxDifference)/255")
+    try expectCPUParity(
+      renderer, image: image, configurations: [("authoritative-pipeline", parameters)])
   }
 
   @Test("Production renderer renders zero-light negative pixels as neutral white")
-  func productionRendererNeutralizesZeroLight() {
+  func productionRendererNeutralizesZeroLight() throws {
     let image = UInt16Image(
       width: 2, height: 1, channels: 3,
       pixels: [0, 512, 1024, 10_000, 10_000, 10_000]
     )
-    guard let renderer = StillPreviewRenderer(image: image) else {
-      #expect(Bool(false), "Could not create production still preview renderer")
-      return
-    }
+    let renderer = try #require(StillPreviewRenderer(image: image))
     var filmNegative = FilmNegativeParams.colourNegative
     filmNegative.measuredMedians = BGRChannelValues(blue: 20_000, green: 20_000, red: 20_000)
     let parameters = ProcessingParameters(
@@ -247,28 +220,21 @@ struct StillPreviewBenchmarkTests {
       photoAdjustments: PhotoAdjustmentParameters(brightness: 0.5)
     )
 
-    guard let rendered = renderer.render(parameters: parameters, showOriginal: false),
-      let pixels = rgbaPixels(rendered)
-    else {
-      #expect(Bool(false), "Could not render or extract sensor-black comparison pixels")
-      return
-    }
-
+    let rendered = try #require(renderer.render(parameters: parameters, showOriginal: false))
+    let pixels = try previewRGBPixels(rendered)
+    try #require(pixels.count == 6)
     #expect(Array(pixels[0..<3]) == [255, 255, 255])
-    #expect(pixels[4..<7].contains { $0 > 0 })
-    #expect(Array(pixels[4..<7]) != [255, 255, 255])
+    #expect(pixels[3..<6].contains { $0 > 0 })
+    #expect(Array(pixels[3..<6]) != [255, 255, 255])
   }
 
   @Test("Production renderer neutralizes basic-inversion holder pixels")
-  func productionRendererNeutralizesBasicInversionZeroLight() {
+  func productionRendererNeutralizesBasicInversionZeroLight() throws {
     let image = UInt16Image(
       width: 1, height: 1, channels: 3,
       pixels: [256, 512, 1024]
     )
-    guard let renderer = StillPreviewRenderer(image: image) else {
-      #expect(Bool(false), "Could not create production still preview renderer")
-      return
-    }
+    let renderer = try #require(StillPreviewRenderer(image: image))
     let parameters = ProcessingParameters(
       filmType: .colourNegative,
       temperature: 100,
@@ -276,30 +242,17 @@ struct StillPreviewBenchmarkTests {
       filmNegativeParams: FilmNegativeParams()
     )
 
-    guard let rendered = renderer.render(parameters: parameters, showOriginal: false),
-      let pixels = rgbaPixels(rendered)
-    else {
-      #expect(Bool(false), "Could not render or extract basic-inversion holder pixel")
-      return
-    }
-
-    #expect(Array(pixels[0..<3]) == [255, 255, 255])
+    let rendered = try #require(renderer.render(parameters: parameters, showOriginal: false))
+    let pixels = try previewRGBPixels(rendered)
+    try #require(pixels.count == 3)
+    #expect(pixels == [255, 255, 255])
   }
 
   @Test("Production renderer matches CPU across parameter grid")
-  func productionRendererMatchesCPUParameterGrid() {
+  func productionRendererMatchesCPUParameterGrid() throws {
     let image = Self.createDeterministicImage(width: 64, height: 48)
-    guard let renderer = StillPreviewRenderer(image: image) else {
-      #expect(Bool(false), "Could not create production still preview renderer")
-      return
-    }
+    let renderer = try #require(StillPreviewRenderer(image: image))
 
-    let curvePoints = [
-      CurvePoint(input: 0, output: 0),
-      CurvePoint(input: 0.3, output: 0.15),
-      CurvePoint(input: 0.7, output: 0.85),
-      CurvePoint(input: 1, output: 1),
-    ]
     var protectedFilmNegative = FilmNegativeParams.colourNegative
     let measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
     protectedFilmNegative.measuredMedians = measuredMedians
@@ -326,43 +279,6 @@ struct StillPreviewBenchmarkTests {
       filmNegativeParams: protectedFilmNegative,
       photoAdjustments: PhotoAdjustmentParameters(saturation: 0.8, vibrance: 0.8)
     )
-    let toneExposurePlus = ProcessingParameters(
-      filmType: .colourNegative,
-      filmNegativeParams: protectedFilmNegative,
-      photoAdjustments: PhotoAdjustmentParameters(exposureEV: 1)
-    )
-    let toneExposureMinus = ProcessingParameters(
-      filmType: .colourNegative,
-      filmNegativeParams: protectedFilmNegative,
-      photoAdjustments: PhotoAdjustmentParameters(exposureEV: -1)
-    )
-    let toneContrastPlus = ProcessingParameters(
-      filmType: .colourNegative,
-      filmNegativeParams: protectedFilmNegative,
-      photoAdjustments: PhotoAdjustmentParameters(contrast: 0.5)
-    )
-    let toneHighlightsRecover = ProcessingParameters(
-      filmType: .colourNegative,
-      filmNegativeParams: protectedFilmNegative,
-      photoAdjustments: PhotoAdjustmentParameters(highlights: 0.5)
-    )
-    let toneShadowsLift = ProcessingParameters(
-      filmType: .colourNegative,
-      filmNegativeParams: protectedFilmNegative,
-      photoAdjustments: PhotoAdjustmentParameters(shadows: 0.5)
-    )
-    let toneFullCombo = ProcessingParameters(
-      filmType: .colourNegative,
-      filmNegativeParams: protectedFilmNegative,
-      photoAdjustments: PhotoAdjustmentParameters(
-        exposureEV: 0.5,
-        brightness: 0.2,
-        contrast: 0.3,
-        highlights: -0.3,
-        shadows: 0.3
-      )
-    )
-
     let configs: [(String, ProcessingParameters)] = [
       ("neutral-neg", ProcessingParameters(filmType: .colourNegative)),
       ("alternate-fuji-400", alternateParameters(.fuji400FreshAlternate)),
@@ -397,16 +313,10 @@ struct StillPreviewBenchmarkTests {
       ),
       ("protected-warm-vibrance", protectedWarmVibrance),
       ("protected-gamut-edge", protectedGamutEdge),
-      ("tone-exposure-plus", toneExposurePlus),
-      ("tone-exposure-minus", toneExposureMinus),
-      ("tone-contrast-plus", toneContrastPlus),
-      ("tone-highlights-recover", toneHighlightsRecover),
-      ("tone-shadows-lift", toneShadowsLift),
-      ("tone-full-combo", toneFullCombo),
       (
         "curve-only",
         ProcessingParameters(
-          filmType: .colourNegative, curveEnabled: true, curveControlPoints: curvePoints)
+          filmType: .colourNegative, curveEnabled: true, curveControlPoints: Self.curvePoints)
       ),
       (
         "wheels-only",
@@ -420,7 +330,7 @@ struct StillPreviewBenchmarkTests {
         "curves-and-wheels",
         ProcessingParameters(
           filmType: .colourNegative,
-          curveEnabled: true, curveControlPoints: curvePoints,
+          curveEnabled: true, curveControlPoints: Self.curvePoints,
           highlightWheel: ColorWheel(hue: 35, strength: 0.4),
           midtoneWheel: ColorWheel(hue: 190, strength: 0.25),
           shadowWheel: ColorWheel(hue: 285, strength: 0.5))
@@ -431,7 +341,7 @@ struct StillPreviewBenchmarkTests {
           filmType: .colourNegative,
           gamma: 35, shadows: 40, highlights: -30,
           temperature: 45, tint: -25, saturation: 145,
-          curveEnabled: true, curveControlPoints: curvePoints,
+          curveEnabled: true, curveControlPoints: Self.curvePoints,
           highlightWheel: ColorWheel(hue: 35, strength: 0.4),
           midtoneWheel: ColorWheel(hue: 190, strength: 0.25),
           shadowWheel: ColorWheel(hue: 285, strength: 0.5))
@@ -460,7 +370,7 @@ struct StillPreviewBenchmarkTests {
       (
         "slide-curves",
         ProcessingParameters(
-          filmType: .slide, curveEnabled: true, curveControlPoints: curvePoints)
+          filmType: .slide, curveEnabled: true, curveControlPoints: Self.curvePoints)
       ),
       (
         "slide-wheels",
@@ -472,48 +382,13 @@ struct StillPreviewBenchmarkTests {
       ),
     ]
 
-    var maxDiff = 0
-    var worstName = ""
-    for (name, parameters) in configs {
-      guard
-        let gpu = renderer.render(parameters: parameters, showOriginal: false),
-        let cpu = FilmProcessing.correctedPreview(image: image, parameters: parameters)
-          .makePreviewCGImage(),
-        let gpuPixels = rgbaPixels(gpu),
-        let cpuPixels = rgbaPixels(cpu)
-      else {
-        #expect(Bool(false), "Render failed for \(name)")
-        continue
-      }
-
-      #expect(gpu.width == cpu.width, "\(name): width mismatch")
-      #expect(gpu.height == cpu.height, "\(name): height mismatch")
-      #expect(gpuPixels.count == cpuPixels.count, "\(name): pixel count mismatch")
-
-      var comboMax = 0
-      for index in gpuPixels.indices {
-        let diff = abs(Int(gpuPixels[index]) - Int(cpuPixels[index]))
-        comboMax = max(comboMax, diff)
-      }
-      if comboMax > maxDiff {
-        maxDiff = comboMax
-        worstName = name
-      }
-    }
-
-    #expect(
-      maxDiff <= 2,
-      "Production renderer max diff \(maxDiff)/255 at '\(worstName)'; should be <= 2 for visual equivalence"
-    )
+    try expectCPUParity(renderer, image: image, configurations: configs)
   }
 
   @Test("Tone controls match CPU within 2/255 across representative parameter grid")
-  func toneControlsMatchCPU() {
+  func toneControlsMatchCPU() throws {
     let image = Self.createDeterministicImage(width: 64, height: 48)
-    guard let renderer = StillPreviewRenderer(image: image) else {
-      #expect(Bool(false), "Could not create production still preview renderer")
-      return
-    }
+    let renderer = try #require(StillPreviewRenderer(image: image))
 
     var filmNegative = FilmNegativeParams.colourNegative
     filmNegative.measuredMedians = FilmNegativeProcessing.computeMedians(image: image)
@@ -606,39 +481,7 @@ struct StillPreviewBenchmarkTests {
       ),
     ]
 
-    var maxDiff = 0
-    var worstName = ""
-    for (name, parameters) in configs {
-      guard
-        let gpu = renderer.render(parameters: parameters, showOriginal: false),
-        let cpu = FilmProcessing.correctedPreview(image: image, parameters: parameters)
-          .makePreviewCGImage(),
-        let gpuPixels = rgbaPixels(gpu),
-        let cpuPixels = rgbaPixels(cpu)
-      else {
-        #expect(Bool(false), "Render failed for \(name)")
-        continue
-      }
-
-      #expect(gpu.width == cpu.width, "\(name): width mismatch")
-      #expect(gpu.height == cpu.height, "\(name): height mismatch")
-      #expect(gpuPixels.count == cpuPixels.count, "\(name): pixel count mismatch")
-
-      var comboMax = 0
-      for index in gpuPixels.indices {
-        let diff = abs(Int(gpuPixels[index]) - Int(cpuPixels[index]))
-        comboMax = max(comboMax, diff)
-      }
-      if comboMax > maxDiff {
-        maxDiff = comboMax
-        worstName = name
-      }
-    }
-
-    #expect(
-      maxDiff <= 2,
-      "Tone control GPU renderer max diff \(maxDiff)/255 at '\(worstName)'; should be <= 2 for visual equivalence"
-    )
+    try expectCPUParity(renderer, image: image, configurations: configs)
   }
 
   @Test("B&W tone curves affect Natural, Classic, and GP3 previews and exports equally")
@@ -669,25 +512,31 @@ struct StillPreviewBenchmarkTests {
       let cpuAfter = FilmProcessing.correctedPreview(image: image, parameters: params)
       let gpuAfter = try #require(renderer.render(parameters: params, showOriginal: false))
       let cpuCGImage = try #require(cpuAfter.makePreviewCGImage())
-      let cpuPixels = try #require(rgbaPixels(cpuCGImage))
-      let gpuPixels = try #require(rgbaPixels(gpuAfter))
+      let gpuPixels = try previewRGBPixels(gpuAfter)
       let cpuChanged = cpuBefore != cpuAfter
-      let gpuChanged = rgbaPixels(gpuBefore) != gpuPixels
+      let gpuChanged = try previewRGBPixels(gpuBefore) != gpuPixels
       #expect(cpuChanged)
       #expect(gpuChanged)
-      let maxDiff = zip(cpuPixels, gpuPixels).map { abs(Int($0) - Int($1)) }.max() ?? 0
-      #expect(maxDiff <= 2, "B&W curve mismatch: \(maxDiff)/255 for \(profile.rendering)")
-      for index in stride(from: 0, to: gpuPixels.count, by: 4) {
+      try expectPreviewRGBPixelsMatch(
+        gpuAfter, cpuCGImage, tolerance: 2, label: "B&W curve \(profile.rendering)")
+      for index in stride(from: 0, to: gpuPixels.count, by: 3) {
         #expect(
           gpuPixels[index] == gpuPixels[index + 1] && gpuPixels[index] == gpuPixels[index + 2])
       }
     }
   }
 
-  private func rgbaPixels(_ image: CGImage) -> [UInt8]? {
-    guard let data = image.dataProvider?.data, let pointer = CFDataGetBytePtr(data) else {
-      return nil
+  private func expectCPUParity(
+    _ renderer: StillPreviewRenderer, image: UInt16Image,
+    configurations: [(String, ProcessingParameters)]
+  ) throws {
+    for (name, parameters) in configurations {
+      let gpu = try #require(
+        renderer.render(parameters: parameters, showOriginal: false), "Render failed for \(name)")
+      let cpu = try #require(
+        FilmProcessing.correctedPreview(image: image, parameters: parameters).makePreviewCGImage(),
+        "CPU preview failed for \(name)")
+      try expectPreviewRGBPixelsMatch(gpu, cpu, tolerance: 2, label: name)
     }
-    return Array(UnsafeBufferPointer(start: pointer, count: image.width * image.height * 4))
   }
 }

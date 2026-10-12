@@ -262,46 +262,7 @@ struct FilmBaseRecipePreviewTests {
     try #require(gpu.height == (rotated ? image.width : image.height), "GPU height: \(label)")
     try #require(cpu.width == gpu.width && cpu.height == gpu.height, "CPU dimensions: \(label)")
 
-    let gpuPixels = try rgbPixels(gpu)
-    let cpuPixels = try rgbPixels(cpu)
-    try #require(gpuPixels.count == cpuPixels.count)
-    var maximumDifference = 0
-    var worstIndex = 0
-    for index in cpuPixels.indices {
-      let difference = abs(Int(gpuPixels[index]) - Int(cpuPixels[index]))
-      if difference > maximumDifference {
-        maximumDifference = difference
-        worstIndex = index
-      }
-    }
-    #expect(
-      maximumDifference <= 2,
-      """
-      \(label): max RGB error \(maximumDifference)/255 at pixel \(worstIndex / 3), \
-      channel \(worstIndex % 3): GPU \(gpuPixels[worstIndex]), CPU \(cpuPixels[worstIndex])
-      """)
-    return gpuPixels
-  }
-
-  private func rgbPixels(_ image: CGImage) throws -> [UInt8] {
-    try #require(image.bitsPerComponent == 8 && image.bitsPerPixel == 32)
-    try #require(
-      image.alphaInfo == .noneSkipLast || image.alphaInfo == .premultipliedLast
-        || image.alphaInfo == .last)
-    try #require(image.bitmapInfo.intersection(.byteOrderMask) != .byteOrder32Little)
-    try #require(image.bytesPerRow >= image.width * 4)
-    let data = try #require(image.dataProvider?.data)
-    try #require(CFDataGetLength(data) >= image.bytesPerRow * (image.height - 1) + image.width * 4)
-    let pointer = try #require(CFDataGetBytePtr(data))
-    var pixels: [UInt8] = []
-    pixels.reserveCapacity(image.width * image.height * 3)
-    for y in 0..<image.height {
-      for x in 0..<image.width {
-        let pixel = pointer + y * image.bytesPerRow + x * 4
-        pixels.append(contentsOf: UnsafeBufferPointer(start: pixel, count: 3))
-      }
-    }
-    return pixels
+    return try expectPreviewRGBPixelsMatch(gpu, cpu, tolerance: 2, label: label)
   }
 
   @MainActor
@@ -326,7 +287,7 @@ struct FilmBaseRecipePreviewTests {
     #expect(model.previewDetail == nil)
     #expect(displayed.width == source.height && displayed.height == source.width)
     #expect(displayed.width == expected.width && displayed.height == expected.height)
-    #expect(try rgbPixels(displayed) == rgbPixels(expected))
+    #expect(try previewRGBPixels(displayed) == previewRGBPixels(expected))
   }
 
   private func chromaticSource() -> UInt16Image {

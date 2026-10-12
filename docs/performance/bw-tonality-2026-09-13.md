@@ -21,9 +21,13 @@ in that interval remains unconfirmed: the particular file, conversion mode,
 settings, preview tier, and matched export comparison have not been identified.
 Classic and the Shanghai GP3 alternate do not use this particular flat curve.
 
-Follow-up: the [second research pass](research-pass-two-2026-09-13.md) evaluates
-the local curve candidate, shows why normalization can still clip it, and adds
-an HDR noise-weighting counterexample and an exact B&W processing prototype.
+A later synthetic follow-up found that a local curve candidate helped, but
+normalization could still clip it. It also found an HDR noise-weighting
+counterexample and prototyped an exact B&W processing lookup. That superseded
+record is `docs/performance/research-pass-two-2026-09-13.md` in Git history;
+the [performance index](index.md#evidence-availability-and-provenance) records
+its revision and retrieval command. This does not establish a current
+photographic repair or reopen broader stock calibration work.
 
 ## 1. A flat interval in the default B&W conversion
 
@@ -274,7 +278,6 @@ all need explicit handling.
    statistics; a RAW crop is not necessarily equivalent to cropping after decode.
 
 This investigation shifts the B&W quality priority toward preserving existing
-tonal information. The related
-[decode/edit/export performance plan](research-directions-2026-09-12.md) remains
-applicable, but making the same flat conversion faster would not resolve this
-specific loss.
+tonal information. Making the same flat conversion faster would not resolve
+this specific loss. Current priorities are in the
+[product roadmap](../improvements/MacOS-Native-Roadmap.md).

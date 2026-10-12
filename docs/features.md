@@ -1,7 +1,10 @@
 # Features
 
-This inventory describes the current native application, including downloadable
-0.2.0 Beta 3. See [Installation](installation.md), the
+This inventory describes the native source released as 0.3.0 Beta 1 on
+October 12, 2026, including selective sync, source-folder export, dust repair,
+open-roll recovery, and preview/export improvements. The
+[release notes](https://github.com/athoma28/Film-Scan-Converter/blob/main/RELEASE_NOTES.md)
+own the binary-specific feature list. See [Installation](installation.md), the
 [usage guide](how-to-use.md), and
 [development status](development/native-macos.md) for instructions and
 verification.
@@ -25,12 +28,18 @@ verification.
   3 GiB on 24 GiB Macs; memory pressure releases background entries. No cache-size
   control appears in the current UI. Up to two neighbouring RAWs prepare at full
   detail in the background when space permits.
+- Leaving a fully rendered RAW keeps a smaller copy of its latest completed
+  correction. Revisiting can show that canvas immediately, with zoom and pan,
+  even after the large RAW buffer is evicted. Full detail reloads in the
+  background. These session-only snapshots are memory bounded and invalidated
+  when their saved correction or flat field no longer matches.
 - At whole-image zoom, supported point-control gestures on a selected
   full-sensor RAW can use a retained 2048px source without changing the logical
   canvas. The preview can render that source on either the GPU or CPU path;
-  zoomed GPU inspection instead renders the visible region from the full source,
-  while CPU fallback processes the full source. Releasing the gesture publishes
-  exact full-source detail. Export is unchanged.
+  zoomed GPU inspection renders the visible region from the full source.
+  Eligible photographic CPU fallbacks render a bounded overview plus exact
+  visible pixels; unsupported paths retain complete rendering. Releasing the
+  gesture publishes exact full-source detail.
 - Native Fit, momentum pan, cursor-centered pinch, step zoom, and 100% current
   preview pixels. Settled images pan and zoom without repeating corrections.
   Image and editing/dust overlays share the viewport transform.
@@ -38,6 +47,8 @@ verification.
   upgrades preserve the viewed region. New selections return to Fit.
 - Embedded-JPEG warning when RAW colour is unavailable, first-draft loading
   indicator, and an aligned-stack badge when appropriate.
+- Native toolbar with Crop, Straighten, and Healing Brush; resizable/collapsible
+  inspector and a shortcut that hides/restores the previous side-panel arrangement.
 - Optional AVFoundation live preview with invert, exposure, and saturation.
 
 ## Develop
@@ -53,9 +64,16 @@ verification.
   further edits show Custom. Command-Z undoes apply. Save current stores the
   same snapshot, identifies replacement names, and retains the name after a
   failed save. Reset Adjustments preserves film base, calibration, and framing.
+- Factory look thumbnails render from the loaded scan in the background. The
+  complete strip must finish within 500 ms; exceeding the budget disables the
+  optional strip for that window session while the named menu stays available.
 - Factory looks: Clean Invert, Soft People, Punchy Print, Warm, Cool, Foliage,
   Night Lift, B&W Print, and B&W Soft. These are creative starting points, not
   measured stock or paper simulations.
+- Exact numeric adjustment entry, locale-aware decimals, fine/Shift-arrow
+  increments, range constraints, Enter/focus-loss commit, and Escape cancellation.
+  Unfinished values cannot transfer to another scan; unchanged rounded displays
+  preserve the stored precision.
 - **Tone & Light**: exposure, brightness, contrast, broad highlights/shadows,
   focused whites/blacks, smooth ordered curves, and sampled display clipping.
   B&W supports overall tone
@@ -82,7 +100,13 @@ verification.
 - Fixed manual-crop ratios: 1:1, 3:2, 4:3, 5:4, 16:9, and portrait equivalents.
   Drawing and resize handles preserve the ratio; Free unlocks the current box.
   Each scan saves its ratio with its crop, including Undo/Redo and relaunch.
-- Diagnostic dust-candidate overlay aligned to the displayed geometry.
+- **Dust & Repair**: bounded automatic identification, editable Mark/Erase masks,
+  explicit Auto Repair Mask, and a Healing Brush. Option-click selects a texture
+  source; automatic donors use nearby texture with boundary color matching and
+  feathering. Editing temporarily shows the unframed scan; Done restores framing.
+  Saved repairs stay in source coordinates through crop, perspective, and rotation,
+  support Undo/Redo, and use the same CPU stage for preview and export. Show Repairs
+  provides a comparison without changing saved edits. Candidate masks are temporary.
 - **Calibrate**: film-base edge detection/manual sampling, flat field,
   measured-density conversion, and persisted capture/film-response/roll profiles.
 - Neutral-preserving six-control dye crossover in Advanced Color Science for
@@ -95,16 +119,29 @@ verification.
 ## Rolls, Stacks, And Settings
 
 - Scans sidebar with multi-selection, Previous/Next Scan in sidebar order,
-  session-local up/down reordering, edited/preview-ready/export markers, and
+  persisted up/down reordering, edited/preview-ready/export markers, and
   stack badges.
-- Per-file persisted corrections and session-local Undo/Redo. Continuous slider,
+- Relaunch restores the open roll, primary scan, and multiselection, retaining
+  unavailable scans when a drive is disconnected. **Close All Scans** clears the
+  roll and transient history/previews while preserving source files and edits.
+  Stack proposals still require explicit enabling; export jobs do not resume.
+- Per-file persisted corrections and session-local Undo/Redo. Ordinary slider,
   curve, wheel, and perspective gestures coalesce into one history entry.
-  Background saves coalesce rapid edits; normal quit waits for pending saves.
+  Successful async framing/repair actions and full-settings paste have separate
+  undo steps, including when a gesture is active. Background saves coalesce rapid
+  edits; normal quit waits for pending saves.
 - Correction copy/paste and selected/all look application transfer public
   adjustments and preserve destination geometry, film base, and calibration.
   Version-one presets migrate to these snapshots; the first save/delete keeps
   the original library as a backup. User film-response profiles retain inversion,
   crossover, density, and display settings.
+- **Selective Sync & Paste** chooses Exposure, Tone, Color & Balance, Curves,
+  and Grading independently. Exposure starts unchecked. Current/selected/all
+  targets preserve unselected controls, film base, calibration, geometry, and
+  repairs. Partial transfers retain each destination's tone response; incompatible
+  version-one Tone/Grading transfers require Update Tone Controls first.
+  Repair-bearing per-file settings use schema 3 so older apps reject the file
+  rather than silently discard repairs. Settings without repairs retain schema 2.
 - Opt-in repeated-capture proposals for adjacent, same-size scans. Translation
   registration rejects low-texture or ambiguous matches. Auto selects HDR when
   exposure spread is at least 0.5 EV, otherwise Noise; either can be forced.
@@ -122,17 +159,25 @@ verification.
 | PNG | 16-bit lossless sRGB. |
 | DNG | Processed 16-bit RGB with output-referred linear-sRGB metadata, not sensor RAW. |
 
-Export is sequential, supports selected/all files and appending duplicate jobs,
-and snapshots each job's output options. Names are collision-safe, errors are
-per-file, and cancellation occurs at safe boundaries. PNG uses staged commit;
+Export supports selected/all files and appending duplicate jobs, and snapshots
+each job's output options and resolved destination. Original folders
+are the default: each image saves beside its source, and an enabled stack uses
+its anchor capture's folder. Choose Folder sets a common override; Use Original
+Folders clears it. Names avoid existing files and other queued outputs, preserving
+source scans. If a reserved name becomes occupied before writing finishes, that
+job reports an error and preserves the other file; exporting again chooses a new
+name. Errors are per-file, and cancellation occurs at safe boundaries.
+PNG uses staged commit;
 all formats clean up failed destinations. The selected RAW retains its last
 three-pass decode for settings-only re-export and drops it on selection change.
 
 **Contact Sheet** saves selected or all scans to a Letter-size PDF, with 12
 corrected previews per page, filenames, and page numbers. Settings are captured
 when the sheet starts; each enabled stack contributes one merged tile under its
-anchor name. Sheets use bounded demosaiced RAW previews, preserve sidebar order,
-and support progress, cancellation, collision-safe naming, and failure cleanup.
+anchor name. Sheets use bounded demosaiced RAW previews and preserve sidebar order.
+The PDF defaults to the active image or stack anchor's folder unless a common
+destination is chosen. Progress, cancellation, collision-safe naming, and failure
+cleanup are supported.
 They show committed crop/corrections, independently of Original comparison or
 an open geometry editor. Export borders and aspect padding are not included.
 
@@ -142,8 +187,14 @@ ID/notarization support exists, but the published beta is ad-hoc signed.
 
 ## Limitations
 
-Native dust removal, lens-distortion modeling, and vendor-specific tethering
-are absent. Stacking handles translation only and is
+Dust repair is an initial local texture-transfer implementation; photographic
+judgment of grain, edges, false positives, and complex textures remains open.
+Repairs use CPU fallback; automatic mask repair conservatively skips large,
+elongated, sparse, or edge-touching components and caps each request at 250 spots.
+Candidates without a usable texture source remain marked, including neighbours
+overlapped by a successful repair's feather. Donor checks use the current preview;
+full-resolution photographic restoration quality still needs inspection.
+Lens-distortion modeling and vendor-specific tethering are absent. Stacking handles translation only and is
 disabled with a loaded flat field. Alpha-channel standard images are rejected.
 Processed DNG support varies by reader; TIFF is the broad-interchange option.
 

@@ -160,8 +160,12 @@ public enum FilmProcessing {
     return working
   }
 
-  static func prepareGeometry(image: UInt16Image, parameters: ProcessingParameters) -> UInt16Image {
-    let cropped = applyAutomaticCrop(to: image, parameters: parameters)
+  static func prepareGeometry(
+    image: UInt16Image, parameters: ProcessingParameters, sourceRepairs: Bool = true
+  ) -> UInt16Image {
+    let source =
+      sourceRepairs ? DustRepair.apply(to: image, strokes: parameters.dustRepairs) : image
+    let cropped = applyAutomaticCrop(to: source, parameters: parameters)
     var working = cropped.rotated(
       quarterTurns: parameters.rotation,
       flipHorizontally: parameters.flip
@@ -435,7 +439,8 @@ public enum FilmProcessing {
     parameters: ProcessingParameters,
     flatField: UInt16Image? = nil
   ) -> UInt16Image {
-    let croppedImage = applyAutomaticCrop(to: image, parameters: parameters)
+    let repairedImage = DustRepair.apply(to: image, strokes: parameters.dustRepairs)
+    let croppedImage = applyAutomaticCrop(to: repairedImage, parameters: parameters)
     let sourceFlatField = flatField.flatMap { field in
       field.channels == image.channels
         ? field.resized(width: image.width, height: image.height)
@@ -646,10 +651,10 @@ public enum FilmProcessing {
     return output
   }
 
-  static func processCorrectionPixels(
-    _ output: inout [UInt16],
+  static func processCorrectionPixels<Component: Sendable>(
+    _ output: inout [Component],
     pixelCount: Int,
-    processPixel: @Sendable (Int, UnsafeMutablePointer<UInt16>) -> Void
+    processPixel: @Sendable (Int, UnsafeMutablePointer<Component>) -> Void
   ) {
     let workerCount = min(8, ProcessInfo.processInfo.activeProcessorCount)
     output.withUnsafeMutableBufferPointer { buffer in

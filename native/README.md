@@ -9,11 +9,18 @@ elsewhere:
 - [Feature inventory](../docs/features.md)
 - [Release runbook](../docs/development/native-release.md)
 
+This is the current source contract for the 0.3.0 Beta 1 workflow.
+The [release notes](../RELEASE_NOTES.md) describe individual packaged builds;
+the [test guide](../tests/README.md) owns check selection and fixture requirements.
+For experiments, use the [research index](../docs/research/index.md) and
+[performance index](../docs/performance/index.md), then follow the relevant
+runbook and inspect its recorded evidence before launching a new run.
+
 ## Package Structure
 
 `native/FilmScanEngine` provides:
 
-- `FilmScanEngine`: deterministic image, processing, crop, dust-mask, RAW,
+- `FilmScanEngine`: deterministic image, processing, crop, dust-mask/repair, RAW,
   standard-image, and export primitives;
 - `FilmScanPreviewRenderer`: the bounded Core Image/Metal still renderer;
 - `FilmScanConverterMac`: the primary SwiftUI application;
@@ -41,8 +48,9 @@ swift run --package-path native/FilmScanEngine FilmScanLookbook \
   /tmp/film-scan-color-lookbook
 ```
 
-The generated `index.html` links rendered JPEGs. These recipes are creative
-starting points, not measured stock calibrations. `LookRecipeTests` and
+Without an output directory, the utility writes to the ignored `dist/lookbook/`
+directory. The generated `index.html` links rendered JPEGs. These recipes are
+creative starting points, not measured stock calibrations. `LookRecipeTests` and
 `LookRecipeAppTests` cover recreatability from public sliders, film-base
 isolation, apply without image analysis, persistence, and undo.
 
@@ -53,6 +61,19 @@ LibRaw 0.21.4's integer arithmetic and overlapping-tile dependence, then runs
 independent `2*row+col` wavefront diagonals. Fuji compressed unpack runs
 independent strips concurrently through `fuji_decode_loop`. `LIBRAW_FORCE_OPENMP`
 stays off. No LibRaw-owned buffer or lifetime is exposed to the application.
+
+Camera-scan X-Trans builds exact homogeneity thresholds in the dead Lab scratch
+plane, then counts the original comparisons in contiguous directional passes.
+The compatibility path retains the original loop. CIELab, final direction ties,
+averaging, and scratch capacity are unchanged; see the
+[three-RAW JPEG export comparison](../docs/performance/jpeg-three-export-2026-10-10.md).
+
+Selection preparation, preview workers, and export queue execution use named
+helpers for their separate responsibilities. Preserve the existing actor boundaries,
+property publication order, cancellation checkpoints, and release of prepared export
+images when changing those helpers. TIFF, JPEG, and PNG share ImageIO staging,
+finalization, cleanup, and collision-safe commit; format-specific packing and options
+remain explicit. The custom DNG writer retains its own bounded packing and file path.
 
 ## Build And Test
 
@@ -117,9 +138,12 @@ stapling, Gatekeeper, and clean-machine validation.
 For Camera Raw reference comparisons, film-preset trials, and segmented skin RGB
 measurements, start with the [color evaluation runbook](../docs/development/color-evaluation.md).
 `diagnostics/color-study.py` provides preflight, ordered execution, and guarded
-resume using production `FilmScanLookbook` renders. Its historical study stages
-still need migration to current recipe names and correction documents; consult
-the runbook's compatibility status before treating a run as reproducible.
+resume using production `FilmScanLookbook` renders. The current stages use
+canonical Film Bases, native variant names, and schema-2 public-control recipes;
+the real app-parser probe checks exact applied settings and production CPU pixels.
+The September 18 reports describe earlier runs. Read the runbook's compatibility
+contract and current verification before reusing either current or historical
+artifacts.
 
 The [preview-analysis benchmark](../docs/performance/preview-analysis.md)
 isolates CPU clipping/tone diagnostics and Darkroom neutral-axis analysis,
@@ -139,7 +163,13 @@ native/FilmScanEngine/.build/release/FilmScanExportBenchmark \
 
 The default format set is TIFF, JPEG, PNG, and DNG. Use
 `--formats=tiff,png`, `--all --limit=10`, or `--frame-percent=2` to vary the
-run. Each generated image is hashed and removed immediately; only the JSON
+run. `--tiff-compression=none|lzw` selects TIFF compression; this benchmark
+defaults to LZW, while the app defaults to None. `--film-base=colorC41`
+selects the current neutral photographic workload with tone version 4;
+`colorCyanMask`, `blackAndWhite`, `slide`, and `original` are also accepted.
+Without that flag, the ordinary benchmark retains its historical legacy
+correction workload. Compression and the selected workload are recorded in
+report configuration. Each generated image is hashed and removed immediately; only the JSON
 report remains. The report retains the individual samples plus median and
 nearest-rank p95 totals, stages, decode substages, packed-pixel bytes, current
 and peak physical footprint, reusable bytes, legacy resident-memory checkpoints,
@@ -166,7 +196,8 @@ order. The first disagreeing boundary is the first stage the candidate allowed
 to diverge. Each repetition prints all eight full digests plus peak and
 post-release physical footprint before final report assembly, preserving
 diagnostic evidence if report finalization fails. The mode defaults to five
-repetitions and rejects fewer; `--formats` is not accepted in this mode.
+repetitions and rejects fewer; `--formats`, `--film-base`, and any explicit
+`--tiff-compression` flag are rejected in this fixed-LZW mode.
 `FSC_UNPACK_WORKERS` accepts 1–16 camera-scan unpack workers;
 `FSC_XTRANS_WORKERS` accepts 1–8 demosaic workers. `1` selects the respective
 serial oracle. Without overrides, each uses the available CPU count up to its
@@ -188,8 +219,8 @@ dye-mixing, and combined correction against the same authoritative image. It
 reports scenario passes, correction and writer timing, corrected/writer/output
 hashes, physical footprint after decode/processing/write/release, process peak,
 and allocator statistics after scenario intermediates are released. One LZW
-TIFF per scenario is verified and removed; `--formats` is not accepted in this
-mode.
+TIFF per scenario is verified and removed; `--formats`, `--film-base`, and any
+explicit `--tiff-compression` flag are rejected in this fixed-LZW mode.
 
 Run the opt-in real-app preview and switching benchmark:
 
@@ -343,7 +374,24 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   and suspends speculation until pressure clears. **Load RAW Preview** requests
   full-sensor detail directly and cancels any in-flight inspect decode through
   the shared gate. Automatic browsing retains the normal inspect/full progression.
-- Keep the still image, dust mask, and crop/straighten/perspective editors in
+- On departure from a fully rendered RAW, downsample the latest completed,
+  corrected canvas to half width and height on a worker. Keep these sRGB bitmaps
+  independently of decoded sessions: at most 24 snapshots and 256 MiB, further
+  limited to one eighth of the existing preview budget and charged to it.
+  Restore only matching saved corrections, preserving full canvas zoom dimensions.
+  Hide lower-tier renders behind the snapshot and skip redundant inspect decoding;
+  edits or Original can use the newly decoded draft until full detail arrives.
+  Exclude incomplete edits, temporary editor canvases, Original, and stacks.
+  Flat-field changes, memory pressure, and Close All clear snapshots and invalidate
+  pending work. Snapshots own no RAW source, renderer, or export pixels.
+- Keep the native inspector resizable and independently collapsible. The workspace
+  shortcut hides both side panels and restores their prior arrangement; layout
+  changes retain the native preview viewport and its zoom/pan state.
+- Numeric adjustment drafts commit finite locale-aware values within the existing
+  slider range/step, once per accepted edit. Escape cancels; an unchanged rounded
+  display preserves hidden precision. Reject a late commit after the selected
+  source or underlying value changes. Grading level fields share this contract.
+- Keep the still image, dust mask/repair, and crop/straighten/perspective editors in
   one native viewport transform. Original comparison must preserve its pan and
   magnification, and selection changes must return to a predictable Fit state.
 - Define 100% against the pixels in the current preview, which become sensor
@@ -359,6 +407,12 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   first decode resolves its film base before applying the copied controls.
   Intentionally saved Original frames keep Original. Preview, export, contact
   sheets, Undo/Redo, and relaunch must preserve that distinction.
+- Factory preset thumbnails use the production CPU engine, existing decoded
+  source, immutable 256px sensor analysis, and 160px display bound. Keep all
+  preparation/render/bitmap work off the main actor; publish the complete strip
+  only below the 500 ms calculation budget. Cancel stale generations and suppress
+  the strip for that window session after an over-budget result. Invalidation
+  follows source/calibration/framing, not controls replaced by every recipe.
 - New neutral edits use photographic tone version 4. Highlights/Shadows affect
   broad regions, Whites/Blacks focus on the respective ends without moving black
   or white, and the grading Shadow Floor/Midtone Level/Highlight Ceiling controls
@@ -387,15 +441,71 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
   calibration are parked until the owner reactivates them; fitted candidates
   still need held-out evidence before promotion.
 - Keep edit history session-local and isolated by standardized source path.
-  Coalesce each slider, curve, color-wheel, and perspective drag into one
-  history entry; persist the restored current state but start with empty
+  Coalesce an ordinary slider, curve, color-wheel, or perspective drag into one
+  history entry. Successful async framing/repair completion records its own entry
+  and rebases an active gesture; continued samples form a later entry. A valid
+  full-settings paste ends the active gesture before recording the paste; empty
+  or invalid clipboard commands leave it intact. Persist the restored current
+  state but start with empty
   transient history after relaunch. Look application and Reset Adjustments must
   remain reversible without resetting film base, calibration, crop, or orientation.
+- Persist the open roll separately in schema-1 `OpenRoll.json`: ordered,
+  standardized source paths, primary selection, and sidebar multiselection.
+  Retain unavailable paths so disconnected drives do not erase the roll.
+  Coalesce snapshots, write off the main thread, and flush both roll and correction
+  saves before normal quit. Validate the existing roll document before every
+  save; unreadable or unsupported documents remain intact until repaired or
+  removed. **Close All Scans** saves an empty roll and clears transient browsing,
+  history, and caches while preserving source files and per-file corrections;
+  it is unavailable during export. Relaunch rediscovers stack proposals but
+  requires explicit enabling, and never restores export jobs.
 - A failed per-file settings read must not let subsequent edits overwrite the
-  unreadable or unsupported document. Saving retries only after that document
+  unreadable or unsupported document. Validate the existing document before
+  every save, including replacements after a successful startup read.
+  Saving retries only after that document
   can be read or has been removed. Recovered files outside the current session
   must survive every later save; session values and edited markers take precedence
   for files edited during recovery.
+- Selective correction transfer groups exposure, tone, color/balance, curves,
+  and grading; preserve unselected values and local repairs. Partial transfers
+  preserve the destination tone version, reject incompatible version-one
+  tone/grading atomically, and leave matching or empty transfers unedited.
+- Dust repairs use normalized top-left source coordinates and a radius relative
+  to source width. Apply texture transfer before geometry and inversion, never
+  to the flat field. Empty repairs preserve exact existing pixels. Corrected
+  previews with repairs use the shared CPU stage; Original comparison omits
+  repairs. Persist repairs and undo each completed brush stroke; temporary
+  candidate masks have no processing effect until explicitly repaired.
+  Direct Heal checks its proposed stroke on a worker before saving or erasing
+  marked pixels. Every interpolated dab must have a usable donor; incomplete
+  paths leave marks and history intact. One-point automatic brush stamps also
+  exclude the full marked mask and save their chosen donor. Multipoint automatic
+  brush paths retain their existing per-dab donor policy; deliberate explicit
+  donors are preserved. Pause overlay input while that check runs.
+  Consume manual marks only inside the renderer's strict positive footprint.
+  A coarse mask cell remains marked unless one dab covers every source pixel
+  represented by it. Finer masks and checks exceeding the bounded work limit
+  remain unchanged; cancellation cannot publish a partially cleared mask.
+  Auto Repair Mask checks donor availability on a worker with existing strokes
+  and all proposed stamps included in its exclusions. The complete marked mask
+  also excludes automatic donors, including skipped large components and spots
+  beyond the proposal cap. Its bounded prefix index supports masks up to 2048px
+  per dimension; unsupported masks produce no automatic plans. Preserve deliberate
+  explicit donors. Save applicable one-point
+  stamps with their chosen donor through the existing `sourcePoint` field, so
+  filtering rejected proposals does not select different texture. Consume their
+  original eight-connected mask components, preserving rejected neighbours even
+  when a successful stamp's feather overlaps them. Mask edits, source/settings
+  changes, and closing the editor invalidate pending checks. Donor availability
+  on one preview tier does not establish restoration quality on final RAW pixels.
+  Repair-bearing per-file documents use schema 3; accept 1–3 and reject unknown
+  store versions without overwriting them. Unrepaired stores retain schema 2.
+- Auto Frame results belong to the source generation and framing inputs captured
+  at launch. Source upgrades, threshold/framing edits, and history restoration
+  invalidate pending detection. Ordinary tone edits survive a valid result; direct
+  cancellation clears only that request's busy state and lets native work drain.
+  A successful Auto Frame or dust repair completion during a slider gesture gets
+  its own undo entry; later gesture samples coalesce from the resulting state.
 - Treat manual film-frame geometry as a persisted, validated clockwise
   four-corner quadrilateral. Its reticle/loupe editor may softly snap either
   incident edge parallel to its opposite edge, but must preserve an explicit
@@ -439,19 +549,37 @@ Swift CPU contract. Do not backport it to Python merely to create a fixture.
 - Keep full-resolution RAW export one-file-at-a-time. Retain the selected
   file's last three-pass decode for settings-only re-export; drop it on
   selection change. Do not prefetch file N+1 or keep a roll-sized decode cache.
-- Contact-sheet PDFs snapshot selected/all settings and stack membership at
-  start, preserve import order, and use corrected demosaiced previews bounded
+- Contact-sheet PDFs snapshot selected/all settings, sidebar order, and stack
+  membership at start, and use corrected demosaiced previews bounded
   to 1000px. Decode captures sequentially through the shared RAW gate; never
   populate the authoritative export cache. Stage the complete PDF and commit
   only after all tiles succeed, with cancellation and collision-safe naming.
 - Give export priority over speculative lookahead work and check cancellation
-  between decode, correction, geometry, and write stages.
+  before preparing another batched request and between decode, correction,
+  geometry, and write stages. Synchronous native work drains before completion;
+  cancellation status counts committed files rather than attempted queue items.
 - Preserve PNG's staged commit, collision-safe naming, and destination cleanup
   on export failure for every format.
+  App image exports must also preserve a file created at a reserved destination
+  after enqueue: fail that job, remove its stage, and choose a new name on retry.
+  Direct engine/diagnostic writes retain their explicit overwrite capability.
+- PNG exports preserve exact 16-bit RGB samples, no alpha, and the named sRGB
+  profile. Use ImageIO's fixed Average lossless byte filter; the predictor changes
+  compressed file bytes and may change size, while reopened pixels remain exact.
+  Paired-reference diagnostics retain adaptive PNG encoding so historical
+  preference-byte checks remain reproducible without replacing the ledger.
+- A nil export-folder override means each source's parent directory. Reserve
+  names per physical directory and freeze resolved destinations/options on
+  enqueue, including appended jobs. Stacks use their anchor's folder; one
+  contact sheet uses the active image/anchor folder unless overridden.
 - Compare performance only across identical profiles, stage sets, hardware, and
   quality contracts.
 - Keep product claims in `docs/features.md`, current evidence in
   `docs/development/native-macos.md`, and priority in the roadmap.
+- After a source change, update the owning contract and verification guide with
+  the exact checked source, inputs, outcomes, failures/skips, and remaining limits.
+  A dated report remains evidence for its recorded state; update current status
+  with a new entry instead of rewriting old results as if they ran today.
 
 ## Live Camera Scope
 
@@ -475,7 +603,11 @@ Source, settings, Original, and flat-field changes invalidate display reuse.
 On machines with at least 16 GiB RAM, the cancellable priority scheduler permits
 one foreground and one speculative decode concurrently, with at most two workers
 and at most one speculative worker. Export preempts speculation. Adjustment
-gestures preserve background progress. CPU preparation still reuses geometry and
-Darkroom analysis; revision-bound statistics follow publication asynchronously.
-See the [earlier measurements](../docs/performance/viewport-and-work-reuse-2026-09-16.md)
-for the preceding viewport-region implementation.
+gestures preserve background progress. CPU preparation belongs to the immutable
+cached full/proxy sources and reuses geometry and Darkroom analysis after a
+revisit. Retained geometry enters the same LRU byte budget; worker completion
+trims it even when its frame is discarded. Revision-bound statistics follow
+publication asynchronously.
+Supported GPU workers release incompatible CPU geometry from both full and
+interaction owners. Density reference renders also release incompatible work;
+matching geometry remains reusable. These releases run off the main actor.

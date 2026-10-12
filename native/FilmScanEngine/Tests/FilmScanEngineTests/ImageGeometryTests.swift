@@ -21,7 +21,7 @@ struct ImageGeometryTests {
   }
 
   @Test("Positive straighten deviation rotates the image counterclockwise")
-  func straightenSignConvention() {
+  func straightenSignConvention() throws {
     var pixels = [UInt16](repeating: 0, count: 31 * 21)
     for y in 0..<21 {
       for x in 0..<31 {
@@ -29,10 +29,17 @@ struct ImageGeometryTests {
       }
     }
     let image = UInt16Image(width: 31, height: 21, channels: 1, pixels: pixels)
-    let clockwise = PerspectiveTransform.rotate(image, clockwiseDegrees: 8)
-    let fromPositiveGuide = PerspectiveTransform.rotate(
-      image, clockwiseDegrees: -8)
-    #expect(clockwise.pixels != fromPositiveGuide.pixels)
+    // A downward-to-the-right segment has an 8-degree clockwise tilt in
+    // screen coordinates. The production straighten parameter must undo it.
+    let guide = try #require(
+      ImageGeometry.straightenGuide(deltaX: 100, deltaY: 14.054083470239145))
+    #expect(guide.axis == .horizontal)
+    #expect(abs(guide.deviation - 8) < 1e-10)
+    let parameters = ProcessingParameters(straightenAngle: guide.deviation, filmType: .cropOnly)
+    let actual = FilmProcessing.correctedPreview(image: image, parameters: parameters)
+    let expected = PerspectiveTransform.rotate(image, clockwiseDegrees: -8)
+    #expect(actual == expected)
+    #expect(actual != PerspectiveTransform.rotate(image, clockwiseDegrees: 8))
   }
 
   @Test("Pixel bounds keep a one-pixel minimum and stay on the canvas")

@@ -119,7 +119,10 @@ struct PresetWorkflowTests {
     #expect(model.saveCorrectionPreset(named: "  CAFE  "))
     #expect(model.namedCorrectionPresets.count == 1)
     #expect(model.namedCorrectionPresets.first?.id == id)
+    #expect(model.namedCorrectionPresets.first?.name == "CAFE")
     #expect(model.namedCorrectionPresets.first?.settings.recipe.photoAdjustments.exposureEV == 0.5)
+    #expect(try store.load() == model.namedCorrectionPresets)
+    #expect(AppModel(presetStore: store).namedCorrectionPresets == model.namedCorrectionPresets)
     // A corrupt store is a recoverable save failure, not a successful empty replacement.
     try Data("invalid JSON".utf8).write(to: store.fileURL)
     #expect(!model.saveCorrectionPreset(named: "Keep this name"))

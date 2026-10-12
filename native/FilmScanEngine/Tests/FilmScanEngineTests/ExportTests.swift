@@ -122,9 +122,9 @@ struct ExportTests {
     #expect(imported.height == original.height)
   }
 
-  @Test func tiffExportUsesCompact16BitRGBComponentLayout() throws {
+  @Test func exportUsesCompact16BitRGBComponentLayout() throws {
     let image = makeTestImage(width: 7, height: 5)
-    let cgImage = try #require(image.makeExportCGImageRGB16())
+    let cgImage = try #require(image.makeExportCGImage16())
 
     #expect(cgImage.bitsPerComponent == 16)
     #expect(cgImage.bitsPerPixel == 48)
@@ -189,6 +189,40 @@ struct ExportTests {
     _ = try requireSRGBImage(at: url)
   }
 
+  @Test(arguments: [(1, 1), (1, 257), (257, 1), (513, 257)])
+  func pngExportPreservesAll16BitCodesAndBoundaryRows(width: Int, height: Int) throws {
+    let pixelCount = width * height
+    var pixels = [UInt16]()
+    pixels.reserveCapacity(pixelCount * 3)
+    for pixelIndex in 0..<pixelCount {
+      // An odd stride visits every UInt16 code in the largest case. XOR offsets
+      // keep BGR channels distinct while preserving that coverage and low bits.
+      let blue = UInt16(truncatingIfNeeded: pixelIndex * 257 + 0x1234)
+      pixels.append(blue)
+      pixels.append(blue ^ 0x55AA)
+      pixels.append(blue ^ 0xAA55)
+    }
+    let original = UInt16Image(
+      width: width, height: height, channels: 3, pixels: pixels)
+    let url = tempDir.appendingPathComponent("full16_\(width)x\(height).png")
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    try original.write(to: url, format: .png, parameters: ExportParameters(format: .png))
+
+    let reopened = try requireSRGBImage(at: url)
+    #expect(reopened.width == width)
+    #expect(reopened.height == height)
+    #expect(reopened.bitsPerComponent == 16)
+    #expect(
+      reopened.alphaInfo == .none || reopened.alphaInfo == .noneSkipFirst
+        || reopened.alphaInfo == .noneSkipLast)
+    let imported = try StandardImageDecoder.decode(url)
+    #expect(imported.width == width)
+    #expect(imported.height == height)
+    #expect(imported.channels == 3)
+    #expect(imported == original)
+  }
+
   @Test func failedExportPreservesExistingDestination() async throws {
     let url = tempDir.appendingPathComponent("existing.png")
     let existingData = Data("existing destination".utf8)
@@ -204,18 +238,6 @@ struct ExportTests {
     #expect(results.count == 1)
     #expect(results[0].error != nil)
     #expect(try Data(contentsOf: url) == existingData)
-  }
-
-  @Test func pngExportUsesCompact16BitRGBComponentLayout() throws {
-    let image = makeTestImage(width: 7, height: 5)
-    let cgImage = try #require(image.makeExportCGImage16())
-
-    #expect(cgImage.bitsPerComponent == 16)
-    #expect(cgImage.bitsPerPixel == 48)
-    #expect(cgImage.bytesPerRow == 7 * 6)
-    #expect(cgImage.alphaInfo == .none)
-    #expect(cgImage.bitmapInfo.contains(.byteOrder16Little))
-    #expect(cgImage.colorSpace?.name == CGColorSpace.sRGB)
   }
 
   @Test func largeExportPackingPreservesRGBValuesAcrossParallelRanges() throws {
@@ -352,6 +374,7 @@ struct ExportTests {
   }
 
   @Test func exportManagerCancellation() async throws {
+    defer { try? FileManager.default.removeItem(at: tempDir) }
     var requests: [ExportManager.ExportRequest] = []
     for i in 0..<10 {
       let image = makeTestImage()
@@ -367,65 +390,162 @@ struct ExportTests {
     }
 
     let manager = ExportManager()
+    let progress = ExportProgressProbe()
     let task = Task {
-      await manager.export(requests: requests)
+      withUnsafeCurrentTask { $0?.cancel() }
+      return await manager.export(requests: requests, progress: progress.record)
     }
-    task.cancel()
     let results = await task.value
 
-    let cancelled = results.filter { ($0.error as? ExportManager.ExportManagerError) == .cancelled }
-    #expect(cancelled.count > 0, "Cancellation should produce cancelled results")
+    #expect(results.map(\.sourceURL) == requests.map(\.sourceURL))
+    #expect(results.allSatisfy { ($0.error as? ExportManager.ExportManagerError) == .cancelled })
+    #expect(
+      progress.events
+        == (1...requests.count).map {
+          .init(completed: $0, total: requests.count, succeeded: false)
+        })
+    #expect(try FileManager.default.contentsOfDirectory(atPath: tempDir.path).isEmpty)
   }
 
   @Test func exportManagerProgressReporting() async throws {
-    var images: [UInt16Image] = []
-    for _ in 0..<5 {
-      images.append(makeTestImage())
-    }
-    let params = ExportParameters(format: .tiff)
+    defer { try? FileManager.default.removeItem(at: tempDir) }
+    // PNG deliberately rejects a one-channel image. The callback must report
+    // the failed member and still reach the total after the following success.
+    let images = [makeTestImage(), makeGrayImage(), makeTestImage()]
+    let params = ExportParameters(format: .png)
     let requests = images.enumerated().map { i, image in
       ExportManager.ExportRequest(
         sourceURL: URL(fileURLWithPath: "/fake/\(i).raf"),
-        destinationURL: tempDir.appendingPathComponent("progress_\(i).tiff"),
+        destinationURL: tempDir.appendingPathComponent("progress_\(i).png"),
         image: image,
         parameters: params
       )
     }
 
     let manager = ExportManager()
-    let results = await manager.export(requests: requests)
-    #expect(results.count == 5, "All requests should complete")
-    let allSucceeded = results.filter(\.isSuccess).count == results.count
-    #expect(allSucceeded, "All exports should succeed")
-    for request in requests {
-      #expect(FileManager.default.fileExists(atPath: request.destinationURL.path))
+    let progress = ExportProgressProbe()
+    let results = await manager.export(requests: requests, progress: progress.record)
+    #expect(results.map(\.isSuccess) == [true, false, true])
+    #expect(
+      progress.events == [
+        .init(completed: 1, total: 3, succeeded: true),
+        .init(completed: 2, total: 3, succeeded: false),
+        .init(completed: 3, total: 3, succeeded: true),
+      ])
+    for (request, result) in zip(requests, results) {
+      if result.isSuccess {
+        #expect(try StandardImageDecoder.decode(request.destinationURL) == request.image)
+      } else {
+        #expect(!FileManager.default.fileExists(atPath: request.destinationURL.path))
+      }
     }
   }
 
-  @Test func exportManagerBatchParallelism() async throws {
-    var images: [UInt16Image] = []
-    for _ in 0..<8 {
-      images.append(makeTestImage())
-    }
-    let params = ExportParameters(format: .tiff)
-    let requests = images.enumerated().map { i, image in
+  @Test("Batch writers overlap within their limit and return input-ordered results")
+  func batchWritersOverlapAndPreserveResultOrder() async throws {
+    defer { try? FileManager.default.removeItem(at: tempDir) }
+    let parameters = ExportParameters(format: .tiff)
+    let requests = (0..<4).map { index in
       ExportManager.ExportRequest(
-        sourceURL: URL(fileURLWithPath: "/fake/\(i).raf"),
-        destinationURL: tempDir.appendingPathComponent("batch_\(i).tiff"),
-        image: image,
-        parameters: params
-      )
+        sourceURL: tempDir.appendingPathComponent("source_\(index).tiff"),
+        destinationURL: tempDir.appendingPathComponent("overlap_\(index).tiff"),
+        image: makeTestImage(width: 64 - index * 8, height: 32),
+        parameters: parameters)
     }
+    let probe = ExportWriterProbe(
+      delayedFilename: "overlap_0.tiff", peerFilename: "overlap_1.tiff")
+    let manager = ExportManager(writer: probe.write)
+    let results = await manager.exportBatch(requests: requests, maxConcurrent: 2)
 
-    let manager = ExportManager()
-    let results = await manager.exportBatch(requests: requests, maxConcurrent: 4)
-
-    #expect(results.count == 8)
-    let successful = results.filter(\.isSuccess)
-    #expect(successful.count == 8, "All images should export successfully")
+    #expect(probe.maximumActiveCount == 2)
+    #expect(probe.completedFilenames.first == "overlap_1.tiff")
+    #expect(results.map(\.sourceURL) == requests.map(\.sourceURL))
+    #expect(results.allSatisfy { $0.isSuccess })
     for request in requests {
-      #expect(FileManager.default.fileExists(atPath: request.destinationURL.path))
+      #expect(try StandardImageDecoder.decode(request.destinationURL) == request.image)
     }
+    let outputNames = try FileManager.default.contentsOfDirectory(atPath: tempDir.path)
+    #expect(Set(outputNames) == Set(requests.map { $0.destinationURL.lastPathComponent }))
+  }
+
+  @Test("Cancelling active batch writers drains their stages without starting pending jobs")
+  func cancellingActiveWritersLeavesPendingJobsUnwritten() async throws {
+    defer { try? FileManager.default.removeItem(at: tempDir) }
+    let parameters = ExportParameters(format: .tiff)
+    let requests = (0..<4).map { index in
+      ExportManager.ExportRequest(
+        sourceURL: tempDir.appendingPathComponent("source_\(index).tiff"),
+        destinationURL: tempDir.appendingPathComponent("cancel_active_\(index).tiff"),
+        image: makeTestImage(), parameters: parameters)
+    }
+    let probe = ExportWriterProbe(waitsForRelease: true)
+    defer { probe.release() }
+    let progress = ExportProgressProbe()
+    let manager = ExportManager(writer: probe.write)
+    let task = Task {
+      await manager.exportBatch(requests: requests, maxConcurrent: 2, progress: progress.record)
+    }
+    let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+    while probe.startedCount < 2, ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(probe.startedCount == 2)
+    task.cancel()
+    probe.release()
+    let results = await task.value
+
+    #expect(probe.startedCount == 2)
+    #expect(probe.maximumActiveCount == 2)
+    #expect(
+      progress.events == [
+        .init(completed: 1, total: 4, succeeded: true),
+        .init(completed: 2, total: 4, succeeded: true),
+        .init(completed: 3, total: 4, succeeded: false),
+        .init(completed: 4, total: 4, succeeded: false),
+      ])
+    #expect(results.map(\.sourceURL) == requests.map(\.sourceURL))
+    #expect(results.filter(\.isSuccess).count == 2)
+    #expect(
+      results.filter {
+        ($0.error as? ExportManager.ExportManagerError) == .cancelled
+      }.count == 2)
+    for (request, result) in zip(requests, results) {
+      if result.isSuccess {
+        #expect(try StandardImageDecoder.decode(request.destinationURL) == request.image)
+      } else {
+        #expect(!FileManager.default.fileExists(atPath: request.destinationURL.path))
+      }
+    }
+    let outputNames = try FileManager.default.contentsOfDirectory(atPath: tempDir.path)
+    #expect(Set(outputNames) == Set(probe.completedFilenames))
+  }
+
+  @Test("A failed batch member preserves its destination and removes staging files")
+  func batchFailurePreservesDestinationAndCleansStages() async throws {
+    defer { try? FileManager.default.removeItem(at: tempDir) }
+    let existingURL = tempDir.appendingPathComponent("existing.png")
+    let existingData = Data("existing destination".utf8)
+    try existingData.write(to: existingURL)
+    let outputURL = tempDir.appendingPathComponent("success.png")
+    let image = makeTestImage()
+    let parameters = ExportParameters(format: .png)
+    let requests = [
+      ExportManager.ExportRequest(
+        sourceURL: tempDir.appendingPathComponent("failure.gray"),
+        destinationURL: existingURL, image: makeGrayImage(), parameters: parameters),
+      ExportManager.ExportRequest(
+        sourceURL: tempDir.appendingPathComponent("success.png"),
+        destinationURL: outputURL, image: image, parameters: parameters),
+    ]
+    let results = await ExportManager().exportBatch(requests: requests, maxConcurrent: 2)
+
+    #expect(results.map(\.sourceURL) == requests.map(\.sourceURL))
+    #expect(!results[0].isSuccess)
+    #expect(results[1].isSuccess)
+    #expect(try Data(contentsOf: existingURL) == existingData)
+    #expect(try StandardImageDecoder.decode(outputURL) == image)
+    let outputNames = try FileManager.default.contentsOfDirectory(atPath: tempDir.path)
+    #expect(Set(outputNames) == ["existing.png", "success.png"])
   }
 
   @Test func cancelledBatchReturnsOneResultPerRequestWithoutWriting() async throws {
@@ -526,5 +646,101 @@ struct ExportTests {
       case .lzw: #expect(comp.displayName == "LZW")
       }
     }
+  }
+}
+
+private final class ExportProgressProbe: @unchecked Sendable {
+  struct Event: Equatable {
+    let completed: Int
+    let total: Int
+    let succeeded: Bool
+  }
+
+  private let lock = NSLock()
+  private var recorded: [Event] = []
+
+  var events: [Event] { lock.withLock { recorded } }
+
+  func record(_ completed: Int, _ total: Int, _ succeeded: Bool) {
+    lock.withLock {
+      recorded.append(.init(completed: completed, total: total, succeeded: succeeded))
+    }
+  }
+}
+
+/// The synchronous writer gate verifies overlapping worker execution without
+/// relying on export durations. Its timeouts keep a serialized regression finite.
+private final class ExportWriterProbe: @unchecked Sendable {
+  private let condition = NSCondition()
+  private let waitsForRelease: Bool
+  private let delayedFilename: String?
+  private let peerFilename: String?
+  private var released = false
+  private var started = 0
+  private var active = 0
+  private var maximumActive = 0
+  private var completed: [String] = []
+
+  init(
+    waitsForRelease: Bool = false,
+    delayedFilename: String? = nil,
+    peerFilename: String? = nil
+  ) {
+    self.waitsForRelease = waitsForRelease
+    self.delayedFilename = delayedFilename
+    self.peerFilename = peerFilename
+  }
+
+  var startedCount: Int { condition.withLock { started } }
+  var maximumActiveCount: Int { condition.withLock { maximumActive } }
+  var completedFilenames: [String] { condition.withLock { completed } }
+
+  func release() {
+    condition.lock()
+    released = true
+    condition.broadcast()
+    condition.unlock()
+  }
+
+  func write(_ request: ExportManager.ExportRequest) throws {
+    condition.lock()
+    started += 1
+    active += 1
+    maximumActive = max(maximumActive, active)
+    condition.broadcast()
+    condition.unlock()
+    var succeeded = false
+    defer {
+      condition.lock()
+      active -= 1
+      if succeeded { completed.append(request.destinationURL.lastPathComponent) }
+      condition.broadcast()
+      condition.unlock()
+    }
+    try waitBeforeWrite(filename: request.destinationURL.lastPathComponent)
+    try request.image.write(
+      to: request.destinationURL,
+      format: request.parameters.format,
+      parameters: request.parameters)
+    succeeded = true
+  }
+
+  private func waitBeforeWrite(filename: String) throws {
+    condition.lock()
+    defer { condition.unlock() }
+    let deadline = Date().addingTimeInterval(5)
+    while waitsForRelease ? !released : started < 2 {
+      guard condition.wait(until: deadline) else { throw ProbeError.writerDidNotStart }
+    }
+    if filename == delayedFilename, let peerFilename {
+      while !completed.contains(peerFilename) {
+        guard condition.wait(until: deadline) else { throw ProbeError.peerDidNotFinish }
+      }
+    }
+  }
+
+  private enum ProbeError: Error {
+    case writerDidNotStart
+    case peerDidNotFinish
   }
 }

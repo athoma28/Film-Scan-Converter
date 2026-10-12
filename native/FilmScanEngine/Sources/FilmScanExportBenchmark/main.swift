@@ -192,12 +192,14 @@ struct Options {
   let outputURL: URL
   let repetitions: Int
   let formats: [ExportFormat]
+  let tiffCompression: TiffCompression
   let framePercent: Int
   let allFiles: Bool
   let selectedFilename: String?
   let fileLimit: Int?
   let determinism: Bool
   let corrections: Bool
+  let filmBase: FilmBase?
 }
 
 #if DEBUG
@@ -209,26 +211,35 @@ struct Options {
 private let usage = """
   Usage: FilmScanExportBenchmark RAW_DIRECTORY OUTPUT_JSON [REPETITIONS]
            [--formats=tiff,jpeg,png,dng] [--frame-percent=N]
+           [--tiff-compression=none|lzw]
            [--file=NAME.raf | --all] [--limit=N]
            [--determinism | --corrections]
+           [--film-base=colorC41|colorCyanMask|blackAndWhite|slide|original]
 
   The default run benchmarks the first RAF in lexical order in all formats.
   Every generated image is hashed and deleted immediately after its run; only
   the compact JSON report remains.
 
+  --tiff-compression selects TIFF compression in the ordinary format benchmark
+  (default: lzw), and is recorded in configuration.
+
+  --film-base uses the current neutral photographic controls and selected film
+  base instead of the historical legacy correction workload. It is accepted
+  only in the ordinary format benchmark, and is recorded in configuration.
+
   --determinism repeats full-resolution camera-scan decodes of each selected
   file with stage-boundary SHA-256 capture, writes one LZW TIFF per
   repetition, and reports per-boundary digest agreement so a threaded decode
   candidate's first divergent stage can be isolated. Use at least 5
-  repetitions. --formats is not accepted in this mode.
+  repetitions. --formats and --tiff-compression are not accepted in this mode.
 
   --corrections decodes each selected file once per repetition at full
   resolution, then measures the five documented full-resolution correction
   scenarios (neutral, tone, protected-color, dye-mixing, combined) against
   the same decoded image, reporting per-scenario processing time, Mach
   physical footprint, allocations, and corrected/writer-input/output hashes.
-  One LZW TIFF per scenario is written and removed. --formats is not
-  accepted in this mode.
+  One LZW TIFF per scenario is written and removed. --formats and
+  --tiff-compression are not accepted in this mode.
   """
 
 private func parseOptions() -> Options? {
@@ -239,12 +250,15 @@ private func parseOptions() -> Options? {
   var requestedRepetitions: Int?
   var formats = ExportFormat.allCases
   var formatsExplicit = false
+  var tiffCompression = TiffCompression.lzw
+  var tiffCompressionExplicit = false
   var framePercent = 0
   var allFiles = false
   var selectedFilename: String?
   var fileLimit: Int?
   var determinism = false
   var corrections = false
+  var filmBase: FilmBase?
 
   for argument in extras {
     if argument == "--all" {
@@ -253,6 +267,10 @@ private func parseOptions() -> Options? {
       determinism = true
     } else if argument == "--corrections" {
       corrections = true
+    } else if argument.hasPrefix("--film-base=") {
+      guard let value = FilmBase(rawValue: String(argument.dropFirst("--film-base=".count)))
+      else { return nil }
+      filmBase = value
     } else if argument.hasPrefix("--file=") {
       selectedFilename = String(argument.dropFirst("--file=".count))
     } else if argument.hasPrefix("--frame-percent=") {
@@ -266,6 +284,13 @@ private func parseOptions() -> Options? {
       guard parsed.count == names.count, !parsed.isEmpty else { return nil }
       formats = parsed
       formatsExplicit = true
+    } else if argument.hasPrefix("--tiff-compression=") {
+      guard
+        let value = TiffCompression(
+          rawValue: String(argument.dropFirst("--tiff-compression=".count)))
+      else { return nil }
+      tiffCompression = value
+      tiffCompressionExplicit = true
     } else if argument.hasPrefix("--limit=") {
       guard let value = Int(argument.dropFirst("--limit=".count)), value > 0 else {
         return nil
@@ -285,7 +310,9 @@ private func parseOptions() -> Options? {
   // mode. The two evidence modes are mutually exclusive.
   guard !(determinism && formatsExplicit) else { return nil }
   guard !(corrections && formatsExplicit) else { return nil }
+  guard !(determinism || corrections) || !tiffCompressionExplicit else { return nil }
   guard !(determinism && corrections) else { return nil }
+  guard filmBase == nil || !(determinism || corrections) else { return nil }
   let repetitions = requestedRepetitions ?? (determinism ? 5 : 3)
   guard !determinism || repetitions >= 5 else { return nil }
   guard !corrections || repetitions >= 1 else { return nil }
@@ -294,12 +321,14 @@ private func parseOptions() -> Options? {
     outputURL: URL(fileURLWithPath: arguments[2]),
     repetitions: repetitions,
     formats: (determinism || corrections) ? [.tiff] : formats,
+    tiffCompression: tiffCompression,
     framePercent: framePercent,
     allFiles: allFiles,
     selectedFilename: selectedFilename,
     fileLimit: fileLimit,
     determinism: determinism,
-    corrections: corrections
+    corrections: corrections,
+    filmBase: filmBase
   )
 }
 
@@ -358,13 +387,19 @@ if options.determinism {
 private func runBenchmark(options: Options, files: [URL], scratchDirectory: URL) throws {
   var fileResults = [FileResult]()
   for sourceURL in files {
-    let preview = try RawImageDecoder.extractThumbnail(sourceURL, maxDimension: 640).image
-    var filmNegative = FilmNegativeParams.colourNegative
-    filmNegative.measuredMedians = FilmNegativeProcessing.computeMedians(image: preview)
-    let processingParameters = ProcessingParameters(
-      filmType: .colourNegative,
-      filmNegativeParams: filmNegative
-    )
+    let processingParameters: ProcessingParameters
+    if let filmBase = options.filmBase {
+      processingParameters = filmBase.applyingInvert(
+        to: ProcessingParameters(photoAdjustments: .init()))
+    } else {
+      let preview = try RawImageDecoder.extractThumbnail(sourceURL, maxDimension: 640).image
+      var filmNegative = FilmNegativeParams.colourNegative
+      filmNegative.measuredMedians = FilmNegativeProcessing.computeMedians(image: preview)
+      processingParameters = ProcessingParameters(
+        filmType: .colourNegative,
+        filmNegativeParams: filmNegative
+      )
+    }
 
     var decoderVersion = "unknown"
     var formatResults = [FormatResult]()
@@ -382,6 +417,7 @@ private func runBenchmark(options: Options, files: [URL], scratchDirectory: URL)
             destinationURL: destinationURL,
             processingParameters: processingParameters,
             format: format,
+            tiffCompression: options.tiffCompression,
             framePercent: options.framePercent,
             repetition: repetition
           )
@@ -466,7 +502,10 @@ private func runBenchmark(options: Options, files: [URL], scratchDirectory: URL)
   let report = BenchmarkReport(
     generatedAt: ISO8601DateFormatter().string(from: Date()),
     configuration:
-      "\(buildConfiguration)-mode full-resolution RAW decode and production export path",
+      "\(buildConfiguration)-mode full-resolution RAW decode and production export path; "
+      + (options.filmBase.map { "filmBase=\($0.rawValue), neutral photographic tone version 4" }
+        ?? "historical legacy correction workload")
+      + "; tiffCompression=\(options.tiffCompression.rawValue)",
     repetitions: options.repetitions,
     framePercent: options.framePercent,
     cleanupPolicy:
@@ -963,6 +1002,7 @@ private func measureExport(
   destinationURL: URL,
   processingParameters: ProcessingParameters,
   format: ExportFormat,
+  tiffCompression: TiffCompression,
   framePercent: Int,
   repetition: Int
 ) throws -> MeasuredExportRun {
@@ -994,7 +1034,7 @@ private func measureExport(
     format: format,
     framePercent: framePercent,
     jpegQuality: 0.95,
-    tiffCompression: .lzw
+    tiffCompression: tiffCompression
   )
   let writeMetrics = try output.writeMeasured(
     to: destinationURL,

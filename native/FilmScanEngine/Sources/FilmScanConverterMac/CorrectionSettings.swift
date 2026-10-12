@@ -2,11 +2,42 @@ import AppKit
 import FilmScanEngine
 import Foundation
 
+enum CorrectionAdjustmentGroup: String, CaseIterable, Identifiable {
+  case exposure
+  case tone
+  case colorBalance
+  case curves
+  case grading
+
+  var id: Self { self }
+
+  var title: String {
+    switch self {
+    case .exposure: "Exposure"
+    case .tone: "Tone"
+    case .colorBalance: "Color & Balance"
+    case .curves: "Curves"
+    case .grading: "Grading"
+    }
+  }
+
+  static let all = Set(allCases)
+  static let defaultForSync = all.subtracting([.exposure])
+}
+
 /// A slider/curve/wheel snapshot that can move between scans without changing
 /// film base, invert IDs, or geometry.
 struct CorrectionSettings: Codable, Equatable {
   enum SettingsError: Error, Equatable {
     case unsupportedSchemaVersion(Int)
+  }
+
+  enum TransferError: Error, LocalizedError {
+    case incompatibleLegacyTone
+
+    var errorDescription: String? {
+      "Update legacy tone controls before selectively transferring Tone or Grading between these scans."
+    }
   }
 
   private static let currentSchemaVersion = 2
@@ -31,6 +62,130 @@ struct CorrectionSettings: Codable, Equatable {
 
   func applying(to destination: ProcessingParameters) -> ProcessingParameters {
     recipe.applying(to: destination)
+  }
+
+  /// Partial transfers preserve the destination's tone response as well as its
+  /// unselected controls. A complete transfer retains the existing recipe contract.
+  func applying(
+    to destination: ProcessingParameters,
+    groups: Set<CorrectionAdjustmentGroup>
+  ) throws -> ProcessingParameters {
+    guard !groups.isEmpty else { return destination }
+    if groups == CorrectionAdjustmentGroup.all {
+      if recipe.photoAdjustments.schemaVersion == destination.photoAdjustments.schemaVersion,
+        CorrectionAdjustmentGroup.allCases.allSatisfy({
+          matchesPublicValues(in: destination, group: $0)
+        })
+      {
+        return destination
+      }
+      return applying(to: destination)
+    }
+    // Publicly matching groups must leave their older representation untouched:
+    // migrated integer fields and density-profile defaults can encode the same
+    // slider positions without being interchangeable for the legacy renderer.
+    let changedGroups = Set(groups.filter { !matchesPublicValues(in: destination, group: $0) })
+    guard !changedGroups.isEmpty else { return destination }
+    let source = recipe.photoAdjustments
+    if !changedGroups.isDisjoint(with: [.tone, .grading]),
+      source.usesPhotographicTone != destination.photoAdjustments.usesPhotographicTone
+    {
+      // Version one reverses highlight intent and has no grading-point controls.
+      // Do not silently reinterpret a partial transfer or change unselected tone.
+      throw TransferError.incompatibleLegacyTone
+    }
+    var result = destination
+    if changedGroups.contains(.exposure) {
+      result.photoAdjustments.exposureEV = source.exposureEV
+    }
+    if changedGroups.contains(.tone) {
+      result.photoAdjustments.brightness = source.brightness
+      result.photoAdjustments.contrast = source.contrast
+      result.photoAdjustments.highlights = source.highlights
+      result.photoAdjustments.shadows = source.shadows
+      result.photoAdjustments.whites = source.whites
+      result.photoAdjustments.blacks = source.blacks
+      result.gamma = 0
+      result.shadows = 0
+      result.highlights = 0
+    }
+    if changedGroups.contains(.colorBalance) {
+      result.photoAdjustments.temperatureShiftMired = source.temperatureShiftMired
+      result.photoAdjustments.tint = source.tint
+      result.photoAdjustments.saturation = source.saturation
+      result.photoAdjustments.vibrance = source.vibrance
+      result.photoAdjustments.warmHueRecovery = source.warmHueRecovery
+      if FilmBase.resolved(from: result).usesDensityPrint
+        || result.pendingFilmBaseInitialization == .preservingLook
+      {
+        result.filmNegativeParams.densityCastRemovalStrength = recipe.castCleanup
+        result.filmNegativeParams.densityUnmixStrength = recipe.colorSeparation
+        result.filmNegativeParams.densityNeutralProtection = true
+      }
+      result.syncLegacyColorFieldsFromPhotoAdjustments()
+    }
+    if changedGroups.contains(.curves) {
+      result.curveEnabled = recipe.curveEnabled
+      result.curveControlPoints = recipe.curveControlPoints
+      result.redCurveEnabled = recipe.redCurveEnabled
+      result.redCurveControlPoints = recipe.redCurveControlPoints
+      result.greenCurveEnabled = recipe.greenCurveEnabled
+      result.greenCurveControlPoints = recipe.greenCurveControlPoints
+      result.blueCurveEnabled = recipe.blueCurveEnabled
+      result.blueCurveControlPoints = recipe.blueCurveControlPoints
+    }
+    if changedGroups.contains(.grading) {
+      result.highlightWheel = recipe.highlightWheel
+      result.midtoneWheel = recipe.midtoneWheel
+      result.shadowWheel = recipe.shadowWheel
+      result.photoAdjustments.shadowFloor = source.shadowFloor
+      result.photoAdjustments.midtoneLevel = source.midtoneLevel
+      result.photoAdjustments.highlightCeiling = source.highlightCeiling
+    }
+    return result
+  }
+
+  private func matchesPublicValues(
+    in destination: ProcessingParameters, group: CorrectionAdjustmentGroup
+  ) -> Bool {
+    let source = recipe.photoAdjustments
+    let target = destination.photoAdjustments
+    switch group {
+    case .exposure:
+      return source.exposureEV == target.exposureEV
+    case .tone:
+      return source.brightness == target.brightness && source.contrast == target.contrast
+        && source.highlights == target.highlights && source.shadows == target.shadows
+        && source.whites == target.whites && source.blacks == target.blacks
+    case .colorBalance:
+      guard source.temperatureShiftMired == target.temperatureShiftMired,
+        source.tint == target.tint, source.saturation == target.saturation,
+        source.vibrance == target.vibrance,
+        (source.warmHueRecovery ?? 0) == (target.warmHueRecovery ?? 0)
+      else { return false }
+      guard
+        FilmBase.resolved(from: destination).usesDensityPrint
+          || destination.pendingFilmBaseInitialization == .preservingLook
+      else { return true }
+      let current = LookRecipe.capturing(destination, id: "comparison", title: "Comparison")
+      return recipe.castCleanup == current.castCleanup
+        && recipe.colorSeparation == current.colorSeparation
+    case .curves:
+      return recipe.curveEnabled == destination.curveEnabled
+        && recipe.curveControlPoints == destination.curveControlPoints
+        && recipe.redCurveEnabled == destination.redCurveEnabled
+        && recipe.redCurveControlPoints == destination.redCurveControlPoints
+        && recipe.greenCurveEnabled == destination.greenCurveEnabled
+        && recipe.greenCurveControlPoints == destination.greenCurveControlPoints
+        && recipe.blueCurveEnabled == destination.blueCurveEnabled
+        && recipe.blueCurveControlPoints == destination.blueCurveControlPoints
+    case .grading:
+      return recipe.highlightWheel == destination.highlightWheel
+        && recipe.midtoneWheel == destination.midtoneWheel
+        && recipe.shadowWheel == destination.shadowWheel
+        && source.shadowFloor == target.shadowFloor && source.midtoneLevel == target.midtoneLevel
+        && source.highlightCeiling == target.highlightCeiling
+    }
   }
 
   private enum CodingKeys: String, CodingKey {

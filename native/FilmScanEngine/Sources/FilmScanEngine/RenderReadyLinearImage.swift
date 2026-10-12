@@ -48,20 +48,7 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
     referenceLuminance: Double = 0.18
   ) {
     if parameters.usesPhotographicTone {
-      let count = pixelCount
-      pixels.withUnsafeMutableBufferPointer { buffer in
-        guard let address = buffer.baseAddress else { return }
-        let output = SendableMutableBuffer(address)
-        Self.forEachPixelInParallel(pixelCount: count) { index in
-          let i = index * 3
-          let value = PhotographicTone.apply(
-            red: output.baseAddress[i + 2],
-            green: output.baseAddress[i + 1], blue: output.baseAddress[i], parameters: parameters)
-          output.baseAddress[i] = value.blue
-          output.baseAddress[i + 1] = value.green
-          output.baseAddress[i + 2] = value.red
-        }
-      }
+      applyPhotographicTone(PhotographicTone.Prepared(parameters))
       return
     }
     let hasToneAdjustment =
@@ -145,6 +132,24 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
         sendable.baseAddress[base] = b
         sendable.baseAddress[base + 1] = g
         sendable.baseAddress[base + 2] = r
+      }
+    }
+  }
+
+  /// The photographic renderer shares one preparation across all bounded bands.
+  mutating func applyPhotographicTone(_ prepared: PhotographicTone.Prepared) {
+    let count = pixelCount
+    pixels.withUnsafeMutableBufferPointer { buffer in
+      guard let address = buffer.baseAddress else { return }
+      let output = SendableMutableBuffer(address)
+      Self.forEachPixelInParallel(pixelCount: count) { index in
+        let i = index * 3
+        let value = prepared.apply(
+          red: output.baseAddress[i + 2],
+          green: output.baseAddress[i + 1], blue: output.baseAddress[i])
+        output.baseAddress[i] = value.blue
+        output.baseAddress[i + 1] = value.green
+        output.baseAddress[i + 2] = value.red
       }
     }
   }
@@ -247,18 +252,20 @@ public struct RenderReadyLinearImage: Equatable, Sendable {
     _ parameters: PhotoAdjustmentParameters
   ) {
     guard parameters.hasColorAdjustment else { return }
+    applyProtectedColorAdjustments(ProtectedColorAdjustment.Prepared(parameters))
+  }
 
+  mutating func applyProtectedColorAdjustments(_ prepared: ProtectedColorAdjustment.Prepared) {
     let pixelCount = self.pixelCount
     pixels.withUnsafeMutableBufferPointer { buffer in
       guard let baseAddress = buffer.baseAddress else { return }
       let sendable = SendableMutableBuffer(baseAddress)
       Self.forEachPixelInParallel(pixelCount: pixelCount) { pixelIndex in
         let base = pixelIndex * 3
-        let output = ProtectedColorAdjustment.apply(
+        let output = prepared.apply(
           blue: sendable.baseAddress[base],
           green: sendable.baseAddress[base + 1],
-          red: sendable.baseAddress[base + 2],
-          parameters: parameters
+          red: sendable.baseAddress[base + 2]
         )
         sendable.baseAddress[base] = output.blue
         sendable.baseAddress[base + 1] = output.green
@@ -377,6 +384,125 @@ public enum ProtectedColorAdjustment {
   /// Relative opponent-chroma shift at full temperature or tint. Mid-gray
   /// samples need about this magnitude before a white-balance move is obvious.
   public static let opponentShiftScale = 0.375
+
+  /// Immutable settings for the CPU loop. Pixel-dependent protection and gamut
+  /// arithmetic retain the scalar reference's order.
+  struct Prepared: Sendable {
+    private let finiteBound = exp2(24.0)
+    private let recoveryAmount: Double
+    private let boundaryTolerance: Double
+    private let saturationFactor: Double
+    private let vibrance: Double
+    private let blueShift: Double
+    private let greenShift: Double
+    private let redShift: Double
+
+    init(_ parameters: PhotoAdjustmentParameters) {
+      recoveryAmount = parameters.warmHueRecovery ?? 0
+      boundaryTolerance = parameters.usesPhotographicTone ? 1e-6 : 0
+      saturationFactor = exp2(min(max(parameters.saturation, -1), 1))
+      vibrance = min(max(parameters.vibrance, -1), 1)
+      let temperature = min(max(parameters.temperatureShiftMired / 100, -1), 1)
+      let tint = min(max(parameters.tint, -1), 1)
+      let temperatureGreen =
+        -(ProtectedColorAdjustment.redLuminance - ProtectedColorAdjustment.blueLuminance)
+        / ProtectedColorAdjustment.greenLuminance
+      let tintGreen =
+        -(ProtectedColorAdjustment.redLuminance + ProtectedColorAdjustment.blueLuminance)
+        / ProtectedColorAdjustment.greenLuminance
+      blueShift = -temperature + tint
+      greenShift = temperature * temperatureGreen + tint * tintGreen
+      redShift = temperature + tint
+    }
+
+    func apply(blue: Double, green: Double, red: Double)
+      -> (blue: Double, green: Double, red: Double)
+    {
+      let recovered = WarmHueRecovery.apply(
+        blue: ScalarMath.finiteClamped(blue, bound: finiteBound),
+        green: ScalarMath.finiteClamped(green, bound: finiteBound),
+        red: ScalarMath.finiteClamped(red, bound: finiteBound),
+        amount: recoveryAmount,
+        boundaryTolerance: boundaryTolerance)
+      let b = recovered.blue
+      let g = recovered.green
+      let r = recovered.red
+      let luminance =
+        ProtectedColorAdjustment.blueLuminance * b + ProtectedColorAdjustment.greenLuminance * g
+        + ProtectedColorAdjustment.redLuminance * r
+      guard luminance > 0 else { return (b, g, r) }
+
+      let neutralB = luminance
+      let neutralG = luminance
+      let neutralR = luminance
+      var chromaB = b - neutralB
+      var chromaG = g - neutralG
+      var chromaR = r - neutralR
+
+      let maximum = max(b, g, r)
+      let minimum = min(b, g, r)
+      let saturationMetric = min(max((maximum - minimum) / max(abs(maximum), 1e-9), 0), 1)
+      let gamutRiskProtection = 1 - 0.75 * ScalarMath.smoothstep(0.75, 1, saturationMetric)
+      let highlightProtection = 1 - 0.85 * ScalarMath.smoothstep(0.75, 1.5, luminance)
+
+      let protectedSaturationFactor =
+        1
+        + (saturationFactor - 1) * gamutRiskProtection * highlightProtection
+
+      let vibranceFactor: Double
+      if vibrance >= 0 {
+        let selectivity = pow(1 - saturationMetric, 2)
+        vibranceFactor = 1 + vibrance * selectivity * gamutRiskProtection * highlightProtection
+      } else {
+        vibranceFactor = 1 + vibrance * highlightProtection
+      }
+      let chromaFactor = max(protectedSaturationFactor * vibranceFactor, 0)
+      chromaB *= chromaFactor
+      chromaG *= chromaFactor
+      chromaR *= chromaFactor
+
+      let shiftMagnitude =
+        ProtectedColorAdjustment.opponentShiftScale * luminance * highlightProtection
+      chromaB += blueShift * shiftMagnitude
+      chromaG += greenShift * shiftMagnitude
+      chromaR += redShift * shiftMagnitude
+
+      let desired = (
+        blue: neutralB + chromaB,
+        green: neutralG + chromaG,
+        red: neutralR + chromaR
+      )
+      let ceiling = max(1, luminance * 1.5)
+      guard !ProtectedColorAdjustment.isInGamut(desired, ceiling: ceiling) else { return desired }
+
+      // The neutral point is guaranteed to be in gamut. Each channel therefore
+      // contributes one linear upper bound on movement toward the desired
+      // chroma. Taking the minimum is equivalent to the former 24-step binary
+      // search, without serial per-pixel iteration on either CPU or GPU.
+      var amount = 1.0
+      if chromaB < 0 {
+        amount = min(amount, luminance / -chromaB)
+      } else if chromaB > 0 {
+        amount = min(amount, (ceiling - luminance) / chromaB)
+      }
+      if chromaG < 0 {
+        amount = min(amount, luminance / -chromaG)
+      } else if chromaG > 0 {
+        amount = min(amount, (ceiling - luminance) / chromaG)
+      }
+      if chromaR < 0 {
+        amount = min(amount, luminance / -chromaR)
+      } else if chromaR > 0 {
+        amount = min(amount, (ceiling - luminance) / chromaR)
+      }
+      amount = min(max(amount, 0), 1)
+      return (
+        neutralB + chromaB * amount,
+        neutralG + chromaG * amount,
+        neutralR + chromaR * amount
+      )
+    }
+  }
 
   public static func apply(
     blue: Double,

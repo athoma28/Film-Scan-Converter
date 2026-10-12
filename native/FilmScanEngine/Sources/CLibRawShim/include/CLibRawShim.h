@@ -142,6 +142,10 @@ int fsc_default_heap_statistics(fsc_heap_statistics *output);
 typedef struct {
     uint32_t width;
     uint32_t height;
+    // Authoritative, orientation-adjusted full RAW dimensions, or zero if the
+    // optional metadata adjustment failed. width/height still describe the JPEG.
+    uint32_t source_width;
+    uint32_t source_height;
     const void *data;
     size_t data_size;
     void *_internal;

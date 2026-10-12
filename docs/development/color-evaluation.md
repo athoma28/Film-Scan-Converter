@@ -7,7 +7,11 @@ engine; they do not approximate FSC with an external editor or change app defaul
 
 ## Current compatibility
 
-Reviewed September 25, 2026.
+Workflow migrated and photographically checked September 25 UTC (September 24
+PDT). Documentation, source contracts and local artifact pointers reviewed
+October 2, 2026; the read-only preflight/plan passed then. This documentation pass
+did not repeat the rendering study. See the
+[research registry](../research/index.md) for track status and the evidence map.
 
 The current workflow uses canonical `FilmBase` inversion and public `LookRecipe`
 controls throughout. Native renders capture schema-2 recipes; Python never
@@ -35,10 +39,23 @@ not a complete photographic validation.
 
 ## Start with the existing evidence
 
-If present, inspect `dist/camera-raw-study/skin-review.html`,
-`proimage-review.html`, and `index.html` before running another fit. That directory
-contains the original private study artifacts and is not in git. These paths and
-the previously used localhost port are conveniences, not assumed services.
+Start with the [September 25 follow-through](roadmap-follow-through-2026-09-25.md#reproducible-color-workflow)
+and [verification summary](native-macos.md#verification-summary), then inspect
+the retained structured reports before running another fit. Completed galleries
+and image caches have been retired; regenerate temporary comparisons when a
+photographic question requires them:
+
+| Artifact root | Status and use |
+|---|---|
+| `dist/roadmap-color-v2-2026-09-25/` | Reports from the completed schema-2 cumulative run: 29 stages, 40 registered pairs, 254 exact app-applied recipe/pixel checks, 13 named presets, five frozen preferences and 11 full-resolution study JPEGs checked at the time. Start with `color-study-run.json`, `skin-review-results.json`, `control-probe.json` and full-check reports. Images and galleries are retired. |
+| `dist/xt5-matrix-study-2026-10-03/` | Reports from the complete fixed-recipe X-T5 decoder-policy A/B: 40 pairs, 500 renders and 90 full JPEGs checked at the time. Candidate rejected, with registration review failures retained. Start with the [dated results](../research/xt5-matrix-study-2026-10-03.md), retained `analysis/scores.json.gz` and [reproduction procedure](../research/xt5-matrix-reproduction.md). This is not a rerun of the fitting/preset-publication workflow. |
+| `dist/roadmap-color-2026-09-25/` | Interrupted earlier migration attempt. Retained failure evidence, not a complete baseline. |
+| `dist/camera-raw-study/` | Original schema-1 reports, historical median metadata needed for frozen preference replay, and explicitly retained scan inputs. No guarded-run manifest; galleries and other image caches are retired. |
+
+These are ignored private artifacts, not documentation-site links or files
+available in a clean checkout. Paths and the previously used localhost port are
+conveniences, not assumed services. Later focused tests do not automatically
+repeat this full cohort; inspect their declared coverage in development status.
 
 Read the relevant historical note:
 
@@ -80,6 +97,24 @@ are excluded as targets. Inspect `inventory.json` if several JPEG edits exist;
 do not assume the chosen alternative is the desired edit. Never substitute a
 neighboring frame: `DSCF5672.jpg` does not complete `DSCF5671.RAF`.
 
+Exact preference replay also needs the original
+`dist/camera-raw-study/<stock>/<frame>/metadata.json` for Fuji DSCF3115 and Phoenix
+DSCF3079/DSCF3086. Its historical `medians` are an input to the frozen-settings
+renders and are hashed in run provenance; the tracked ledger alone is insufficient.
+Preserve those files at their canonical paths. Eight archived `scan.bgr16`
+inputs also remain required by the tone/interaction probes. Keep them beside
+their matching `metadata.json` under `dist/camera-raw-study/`:
+
+- `fuji400-fresh/DSCF2833`, `DSCF2892`, `DSCF3115`.
+- `proimage/DSCF5800`, `DSCF5809`.
+- `harmanphoenixii/DSCF3079`, `DSCF3086`, `DSCF3091`.
+
+These are explicit harness inputs, not a reason to retain every historical raster.
+`doctor` checks corpus
+and dependencies but does not verify that these metadata files exist. Confirm
+them before a run; do not substitute new medians or regenerate preference hashes
+to fill that gap.
+
 ```sh
 # Both commands are read-only: check setup, then inspect the command sequence.
 .venv/bin/python native/diagnostics/color-study.py doctor \
@@ -101,8 +136,11 @@ neighboring frame: `DSCF5672.jpg` does not complete `DSCF5671.RAF`.
 
 `--full` adds the existing study-specific full-resolution export cohorts; it does
 not export every photograph. Without it, the run makes proxy-level claims only.
-The complete skin workflow makes hundreds of production renders and multiple
-gigabytes of artifacts; run stages sequentially. `plan` does not execute them.
+The complete skin workflow makes hundreds of production renders and can use
+multiple gigabytes temporarily; run stages sequentially. After review, retain
+results, exact reproduction instructions and the small report/input bundle
+under the [retention policy](documentation-maintenance.md#keeping-evidence-available).
+`plan` does not execute them.
 Use one process per output directory and leave source/input files unchanged
 while it runs.
 
@@ -116,8 +154,9 @@ command with `--resume`. A changed source, selected input, pinned renderer, envi
 workflow, or `--full` setting requires a new output directory. Do not delete or
 edit the manifest to bypass a mismatch.
 
-The runner cannot adopt older populated directories without provenance. Keep
-`dist/camera-raw-study` for historical comparison. Lower-level stage scripts are
+The runner cannot adopt older populated directories without provenance. Retain
+the compact `dist/camera-raw-study` reports and required historical inputs.
+Lower-level stage scripts are
 available for focused experiments, but their caches do **not** enforce freshness.
 Do not mix new engine results with old baselines and call it a fresh comparison.
 The manifest fingerprints inputs, not every generated artifact; it is a resume
@@ -222,14 +261,15 @@ and skin reports require all five snapshots. A mismatch stops the workflow:
 compare settings and decoded pixels, inspect the appearance, and explain the
 change. Encoding/environment differences may affect PNG byte hashes, but do not
 silently regenerate checkpoints to make an assertion pass. Checking unchanged
-archived PNGs alone does not test a changed engine. Preserve the old baseline and
-render the frozen settings with the new engine too.
+archived PNGs alone does not test a changed engine. Preserve the historical
+settings, medians and hashes; render the frozen settings with the new engine too.
+The ledger does not require retaining every generated study image.
 
 ## Files and lower-level entry points
 
 | File / entry point | Contract |
 |---|---|
-| `paired-reference-study.py` | `inventory → preferences → fit → report → basic → refine → transfer → automatic → report`; optional `crop`, `full`. The first report creates `results.json` used by later fits. |
+| `paired-reference-study.py` | `inventory → preferences → fit → report → basic → refine → transfer → automatic → report → crop`; optional `full`. The first report creates `results.json` used by later fits. The runner always includes `crop`; focused direct calls may omit it. |
 | `proimage-color-study.py` | After paired results: `fit → report`; optional `full → report`. Assumes the two named Pro Image frames and saved favorites. |
 | `skin-color-study.py` | After Pro Image: `segment → jacobians → fit → red_jacobians → red_fit → red_shared → joint_proimage → joint_proimage_rgb → joint_proimage_regions → report → publish`; optional `full → publish`. |
 | `inventory.json`, `aligned-inventory.json`, `results.json` | Exact inputs/metadata, exclusions, fitted recipes and scores; absolute frame directories. |
@@ -240,20 +280,15 @@ render the frozen settings with the new engine too.
 | `<variant>.recipe.json`, `<variant>.corrections.json` | Native schema-2 `recipe` plus `requiredFilmBase`; the probe checks exact reproduction on that canonical base. Full parameters remain separate. |
 | `skin-presets.json` | Schema-2 named public recipes with stable IDs; emitted only for accepted changes. Downloading does not install them. |
 | `skin-review-results.json`, `skin-color-results.json` | Selected recipes versus all trials, train/test/region and control-patch measurements. |
-| `skin-profile-revisions.json` | Changed parameter fields plus base recipe/hash; a patch is valid only for its named base. New publication writes this inside the output directory. |
-| `*-full-checks.json`, `*-export.json` | Export dimensions/timing and downsampled full-render comparisons. Skin checks bind the exact selected parameters by SHA-256. |
+| `skin-profile-revisions.json` | Diagnostic parameter patches plus base recipe/hash; a patch is valid only for its named base. Publication writes this inside the output directory. The old tracked schema-1 snapshot is available in Git history. |
+| `color-study-run.json`, numbered stage logs | Source/input/renderer hashes, environment, options, completion state and command output. Interrupted runs and completed runs remain distinct. |
+| `preference-checks.json`, `preferences/**/historical-analysis.json` | Fresh frozen-render checks and the historical median values/source hash used to reproduce them. |
+| `control-probe.json` | Real app-parser results: canonical-base reproduction, exact applied recipe/pixel checks and destination framing/calibration preservation. |
+| `full-resolution-checks.json`, `proimage-full-checks.json`, `skin-full-checks.json`, `*-export.json` | Export dimensions/timing and downsampled full-render comparisons. Skin checks bind the exact selected parameters by SHA-256; the full cohort is a subset of published candidates. |
 
-To record a reviewed skin revision document in the repository explicitly:
-
-```sh
-.venv/bin/python native/diagnostics/skin-color-study.py publish \
-  --output dist/skin-study-next \
-  --revisions-output docs/development/skin-profile-revisions.json
-```
-
-Ordinary `publish` only creates local artifacts; it does not publish externally
-or install presets. Do not overwrite historical research notes merely because a
-new output directory exists.
+`publish` creates local artifacts only; it does not publish externally or
+install presets. Keep per-run diagnostic patches with the output rather than
+checking another generated capture into the documentation tree.
 
 For a focused candidate, create a JSON array of jobs and call
 `native/FilmScanEngine/.build/release/FilmScanLookbook --paired-study=/absolute/jobs.json`.
@@ -313,6 +348,11 @@ compatibility decisions, appropriate tests, and fresh visual/export evidence.
 
 ## Review and handoff
 
+Use the [research evidence workflow](../research/index.md#record-and-hand-off-the-decision)
+for the dated decision record and link it from development status when it changes
+verification. Keep product priorities in the [roadmap](../improvements/MacOS-Native-Roadmap.md).
+Report the source state actually rendered; a preflight date is not a rendering date.
+
 Inspect the whole image plus skin and control-region crops side by side. A local
 server can serve the chosen output directory if needed:
 
@@ -328,9 +368,16 @@ Before reporting success, include the exact cohort/exclusions, baseline and sele
 recipe names, train/test errors with units, individual problem regions, collateral
 changes and failed transfers. Confirm native clipboard validation and, for export
 claims, full-resolution checks for the exact selected settings. Link the local
-gallery and correction documents. State whether the result is a frame-specific
+temporary gallery and correction documents while review is active. State whether the result is a frame-specific
 recipe or a validated reusable profile, and which claims remain untested. Leave
 private RAWs, JPEGs, masks and generated renders out of commits.
+
+When review finishes, retain the dated results and reproduction record, scores,
+settings, individual-region/failed-transfer reports, provenance and necessary
+harness inputs. Remove temporary image/numeric caches and galleries; record
+their retirement rather than leaving instructions to open missing HTML. Historical
+scores remain historical evidence. A fresh run on changed engine sources or
+dependencies must be identified as a new measurement.
 
 Runner safety checks can be exercised without RAW rendering:
 

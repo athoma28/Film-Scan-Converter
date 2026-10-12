@@ -4,6 +4,56 @@ These notes describe versioned macOS artifacts. See
 [development status](docs/development/native-macos.md) for current source
 behavior, verification, and remaining limitations.
 
+## Film Scan Converter 0.3.0 Beta 1 — October 12, 2026 (PDT)
+
+Beta 1 packages version 0.3.0, build 4 of the native macOS application for
+Apple Silicon Macs running macOS 14 or later. It is an ad-hoc-signed technical
+beta and is not Apple-notarized.
+
+- Selective Sync & Paste transfers Exposure, Tone, Color & Balance, Curves,
+  and Grading independently while preserving each destination's film base,
+  calibration, framing, and local repairs. Exposure starts unchecked.
+- Exports default beside each source, with an optional common destination.
+  Queued destinations remain fixed, and late filename collisions preserve
+  existing files and report an error.
+- Editable dust masks, Auto Repair Mask, and a Healing Brush with automatic
+  nearby texture or an Option-click donor. Completed repairs persist,
+  support Undo/Redo, and apply before framing and inversion in preview/export.
+- Relaunch restores open scans, sidebar order, and selection, including paths
+  on disconnected drives. Close All Scans preserves source files and edits.
+- Resizable and collapsible inspector, native editing toolbar, exact numeric
+  adjustment entry, and optional factory-look thumbnails rendered from the scan.
+- RAW revisits can display retained corrected canvases while full detail reloads.
+  Cached CPU preparation reduces repeated geometry work. Photographic correction,
+  X-Trans decoding, and lossless PNG writing include further optimizations.
+- Stronger protection for unreadable settings, stale framing/repair results,
+  cancellation, and Undo/Redo during active adjustment gestures.
+
+Release-source verification passed 924 native tests with 22 intentional skips
+and zero failures, plus all 4,608 CPU/Metal comparator cases within the existing
+2/255 tolerance. Six full-resolution photographs passed same-source preview
+checks and exact reopened production-CPU TIFF checks. The repaired-RAW output,
+three-frame roll/re-export/relaunch workflow, TIFF/JPEG/PNG/DNG output-reader
+contract, and all five freshly rendered preferred-look checkpoints passed.
+Legacy Python, diagnostic runner/contracts, storage-tool safety tests, RAW
+compatibility, strict Swift formatting, documentation links, and a strict MkDocs
+build also passed. The release packager validates the app and extracted ZIP,
+dependency closure, licenses, ad-hoc signatures, and archive checksum. The release
+page records the source commit, artifact hashes, and GitHub Actions acceptance.
+
+Compatibility: repair-bearing settings use schema 3. Earlier builds reject
+these stores instead of discarding repairs; settings without repairs retain
+schema 2. Factory looks and color defaults are unchanged.
+
+Known limitations: the beta is not notarized and independent-Mac installation
+review remains incomplete. Photographic dust quality and real Noise/HDR repeated
+captures need broader review. Stack alignment handles translation only. Processed
+DNG contains RGB output rather than untouched sensor RAW, and reader support
+varies. Restored rolls do not resume enabled stacks, export jobs, flat fields,
+or transient history. Opt-in performance studies and broad camera coverage are
+outside the release regression gates. See [Features](docs/features.md) and
+[development status](docs/development/native-macos.md).
+
 ## Film Scan Converter 0.2.0 Beta 3 — September 25, 2026 (PDT)
 
 Beta 3 packages version 0.2.0, build 3 of the native macOS application for

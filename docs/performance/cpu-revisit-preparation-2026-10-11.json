@@ -1,0 +1,878 @@
+{
+  "schemaVersion": 1,
+  "kind": "Frozen ordinary release baseline/candidate/baseline recheck; descriptive CPU cached-revisit point-edit evidence",
+  "collectedDate": "2026-10-11",
+  "hardware": "Apple M4 Pro, Mac16,7, 48 GiB RAM",
+  "operatingSystem": "macOS 15.7.9 (24G830)",
+  "swift": "Apple Swift 6.1.2 (swiftlang-6.1.2.1.2, clang-1700.0.13.5)",
+  "libraw": "0.22.2",
+  "runOrder": ["baseline-1", "baseline-2", "candidate-1", "candidate-2", "baseline-recheck"],
+  "cohorts": {
+    "baseline": {
+      "sourceRevision": "2b4da0930df3ccebc08c1e3197a8ec242df448ac",
+      "sourceState": "dirty working tree frozen in matching source archive",
+      "compiledTestBundleSHA256": "0ba223f537a0e9294ac4acbbd647ba3ed3db92496ca757db0772202e1a38906f",
+      "sourceManifest": {
+        "file": "workflow-source-manifest.json",
+        "sha256": "8964a9336b3fe78c6dff6ca5464dbda336a39b7bb380d2d7351657c15bb38801"
+      },
+      "sourceArchive": {
+        "file": "workflow-validation-source.tar.gz",
+        "sha256": "b01712499a35c817c3a5f15ac7dd39526fd58049e9add3ee534de988378425b9"
+      },
+      "compiledSourceSHA256": {
+        "harness": "6ae6363158ebdd8de0795a55cdd757c9bd10e269670cf0237b3c88748c5ee651",
+        "appModel": "9c388a8019960ad6af40836edf837916bc24672c47740f0837ff3e9e2bc1f09c",
+        "previewSessionCache": "e401bbfffa1281076072d2b1acc8bc90b92a1d2b0d0454f09ef620a565a9eaf8",
+        "cpuPreparation": "b560ea54f72bacedab8f80b8ec02245853ac69f9be8eeea4d5bb48bc85763cc4"
+      }
+    },
+    "candidate": {
+      "sourceRevision": "2b4da0930df3ccebc08c1e3197a8ec242df448ac",
+      "sourceState": "dirty working tree frozen in matching source archive",
+      "compiledTestBundleSHA256": "35d258660f6f82a7301de4ef7c7626e1829f494bee4c51c02131c3c1e18ee3ed",
+      "sourceManifest": {
+        "file": "cpu-retention-candidate-manifest.json",
+        "sha256": "dcf2965080a2991388a73effebe3906689e8e57379b84a9cc128808bb6935436"
+      },
+      "sourceArchive": {
+        "file": "cpu-retention-candidate-source.tar.gz",
+        "sha256": "da22c987395b625ab4026990b47886deac1ecdd66638e7067cf715eaadeaa903"
+      },
+      "compiledSourceSHA256": {
+        "harness": "6ae6363158ebdd8de0795a55cdd757c9bd10e269670cf0237b3c88748c5ee651",
+        "appModel": "26ae2fd0177da7304038e5108dc6e69a25e9a1e8a5da84b369bfe9add491b4e6",
+        "previewSessionCache": "1182b67d30566713fef16e339f17c4e0ddc127efbfe9f16b742b88fcee6cc8d6",
+        "cpuPreparation": "88356736d7705aaeaa6041253cc255293468522f0a4c9515840884ae7a6dd91e"
+      }
+    }
+  },
+  "workload": {
+    "frames": ["fuji400-fresh/DSCF2833.RAF", "fuji400-fresh/DSCF2851.RAF"],
+    "selectedFrame": "fuji400-fresh/DSCF2833.RAF",
+    "filmBase": "colorC41",
+    "toneSchemaVersion": 4,
+    "straightenAngleDegrees": 2,
+    "perspectiveCorners": [
+      [0.08, 0.1],
+      [0.93, 0.08],
+      [0.91, 0.92],
+      [0.1, 0.9]
+    ],
+    "timedExposureEV": [0, 0.25],
+    "cacheCountLimit": 2,
+    "normalMachineByteBudget": true,
+    "pairsPerRun": 3,
+    "pairOrders": [
+      ["warm", "revisit"],
+      ["revisit", "warm"],
+      ["warm", "revisit"]
+    ],
+    "sourceDimensions": [7752, 5184],
+    "fullOutputDimensions": [6580, 4476],
+    "pollingMilliseconds": 10,
+    "onePassSourcePixelsSHA256": "2006fdc9a9662c0ceb255273d23f587accaf18058ccb739012ac0d1a6e19ff40",
+    "sameSourceProductionCPUOutputSHA256": "f734c30534292b53567e2f99c890aef71c73662501df819fba206fcf70adc7f9",
+    "targetParametersSHA256": "b4d35c4c3030f872759b91f679dc66cac063f5bf7caed0f3008315beee8460b8",
+    "targetParametersHashEncoding": "UTF-8 Python JSON sorted keys and separators comma/colon; derived only for this report"
+  },
+  "columnDefinitions": {
+    "timingsMilliseconds": ["publicationMilliseconds", "publicationAndStatisticsSettledMilliseconds", "lastPreparationMilliseconds", "lastQueueWaitMilliseconds", "lastRenderMilliseconds", "lastInteractionPublicationMilliseconds"],
+    "workCounters": ["publishedFullSourceDecodes", "corrections", "renderedCacheHits", "statisticsComputations", "submittedSnapshots", "displayedRenders"],
+    "state": ["chargedPreviewBytes", "sessions", "retainedCanvases", "physicalFootprintBytes", "processLifetimePeakPhysicalFootprintBytes", "reusableBytes"],
+    "processMemory": ["physicalFootprintBytes", "processLifetimePeakPhysicalFootprintBytes", "reusableBytes"]
+  },
+  "runs": [
+    {
+      "id": "baseline-1",
+      "compiledCohort": "baseline",
+      "generatedAt": "2026-10-11T06:48:39Z",
+      "originalReport": {
+        "file": "cached-revisit-baseline-1.json",
+        "sha256": "38636c377c69e02f7b6c3ef5d08b679ad47273913a2322dee171c922d056183b"
+      },
+      "fullLog": {
+        "file": "cached-revisit-baseline-1.log",
+        "sha256": "d339c50d2f2851cb2a4ea7b105996a71ff0c3ae925543c30e6798af3941e3760"
+      },
+      "executionTimeSourceSHA256": {
+        "appModel": "9c388a8019960ad6af40836edf837916bc24672c47740f0837ff3e9e2bc1f09c",
+        "cpuPreparation": "b560ea54f72bacedab8f80b8ec02245853ac69f9be8eeea4d5bb48bc85763cc4",
+        "harness": "6ae6363158ebdd8de0795a55cdd757c9bd10e269670cf0237b3c88748c5ee651",
+        "previewSessionCache": "e401bbfffa1281076072d2b1acc8bc90b92a1d2b0d0454f09ef620a565a9eaf8"
+      },
+      "executionTimeSourceMatchesCompiledCohort": true,
+      "runtimeExecutableSHA256": "c5fc2f081babd734b89c150874b34cb5bc2f2dbfa4a203bdafdd3b96087f78a7",
+      "runtimeExecutableRole": "runtime executable",
+      "thermalStateAtStart": 0,
+      "inputSHA256": {
+        "fuji400-fresh/DSCF2833.RAF": "c71a348038f397743360ca41a2ac099f51b81c1dd81e319b39e39a05711f2fe7",
+        "fuji400-fresh/DSCF2851.RAF": "834867cca5f2aca9511ca6d4335320b554b48af0f30a31b110f2a27a34320b9e"
+      },
+      "warmupMilliseconds": 3460.155542,
+      "pairs": [
+        {
+          "index": 0,
+          "order": ["warm", "revisit"],
+          "samples": [
+            {
+              "arm": "warm",
+              "timingsMilliseconds": [1009.687292, 1009.770875, 0.242, 0.092417, 1001.586708, 1002.007834],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [810951648, 2, 0, 251529904, 844286640, 1790476288],
+              "afterState": [810951648, 2, 0, 369593080, 844286640, 1790574592]
+            },
+            {
+              "arm": "revisit",
+              "cachedReturn": {
+                "milliseconds": 58.623584,
+                "workCounters": [0, 0, 1, 0, 1, 1],
+                "beforeDepartureState": [810951648, 2, 0, 251808504, 844286640, 1908408320],
+                "beforeReturnState": [958265760, 2, 1, 103451480, 844286640, 2089418752],
+                "afterReturnState": [811059072, 2, 2, 103533448, 844286640, 2089418752]
+              },
+              "timingsMilliseconds": [1223.040917, 1223.143875, 0.187333, 0.061792, 1215.0645, 1215.409167],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [811059072, 2, 2, 103533448, 844286640, 2089418752],
+              "afterState": [987771552, 2, 2, 221219792, 844286640, 2089451520]
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "order": ["revisit", "warm"],
+          "samples": [
+            {
+              "arm": "revisit",
+              "cachedReturn": {
+                "milliseconds": 15.212834,
+                "workCounters": [0, 0, 1, 0, 1, 1],
+                "beforeDepartureState": [987771552, 2, 2, 103418832, 844286640, 2207268864],
+                "beforeReturnState": [811059072, 2, 2, 103435216, 844286640, 2207268864],
+                "afterReturnState": [811059072, 2, 2, 103435216, 844286640, 2207268864]
+              },
+              "timingsMilliseconds": [1210.876042, 1222.126375, 0.178666, 0.052584, 1203.783291, 1204.11075],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [811059072, 2, 2, 103435216, 844286640, 2207268864],
+              "afterState": [987771552, 2, 2, 132942824, 844286640, 2207285248]
+            },
+            {
+              "arm": "warm",
+              "timingsMilliseconds": [1011.909417, 1011.996, 0.17175, 0.052958, 1003.843667, 1004.157917],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [987771552, 2, 2, 103500776, 844286640, 2236743680],
+              "afterState": [987771552, 2, 2, 103517160, 844286640, 2236743680]
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "order": ["warm", "revisit"],
+          "samples": [
+            {
+              "arm": "warm",
+              "timingsMilliseconds": [1002.584791, 1002.650833, 0.193, 0.053375, 994.620708, 994.9655],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [987771552, 2, 2, 103517160, 844286640, 2236743680],
+              "afterState": [987771552, 2, 2, 103549928, 844286640, 2236743680]
+            },
+            {
+              "arm": "revisit",
+              "cachedReturn": {
+                "milliseconds": 13.693208,
+                "workCounters": [0, 0, 1, 0, 1, 1],
+                "beforeDepartureState": [987771552, 2, 2, 103549928, 844286640, 2236743680],
+                "beforeReturnState": [811059072, 2, 2, 103549928, 844286640, 2236743680],
+                "afterReturnState": [811059072, 2, 2, 103549928, 844286640, 2236743680]
+              },
+              "timingsMilliseconds": [1219.365459, 1233.622625, 0.19575, 0.057875, 1217.284375, 1217.633375],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [811059072, 2, 2, 103549928, 844286640, 2236743680],
+              "afterState": [987771552, 2, 2, 103566312, 844286640, 2236743680]
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "publicationMilliseconds": {
+          "warmMedian": 1009.687292,
+          "revisitMedian": 1219.365459,
+          "pairedRevisitMinusWarm": [213.35362500000008, 198.96662500000014, 216.7806680000001],
+          "medianPairedRevisitMinusWarm": 213.35362500000008,
+          "pairedRevisitDividedByWarm": [1.211306635916341, 1.1966249366369917, 1.2162217798893382]
+        },
+        "publicationAndStatisticsSettledMilliseconds": {
+          "warmMedian": 1009.770875,
+          "revisitMedian": 1223.143875,
+          "pairedRevisitMinusWarm": [213.37299999999993, 210.13037500000007, 230.97179199999994],
+          "medianPairedRevisitMinusWarm": 213.37299999999993,
+          "pairedRevisitDividedByWarm": [1.2113083326947809, 1.2076395311839179, 1.2303611430800057]
+        },
+        "lastRenderMilliseconds": {
+          "warmMedian": 1001.586708,
+          "revisitMedian": 1215.0645,
+          "pairedRevisitMinusWarm": [213.4777919999999, 199.93962399999998, 222.66366699999992],
+          "medianPairedRevisitMinusWarm": 213.4777919999999,
+          "pairedRevisitDividedByWarm": [1.2131396016888834, 1.1991740652182648, 1.223867917899815]
+        }
+      },
+      "memoryBeforeModel": [9716312, 9716312, 0],
+      "initialWarmState": [810951648, 2, 0, 251529904, 844286640, 1790476288],
+      "beforeOracle": [987771552, 2, 2, 103582696, 844286640, 2236743680],
+      "afterOracle": [987771552, 2, 2, 103730320, 844286640, 2477867008],
+      "afterCloseAll": [0, 0, 0, 74009744, 844286640, 2507325440],
+      "memoryAfterVerifiedModelRelease": [74009744, 844286640, 2507325440],
+      "previewBudgetBytes": 3221225472
+    },
+    {
+      "id": "baseline-2",
+      "compiledCohort": "baseline",
+      "generatedAt": "2026-10-11T06:49:34Z",
+      "originalReport": {
+        "file": "cached-revisit-baseline-2.json",
+        "sha256": "cb2a937da3bce33a686062dade2b49c759f09763b83f106d216ba479d1a32f38"
+      },
+      "fullLog": {
+        "file": "cached-revisit-baseline-2.log",
+        "sha256": "6686c6f1ddd8e6bb7040161121d0fb1998bf123ee12bc9add6f4b11f1ebaf475"
+      },
+      "executionTimeSourceSHA256": {
+        "appModel": "9c388a8019960ad6af40836edf837916bc24672c47740f0837ff3e9e2bc1f09c",
+        "cpuPreparation": "b560ea54f72bacedab8f80b8ec02245853ac69f9be8eeea4d5bb48bc85763cc4",
+        "harness": "6ae6363158ebdd8de0795a55cdd757c9bd10e269670cf0237b3c88748c5ee651",
+        "previewSessionCache": "e401bbfffa1281076072d2b1acc8bc90b92a1d2b0d0454f09ef620a565a9eaf8"
+      },
+      "executionTimeSourceMatchesCompiledCohort": true,
+      "runtimeExecutableSHA256": "c5fc2f081babd734b89c150874b34cb5bc2f2dbfa4a203bdafdd3b96087f78a7",
+      "runtimeExecutableRole": "runtime executable",
+      "thermalStateAtStart": 0,
+      "inputSHA256": {
+        "fuji400-fresh/DSCF2833.RAF": "c71a348038f397743360ca41a2ac099f51b81c1dd81e319b39e39a05711f2fe7",
+        "fuji400-fresh/DSCF2851.RAF": "834867cca5f2aca9511ca6d4335320b554b48af0f30a31b110f2a27a34320b9e"
+      },
+      "warmupMilliseconds": 3373.081042,
+      "pairs": [
+        {
+          "index": 0,
+          "order": ["warm", "revisit"],
+          "samples": [
+            {
+              "arm": "warm",
+              "timingsMilliseconds": [997.088292, 1010.464292, 0.233792, 0.069708, 994.913667, 995.296],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [810951648, 2, 0, 255773216, 848742944, 1788067840],
+              "afterState": [810951648, 2, 0, 373918312, 848742944, 1792606208]
+            },
+            {
+              "arm": "revisit",
+              "cachedReturn": {
+                "milliseconds": 59.413916,
+                "workCounters": [0, 0, 1, 0, 1, 1],
+                "beforeDepartureState": [810951648, 2, 0, 255085160, 848742944, 1914519552],
+                "beforeReturnState": [958265760, 2, 1, 108432072, 848742944, 2091548672],
+                "afterReturnState": [811059072, 2, 2, 108497632, 848742944, 2091548672]
+              },
+              "timingsMilliseconds": [1256.042875, 1256.119958, 0.176958, 0.057708, 1243.432875, 1243.741],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [811059072, 2, 2, 108497632, 848742944, 2091548672],
+              "afterState": [987771552, 2, 2, 226380608, 848742944, 2091499520]
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "order": ["revisit", "warm"],
+          "samples": [
+            {
+              "arm": "revisit",
+              "cachedReturn": {
+                "milliseconds": 10.681208,
+                "workCounters": [0, 0, 1, 0, 1, 1],
+                "beforeDepartureState": [987771552, 2, 2, 108596032, 848742944, 2209316864],
+                "beforeReturnState": [811059072, 2, 2, 108596032, 848742944, 2209316864],
+                "afterReturnState": [811059072, 2, 2, 108596032, 848742944, 2209316864]
+              },
+              "timingsMilliseconds": [1231.082666, 1231.15225, 0.1605, 0.050291, 1217.68325, 1217.986708],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [811059072, 2, 2, 108596032, 848742944, 2209316864],
+              "afterState": [987771552, 2, 2, 138103640, 848742944, 2209333248]
+            },
+            {
+              "arm": "warm",
+              "timingsMilliseconds": [1019.336958, 1034.528791, 0.17925, 0.057625, 1011.59175, 1011.910917],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [987771552, 2, 2, 108661592, 848742944, 2238791680],
+              "afterState": [987771552, 2, 2, 108661592, 848742944, 2238808064]
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "order": ["warm", "revisit"],
+          "samples": [
+            {
+              "arm": "warm",
+              "timingsMilliseconds": [1023.201958, 1023.248458, 0.18075, 0.057667, 1014.176166, 1014.509542],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [987771552, 2, 2, 108710744, 848742944, 2238808064],
+              "afterState": [987771552, 2, 2, 108710744, 848742944, 2238808064]
+            },
+            {
+              "arm": "revisit",
+              "cachedReturn": {
+                "milliseconds": 15.425167,
+                "workCounters": [0, 0, 1, 0, 1, 1],
+                "beforeDepartureState": [987771552, 2, 2, 108612440, 848742944, 2238906368],
+                "beforeReturnState": [811059072, 2, 2, 108612440, 848742944, 2238906368],
+                "afterReturnState": [811059072, 2, 2, 108612440, 848742944, 2238906368]
+              },
+              "timingsMilliseconds": [1230.464667, 1245.537083, 0.15875, 0.050333, 1226.81025, 1227.107958],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [811059072, 2, 2, 108612440, 848742944, 2238906368],
+              "afterState": [987771552, 2, 2, 108612440, 848742944, 2238906368]
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "publicationMilliseconds": {
+          "warmMedian": 1019.336958,
+          "revisitMedian": 1231.082666,
+          "pairedRevisitMinusWarm": [258.95458300000007, 211.74570800000004, 207.26270899999997],
+          "medianPairedRevisitMinusWarm": 211.74570800000004,
+          "pairedRevisitDividedByWarm": [1.2597107849702842, 1.2077288636874874, 1.2025628541652966]
+        },
+        "publicationAndStatisticsSettledMilliseconds": {
+          "warmMedian": 1023.248458,
+          "revisitMedian": 1245.537083,
+          "pairedRevisitMinusWarm": [245.655666, 196.62345900000014, 222.2886249999999],
+          "medianPairedRevisitMinusWarm": 222.2886249999999,
+          "pairedRevisitDividedByWarm": [1.2431116744499469, 1.1900608863770135, 1.217238172471304]
+        },
+        "lastRenderMilliseconds": {
+          "warmMedian": 1011.59175,
+          "revisitMedian": 1226.81025,
+          "pairedRevisitMinusWarm": [248.51920799999994, 206.0915, 212.63408400000003],
+          "medianPairedRevisitMinusWarm": 212.63408400000003,
+          "pairedRevisitDividedByWarm": [1.2497897217045666, 1.203729913772033, 1.209661882351907]
+        }
+      },
+      "memoryBeforeModel": [7569912, 7569912, 425984],
+      "initialWarmState": [810951648, 2, 0, 255773216, 848742944, 1788067840],
+      "beforeOracle": [987771552, 2, 2, 108612440, 848742944, 2238906368],
+      "afterOracle": [987771552, 2, 2, 108727296, 848742944, 2480029696],
+      "afterCloseAll": [0, 0, 0, 79006720, 848742944, 2509488128],
+      "memoryAfterVerifiedModelRelease": [79006720, 848742944, 2509488128],
+      "previewBudgetBytes": 3221225472
+    },
+    {
+      "id": "candidate-1",
+      "compiledCohort": "candidate",
+      "generatedAt": "2026-10-11T07:00:35Z",
+      "originalReport": {
+        "file": "cached-revisit-candidate-1.json",
+        "sha256": "441fc299c30643b79f1458876a8f12463a1574e36523e125afedb1cfa4da0793"
+      },
+      "fullLog": {
+        "file": "cached-revisit-candidate-1.log",
+        "sha256": "2d4315f24ad67d93ed419ab85190081d656d60075e477d9852aeaa120bafde76"
+      },
+      "executionTimeSourceSHA256": {
+        "appModel": "26ae2fd0177da7304038e5108dc6e69a25e9a1e8a5da84b369bfe9add491b4e6",
+        "cpuPreparation": "88356736d7705aaeaa6041253cc255293468522f0a4c9515840884ae7a6dd91e",
+        "harness": "6ae6363158ebdd8de0795a55cdd757c9bd10e269670cf0237b3c88748c5ee651",
+        "previewSessionCache": "1182b67d30566713fef16e339f17c4e0ddc127efbfe9f16b742b88fcee6cc8d6"
+      },
+      "executionTimeSourceMatchesCompiledCohort": true,
+      "runtimeExecutableSHA256": "c5fc2f081babd734b89c150874b34cb5bc2f2dbfa4a203bdafdd3b96087f78a7",
+      "runtimeExecutableRole": "runtime executable",
+      "thermalStateAtStart": 0,
+      "inputSHA256": {
+        "fuji400-fresh/DSCF2833.RAF": "c71a348038f397743360ca41a2ac099f51b81c1dd81e319b39e39a05711f2fe7",
+        "fuji400-fresh/DSCF2851.RAF": "834867cca5f2aca9511ca6d4335320b554b48af0f30a31b110f2a27a34320b9e"
+      },
+      "warmupMilliseconds": 3283.378542,
+      "pairs": [
+        {
+          "index": 0,
+          "order": ["warm", "revisit"],
+          "samples": [
+            {
+              "arm": "warm",
+              "timingsMilliseconds": [1060.954625, 1061.027291, 0.195792, 0.0605, 1047.718917, 1048.073917],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [810951648, 2, 0, 255675008, 847694464, 1794293760],
+              "afterState": [810951648, 2, 0, 373754568, 847694464, 1797308416]
+            },
+            {
+              "arm": "revisit",
+              "cachedReturn": {
+                "milliseconds": 58.329708,
+                "workCounters": [0, 0, 1, 0, 1, 1],
+                "beforeDepartureState": [810951648, 2, 0, 256019144, 847694464, 1915125760],
+                "beforeReturnState": [1134978240, 2, 1, 462588832, 847694464, 1915142144],
+                "afterReturnState": [1164484032, 2, 2, 462654416, 847694464, 1915142144]
+              },
+              "timingsMilliseconds": [1032.317875, 1032.3967499999999, 0.189208, 0.063084, 1020.990916, 1021.347042],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [1164484032, 2, 2, 462654416, 847694464, 1915142144],
+              "afterState": [1164484032, 2, 2, 580406296, 847694464, 1915109376]
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "order": ["revisit", "warm"],
+          "samples": [
+            {
+              "arm": "revisit",
+              "cachedReturn": {
+                "milliseconds": 15.604708,
+                "workCounters": [0, 0, 1, 0, 1, 1],
+                "beforeDepartureState": [1164484032, 2, 2, 462588952, 847694464, 2033680384],
+                "beforeReturnState": [1164484032, 2, 2, 462588952, 847694464, 2033680384],
+                "afterReturnState": [1164484032, 2, 2, 462588952, 847694464, 2033680384]
+              },
+              "timingsMilliseconds": [1000.665958, 1000.742375, 0.183584, 0.063791, 992.069709, 992.437334],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [1164484032, 2, 2, 462588952, 847694464, 2033680384],
+              "afterState": [1164484032, 2, 2, 492063792, 847694464, 2033680384]
+            },
+            {
+              "arm": "warm",
+              "timingsMilliseconds": [1028.054458, 1028.122791, 0.190167, 0.055875, 1017.618, 1017.957167],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [1164484032, 2, 2, 462621744, 847694464, 2063138816],
+              "afterState": [1164484032, 2, 2, 462654512, 847694464, 2063138816]
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "order": ["warm", "revisit"],
+          "samples": [
+            {
+              "arm": "warm",
+              "timingsMilliseconds": [1018.160875, 1033.361208, 0.173, 0.050333, 1016.394625, 1016.718292],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [1164484032, 2, 2, 462670896, 847694464, 2063138816],
+              "afterState": [1164484032, 2, 2, 462670896, 847694464, 2063138816]
+            },
+            {
+              "arm": "revisit",
+              "cachedReturn": {
+                "milliseconds": 12.311292,
+                "workCounters": [0, 0, 1, 0, 1, 1],
+                "beforeDepartureState": [1164484032, 2, 2, 462670896, 847694464, 2063138816],
+                "beforeReturnState": [1164484032, 2, 2, 462670896, 847694464, 2063138816],
+                "afterReturnState": [1164484032, 2, 2, 462670896, 847694464, 2063138816]
+              },
+              "timingsMilliseconds": [1054.560125, 1054.634542, 0.188, 0.055042, 1043.634625, 1043.975792],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [1164484032, 2, 2, 462670896, 847694464, 2063138816],
+              "afterState": [1164484032, 2, 2, 462670896, 847694464, 2063138816]
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "publicationMilliseconds": {
+          "warmMedian": 1028.054458,
+          "revisitMedian": 1032.317875,
+          "pairedRevisitMinusWarm": [-28.63675000000012, -27.388500000000022, 36.39924999999994],
+          "medianPairedRevisitMinusWarm": -27.388500000000022,
+          "pairedRevisitDividedByWarm": [0.9730085063722682, 0.9733589015767878, 1.0357499987416035]
+        },
+        "publicationAndStatisticsSettledMilliseconds": {
+          "warmMedian": 1033.361208,
+          "revisitMedian": 1032.3967499999999,
+          "pairedRevisitMinusWarm": [-28.63054100000022, -27.38041599999997, 21.273333999999977],
+          "medianPairedRevisitMinusWarm": -27.38041599999997,
+          "pairedRevisitDividedByWarm": [0.9730162067999057, 0.973368535120821, 1.0205865420874207]
+        },
+        "lastRenderMilliseconds": {
+          "warmMedian": 1017.618,
+          "revisitMedian": 1020.990916,
+          "pairedRevisitMinusWarm": [-26.72800099999995, -25.548291000000063, 27.239999999999895],
+          "medianPairedRevisitMinusWarm": -25.548291000000063,
+          "pairedRevisitDividedByWarm": [0.9744893400640966, 0.9748940260490675, 1.0268006139839632]
+        }
+      },
+      "memoryBeforeModel": [7569936, 7569936, 491520],
+      "initialWarmState": [810951648, 2, 0, 255675008, 847694464, 1794293760],
+      "beforeOracle": [1164484032, 2, 2, 462687280, 847694464, 2063138816],
+      "afterOracle": [1164484032, 2, 2, 462785704, 847694464, 2239856640],
+      "afterCloseAll": [0, 0, 0, 79629480, 847694464, 2622750720],
+      "memoryAfterVerifiedModelRelease": [79629480, 847694464, 2622750720],
+      "previewBudgetBytes": 3221225472
+    },
+    {
+      "id": "candidate-2",
+      "compiledCohort": "candidate",
+      "generatedAt": "2026-10-11T07:01:41Z",
+      "originalReport": {
+        "file": "cached-revisit-candidate-2.json",
+        "sha256": "14870d2e3fedec16703c4daca9733cca3e01f33e6cc04f98bae5e55f02fa4401"
+      },
+      "fullLog": {
+        "file": "cached-revisit-candidate-2.log",
+        "sha256": "75f56a768f208a937b14ce5a33921dd2fd60a41b4d1469f804d78d2a86d57daa"
+      },
+      "executionTimeSourceSHA256": {
+        "appModel": "26ae2fd0177da7304038e5108dc6e69a25e9a1e8a5da84b369bfe9add491b4e6",
+        "cpuPreparation": "88356736d7705aaeaa6041253cc255293468522f0a4c9515840884ae7a6dd91e",
+        "harness": "6ae6363158ebdd8de0795a55cdd757c9bd10e269670cf0237b3c88748c5ee651",
+        "previewSessionCache": "1182b67d30566713fef16e339f17c4e0ddc127efbfe9f16b742b88fcee6cc8d6"
+      },
+      "executionTimeSourceMatchesCompiledCohort": true,
+      "runtimeExecutableSHA256": "c5fc2f081babd734b89c150874b34cb5bc2f2dbfa4a203bdafdd3b96087f78a7",
+      "runtimeExecutableRole": "runtime executable",
+      "thermalStateAtStart": 0,
+      "inputSHA256": {
+        "fuji400-fresh/DSCF2833.RAF": "c71a348038f397743360ca41a2ac099f51b81c1dd81e319b39e39a05711f2fe7",
+        "fuji400-fresh/DSCF2851.RAF": "834867cca5f2aca9511ca6d4335320b554b48af0f30a31b110f2a27a34320b9e"
+      },
+      "warmupMilliseconds": 3356.390125,
+      "pairs": [
+        {
+          "index": 0,
+          "order": ["warm", "revisit"],
+          "samples": [
+            {
+              "arm": "warm",
+              "timingsMilliseconds": [995.2205, 1006.90725, 0.223416, 0.071125, 990.395417, 990.795916],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [810951648, 2, 0, 266308320, 858655456, 1795915776],
+              "afterState": [810951648, 2, 0, 384371496, 858655456, 1795932160]
+            },
+            {
+              "arm": "revisit",
+              "cachedReturn": {
+                "milliseconds": 52.773167,
+                "workCounters": [0, 0, 1, 0, 1, 1],
+                "beforeDepartureState": [810951648, 2, 0, 266570536, 858655456, 1913749504],
+                "beforeReturnState": [1134978240, 2, 1, 473271296, 858655456, 1913749504],
+                "afterReturnState": [1164484032, 2, 2, 473254960, 858655456, 1913749504]
+              },
+              "timingsMilliseconds": [975.9425, 991.154333, 0.194584, 0.062583, 972.711917, 973.067792],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [1164484032, 2, 2, 473254960, 858655456, 1913749504],
+              "afterState": [1164484032, 2, 2, 591039608, 858655456, 1913749504]
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "order": ["revisit", "warm"],
+          "samples": [
+            {
+              "arm": "revisit",
+              "cachedReturn": {
+                "milliseconds": 15.738875,
+                "workCounters": [0, 0, 1, 0, 1, 1],
+                "beforeDepartureState": [1164484032, 2, 2, 473271416, 858655456, 2031566848],
+                "beforeReturnState": [1164484032, 2, 2, 473271416, 858655456, 2031566848],
+                "afterReturnState": [1164484032, 2, 2, 473271416, 858655456, 2031566848]
+              },
+              "timingsMilliseconds": [988.289542, 988.371875, 0.191334, 0.053041, 980.485542, 980.832292],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [1164484032, 2, 2, 473271416, 858655456, 2031566848],
+              "afterState": [1164484032, 2, 2, 502746256, 858655456, 2031566848]
+            },
+            {
+              "arm": "warm",
+              "timingsMilliseconds": [990.093416, 1005.227208, 0.178666, 0.049667, 985.679667, 986.00875],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [1164484032, 2, 2, 473287824, 858655456, 2061041664],
+              "afterState": [1164484032, 2, 2, 473287824, 858655456, 2061041664]
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "order": ["warm", "revisit"],
+          "samples": [
+            {
+              "arm": "warm",
+              "timingsMilliseconds": [986.98, 987.045292, 0.180542, 0.054042, 976.645416, 976.978709],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [1164484032, 2, 2, 473304208, 858655456, 2061041664],
+              "afterState": [1164484032, 2, 2, 473336976, 858655456, 2061041664]
+            },
+            {
+              "arm": "revisit",
+              "cachedReturn": {
+                "milliseconds": 15.305583,
+                "workCounters": [0, 0, 1, 0, 1, 1],
+                "beforeDepartureState": [1164484032, 2, 2, 473353360, 858655456, 2064072704],
+                "beforeReturnState": [1164484032, 2, 2, 473353360, 858655456, 2064072704],
+                "afterReturnState": [1164484032, 2, 2, 473353360, 858655456, 2064072704]
+              },
+              "timingsMilliseconds": [991.608709, 991.656417, 0.198584, 0.053958, 980.675333, 981.022167],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [1164484032, 2, 2, 473353360, 858655456, 2064072704],
+              "afterState": [1164484032, 2, 2, 473369744, 858655456, 2064072704]
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "publicationMilliseconds": {
+          "warmMedian": 990.093416,
+          "revisitMedian": 988.289542,
+          "pairedRevisitMinusWarm": [-19.27800000000002, -1.8038740000000644, 4.628708999999958],
+          "medianPairedRevisitMinusWarm": -1.8038740000000644,
+          "pairedRevisitDividedByWarm": [0.9806294183047877, 0.9981780769664264, 1.0046897698028328]
+        },
+        "publicationAndStatisticsSettledMilliseconds": {
+          "warmMedian": 1005.227208,
+          "revisitMedian": 991.154333,
+          "pairedRevisitMinusWarm": [-15.752917000000025, -16.855332999999973, 4.6111250000000155],
+          "medianPairedRevisitMinusWarm": -15.752917000000025,
+          "pairedRevisitDividedByWarm": [0.9843551459183554, 0.9832323151762522, 1.0046716447941884]
+        },
+        "lastRenderMilliseconds": {
+          "warmMedian": 985.679667,
+          "revisitMedian": 980.485542,
+          "pairedRevisitMinusWarm": [-17.68349999999998, -5.1941249999999854, 4.029917000000069],
+          "medianPairedRevisitMinusWarm": -5.1941249999999854,
+          "pairedRevisitDividedByWarm": [0.9821450102691661, 0.9947304127558918, 1.0041262846617407]
+        }
+      },
+      "memoryBeforeModel": [7619088, 7619088, 442368],
+      "initialWarmState": [810951648, 2, 0, 266308320, 858655456, 1795915776],
+      "beforeOracle": [1164484032, 2, 2, 473369744, 858655456, 2064072704],
+      "afterOracle": [1164484032, 2, 2, 473517320, 858655456, 2240790528],
+      "afterCloseAll": [0, 0, 0, 90361096, 858655456, 2623684608],
+      "memoryAfterVerifiedModelRelease": [90361096, 858655456, 2623684608],
+      "previewBudgetBytes": 3221225472
+    },
+    {
+      "id": "baseline-recheck",
+      "compiledCohort": "baseline",
+      "generatedAt": "2026-10-11T07:02:41Z",
+      "originalReport": {
+        "file": "cached-revisit-baseline-recheck.json",
+        "sha256": "c145fa6c4dbdd5d129191ea33f26ec668a2adc9b32cc68c1b6467d33f7d8203b"
+      },
+      "fullLog": {
+        "file": "cached-revisit-baseline-recheck.log",
+        "sha256": "38be012f035767d437cf9bf4cee0610119c7c45c0cd17df9abaa62af63cdcdcb"
+      },
+      "executionTimeSourceSHA256": {
+        "appModel": "26ae2fd0177da7304038e5108dc6e69a25e9a1e8a5da84b369bfe9add491b4e6",
+        "cpuPreparation": "88356736d7705aaeaa6041253cc255293468522f0a4c9515840884ae7a6dd91e",
+        "harness": "6ae6363158ebdd8de0795a55cdd757c9bd10e269670cf0237b3c88748c5ee651",
+        "previewSessionCache": "1182b67d30566713fef16e339f17c4e0ddc127efbfe9f16b742b88fcee6cc8d6"
+      },
+      "executionTimeSourceMatchesCompiledCohort": false,
+      "runtimeExecutableSHA256": "c5fc2f081babd734b89c150874b34cb5bc2f2dbfa4a203bdafdd3b96087f78a7",
+      "runtimeExecutableRole": "runtime executable",
+      "thermalStateAtStart": 0,
+      "inputSHA256": {
+        "fuji400-fresh/DSCF2833.RAF": "c71a348038f397743360ca41a2ac099f51b81c1dd81e319b39e39a05711f2fe7",
+        "fuji400-fresh/DSCF2851.RAF": "834867cca5f2aca9511ca6d4335320b554b48af0f30a31b110f2a27a34320b9e"
+      },
+      "warmupMilliseconds": 3327.690416,
+      "pairs": [
+        {
+          "index": 0,
+          "order": ["warm", "revisit"],
+          "samples": [
+            {
+              "arm": "warm",
+              "timingsMilliseconds": [1026.237417, 1041.463583, 0.249583, 0.0835, 1023.248792, 1023.6725],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [810951648, 2, 0, 256936648, 849005256, 1798209536],
+              "afterState": [810951648, 2, 0, 374262544, 849005256, 1798995968]
+            },
+            {
+              "arm": "revisit",
+              "cachedReturn": {
+                "milliseconds": 62.322084,
+                "workCounters": [0, 0, 1, 0, 1, 1],
+                "beforeDepartureState": [810951648, 2, 0, 256527120, 849005256, 1919860736],
+                "beforeReturnState": [958265760, 2, 1, 109431664, 849005256, 2096578560],
+                "afterReturnState": [811059072, 2, 2, 109497224, 849005256, 2096578560]
+              },
+              "timingsMilliseconds": [1249.629375, 1264.659083, 0.206542, 0.06075, 1243.5133329999999, 1243.861875],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [811059072, 2, 2, 109497224, 849005256, 2096578560],
+              "afterState": [987771552, 2, 2, 227052520, 849005256, 2096873472]
+            }
+          ]
+        },
+        {
+          "index": 1,
+          "order": ["revisit", "warm"],
+          "samples": [
+            {
+              "arm": "revisit",
+              "cachedReturn": {
+                "milliseconds": 15.597708,
+                "workCounters": [0, 0, 1, 0, 1, 1],
+                "beforeDepartureState": [987771552, 2, 2, 109251560, 849005256, 2214690816],
+                "beforeReturnState": [811059072, 2, 2, 109251560, 849005256, 2214690816],
+                "afterReturnState": [811059072, 2, 2, 109251560, 849005256, 2214690816]
+              },
+              "timingsMilliseconds": [1230.372, 1243.556792, 0.189459, 0.055583, 1226.674708, 1227.012417],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [811059072, 2, 2, 109251560, 849005256, 2214690816],
+              "afterState": [987771552, 2, 2, 138742784, 849005256, 2214690816]
+            },
+            {
+              "arm": "warm",
+              "timingsMilliseconds": [1053.950708, 1054.005541, 0.181209, 0.049958, 1042.547, 1042.860292],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [987771552, 2, 2, 109284352, 849005256, 2244165632],
+              "afterState": [987771552, 2, 2, 109284352, 849005256, 2244165632]
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "order": ["warm", "revisit"],
+          "samples": [
+            {
+              "arm": "warm",
+              "timingsMilliseconds": [1024.654583, 1039.795125, 0.170542, 0.054291, 1022.931917, 1023.242125],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [987771552, 2, 2, 109317120, 849005256, 2244165632],
+              "afterState": [987771552, 2, 2, 109349888, 849005256, 2247180288]
+            },
+            {
+              "arm": "revisit",
+              "cachedReturn": {
+                "milliseconds": 15.485791,
+                "workCounters": [0, 0, 1, 0, 1, 1],
+                "beforeDepartureState": [987771552, 2, 2, 109415424, 849005256, 2247180288],
+                "beforeReturnState": [811059072, 2, 2, 109415424, 849005256, 2247180288],
+                "afterReturnState": [811059072, 2, 2, 109415424, 849005256, 2247180288]
+              },
+              "timingsMilliseconds": [1248.8865, 1248.9703749999999, 0.157125, 0.045958, 1236.301667, 1236.608708],
+              "workCounters": [0, 1, 0, 1, 1, 1],
+              "beforeState": [811059072, 2, 2, 109415424, 849005256, 2247180288],
+              "afterState": [987771552, 2, 2, 109464576, 849005256, 2247180288]
+            }
+          ]
+        }
+      ],
+      "summary": {
+        "publicationMilliseconds": {
+          "warmMedian": 1026.237417,
+          "revisitMedian": 1248.8865,
+          "pairedRevisitMinusWarm": [223.39195799999993, 176.421292, 224.23191700000007],
+          "medianPairedRevisitMinusWarm": 223.39195799999993,
+          "pairedRevisitDividedByWarm": [1.2176805818024465, 1.1673904582642018, 1.2188365920771957]
+        },
+        "publicationAndStatisticsSettledMilliseconds": {
+          "warmMedian": 1041.463583,
+          "revisitMedian": 1248.9703749999999,
+          "pairedRevisitMinusWarm": [223.19550000000004, 189.5512510000001, 209.17524999999978],
+          "medianPairedRevisitMinusWarm": 209.17524999999978,
+          "pairedRevisitDividedByWarm": [1.2143094618412595, 1.1798389511502578, 1.2011696775362355]
+        },
+        "lastRenderMilliseconds": {
+          "warmMedian": 1023.248792,
+          "revisitMedian": 1236.301667,
+          "pairedRevisitMinusWarm": [220.2645409999999, 184.12770799999998, 213.36974999999995],
+          "medianPairedRevisitMinusWarm": 213.36974999999995,
+          "pairedRevisitDividedByWarm": [1.2152600058969822, 1.1766133402139185, 1.2085864625534017]
+        }
+      },
+      "memoryBeforeModel": [7569960, 7569960, 442368],
+      "initialWarmState": [810951648, 2, 0, 256936648, 849005256, 1798209536],
+      "beforeOracle": [987771552, 2, 2, 109464576, 849005256, 2247180288],
+      "afterOracle": [987771552, 2, 2, 109644968, 849005256, 2488303616],
+      "afterCloseAll": [0, 0, 0, 79924392, 849005256, 2517762048],
+      "memoryAfterVerifiedModelRelease": [79924392, 849005256, 2517762048],
+      "previewBudgetBytes": 3221225472
+    }
+  ],
+  "aggregate": {
+    "publicationMilliseconds": {
+      "baselineWarmRunMedianRange": [1009.687292, 1026.237417],
+      "candidateWarmRunMedianRange": [990.093416, 1028.054458],
+      "baselineRevisitRunMedianRangeIncludingPostCandidateRecheck": [1219.365459, 1248.8865],
+      "candidateRevisitRunMedianRange": [988.289542, 1032.317875],
+      "descriptiveRevisitMedianReductionRangeMilliseconds": [187.04758400000014, 260.5969580000001],
+      "descriptiveRevisitMedianReductionRangePercent": [15.339747621963774, 20.86634437957333],
+      "baselineMedianPairedPenaltyRunRange": [211.74570800000004, 223.39195799999993],
+      "candidateMedianPairedPenaltyRunRange": [-27.388500000000022, -1.8038740000000644]
+    },
+    "publicationAndStatisticsSettledMilliseconds": {
+      "baselineWarmRunMedianRange": [1009.770875, 1041.463583],
+      "candidateWarmRunMedianRange": [1005.227208, 1033.361208],
+      "baselineRevisitRunMedianRangeIncludingPostCandidateRecheck": [1223.143875, 1248.9703749999999],
+      "candidateRevisitRunMedianRange": [991.154333, 1032.3967499999999],
+      "descriptiveRevisitMedianReductionRangeMilliseconds": [190.7471250000001, 257.8160419999999],
+      "descriptiveRevisitMedianReductionRangePercent": [15.594823217342292, 20.642286411317002],
+      "baselineMedianPairedPenaltyRunRange": [209.17524999999978, 222.2886249999999],
+      "candidateMedianPairedPenaltyRunRange": [-27.38041599999997, -15.752917000000025]
+    },
+    "lastRenderMilliseconds": {
+      "baselineWarmRunMedianRange": [1001.586708, 1023.248792],
+      "candidateWarmRunMedianRange": [985.679667, 1017.618],
+      "baselineRevisitRunMedianRangeIncludingPostCandidateRecheck": [1215.0645, 1236.301667],
+      "candidateRevisitRunMedianRange": [980.485542, 1020.990916],
+      "descriptiveRevisitMedianReductionRangeMilliseconds": [194.07358399999998, 255.81612499999994],
+      "descriptiveRevisitMedianReductionRangePercent": [15.972286574087214, 20.692047242867616],
+      "baselineMedianPairedPenaltyRunRange": [212.63408400000003, 213.4777919999999],
+      "candidateMedianPairedPenaltyRunRange": [-25.548291000000063, -5.1941249999999854]
+    }
+  },
+  "footprintTradeoff": {
+    "beforeOracle": {
+      "baselinePhysicalBytesRange": [103582696, 109464576],
+      "candidatePhysicalBytesRange": [462687280, 473369744],
+      "baselinePhysicalMiBRange": [98.7841567993164, 104.3935546875],
+      "candidatePhysicalMiBRange": [441.2529754638672, 451.44056701660156],
+      "descriptiveCandidateMinusBaselinePhysicalMiBRange": [336.8594207763672, 352.65641021728516]
+    },
+    "afterOracle": {
+      "baselinePhysicalBytesRange": [103730320, 109644968],
+      "candidatePhysicalBytesRange": [462785704, 473517320],
+      "baselinePhysicalMiBRange": [98.92494201660156, 104.56558990478516],
+      "candidatePhysicalMiBRange": [441.34683990478516, 451.58130645751953]
+    },
+    "afterCloseAll": {
+      "baselinePhysicalBytesRange": [74009744, 79924392],
+      "candidatePhysicalBytesRange": [79629480, 90361096],
+      "baselinePhysicalMiBRange": [70.58119201660156, 76.22183990478516],
+      "candidatePhysicalMiBRange": [75.94058990478516, 86.17505645751953]
+    },
+    "memoryAfterVerifiedModelRelease": {
+      "baselinePhysicalBytesRange": [74009744, 79924392],
+      "candidatePhysicalBytesRange": [79629480, 90361096],
+      "baselinePhysicalMiBRange": [70.58119201660156, 76.22183990478516],
+      "candidatePhysicalMiBRange": [75.94058990478516, 86.17505645751953]
+    },
+    "processLifetimePeakPhysicalBytesRange": {
+      "baseline": [844286640, 849005256],
+      "candidate": [847694464, 858655456]
+    }
+  },
+  "chargedBytesBeforeOracle": {
+    "baseline": 987771552,
+    "candidate": 1164484032,
+    "candidateMinusBaseline": 176712480,
+    "candidateMinusBaselineMiB": 168.52615356445312
+  },
+  "guards": {
+    "timedEditCount": 30,
+    "allTimedEditsZeroAcceptedFullDecodes": true,
+    "allTimedEditsExactlyOneCorrection": true,
+    "allCachedAReturnsZeroCorrectionAndExactlyOneRenderCacheHit": true,
+    "allTimedFullRastersMatchFreshSameSourceProductionCPU": true,
+    "sameTargetParametersAcrossAllRuns": true,
+    "RAWBytesUnchangedInEveryPassingRun": true,
+    "harnessSHA256IdenticalAcrossCompiledCohorts": true
+  },
+  "limits": ["Five processes with three alternating pairs each describe this two-RAW CPU geometry workload; ranges are not confidence intervals or population-tail estimates.", "Timers cover programmatic committed setter to model publication, worker render, and statistics settling; no gesture/proxy, native input, screen, export, photographic quality, or Metal parity claim.", "Decode, first full warp, source hashing, reset to zero and final production CPU oracle are outside timed edits. Warmup includes untimed pixel hashing and is not an import-latency metric.", "CPU preparation loss on baseline cached revisits is a source-ownership inference. lastPreparationMilliseconds is request preparation, not a geometry-build timer.", "Physical footprint after timed work is much higher in candidate. The observed physical increase is not explained as one geometry allocation; allocator/page lifetimes and other owners are not separately attributed.", "Charged bytes, process physical footprint, reusable pages and process-lifetime peak are distinct. Peak includes untimed decoding/hashing/oracle work.", "AfterCloseAll still has test-held source guards; verified model release is sampled after the measurement helper and its guards leave scope. Reusable allocator pages may remain.", "The default byte budget bounds retained-session admission; selected oversized sessions can exceed it. This two-session cohort does not establish longer-roll capacity, lower memory use, or OS-pressure behavior.", "Accepted full-source decode counts exclude discarded native results and native work cancelled before publication.", "Original external source manifests/archives and test-bundle fingerprints identify compiled cohorts. Runtime executable fingerprint identifies swiftpm-testing-helper. Baseline recheck execution-time source hashes describe the candidate checkout and must not be used as its compiled-source identity.", "Native and test sources differed outside this timed workload; the timed harness and RAW inputs were unchanged. No arbitrary cache purge or physically cold-disk claim.", "The machine was not established quiescent. A subsequent 07:11 UTC read-only check showed unrelated CPU workloads; they were left alone. Serial study execution and original-binary bracketing do not eliminate external-load variability."],
+  "environmentControl": {
+    "studyExecution": "Five study processes ran serially, with two initial baselines, two candidates, and an original-binary baseline recheck.",
+    "machineQuiescence": "Not guaranteed. A subsequent read-only process check at 2026-10-11T07:11Z showed other CPU workloads running.",
+    "intervention": "Other workloads were left running; no system caches were purged.",
+    "interpretation": "Bracketing and matched within-process warm controls reduce some drift concerns; unrelated activity remains a limitation and these are descriptive samples."
+  }
+}

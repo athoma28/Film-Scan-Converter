@@ -35,20 +35,19 @@ changes, which were preserved.
   and photographic output SHA-256s are in the local manifests.
 
 Canonical local artifacts:
-[`dist/tone-control-audit-2026-09-22-final/`](../../dist/tone-control-audit-2026-09-22-final/index.html),
-including the [measured curves](../../dist/tone-control-audit-2026-09-22-final/tone-curves.png),
-[ramp data](../../dist/tone-control-audit-2026-09-22-final/ramps.json),
-[content metrics](../../dist/tone-control-audit-2026-09-22-final/content-metrics.json),
-[timings](../../dist/tone-control-audit-2026-09-22-final/performance.json), and
-[provenance](../../dist/tone-control-audit-2026-09-22-final/manifest.json).
+`dist/tone-control-audit-2026-09-22-final/index.html`,
+including `tone-curves.png`, `ramps.json`, `content-metrics.json`,
+`performance.json`, and `manifest.json` in the same directory.
 These private/generated artifacts remain ignored and are not part of git.
+Use the [diagnostic tools guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/native/diagnostics/README.md)
+for reproduction. The operator descriptions and line ranges below refer to the
+audited source; later changes are documented in the successor studies above.
 
 ## Findings
 
 ### P1 — Brightness directly creates a gray floor or clips shadows
 
-[`RenderReadyLinearImage.swift`](../../native/FilmScanEngine/Sources/FilmScanEngine/RenderReadyLinearImage.swift)
-lines 58–90 implement:
+At the audit checkpoint, `RenderReadyLinearImage.swift` lines 58–90 implemented:
 
 ```text
 RGB = RGB × 2^exposureEV

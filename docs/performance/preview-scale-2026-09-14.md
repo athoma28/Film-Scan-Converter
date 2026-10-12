@@ -2,17 +2,20 @@
 
 **Dated implementation and measurement record.** The 2048px interaction proxy
 remains part of the app, but these timings and memory observations predate
-full-preview retention across navigation and CPU fallback use of the same
-bounded source. Current supported GPU zoomed inspection uses a full-source
-visible region; CPU fallback processes the full source. Use the
+full-preview retention across navigation and later CPU overview/viewport work.
+Supported GPU zoomed inspection uses a full-source visible region. Eligible
+photographic CPU requests now use an overview plus exact visible detail after
+complete geometry preparation; their settled refinement is still complete.
+See the [September 27 implementation](implementation-2026-09-27.md) and
+[September 28 requested-overview follow-up](cpu-point-work-2026-09-28.md) for
+those changes. Routing and byte counts below describe September 14. Use the
 [preview architecture](../development/realtime-preview-plan.md) for current
 ownership and scheduling and the [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md) to rerun
 the opt-in workload after changes.
 
-September 14, 2026. This follows the editing measurements and promotion gates in
-the [performance research plan](research-directions-2026-09-12.md). It measures
-the retained real-RAW renderer at the app's draft, inspect, and full-sensor tiers,
-then implements a bounded interaction raster for continuous point-control edits.
+September 14, 2026. This measures the retained real-RAW renderer at the app's
+draft, inspect, and full-sensor tiers, then implements a bounded interaction
+raster for continuous point-control edits.
 
 ## Outcome
 

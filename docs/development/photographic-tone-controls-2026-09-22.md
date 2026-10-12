@@ -133,10 +133,10 @@ and ACR. They do not establish mouse-to-screen latency or ACR speed parity.
 
 Local, ignored artifacts:
 
-- [Ramps, six-frame sweeps, hashes and timings](../../dist/tone-controls-fixed-final-2026-09-22/index.html)
-- [Additional-frame contact sheet](../../dist/tone-controls-fixed-final-2026-09-22/heldout-contact.png)
-- [Five preferred-look checks](../../dist/tone-controls-fixed-final-2026-09-22/preferences/checks.json)
-- [Full-resolution checks](../../dist/tone-full-output-2026-09-22/checks.json)
+- Ramps, six-frame sweeps, hashes and timings: `dist/tone-controls-fixed-final-2026-09-22/index.html`.
+- Additional-frame contact sheet: `dist/tone-controls-fixed-final-2026-09-22/heldout-contact.png`.
+- Five preferred-look checks: `dist/tone-controls-fixed-final-2026-09-22/preferences/checks.json`.
+- Full-resolution checks: `dist/tone-full-output-2026-09-22/checks.json`.
 
 The archived 900px inputs and fresh full-resolution exports use different
 preview/full decode paths and analysis samples. Their central-region, lightly

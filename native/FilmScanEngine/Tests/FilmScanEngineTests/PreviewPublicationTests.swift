@@ -106,7 +106,11 @@ struct PreviewPublicationTests {
     }
 
     gate.release(4)
-    try await waitUntil { !model.isRendering }
+    try await waitUntil {
+      !model.isRendering && model.previewStatisticsRevision == model.publishedRenderRevision
+    }
+    #expect(model.previewImage != nil)
+    #expect(model.previewStatistics.sampleCount > 0)
     #expect(model.publishedPreviewParameters == model.parameters)
     #expect(model.publishedPreviewParameters?.temperature == 50)
     #expect(model.renderStats.displayedRenders == displayedBefore + 5)
@@ -175,6 +179,7 @@ struct PreviewPublicationTests {
       gate.releaseAll()
     }
     let published = model.renderStats.displayedRenders
+    let droppedBefore = model.renderStats.droppedSnapshots
     model.setExposureEV(0.25)
     try await waitUntil { gate.arrivals.count == 1 }
     for index in 1...8 {
@@ -190,6 +195,8 @@ struct PreviewPublicationTests {
     gate.release(1)
     try await waitUntil { !model.isRendering }
     #expect(gate.arrivals.count == 2)
+    #expect(model.renderStats.submittedSnapshots > model.renderStats.displayedRenders)
+    #expect(model.renderStats.droppedSnapshots > droppedBefore)
     #expect(model.publishedPreviewParameters == model.parameters)
     #expect(model.parameters.photoAdjustments.exposureEV == 0.8)
   }

@@ -935,6 +935,69 @@ public enum FilmNegativeProcessing {
     return applyCalibratedMonochromeInversion(image: image, params: params)
   }
 
+  /// Resolves source-independent curve data and the already measured frame gains
+  /// once for all photographic pixels, without introducing a quantized lookup.
+  struct PreparedPhotographicInversion: Sendable {
+    private struct Channel: Sendable {
+      let gain: Double
+      let knots: [Double]
+      let tailRate: Double
+
+      init(curve: [Double], gain: Double) {
+        self.gain = gain
+        knots = (0...10).map { (i: Int) -> Double in
+          let indexFraction: Double = Double(i) / 10
+          let remainingFraction: Double = 1 - indexFraction
+          let curveComponent: Double = 0.997 * curve[i]
+          let slopeComponent: Double = 0.003 * remainingFraction
+          return curveComponent + slopeComponent
+        }
+        let end = knots[10]
+        tailRate = max(10 * (knots[9] - end) / max(end, 1e-9), 0.01)
+      }
+    }
+
+    private let monochrome: Bool
+    private let channels: [Channel]
+    private let exposureGain: Double
+
+    init(params: FilmNegativeParams) {
+      monochrome = params.rendering == .calibratedMonochrome
+      exposureGain = exp2(params.monochromeExposureEV)
+      if monochrome {
+        let definition = calibratedMonochromeDefinition(for: params.calibratedMonochromeProfile)
+        channels = [
+          Channel(
+            curve: definition.curve,
+            gain: calibratedMonochromeInputGain(
+              measuredMedians: params.measuredMedians,
+              profile: params.calibratedMonochromeProfile))
+        ]
+      } else {
+        let definition = calibratedColorDefinition(for: params.calibratedColorProfile)
+        let gains = calibratedColorInputGains(
+          measuredMedians: params.measuredMedians, profile: params.calibratedColorProfile)
+        channels = [
+          Channel(curve: definition.curves[0], gain: gains.blue),
+          Channel(curve: definition.curves[1], gain: gains.green),
+          Channel(curve: definition.curves[2], gain: gains.red),
+        ]
+      }
+    }
+
+    func value(_ value: Double, channel: Int) -> Double {
+      let prepared = channels[monochrome ? 0 : channel]
+      let exposed = max(value * prepared.gain * exposureGain, 0)
+      if exposed > 1 {
+        return prepared.knots[10] * exp(-prepared.tailRate * (exposed - 1))
+      }
+      let position = exposed * 10
+      let lower = min(Int(position), 9)
+      let t = position - Double(lower)
+      return prepared.knots[lower] * (1 - t) + prepared.knots[lower + 1] * t
+    }
+  }
+
   /// Version-2 curve evaluation: retain float precision, give historical flat
   /// knots a small strict slope, and extend the tail rather than clamp scan input.
   public static func photographicCalibratedValue(
