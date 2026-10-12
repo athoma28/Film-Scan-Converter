@@ -149,11 +149,12 @@ and [research index](../research/index.md) to find reports by question.
 ### October 12: 0.3.0 Beta 1 release-source verification
 
 The release source is identified by tag `v0.3.0-beta.1`, version 0.3.0/build 4.
-Local gates ran against the final native implementation and tests before the
-release commit; the 412 recorded package/source/test/fixture/diagnostic hashes
-remained unchanged across the final gates. Release metadata and documentation
-were updated for publication. Untracked inspiration originals remain outside
-the release source; private scans and generated outputs remain ignored.
+Local gates ran against the native production implementation shipped unchanged
+in this release. The initial 412 package/source/test/fixture/diagnostic hashes
+remained unchanged across those gates. The test-only CI follow-through below
+records the subsequent assertion compatibility changes. Release metadata and
+documentation were updated for publication. Concurrent inspiration-asset cleanup
+is preserved separately; private scans and generated outputs remain ignored.
 
 On arm64 macOS 15.7.9 (24G830), Swift 6.1.2 and LibRaw 0.22.2, with normal macOS
 graphics access:
@@ -179,6 +180,17 @@ graphics access:
 - C/C++ RAW compatibility, strict Swift formatting, legacy Python (24 tests,
   one opt-in skip), diagnostic runner/recipe contracts, 73 storage-tool tests,
   documentation links and strict MkDocs build passed.
+
+The initial macOS 14 CI compile on Xcode 16.2 rejected throwing expressions
+inside two thumbnail assertions and could not type-check a compound optional
+budget assertion. Two test files now calculate those values before the macros;
+assertion coverage and all production hashes remain unchanged. The focused
+release check passed **27 tests: 26 passed, one intentional sustained-measurement
+skip, zero failures, 117.700 s** after rebuilding. The complete local suite above
+was not repeated after these test-only changes; final macOS 14/15 CI acceptance
+and the release source commit are recorded on the release page. The focused
+command is in the test guide. Earlier candidate hashes remain in the ignored
+release evidence alongside the final package record.
 
 Commands and switches remain in the [test guide](https://github.com/athoma28/Film-Scan-Converter/blob/main/tests/README.md)
 and [Building](building.md). Ignored `dist/release-0.3.0-beta.1/` retains source

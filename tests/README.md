@@ -41,6 +41,17 @@ assembles an unsigned beta on macOS 15. CI does not contain the private RAW
 corpus or enable the performance/roll gates. A passing CI run therefore does not
 establish local RAW parity, packaged-app interaction, or current performance.
 
+For a focused RAW metadata and Xcode 16.2 assertion-compatibility check:
+
+```sh
+swift test --disable-sandbox -c release --package-path native/FilmScanEngine \
+  --no-parallel --filter 'RawImageDecoderTests|SustainedPreviewPerformanceTests'
+```
+
+This compiles the sustained-preview harness but leaves its measurement disabled
+unless explicitly enabled. Keep throwing work and compound budget calculations
+outside test macros so the supported older toolchain can compile the assertions.
+
 ### Current default coverage
 
 These suites cover the current film-base/look workflow and preview changes;

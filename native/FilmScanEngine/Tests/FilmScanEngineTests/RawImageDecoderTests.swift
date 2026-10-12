@@ -656,6 +656,7 @@ struct RawImageDecoderTests {
     let rawURL = try #require(representativeRawURL)
 
     let thumbnail = try RawImageDecoder.extractThumbnail(rawURL)
+    let fullDimensions = try RawImageDecoder.fullResolutionDimensions(rawURL)
 
     #expect(thumbnail.width > 0)
     #expect(thumbnail.height > 0)
@@ -664,8 +665,7 @@ struct RawImageDecoderTests {
     #expect(thumbnail.image.channels == 3)
     #expect(thumbnail.image.pixels.count == thumbnail.width * thumbnail.height * 3)
     #expect(thumbnail.image.makePreviewCGImage() != nil)
-    #expect(
-      thumbnail.fullResolutionDimensions == (try RawImageDecoder.fullResolutionDimensions(rawURL)))
+    #expect(thumbnail.fullResolutionDimensions == fullDimensions)
   }
 
   @Test(
@@ -678,14 +678,14 @@ struct RawImageDecoderTests {
     let rawURL = try #require(representativeRawURL)
 
     let thumbnail = try RawImageDecoder.extractThumbnail(rawURL, maxDimension: 640)
+    let fullDimensions = try RawImageDecoder.fullResolutionDimensions(rawURL)
 
     #expect(max(thumbnail.width, thumbnail.height) <= 640)
     #expect(max(thumbnail.width, thumbnail.height) >= 600)
     #expect(thumbnail.image.width == thumbnail.width)
     #expect(thumbnail.image.height == thumbnail.height)
     #expect(thumbnail.image.pixels.count == thumbnail.width * thumbnail.height * 3)
-    #expect(
-      thumbnail.fullResolutionDimensions == (try RawImageDecoder.fullResolutionDimensions(rawURL)))
+    #expect(thumbnail.fullResolutionDimensions == fullDimensions)
   }
 
   @Test(

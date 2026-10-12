@@ -41,6 +41,10 @@ build also passed. The release packager validates the app and extracted ZIP,
 dependency closure, licenses, ad-hoc signatures, and archive checksum. The release
 page records the source commit, artifact hashes, and GitHub Actions acceptance.
 
+Two subsequent assertion-only changes for Xcode 16.2 compatibility passed the
+focused RAW release suite (26 passed, one intentional measurement skip). The
+production implementation and preferred-look ledger remained unchanged.
+
 Compatibility: repair-bearing settings use schema 3. Earlier builds reject
 these stores instead of discarding repairs; settings without repairs retain
 schema 2. Factory looks and color defaults are unchanged.

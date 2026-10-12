@@ -83,8 +83,10 @@ struct SustainedPreviewPerformanceTests {
     weak var releasedModel = model
     model?.setPreviewCacheLimit(configuration.cacheDepth)
     if configuration.requiresByteCapacity {
+      let previewBudgetBytes = try #require(model?.previewMemoryByteLimit)
+      let expectedPreviewBudgetBytes: Int = 3_072 * 1_024 * 1_024
       try #require(
-        model?.previewMemoryByteLimit == 3_072 * 1_024 * 1_024,
+        previewBudgetBytes == expectedPreviewBudgetBytes,
         "fuji-eight-cpu requires the normal 3 GiB machine preview budget")
     }
     let measurement: Measurement
