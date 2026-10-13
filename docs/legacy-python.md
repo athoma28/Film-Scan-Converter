@@ -17,20 +17,21 @@ behavior, not the design authority for new native features.
 
 Keep `source/` available because:
 
-- it remains the only complete workflow with automatic dust detection and
-  inpainting;
+- it retains the older automatic dust detection and inpainting workflow;
 - fixture and benchmark tools still import production Python modules;
 - legacy cross-platform releases and ART integration remain documented.
 
 Native TIFF/JPEG/PNG/processed-RGB-DNG export, crop detection, perspective
-correction, and dust-candidate detection are implemented. Native dust removal
-is not.
+correction, editable dust-candidate masks, and optional saved texture repairs
+are implemented. The native app provides Auto Repair Mask and a Healing Brush;
+these differ from the legacy Python inpainting workflow. See
+[Features](features.md#geometry-and-calibration) for the current native tools
+and their limitations.
 
 ## Retirement Policy
 
 Python retirement is repository cleanup, not a gate for a notarized native
-release. The native app may ship while dust removal remains explicitly
-legacy-only.
+release. The native app may ship while legacy Python workflows remain available.
 
 Archive or remove the Python product only when all of the following are true:
 
@@ -38,8 +39,9 @@ Archive or remove the Python product only when all of the following are true:
    export through the packaged native application with verified output;
 2. a signed/notarized native artifact has passed Gatekeeper and clean-machine
    installation;
-3. any Python-only workflow that will remain supported—currently dust removal
-   and cross-platform/ART use—has been replaced or explicitly discontinued;
+3. any Python-only workflow that will remain supported—currently legacy
+   automatic inpainting and cross-platform/ART use—has been replaced or
+   explicitly discontinued;
 4. frozen fixture and benchmark tools no longer require production modules in
    `source/`, or those tools move with stable paths;
 5. public installation, usage, release, and ART documentation clearly states
